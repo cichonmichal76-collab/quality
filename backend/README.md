@@ -120,7 +120,7 @@ Aktualne moduły:
 - `files`
 - `nonconformities`
 
-Legacy router trzyma już głównie device CRUD i proste endpointy komponentów, ale nowa praca powinna trafiać do routerów i serwisów modułowych, a nie rozbudowywać stary plik tras.
+Zaobserwowane domeny backendu działają już przez routery i serwisy modułowe. Moduł `assembly` obsługuje dodatkowo device CRUD i proste endpointy komponentów.
 
 ## Najważniejsze endpointy
 
@@ -169,7 +169,7 @@ Ten kontekst trafia do audit trail i jest krytyczny dla traceability.
 
 ## Najbliższe cele refaktoru
 
-- przenieść device CRUD i proste endpointy komponentów do jawnych modułów domenowych
+- rozważyć wydzielenie osobnej domeny `devices`, jeśli device CRUD urośnie poza odpowiedzialność modułu `assembly`
 - wydzielić współdzielone elementy DB ze starego `database.py` do `app/db/`
 - dodać pokrycie integracyjne PostgreSQL w CI
 - dodać mocniejsze reguły domenowe shipment, service i plików wraz z testami integracyjnymi

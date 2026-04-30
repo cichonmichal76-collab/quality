@@ -1,6 +1,5 @@
 from fastapi import APIRouter
 
-from app.api.routes import router as legacy_router
 from app.modules.assembly.router import router as assembly_router
 from app.modules.auth_rfid.router import router as auth_rfid_router
 from app.modules.files.router import router as files_router
@@ -21,6 +20,3 @@ api_router.include_router(shipment_router)
 api_router.include_router(service_router)
 api_router.include_router(files_router)
 api_router.include_router(nonconformities_router)
-
-# Przejściowo zachowujemy stary router, dopóki endpointy nie zostaną przeniesione do modułów.
-api_router.include_router(legacy_router)

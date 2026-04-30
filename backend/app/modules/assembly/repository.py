@@ -1,10 +1,14 @@
 from sqlalchemy.orm import Session
 
-from app.models import AssemblyLink, Device, ProductionItem
+from app.models import AssemblyLink, Device, DeviceComponent, ProductionItem
 
 
 def get_device_by_serial_number(db: Session, device_serial_number: str) -> Device | None:
     return db.query(Device).filter(Device.device_serial_number == device_serial_number).first()
+
+
+def list_devices(db: Session) -> list[Device]:
+    return db.query(Device).order_by(Device.created_at.desc()).all()
 
 
 def get_production_item_by_barcode(db: Session, barcode_value: str) -> ProductionItem | None:
@@ -27,5 +31,14 @@ def list_assembly_links_for_device(db: Session, device_serial_number: str) -> li
         db.query(AssemblyLink)
         .filter(AssemblyLink.parent_device_serial_number == device_serial_number)
         .order_by(AssemblyLink.installed_at.asc())
+        .all()
+    )
+
+
+def list_device_components(db: Session, device_serial_number: str) -> list[DeviceComponent]:
+    return (
+        db.query(DeviceComponent)
+        .filter(DeviceComponent.device_serial_number == device_serial_number)
+        .order_by(DeviceComponent.installed_at.desc())
         .all()
     )

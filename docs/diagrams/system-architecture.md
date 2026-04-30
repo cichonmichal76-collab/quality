@@ -32,7 +32,6 @@ graph TD
         SERVICE["moduł service"]
         FILESMOD["moduł files"]
         NCR["moduł nonconformities"]
-        LEGACY["legacy routes<br/>device CRUD, proste endpointy komponentów"]
         AUDIT["audit trail"]
     end
 
@@ -64,7 +63,6 @@ graph TD
     API --> SERVICE
     API --> FILESMOD
     API --> NCR
-    API --> LEGACY
     AUTH --> AUDIT
     TRACE --> AUDIT
     QC --> AUDIT
@@ -74,7 +72,6 @@ graph TD
     SERVICE --> AUDIT
     FILESMOD --> AUDIT
     NCR --> AUDIT
-    LEGACY --> AUDIT
 
     API --> DB
     API --> FILES
@@ -88,6 +85,6 @@ graph TD
 
 - backend jest dziś operacyjnym rdzeniem produktu
 - `auth_rfid`, `traceability`, `qc`, `assembly`, `final_test`, `shipment`, `service`, `files` i `nonconformities` są już aktywnymi modułami backendu
-- legacy route code trzyma dziś głównie device CRUD i proste endpointy komponentów
+- moduł `assembly` obejmuje dziś także device CRUD i proste endpointy komponentów
 - final-test-runner jest najbardziej realnym klientem poza backendem
 - mobile i web są widoczne w repo, ale nie są jeszcze pełnymi aplikacjami produktowymi

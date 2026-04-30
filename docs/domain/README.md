@@ -17,7 +17,7 @@ ServiceTrace obraca się obecnie wokół następujących domen:
 - service i commissioning
 - pliki oraz audit trail
 
-Większość tych domen ma już aktywne routery i serwisy modułowe, a legacy API routes zostały zredukowane głównie do device CRUD i prostych endpointów komponentów.
+Te domeny mają już aktywne routery i serwisy modułowe. Device CRUD i proste endpointy komponentów zostały włączone do modułu `assembly`.
 
 ## Wysokopoziomowy przepływ domenowy
 
@@ -186,7 +186,7 @@ Najważniejsze reguły:
 Stan implementacji:
 
 - zaimplementowane w module `assembly`
-- CRUD urządzeń nadal żyje poza modułem assembly, w części współdzielonej / legacy
+- moduł `assembly` obsługuje też device CRUD i proste endpointy komponentów
 
 ### 5. Final test
 
@@ -595,7 +595,7 @@ Kluczowe pola:
 Aktualna rzeczywistość:
 
 - `auth_rfid`, `traceability`, `qc`, `assembly`, `final_test`, `shipment`, `service`, `files` i `nonconformities` mają już aktywną logikę modułową
-- legacy routes trzymają dziś głównie device CRUD i proste endpointy komponentów
+- device CRUD i proste endpointy komponentów są dziś częścią modułu `assembly`
 
 Kierunek docelowy:
 
@@ -605,6 +605,6 @@ Kierunek docelowy:
 
 ## Rekomendowane dalsze porządki domenowe
 
-- przenieść device CRUD i proste endpointy komponentów do jawnie wskazanej domeny
+- rozważyć wydzielenie osobnej domeny `devices`, jeśli CRUD urządzeń rozrośnie się ponad odpowiedzialność `assembly`
 - doprecyzować model targetu w QC, tak aby semantyka device-target i item-target była jednoznaczna
 - sformalizować statusy jako enumy zamiast polegać na swobodnych stringach

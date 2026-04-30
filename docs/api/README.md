@@ -460,6 +460,6 @@ Końcowe statusy itemu:
 ## Aktualne ograniczenia
 
 - mamy praktyczny przewodnik API, ale nie ma jeszcze sformalizowanego procesu wersjonowania kontraktu
-- część zaimplementowanych endpointów nadal żyje w legacy routes
+- główne zaimplementowane endpointy działają już przez moduły domenowe backendu
 - walidacja shipment jest węższa niż pełny target z PRD
 - web i Android nie używają jeszcze generowanego klienta API

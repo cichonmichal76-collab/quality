@@ -4,10 +4,11 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.audit import record_audit_event
-from app.models import AssemblyLink, ScanEvent
+from app.database import utc_now
+from app.models import AssemblyLink, Device, DeviceComponent, ScanEvent
 from app.modules.auth_rfid.service import PRODUCTION_SESSION_ROLES, require_active_work_session
 from app.modules.assembly import repository
-from app.schemas import AssemblyScanRequest
+from app.schemas import AssemblyScanRequest, ComponentCreate, DeviceCreate
 
 
 def get_device_or_404(db: Session, device_serial_number: str):
@@ -15,6 +16,38 @@ def get_device_or_404(db: Session, device_serial_number: str):
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
     return device
+
+
+def create_device(db: Session, payload: DeviceCreate) -> Device:
+    if repository.get_device_by_serial_number(db, payload.device_serial_number):
+        raise HTTPException(status_code=409, detail="Device already exists")
+    device = Device(**payload.model_dump(), production_status="CREATED")
+    db.add(device)
+    db.commit()
+    db.refresh(device)
+    return device
+
+
+def list_devices(db: Session) -> list[Device]:
+    return repository.list_devices(db)
+
+
+def add_component(db: Session, device_serial_number: str, payload: ComponentCreate) -> DeviceComponent:
+    get_device_or_404(db, device_serial_number)
+    component = DeviceComponent(
+        device_serial_number=device_serial_number,
+        installed_at=utc_now(),
+        **payload.model_dump(),
+    )
+    db.add(component)
+    db.commit()
+    db.refresh(component)
+    return component
+
+
+def list_components(db: Session, device_serial_number: str) -> list[DeviceComponent]:
+    get_device_or_404(db, device_serial_number)
+    return repository.list_device_components(db, device_serial_number)
 
 
 def scan_component_for_assembly(

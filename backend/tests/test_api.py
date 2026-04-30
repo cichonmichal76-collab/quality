@@ -79,11 +79,43 @@ def test_device_lifecycle():
     assert response.status_code == 200
     assert response.json()["device_serial_number"] == serial_number
 
+    listed = client.get("/api/devices")
+    assert listed.status_code == 200
+    assert any(row["device_serial_number"] == serial_number for row in listed.json())
+
     response = client.patch(
         f"/api/devices/{serial_number}/status",
         json={"production_status": "READY_FOR_SHIPMENT"},
     )
     assert response.status_code == 400
+
+
+def test_manual_device_components_can_be_added_and_listed():
+    serial_number = unique_id("ZSS")
+    created = client.post(
+        "/api/devices",
+        json={"device_serial_number": serial_number, "device_type": "ZSS"},
+    )
+    assert created.status_code == 200
+
+    added = client.post(
+        f"/api/devices/{serial_number}/components",
+        json={
+            "component_type": "FAN",
+            "component_serial_number": unique_id("CMP"),
+            "component_part_number": "FAN-120",
+            "component_revision": "A",
+            "installed_by": "pytest",
+        },
+    )
+    assert added.status_code == 200
+    assert added.json()["device_serial_number"] == serial_number
+    assert added.json()["component_type"] == "FAN"
+
+    listed = client.get(f"/api/devices/{serial_number}/components")
+    assert listed.status_code == 200
+    assert len(listed.json()) == 1
+    assert listed.json()[0]["component_part_number"] == "FAN-120"
 
 
 def test_rfid_work_session_lifecycle_and_audit_events():

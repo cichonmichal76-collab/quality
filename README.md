@@ -61,7 +61,7 @@ Backend ewoluuje w kierunku modularnego monolitu z modułami domenowymi takimi j
 - `files`
 - `nonconformities`
 
-Legacy router trzyma już głównie device CRUD i proste endpointy komponentów, a główne domeny biznesowe działają przez moduły.
+Zaobserwowane domeny backendu działają już przez moduły. `assembly` obsługuje także device CRUD i proste endpointy komponentów.
 
 ## Szybki start
 
@@ -184,7 +184,7 @@ Wysokopoziomowo:
 
 ## Najbliższe cele
 
-- dokończyć przenoszenie device CRUD i prostych endpointów komponentów do modułów domenowych
+- wydzielić, jeśli zajdzie potrzeba, osobną domenę `devices`, zamiast zostawiać device CRUD w `assembly`
 - dodać testy integracyjne PostgreSQL do CI
 - zbudować używalny UI dla produkcji i jakości
 - rozpocząć MVP Android commissioning
