@@ -17,7 +17,7 @@ ServiceTrace obraca się obecnie wokół następujących domen:
 - service i commissioning
 - pliki oraz audit trail
 
-Część z tych domen ma już aktywne routery i serwisy modułowe, a część nadal wykonuje się przez legacy API routes.
+Większość tych domen ma już aktywne routery i serwisy modułowe, a legacy API routes zostały zredukowane głównie do device CRUD i prostych endpointów komponentów.
 
 ## Wysokopoziomowy przepływ domenowy
 
@@ -160,7 +160,7 @@ Najważniejsze reguły:
 Stan implementacji:
 
 - checklisty i flow `qc_run` są zaimplementowane w module `qc`
-- CRUD NCR nadal żyje w legacy routes
+- CRUD NCR jest zaimplementowany w module `nonconformities`
 
 ### 4. Assembly
 
@@ -212,7 +212,7 @@ Najważniejsze reguły:
 Stan implementacji:
 
 - zaimplementowane w module `final_test`
-- przejścia statusów shipment nadal żyją poza modułem final-test, w części współdzielonej / legacy
+- przejścia statusów shipment są zaimplementowane w module `shipment`
 
 ### 6. Shipment gate
 
@@ -233,8 +233,7 @@ Aktualnie zaimplementowana reguła:
 
 Stan implementacji:
 
-- minimalna bramka jest zaimplementowana w logice statusu urządzenia
-- moduł `shipment` nadal jest scaffolodem
+- minimalna bramka jest zaimplementowana w module `shipment`
 
 ### 7. Service i commissioning
 
@@ -261,8 +260,7 @@ Planowane, ale jeszcze niezaimplementowane jako pełny przepływ:
 
 Stan implementacji:
 
-- flow uploadu istnieje w legacy API routes
-- moduł `service` nadal jest scaffolodem
+- flow uploadu istnieje w module `service`
 
 ### 8. Pliki i audit trail
 
@@ -283,9 +281,8 @@ Rola w projekcie:
 
 Stan implementacji:
 
-- upload i download plików istnieją w legacy API routes
+- upload i download plików istnieją w module `files`
 - listing audit eventów istnieje w module `traceability`
-- moduł `files` nadal jest scaffolodem
 
 ## Mapa encji
 
@@ -597,8 +594,8 @@ Kluczowe pola:
 
 Aktualna rzeczywistość:
 
-- `auth_rfid`, `traceability`, `qc`, `assembly` i `final_test` mają już aktywną logikę modułową
-- `shipment`, `service`, `files`, CRUD urządzeń i NCR nadal żyją częściowo albo głównie w legacy routes
+- `auth_rfid`, `traceability`, `qc`, `assembly`, `final_test`, `shipment`, `service`, `files` i `nonconformities` mają już aktywną logikę modułową
+- legacy routes trzymają dziś głównie device CRUD i proste endpointy komponentów
 
 Kierunek docelowy:
 
@@ -608,7 +605,6 @@ Kierunek docelowy:
 
 ## Rekomendowane dalsze porządki domenowe
 
-- wydzielić NCR do osobnego modułu domenowego
-- przenieść device CRUD i shipment gate do jawnie wskazanej domeny
+- przenieść device CRUD i proste endpointy komponentów do jawnie wskazanej domeny
 - doprecyzować model targetu w QC, tak aby semantyka device-target i item-target była jednoznaczna
 - sformalizować statusy jako enumy zamiast polegać na swobodnych stringach

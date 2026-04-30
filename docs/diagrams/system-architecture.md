@@ -28,7 +28,11 @@ graph TD
         QC["moduł qc"]
         ASSEMBLY["moduł assembly"]
         FINALTEST["moduł final_test"]
-        LEGACY["legacy routes<br/>device CRUD, shipment gate, service, files, NCR"]
+        SHIPMENT["moduł shipment"]
+        SERVICE["moduł service"]
+        FILESMOD["moduł files"]
+        NCR["moduł nonconformities"]
+        LEGACY["legacy routes<br/>device CRUD, proste endpointy komponentów"]
         AUDIT["audit trail"]
     end
 
@@ -56,12 +60,20 @@ graph TD
     API --> QC
     API --> ASSEMBLY
     API --> FINALTEST
+    API --> SHIPMENT
+    API --> SERVICE
+    API --> FILESMOD
+    API --> NCR
     API --> LEGACY
     AUTH --> AUDIT
     TRACE --> AUDIT
     QC --> AUDIT
     ASSEMBLY --> AUDIT
     FINALTEST --> AUDIT
+    SHIPMENT --> AUDIT
+    SERVICE --> AUDIT
+    FILESMOD --> AUDIT
+    NCR --> AUDIT
     LEGACY --> AUDIT
 
     API --> DB
@@ -75,7 +87,7 @@ graph TD
 ## Jak czytać ten diagram
 
 - backend jest dziś operacyjnym rdzeniem produktu
-- `auth_rfid`, `traceability`, `qc`, `assembly` i `final_test` są już aktywnymi modułami backendu
-- device CRUD, shipment gate, uploady serwisowe, pliki i NCR nadal częściowo zależą od legacy route code
+- `auth_rfid`, `traceability`, `qc`, `assembly`, `final_test`, `shipment`, `service`, `files` i `nonconformities` są już aktywnymi modułami backendu
+- legacy route code trzyma dziś głównie device CRUD i proste endpointy komponentów
 - final-test-runner jest najbardziej realnym klientem poza backendem
 - mobile i web są widoczne w repo, ale nie są jeszcze pełnymi aplikacjami produktowymi

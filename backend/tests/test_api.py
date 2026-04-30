@@ -596,3 +596,96 @@ def test_final_test_fail_sets_device_status_and_creates_ncr():
     assert ncr.status_code == 200
     assert ncr.json()["device_serial_number"] == device_serial_number
     assert ncr.json()["severity"] == "CRITICAL"
+
+
+def test_service_session_upload_list_and_download(tmp_path, monkeypatch):
+    import app.services.files as file_storage
+
+    monkeypatch.setattr(file_storage, "STORAGE_DIR", tmp_path)
+
+    session_id = unique_id("SVC")
+    upload = client.post(
+        "/api/service-sessions/upload",
+        data={
+            "session_id": session_id,
+            "device_serial_number": unique_id("ZSS"),
+            "technician_id": "TECH-001",
+            "device_type": "ZSS",
+            "result": "PASS",
+            "firmware_version": "1.2.4",
+            "bootloader_version": "0.9.8",
+        },
+        files={"file": ("service-package.zip", b"service-package-content", "application/zip")},
+    )
+    assert upload.status_code == 200
+    payload = upload.json()
+    assert payload["session_id"] == session_id
+    assert payload["upload_status"] == "UPLOADED"
+    assert payload["package_hash"]
+
+    listed = client.get("/api/service-sessions")
+    assert listed.status_code == 200
+    assert any(row["session_id"] == session_id for row in listed.json())
+
+    fetched = client.get(f"/api/service-sessions/{session_id}")
+    assert fetched.status_code == 200
+    assert fetched.json()["technician_id"] == "TECH-001"
+
+    package_download = client.get(f"/api/service-sessions/{session_id}/package")
+    assert package_download.status_code == 200
+    assert package_download.content == b"service-package-content"
+
+
+def test_file_upload_and_download(tmp_path, monkeypatch):
+    import app.services.files as file_storage
+
+    monkeypatch.setattr(file_storage, "STORAGE_DIR", tmp_path)
+
+    upload = client.post(
+        "/api/files/upload",
+        data={
+            "related_entity_type": "DEVICE",
+            "related_entity_id": unique_id("ZSS"),
+            "uploaded_by": "pytest",
+        },
+        files={"file": ("report.txt", b"traceability-report", "text/plain")},
+    )
+    assert upload.status_code == 200
+    stored = upload.json()
+    assert stored["file_name"] == "report.txt"
+    assert stored["uploaded_by"] == "pytest"
+    assert stored["file_hash"]
+
+    downloaded = client.get(f"/api/files/{stored['id']}")
+    assert downloaded.status_code == 200
+    assert downloaded.content == b"traceability-report"
+
+
+def test_manual_ncr_create_update_and_close():
+    ncr_id = unique_id("NCR")
+    created = client.post(
+        "/api/nonconformities",
+        json={
+            "ncr_id": ncr_id,
+            "device_serial_number": unique_id("ZSS"),
+            "process_stage": "MANUAL_REVIEW",
+            "description": "Manual NCR for regression test",
+            "severity": "MEDIUM",
+            "detected_by": "pytest",
+        },
+    )
+    assert created.status_code == 200
+    assert created.json()["status"] == "OPEN"
+
+    updated = client.patch(
+        f"/api/nonconformities/{ncr_id}",
+        json={"status": "CLOSED", "corrective_action": "Verified and closed"},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["status"] == "CLOSED"
+    assert updated.json()["corrective_action"] == "Verified and closed"
+    assert updated.json()["closed_at"] is not None
+
+    fetched = client.get(f"/api/nonconformities/{ncr_id}")
+    assert fetched.status_code == 200
+    assert fetched.json()["status"] == "CLOSED"

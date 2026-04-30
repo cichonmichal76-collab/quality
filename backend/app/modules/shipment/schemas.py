@@ -1,6 +1,1 @@
-from pydantic import BaseModel
-
-
-class ShipmentPlaceholder(BaseModel):
-    module: str = "shipment"
-
+"""Shipment korzysta obecnie ze wspoldzielonych schematow z app.schemas."""

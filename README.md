@@ -59,8 +59,9 @@ Backend ewoluuje w kierunku modularnego monolitu z modułami domenowymi takimi j
 - `shipment`
 - `service`
 - `files`
+- `nonconformities`
 
-Część kodu nadal żyje w legacy routes, ale nowy podział modułowy jest już aktywny dla kilku kluczowych domen.
+Legacy router trzyma już głównie device CRUD i proste endpointy komponentów, a główne domeny biznesowe działają przez moduły.
 
 ## Szybki start
 
@@ -102,6 +103,7 @@ Final-test-runner:
 cd final-test-runner
 pytest
 ruff check .
+mypy servicetrace_runner
 ```
 
 ## Final-test-runner
@@ -182,8 +184,7 @@ Wysokopoziomowo:
 
 ## Najbliższe cele
 
-- przenieść pozostałe legacy routes do modułów domenowych
-- zaostrzyć CI tak, aby lint i typecheck były blokujące
+- dokończyć przenoszenie device CRUD i prostych endpointów komponentów do modułów domenowych
 - dodać testy integracyjne PostgreSQL do CI
 - zbudować używalny UI dla produkcji i jakości
 - rozpocząć MVP Android commissioning

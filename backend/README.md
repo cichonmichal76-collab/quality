@@ -28,7 +28,7 @@ Backend czyta konfigurację ze zmiennych środowiskowych opisanych w [`.env.exam
 - `DATABASE_URL`
   Domyślnie: `sqlite:///./servicetrace_dev.db`
 - `STORAGE_DIR`
-  Domyślnie: `./app/storage`
+  Domyślnie: `./storage`
 - `API_HOST`
   Domyślnie: `0.0.0.0`
 - `API_PORT`
@@ -118,8 +118,9 @@ Aktualne moduły:
 - `shipment`
 - `service`
 - `files`
+- `nonconformities`
 
-Część endpointów nadal istnieje w legacy routes, ale nowa praca powinna trafiać do routerów i serwisów modułowych, a nie rozbudowywać stary plik tras.
+Legacy router trzyma już głównie device CRUD i proste endpointy komponentów, ale nowa praca powinna trafiać do routerów i serwisów modułowych, a nie rozbudowywać stary plik tras.
 
 ## Najważniejsze endpointy
 
@@ -168,7 +169,7 @@ Ten kontekst trafia do audit trail i jest krytyczny dla traceability.
 
 ## Najbliższe cele refaktoru
 
-- przenieść pozostałe legacy routes do modułów domenowych
+- przenieść device CRUD i proste endpointy komponentów do jawnych modułów domenowych
 - wydzielić współdzielone elementy DB ze starego `database.py` do `app/db/`
 - dodać pokrycie integracyjne PostgreSQL w CI
-- zaostrzyć CI tak, żeby lint i typecheck były blokujące
+- dodać mocniejsze reguły domenowe shipment, service i plików wraz z testami integracyjnymi
