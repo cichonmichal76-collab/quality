@@ -1,27 +1,27 @@
-# API Guide
+# Przewodnik API
 
-This document describes the currently implemented MVP API flow in the backend.
+Ten dokument opisuje aktualnie zaimplementowany przepływ API dla MVP backendu.
 
-It focuses on the traceability-first workflow that already exists in code:
+Skupia się na traceability-first przepływie, który już istnieje w kodzie:
 
-1. operator and workstation bootstrap
-2. RFID login and `work_session_id`
-3. production item creation
-4. scan event ledger
-5. QC checklist and QC run
+1. bootstrap operatora i stanowiska
+2. logowanie RFID i `work_session_id`
+3. tworzenie production itemu
+4. ledger scan eventów
+5. checklisty QC i `qc_run`
 6. assembly by scan
-7. final test upload
-8. audit trail lookup
+7. upload final testu
+8. odczyt audit trail
 
 ## Base URL
 
-Local development default:
+Domyślny lokalny adres:
 
 ```text
 http://localhost:8000
 ```
 
-API prefix:
+Prefiks API:
 
 ```text
 /api
@@ -33,42 +33,42 @@ Health check:
 GET /health
 ```
 
-Generated FastAPI docs are also available at:
+Generowane przez FastAPI dokumenty są dostępne także pod:
 
 ```text
 /docs
 /openapi.json
 ```
 
-## Content types
+## Typy treści
 
-Most endpoints use JSON request bodies.
+Większość endpointów używa JSON.
 
-Exceptions:
+Wyjątki:
 
-- `POST /api/qc-runs/{run_id}/complete` expects form data
-- `POST /api/service-sessions/upload` uses multipart form data
-- `POST /api/files/upload` uses multipart form data
+- `POST /api/qc-runs/{run_id}/complete` oczekuje `form-data`
+- `POST /api/service-sessions/upload` używa `multipart/form-data`
+- `POST /api/files/upload` używa `multipart/form-data`
 
-## Core workflow conventions
+## Wspólne zasady przepływu
 
-- production and quality actions rely on `work_session_id`
-- `work_session_id` must reference an active RFID-authenticated workstation session
-- operator roles are validated against the action being executed
-- audit events are written for important workflow actions and failures
+- akcje produkcyjne i jakościowe opierają się na `work_session_id`
+- `work_session_id` musi wskazywać na aktywną sesję RFID stanowiska
+- role operatorów są walidowane względem wykonywanej akcji
+- audit eventy są zapisywane dla ważnych akcji i błędów przepływu
 
-## Common HTTP responses
+## Typowe odpowiedzi HTTP
 
-- `200` success
-- `400` invalid state, invalid transition, inactive session, missing active session
-- `401` inactive or unknown RFID operator
-- `403` operator role is not allowed for the action
-- `404` requested entity does not exist
-- `409` duplicate identifier or already-installed component
+- `200` sukces
+- `400` niepoprawny stan, niepoprawne przejście, nieaktywna sesja albo brak aktywnej sesji
+- `401` nieaktywny albo nieznany operator RFID
+- `403` rola operatora nie jest dozwolona dla danej akcji
+- `404` żądana encja nie istnieje
+- `409` duplikat identyfikatora albo już zainstalowany komponent
 
-## 1. Bootstrap master data
+## 1. Bootstrap danych podstawowych
 
-Create an operator:
+Utworzenie operatora:
 
 ```bash
 curl -X POST http://localhost:8000/api/operators \
@@ -81,20 +81,20 @@ curl -X POST http://localhost:8000/api/operators \
   }'
 ```
 
-Create a workstation:
+Utworzenie stanowiska:
 
 ```bash
 curl -X POST http://localhost:8000/api/workstations \
   -H "Content-Type: application/json" \
   -d '{
     "workstation_id": "WS-01",
-    "name": "Station 01",
+    "name": "Stanowisko 01",
     "area": "MECHANICAL",
     "station_type": "PRODUCTION"
   }'
 ```
 
-Create a machine:
+Utworzenie maszyny:
 
 ```bash
 curl -X POST http://localhost:8000/api/machines \
@@ -103,13 +103,13 @@ curl -X POST http://localhost:8000/api/machines \
     "machine_id": "MC-01",
     "name": "Laser Marker",
     "machine_type": "MARKING",
-    "location": "Line A"
+    "location": "Linia A"
   }'
 ```
 
-## 2. RFID login and work session
+## 2. Logowanie RFID i work session
 
-Start an RFID session:
+Start sesji RFID:
 
 ```bash
 curl -X POST http://localhost:8000/api/auth/rfid-login \
@@ -121,7 +121,7 @@ curl -X POST http://localhost:8000/api/auth/rfid-login \
   }'
 ```
 
-Typical response:
+Typowa odpowiedź:
 
 ```json
 {
@@ -136,27 +136,27 @@ Typical response:
 }
 ```
 
-Important:
+Ważne:
 
-- repeated login with the same active context reuses the existing session
-- timed-out sessions are marked as `TIMEOUT`
-- production and QC flows fail if the session is not active
+- powtórne logowanie z tym samym aktywnym kontekstem zwraca istniejącą sesję
+- przeterminowane sesje dostają status `TIMEOUT`
+- flow produkcyjne i QC kończą się błędem, jeśli sesja nie jest aktywna
 
-Close a session:
+Zamknięcie sesji:
 
 ```bash
 curl -X POST http://localhost:8000/api/work-sessions/WS-9f58f6efc49b/close \
   -H "Content-Type: application/json" \
   -d '{
-    "reason": "Shift completed"
+    "reason": "Koniec zmiany"
   }'
 ```
 
-## 3. Create a production item
+## 3. Utworzenie production itemu
 
-You can create a barcode explicitly, but the current backend also creates a barcode automatically when a production item is created and the barcode does not already exist.
+Barcode można utworzyć jawnie, ale obecny backend potrafi też utworzyć go automatycznie przy tworzeniu production itemu, jeśli dany barcode jeszcze nie istnieje.
 
-Optional explicit barcode creation:
+Opcjonalne jawne utworzenie barcode:
 
 ```bash
 curl -X POST http://localhost:8000/api/barcodes/create \
@@ -169,7 +169,7 @@ curl -X POST http://localhost:8000/api/barcodes/create \
   }'
 ```
 
-Create the production item:
+Utworzenie production itemu:
 
 ```bash
 curl -X POST http://localhost:8000/api/production-items \
@@ -186,15 +186,15 @@ curl -X POST http://localhost:8000/api/production-items \
   }'
 ```
 
-Notes:
+Uwagi:
 
-- active work session is required
-- the backend fills `created_by_operator_id` and `machine_id` from the active session if omitted
-- duplicate `item_serial_number` or `barcode_value` returns `409`
+- aktywna work session jest wymagana
+- backend może uzupełnić `created_by_operator_id` i `machine_id` z aktywnej sesji
+- duplikat `item_serial_number` albo `barcode_value` zwraca `409`
 
-## 4. Record scan events
+## 4. Rejestrowanie scan eventów
 
-Record an accepted scan:
+Zapis zaakceptowanego skanu:
 
 ```bash
 curl -X POST http://localhost:8000/api/scan-events \
@@ -208,13 +208,13 @@ curl -X POST http://localhost:8000/api/scan-events \
   }'
 ```
 
-Get scan history for a barcode:
+Historia skanów dla barcode:
 
 ```bash
 curl http://localhost:8000/api/barcodes/BC-1001/scan-history
 ```
 
-Deactivate a barcode:
+Dezaktywacja barcode:
 
 ```bash
 curl -X PATCH http://localhost:8000/api/barcodes/BC-1001/status \
@@ -224,15 +224,15 @@ curl -X PATCH http://localhost:8000/api/barcodes/BC-1001/status \
   }'
 ```
 
-Barcode status rules:
+Reguły statusu barcode:
 
-- allowed barcode statuses: `ACTIVE`, `INACTIVE`, `VOID`
-- inactive barcodes are blocked during scan
-- blocked scans still create a rejected scan event and audit entry
+- dozwolone statusy: `ACTIVE`, `INACTIVE`, `VOID`
+- nieaktywny barcode jest blokowany przy skanie
+- odrzucony skan nadal zapisuje scan event i audit event
 
-## 5. QC checklist and QC run
+## 5. Checklisty QC i `qc_run`
 
-Create a checklist:
+Utworzenie checklisty:
 
 ```bash
 curl -X POST http://localhost:8000/api/qc-checklists \
@@ -245,21 +245,21 @@ curl -X POST http://localhost:8000/api/qc-checklists \
   }'
 ```
 
-Add a checklist step:
+Dodanie kroku checklisty:
 
 ```bash
 curl -X POST http://localhost:8000/api/qc-checklists/CHK-MECH-01/steps \
   -H "Content-Type: application/json" \
   -d '{
     "step_order": 1,
-    "title": "Measure width",
+    "title": "Pomiar szerokości",
     "requires_measurement": true,
     "tolerance_min": 10.0,
     "tolerance_max": 20.0
   }'
 ```
 
-Start a QC run for the item:
+Start `qc_run` dla itemu:
 
 ```bash
 curl -X POST http://localhost:8000/api/qc-runs \
@@ -274,7 +274,7 @@ curl -X POST http://localhost:8000/api/qc-runs \
   }'
 ```
 
-Submit step result:
+Wysłanie wyniku kroku:
 
 ```bash
 curl -X POST http://localhost:8000/api/qc-runs/QCRUN-1001/steps/STEP-ID/result \
@@ -282,29 +282,29 @@ curl -X POST http://localhost:8000/api/qc-runs/QCRUN-1001/steps/STEP-ID/result \
   -d '{
     "status": "PASS",
     "measurement_value": 15.2,
-    "comment": "Within tolerance"
+    "comment": "W normie"
   }'
 ```
 
-Complete the run:
+Zakończenie `qc_run`:
 
 ```bash
 curl -X POST http://localhost:8000/api/qc-runs/QCRUN-1001/complete \
   -F "result=PASS"
 ```
 
-You can also omit the explicit `result`. In that case the backend derives the run result from step results.
+Możesz też pominąć jawny `result`. Wtedy backend wyliczy wynik końcowy na podstawie wyników kroków.
 
-QC behavior in the current MVP:
+Aktualne zachowanie QC:
 
-- QC requires an active work session with a quality role
-- measurement steps automatically return `FAIL` when outside tolerance
-- item status changes to `QC_IN_PROGRESS`, then `QC_PASSED` or `QC_FAILED`
-- a failed QC run creates a blocking NCR with id pattern `NCR-QC-{run_id}`
+- QC wymaga aktywnej work session z rolą jakościową
+- kroki pomiarowe automatycznie zwracają `FAIL`, jeśli wartość wyjdzie poza tolerancję
+- status itemu przechodzi przez `QC_IN_PROGRESS`, a potem `QC_PASSED` albo `QC_FAILED`
+- nieudany `qc_run` tworzy blokującą NCR o wzorze `NCR-QC-{run_id}`
 
 ## 6. Assembly by scan
 
-Create the device:
+Utworzenie urządzenia:
 
 ```bash
 curl -X POST http://localhost:8000/api/devices \
@@ -316,7 +316,7 @@ curl -X POST http://localhost:8000/api/devices \
   }'
 ```
 
-Install a component into the device:
+Instalacja komponentu do urządzenia:
 
 ```bash
 curl -X POST http://localhost:8000/api/devices/ZSS-000123/assembly/scan-component \
@@ -328,22 +328,22 @@ curl -X POST http://localhost:8000/api/devices/ZSS-000123/assembly/scan-componen
   }'
 ```
 
-Read the assembly tree:
+Odczyt drzewa montażowego:
 
 ```bash
 curl http://localhost:8000/api/devices/ZSS-000123/assembly-tree
 ```
 
-Assembly rules:
+Reguły assembly:
 
-- component barcode must exist
-- component item status cannot be `QC_FAILED`, `SCRAPPED`, or `REWORK_REQUIRED`
-- a component cannot be installed twice while already `INSTALLED`
-- assembly writes both a scan event and an audit event
+- barcode komponentu musi istnieć
+- status itemu nie może być `QC_FAILED`, `SCRAPPED` ani `REWORK_REQUIRED`
+- komponent nie może być zainstalowany drugi raz, jeśli już ma aktywne `INSTALLED`
+- assembly zapisuje zarówno relację montażową, jak i ślad skanu oraz audytu
 
 ## 7. Final test
 
-Record final test result:
+Zapis wyniku final testu:
 
 ```bash
 curl -X POST http://localhost:8000/api/final-tests \
@@ -358,15 +358,15 @@ curl -X POST http://localhost:8000/api/final-tests \
   }'
 ```
 
-Final test rules:
+Reguły final testu:
 
-- final test requires an active work session with a final-test role
-- device must already exist
-- `PASS` sets device `production_status` to `FINAL_TEST_PASSED`
-- `FAIL` sets device `production_status` to `FINAL_TEST_FAILED`
-- `FAIL` also creates a critical NCR with id pattern `NCR-{test_run_id}`
+- final test wymaga aktywnej work session z rolą final-testową
+- urządzenie musi już istnieć
+- `PASS` ustawia `production_status` urządzenia na `FINAL_TEST_PASSED`
+- `FAIL` ustawia `production_status` na `FINAL_TEST_FAILED`
+- `FAIL` tworzy też krytyczną NCR o wzorze `NCR-{test_run_id}`
 
-Mark the device ready for shipment:
+Oznaczenie urządzenia jako gotowego do wysyłki:
 
 ```bash
 curl -X PATCH http://localhost:8000/api/devices/ZSS-000123/status \
@@ -376,32 +376,32 @@ curl -X PATCH http://localhost:8000/api/devices/ZSS-000123/status \
   }'
 ```
 
-Shipment gate in the current MVP:
+Shipment gate w aktualnym MVP:
 
-- `READY_FOR_SHIPMENT` requires `FINAL_TEST_PASSED`
-- open critical NCR blocks shipment
+- `READY_FOR_SHIPMENT` wymaga `FINAL_TEST_PASSED`
+- otwarta krytyczna NCR blokuje shipment
 
 ## 8. Audit trail
 
-List all audit events:
+Lista wszystkich audit eventów:
 
 ```bash
 curl http://localhost:8000/api/audit-events
 ```
 
-Filter by work session:
+Filtrowanie po work session:
 
 ```bash
 curl "http://localhost:8000/api/audit-events?work_session_id=WS-9f58f6efc49b"
 ```
 
-Filter by entity:
+Filtrowanie po encji:
 
 ```bash
 curl "http://localhost:8000/api/audit-events?entity_type=FINAL_TEST&entity_id=FT-20260430-0001"
 ```
 
-Typical audit event types in the implemented flow:
+Typowe `event_type` w zaimplementowanym flow:
 
 - `RFID_LOGIN`
 - `RFID_LOGIN_REUSED`
@@ -419,9 +419,9 @@ Typical audit event types in the implemented flow:
 - `FINAL_TEST_RECORDED`
 - `DEVICE_STATUS_UPDATED`
 
-## Status rules worth knowing
+## Reguły statusów, które warto znać
 
-Production item transitions currently allowed:
+Aktualnie dozwolone przejścia `ProductionItem`:
 
 - `LABELED` -> `PRODUCED`, `QC_IN_PROGRESS`, `BLOCKED`, `SCRAPPED`
 - `PRODUCED` -> `QC_IN_PROGRESS`, `BLOCKED`, `SCRAPPED`
@@ -431,18 +431,18 @@ Production item transitions currently allowed:
 - `QC_PASSED` -> `INSTALLED`, `BLOCKED`
 - `BLOCKED` -> `REWORK_REQUIRED`, `QC_IN_PROGRESS`, `SCRAPPED`
 
-Terminal item states:
+Końcowe statusy itemu:
 
 - `INSTALLED`
 - `SCRAPPED`
 
-## Role gates in the current MVP
+## Role i bramki dostępu w aktualnym MVP
 
-- production and traceability actions: `ADMIN`, `PRODUCTION_OPERATOR`, `QUALITY_INSPECTOR`
-- QC actions: `ADMIN`, `QUALITY_INSPECTOR`, `QUALITY_MANAGER`
-- final test actions: `ADMIN`, `FINAL_TEST_OPERATOR`, `QUALITY_MANAGER`
+- akcje produkcyjne i traceability: `ADMIN`, `PRODUCTION_OPERATOR`, `QUALITY_INSPECTOR`
+- akcje QC: `ADMIN`, `QUALITY_INSPECTOR`, `QUALITY_MANAGER`
+- akcje final testu: `ADMIN`, `FINAL_TEST_OPERATOR`, `QUALITY_MANAGER`
 
-## Additional endpoints outside the main flow
+## Dodatkowe endpointy poza głównym flow
 
 - `GET /api/devices`
 - `GET /api/production-items/{item_serial_number}`
@@ -457,9 +457,9 @@ Terminal item states:
 - `POST /api/files/upload`
 - `GET /api/files/{file_id}`
 
-## Current caveats
+## Aktualne ograniczenia
 
-- there is now a practical API guide in this repo, but no versioned contract documentation process yet
-- some implemented endpoints still live in legacy routing code while the module split continues
-- shipment validation is still narrower than the full PRD target
-- web and Android clients are not yet using a generated API client contract
+- mamy praktyczny przewodnik API, ale nie ma jeszcze sformalizowanego procesu wersjonowania kontraktu
+- część zaimplementowanych endpointów nadal żyje w legacy routes
+- walidacja shipment jest węższa niż pełny target z PRD
+- web i Android nie używają jeszcze generowanego klienta API

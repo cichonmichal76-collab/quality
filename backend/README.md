@@ -1,16 +1,16 @@
 # ServiceTrace Backend
 
-FastAPI backend for the ServiceTrace Platform.
+Backend FastAPI dla ServiceTrace Platform.
 
-The backend is the system of record for operators, RFID sessions, barcodes, production items, devices, QC, NCR, final tests, and audit events.
+Backend jest systemem źródłowym dla operatorów, sesji RFID, barcode, production itemów, urządzeń, QC, NCR, final testów i audit eventów.
 
-## Prerequisites
+## Wymagania wstępne
 
 - Python 3.11+
-- PostgreSQL 16+ for the target local stack
-- Docker Desktop if you want the containerized setup
+- PostgreSQL 16+ dla docelowego lokalnego stacku
+- Docker Desktop, jeśli chcesz używać uruchomienia kontenerowego
 
-## Local development
+## Lokalny development
 
 ```bash
 cd backend
@@ -19,64 +19,64 @@ alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
-The API starts on `http://localhost:8000` by default.
+API startuje domyślnie pod `http://localhost:8000`.
 
-## Environment variables
+## Zmienne środowiskowe
 
-The backend reads configuration from environment variables defined in [`.env.example`](../.env.example).
+Backend czyta konfigurację ze zmiennych środowiskowych opisanych w [`.env.example`](../.env.example).
 
 - `DATABASE_URL`
-  Default: `sqlite:///./servicetrace_dev.db`
+  Domyślnie: `sqlite:///./servicetrace_dev.db`
 - `STORAGE_DIR`
-  Default: `./app/storage`
+  Domyślnie: `./app/storage`
 - `API_HOST`
-  Default: `0.0.0.0`
+  Domyślnie: `0.0.0.0`
 - `API_PORT`
-  Default: `8000`
+  Domyślnie: `8000`
 - `SERVICE_TRACE_ENV`
-  Default: `local`
+  Domyślnie: `local`
 - `WORK_SESSION_TIMEOUT_MINUTES`
-  Default: `480`
+  Domyślnie: `480`
 
-For day-to-day development, PostgreSQL is recommended so local behavior stays close to the Docker stack and production target.
+Do codziennego developmentu rekomendowany jest PostgreSQL, żeby lokalne zachowanie było bliższe stackowi Docker i środowisku docelowemu.
 
 ## Docker
 
-From the repository root:
+Z katalogu głównego repo:
 
 ```bash
 docker compose up --build
 ```
 
-This starts:
+To uruchamia:
 
-- PostgreSQL on `localhost:5432`
-- backend API on `localhost:8000`
+- PostgreSQL na `localhost:5432`
+- backend API na `localhost:8000`
 
-## Database migrations
+## Migracje bazy danych
 
-The application no longer creates tables automatically at startup. Schema changes must go through Alembic migrations.
+Aplikacja nie tworzy już tabel automatycznie przy starcie. Zmiany schematu muszą przechodzić przez migracje Alembic.
 
-Apply the latest schema:
+Zastosowanie aktualnego schematu:
 
 ```bash
 cd backend
 alembic upgrade head
 ```
 
-Create a new migration after model changes:
+Utworzenie nowej migracji po zmianie modeli:
 
 ```bash
 cd backend
-alembic revision --autogenerate -m "describe change"
+alembic revision --autogenerate -m "opis zmiany"
 ```
 
-Current migration history covers:
+Obecna historia migracji obejmuje:
 
-- initial schema bootstrap
-- QC run target expansion
+- początkowy bootstrap schematu
+- rozszerzenie targetów `qc_run`
 
-## Tests and quality checks
+## Testy i quality checks
 
 ```bash
 cd backend
@@ -85,30 +85,30 @@ ruff check .
 mypy app
 ```
 
-Tests create and tear down schema explicitly, so they do not rely on application startup side effects.
+Testy tworzą i usuwają schemat jawnie, więc nie polegają na skutkach ubocznych startu aplikacji.
 
-## Package layout
+## Struktura pakietu
 
 ```text
 backend/
-|-- alembic/          migration environment and revisions
+|-- alembic/          środowisko migracji i rewizje
 |-- app/
-|   |-- api/          router composition and API wiring
-|   |-- core/         config and shared backend helpers
-|   |-- db/           reserved place for future DB split
-|   |-- models/       SQLAlchemy entities
-|   |-- modules/      domain-oriented API and service modules
-|   |-- schemas/      Pydantic request/response models
-|   |-- services/     shared service helpers
-|   `-- main.py       FastAPI entrypoint
-`-- tests/            API and workflow tests
+|   |-- api/          składanie routerów i warstwa API
+|   |-- core/         konfiguracja i współdzielone helpery
+|   |-- db/           miejsce na dalszy podział warstwy DB
+|   |-- models/       encje SQLAlchemy
+|   |-- modules/      moduły domenowe z API i logiką
+|   |-- schemas/      modele request/response Pydantic
+|   |-- services/     współdzielone helpery usługowe
+|   `-- main.py       entrypoint FastAPI
+`-- tests/            testy API i przepływów
 ```
 
-## Domain modules
+## Moduły domenowe
 
-The target architecture is a modular monolith. The `app/modules/` directory is the main boundary for that split.
+Docelowa architektura to modularny monolit. Katalog `app/modules/` jest główną granicą tego podziału.
 
-Current modules:
+Aktualne moduły:
 
 - `auth_rfid`
 - `traceability`
@@ -119,9 +119,9 @@ Current modules:
 - `service`
 - `files`
 
-Some endpoints still exist in legacy routing code while the refactor is in progress. New work should prefer module routers and module services over expanding the legacy route file.
+Część endpointów nadal istnieje w legacy routes, ale nowa praca powinna trafiać do routerów i serwisów modułowych, a nie rozbudowywać stary plik tras.
 
-## API highlights
+## Najważniejsze endpointy
 
 - `GET /health`
 - `POST /api/operators`
@@ -143,32 +143,32 @@ Some endpoints still exist in legacy routing code while the refactor is in progr
 - `GET /api/audit-events`
 - `POST /api/service-sessions/upload`
 
-## Traceability context and work sessions
+## Kontekst traceability i work sessions
 
-Production and quality operations can include `work_session_id` to link actions to an active RFID workstation session.
+Operacje produkcyjne i jakościowe mogą przekazywać `work_session_id`, żeby powiązać akcję z aktywną sesją RFID operatora na stanowisku.
 
-When a session id is provided, the backend validates:
+Jeśli identyfikator sesji jest podany, backend waliduje:
 
-- operator identity
-- workstation identity
-- machine identity when relevant
-- allowed operator role for the requested action
-- session timeout
+- tożsamość operatora
+- tożsamość stanowiska
+- tożsamość maszyny, jeśli ma znaczenie
+- dozwoloną rolę operatora dla danej akcji
+- timeout sesji
 
-This context is written to the audit trail and is critical for traceability.
+Ten kontekst trafia do audit trail i jest krytyczny dla traceability.
 
-## Recommended development workflow
+## Rekomendowany przepływ developerski
 
-1. update or add SQLAlchemy models
-2. generate an Alembic migration
-3. implement or adjust module service logic
-4. expose or update the API route
-5. add or update tests
-6. run `pytest`, `ruff check .`, and `mypy app`
+1. zaktualizować albo dodać modele SQLAlchemy
+2. wygenerować migrację Alembic
+3. zaimplementować lub poprawić logikę serwisu modułu
+4. wystawić albo zaktualizować endpoint API
+5. dodać lub poprawić testy
+6. uruchomić `pytest`, `ruff check .` i `mypy app`
 
-## Near-term refactor targets
+## Najbliższe cele refaktoru
 
-- move remaining legacy routes into domain modules
-- split shared DB concerns from the old `database.py` into `app/db/`
-- add PostgreSQL integration coverage in CI
-- tighten CI so lint and type checks are blocking
+- przenieść pozostałe legacy routes do modułów domenowych
+- wydzielić współdzielone elementy DB ze starego `database.py` do `app/db/`
+- dodać pokrycie integracyjne PostgreSQL w CI
+- zaostrzyć CI tak, żeby lint i typecheck były blokujące

@@ -1,32 +1,32 @@
-# Android App — ServiceTrace Mobile
+# Android App - ServiceTrace Mobile
 
-Placeholder pod aplikację Android.
+Szkic aplikacji mobilnej Android.
 
-Stack rekomendowany:
+Rekomendowany stack:
 
 - Kotlin
 - Jetpack Compose
 - Room / SQLite
 - Android USB Host API
 - OkHttp / Retrofit
-- CameraX lub Camera Intent
+- CameraX albo Camera Intent
 
-MVP ekrany:
+Ekrany MVP:
 
-1. Start
-2. Nowa sesja uruchomienia
-3. Połączenie USB / Mock MCU
-4. Procedura 10 kroków
+1. start
+2. nowa sesja uruchomienia
+3. połączenie USB / Mock MCU
+4. procedura 10 kroków
 5. OK / NOK / komentarz / zdjęcie
-6. Podsumowanie sesji
-7. Generowanie paczki ZIP
-8. Kolejka uploadu
-9. Status synchronizacji
+6. podsumowanie sesji
+7. generowanie paczki ZIP
+8. kolejka uploadu
+9. status synchronizacji
 
-W MVP brak:
+Poza zakresem MVP:
 
 - Wi-Fi
 - Bluetooth
 - firmware update
-- sterowania urządzeniem
+- sterowanie urządzeniem
 - AI

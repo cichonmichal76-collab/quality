@@ -1,24 +1,24 @@
-# Diagrams
+# Diagramy
 
-This directory contains working diagrams for the current ServiceTrace MVP.
+Ten katalog zawiera robocze diagramy dla aktualnego MVP ServiceTrace.
 
-The goal is not to draw an idealized future-state platform, but to make the current repository easier to understand for engineering, product, and architecture work.
+Celem nie jest rysowanie idealnej architektury przyszłości, tylko ułatwienie zrozumienia obecnego repo z perspektywy inżynierskiej, produktowej i architektonicznej.
 
-## Available diagrams
+## Dostępne diagramy
 
-- [System architecture](./system-architecture.md)
-- [Production traceability flow](./production-traceability-flow.md)
-- [Production item lifecycle](./production-item-lifecycle.md)
+- [Architektura systemu](./system-architecture.md)
+- [Przepływ traceability w produkcji](./production-traceability-flow.md)
+- [Lifecycle production itemu](./production-item-lifecycle.md)
 
-## Scope notes
+## Uwagi o zakresie
 
-- diagrams are aligned with the current backend-first MVP
-- implemented backend flows are shown as active paths
-- web app, Android app, and AR are still represented as partial or future-facing surfaces
-- some business flows still live in legacy backend routes even if the target module exists
+- diagramy są zgodne z aktualnym MVP budowanym z backendem na pierwszym planie
+- zaimplementowane flow backendowe są pokazane jako aktywne ścieżki
+- web app, Android app i AR są nadal pokazane jako częściowe albo przyszłe powierzchnie systemu
+- część przepływów biznesowych nadal żyje w legacy backend routes, nawet jeśli docelowy moduł już istnieje
 
-## Suggested reading order
+## Sugerowana kolejność czytania
 
-1. start with [System architecture](./system-architecture.md)
-2. then read [Production traceability flow](./production-traceability-flow.md)
-3. finish with [Production item lifecycle](./production-item-lifecycle.md)
+1. zacznij od [Architektury systemu](./system-architecture.md)
+2. potem przeczytaj [Przepływ traceability w produkcji](./production-traceability-flow.md)
+3. na końcu zobacz [Lifecycle production itemu](./production-item-lifecycle.md)

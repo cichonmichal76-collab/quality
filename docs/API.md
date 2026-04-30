@@ -1,6 +1,8 @@
-# API — ServiceTrace v3
+# API - ServiceTrace v3
 
-## Auth / RFID
+Ten plik jest skróconym indeksem najważniejszych endpointów. Pełniejszy opis przepływów i przykładowych payloadów znajduje się w [docs/api/README.md](./api/README.md).
+
+## Autoryzacja / RFID
 
 ```text
 POST /api/auth/rfid-login
@@ -8,7 +10,7 @@ GET /api/operators
 POST /api/operators
 ```
 
-## Workstations / machines
+## Stanowiska / maszyny
 
 ```text
 POST /api/workstations
@@ -17,14 +19,14 @@ POST /api/machines
 GET /api/machines
 ```
 
-## Barcode / QR
+## Kody kreskowe / QR
 
 ```text
 POST /api/barcodes/create
 GET /api/barcodes/{barcode_value}
 ```
 
-## Production items
+## Elementy produkcyjne
 
 ```text
 POST /api/production-items
@@ -33,20 +35,20 @@ GET /api/production-items/by-barcode/{barcode_value}
 PATCH /api/production-items/{item_serial_number}/status
 ```
 
-## Scan events
+## Zdarzenia skanowania
 
 ```text
 POST /api/scan-events
 ```
 
-## Assembly
+## Montaż
 
 ```text
 POST /api/devices/{device_serial_number}/assembly/scan-component
 GET /api/devices/{device_serial_number}/assembly-tree
 ```
 
-## Existing APIs retained
+## Zachowane endpointy istniejącego API
 
 ```text
 GET /health

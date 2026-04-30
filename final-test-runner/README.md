@@ -1,92 +1,92 @@
 # Final Test Runner
 
-Python CLI for running final device tests and sending the result to the ServiceTrace backend.
+Pythonowy CLI do uruchamiania final testu urządzenia i wysyłania wyniku do backendu ServiceTrace.
 
-The runner supports:
+Runner wspiera:
 
-- mock MCU mode for local development
-- serial over USB mode for workstation testing
-- local JSON result output
-- backend upload of final test metadata
+- tryb mock MCU do lokalnego developmentu
+- tryb serial over USB do testów stanowiskowych
+- lokalny zapis wyniku do JSON
+- upload metadanych final testu do backendu
 
-## Prerequisites
+## Wymagania wstępne
 
 - Python 3.11+
-- reachable ServiceTrace backend
-- active `work_session_id` from an RFID-authenticated workstation session
-- USB serial connection when using hardware mode
+- dostępny backend ServiceTrace
+- aktywne `work_session_id` z sesji RFID na stanowisku
+- połączenie USB serial przy użyciu trybu sprzętowego
 
-## Install
+## Instalacja
 
 ```bash
 cd final-test-runner
 pip install -e .[dev]
 ```
 
-## Quick start
+## Szybki start
 
-Mock mode:
+Tryb mock:
 
 ```bash
 python -m servicetrace_runner.main --device ZSS-000123 --backend http://localhost:8000 --mock --work-session-id WS-1234567890AB
 ```
 
-Serial / USB CDC mode:
+Tryb serial / USB CDC:
 
 ```bash
 python -m servicetrace_runner.main --device ZSS-000123 --backend http://localhost:8000 --port COM5 --work-session-id WS-1234567890AB
 ```
 
-The CLI also exposes the console script:
+CLI wystawia też skrypt konsolowy:
 
 ```bash
 servicetrace-final-test --device ZSS-000123 --backend http://localhost:8000 --mock --work-session-id WS-1234567890AB
 ```
 
-## CLI arguments
+## Argumenty CLI
 
 - `--backend`
-  Backend base URL. Default: `http://localhost:8000`
+  Bazowy URL backendu. Domyślnie: `http://localhost:8000`
 - `--device`
-  Device serial number override. If omitted in mock mode, a default mock serial is used.
+  Nadpisanie numeru seryjnego urządzenia. Jeśli nie podasz go w trybie mock, zostanie użyty domyślny numer mocka.
 - `--mock`
-  Use the in-process mock MCU client.
+  Używa wbudowanego klienta mock MCU.
 - `--port`
-  Serial port for USB CDC communication, for example `COM5`.
+  Port serial dla USB CDC, na przykład `COM5`.
 - `--output`
-  Local JSON output path. Default: `final-test-result.json`
+  Ścieżka lokalnego pliku JSON. Domyślnie: `final-test-result.json`
 - `--work-session-id`
-  Required for backend upload. Must point to an active workstation session.
+  Wymagane przy uploadzie do backendu. Musi wskazywać na aktywną sesję stanowiskową.
 
-## What the runner does
+## Co robi runner
 
-The runner performs this sequence:
+Runner wykonuje sekwencję:
 
-1. connect to MCU
+1. łączy się z MCU
 2. `PING`
 3. `GET_DEVICE_INFO`
 4. `GET_STATUS`
 5. `GET_ERRORS`
 6. `RUN_SELF_TEST`
 7. `GET_LOGS`
-8. compute a local PASS or FAIL
-9. write the local result JSON file
-10. ensure the device exists in backend
-11. upload final test metadata to `/api/final-tests`
+8. wylicza lokalny wynik PASS lub FAIL
+9. zapisuje lokalny plik JSON
+10. upewnia się, że urządzenie istnieje w backendzie
+11. wysyła metadane final testu do `/api/final-tests`
 
-Current result logic is intentionally simple:
+Aktualna logika wyniku jest celowo prosta:
 
-- `PASS` when self-test returns `PASS` and no MCU errors are reported
-- `FAIL` otherwise
+- `PASS`, jeśli self-test zwraca `PASS` i MCU nie raportuje błędów
+- `FAIL` w przeciwnym razie
 
-## Backend contract
+## Kontrakt z backendem
 
-Before upload, the runner calls:
+Przed uploadem runner wywołuje:
 
-- `POST /api/devices` to ensure the device exists
-- `POST /api/final-tests` to store the final test run
+- `POST /api/devices`, żeby upewnić się, że urządzenie istnieje
+- `POST /api/final-tests`, żeby zapisać wynik final testu
 
-Uploaded payload fields currently include:
+Aktualnie wysyłany payload zawiera:
 
 - `test_run_id`
 - `device_serial_number`
@@ -96,7 +96,7 @@ Uploaded payload fields currently include:
 - `bootloader_version`
 - `work_session_id`
 
-The full local JSON result also contains raw MCU data such as:
+Pełny lokalny wynik JSON zawiera też surowe dane z MCU, takie jak:
 
 - `device_info`
 - `status`
@@ -104,29 +104,29 @@ The full local JSON result also contains raw MCU data such as:
 - `self_test`
 - `logs`
 
-## Output artifact
+## Artefakt wyjściowy
 
-By default the runner writes `final-test-result.json` in the current directory.
+Domyślnie runner zapisuje `final-test-result.json` w bieżącym katalogu.
 
-That file is useful for:
+Ten plik jest przydatny do:
 
-- local troubleshooting
-- attaching artifacts to a future workstation workflow
-- debugging backend integration without rerunning hardware steps
+- lokalnego diagnozowania problemów
+- późniejszego podpięcia artefaktów do przepływu stanowiskowego
+- debugowania integracji z backendem bez powtarzania kroków sprzętowych
 
-## Mock MCU behavior
+## Zachowanie mock MCU
 
-The mock client returns deterministic values for:
+Mock client zwraca deterministyczne dane dla:
 
-- device info
-- status
-- error list
-- self-test output
-- logs
+- informacji o urządzeniu
+- statusu
+- listy błędów
+- wyniku self-testu
+- logów
 
-This makes it suitable for backend development, CI-oriented local checks, and demos without hardware access.
+To sprawia, że nadaje się do developmentu backendu, lokalnych sprawdzeń i demo bez sprzętu.
 
-## Tests and lint
+## Testy i lint
 
 ```bash
 cd final-test-runner
@@ -134,10 +134,10 @@ pytest
 ruff check .
 ```
 
-## Current limitations
+## Aktualne ograniczenia
 
-- no retry strategy on backend upload
-- no persisted artifact bundle beyond the local JSON file
-- no workstation-side workflow orchestration yet
-- no advanced PASS, FAIL, HOLD rule engine yet
-- no protocol version negotiation yet
+- brak strategii retry przy uploadzie do backendu
+- brak trwałej paczki artefaktów poza lokalnym plikiem JSON
+- brak pełnej orkiestracji przepływu stanowiskowego
+- brak rozbudowanego silnika PASS / FAIL / HOLD
+- brak negocjacji wersji protokołu

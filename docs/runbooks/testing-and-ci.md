@@ -1,19 +1,19 @@
-# Testing and CI
+# Testy i CI
 
-This runbook describes the current local checks and CI behavior for the repository.
+Ten runbook opisuje aktualne lokalne checki i zachowanie CI w repozytorium.
 
-## Local rule of thumb
+## Prosta zasada lokalna
 
-Before pushing code:
+Przed pushem:
 
-- run backend tests for backend changes
-- run runner tests for runner changes
-- rerun migrations if schema changed
-- do not rely on CI to find obvious local breakage
+- uruchom testy backendu, jeśli zmieniałeś backend
+- uruchom testy runnera, jeśli zmieniałeś runner
+- zastosuj migracje, jeśli zmienił się schemat
+- nie zakładaj, że CI złapie wszystko, co łatwo znaleźć lokalnie
 
-## Backend checks
+## Checki backendu
 
-From the repository root:
+Z katalogu głównego repo:
 
 ```bash
 cd backend
@@ -22,18 +22,18 @@ ruff check .
 mypy app
 ```
 
-What each check covers:
+Co sprawdza każdy krok:
 
 - `pytest`
-  API and workflow correctness
+  poprawność API i przepływów
 - `ruff check .`
-  lint and style issues
+  lint i problemy stylu
 - `mypy app`
-  type checking for backend code
+  typecheck backendu
 
-## Final-test-runner checks
+## Checki final-test-runnera
 
-From the repository root:
+Z katalogu głównego repo:
 
 ```bash
 cd final-test-runner
@@ -41,80 +41,80 @@ pytest
 ruff check .
 ```
 
-Note:
+Uwaga:
 
-- the current CI file includes `mypy servicetrace_runner`, but the package optional dependencies in `final-test-runner` do not currently list `mypy`
+- obecny plik CI zawiera `mypy servicetrace_runner`, ale optional dependencies pakietu `final-test-runner` nie dodają jeszcze `mypy`
 
-## Docker build check
+## Check buildu Docker
 
-From the repository root:
+Z katalogu głównego repo:
 
 ```bash
 docker compose build
 ```
 
-Run this when:
+Uruchamiaj to, gdy:
 
-- backend dependencies changed
-- Dockerfile changed
-- compose configuration changed
+- zmieniły się zależności backendu
+- zmienił się Dockerfile
+- zmienił się `docker-compose.yml`
 
-## Current CI workflow
+## Aktualny przepływ CI
 
-The repository currently runs one GitHub Actions workflow at:
+Repo uruchamia dziś jeden przepływ GitHub Actions w:
 
 [ci.yml](</C:/Users/cicho/OneDrive/Pulpit/Quality/service-trace-codex-v4/service-trace-v4/.github/workflows/ci.yml>)
 
-Current jobs:
+Aktualne joby:
 
 - `backend`
 - `final-test-runner`
 - `docker-build`
 
-## Important CI caveat
+## Ważna uwaga o obecnym CI
 
-Right now:
+Obecnie:
 
-- backend lint is non-blocking
-- backend mypy is non-blocking
-- runner lint is non-blocking
-- runner mypy is non-blocking
+- lint backendu jest nieblokujący
+- mypy backendu jest nieblokujący
+- lint runnera jest nieblokujący
+- mypy runnera jest nieblokujący
 
-That means CI can still go green even when some quality checks fail.
+To oznacza, że CI może pozostać zielone, nawet jeśli część quality checks zawiedzie.
 
-Until this is tightened, the safest local policy is:
+Dopóki to nie zostanie zaostrzone, najbezpieczniejsza lokalna polityka brzmi:
 
-- treat `ruff` and `mypy` as required locally
+- traktuj `ruff` i `mypy` jako wymagane lokalnie
 
-## Recommended pre-push checklist
+## Rekomendowana checklista przed pushem
 
-1. run `alembic upgrade head` if the backend schema changed
-2. run backend checks if backend code changed
-3. run runner checks if runner code changed
-4. inspect `git diff`
-5. commit intentionally
-6. push only from a clean working tree
+1. uruchom `alembic upgrade head`, jeśli zmienił się schemat backendu
+2. uruchom checki backendu, jeśli zmieniałeś backend
+3. uruchom checki runnera, jeśli zmieniałeś runner
+4. przejrzyj `git diff`
+5. commituj świadomie
+6. pushuj tylko z czystego working tree
 
-## How to interpret failures
+## Jak interpretować błędy
 
-If `pytest` fails:
+Jeśli pada `pytest`:
 
-- prioritize behavior and data-flow bugs first
+- priorytetem są błędy zachowania i przepływu danych
 
-If `ruff` fails:
+Jeśli pada `ruff`:
 
-- fix lint issues before pushing, even if CI would currently allow them
+- napraw lint przed pushem, nawet jeśli CI dziś to przepuszcza
 
-If `mypy` fails:
+Jeśli pada `mypy`:
 
-- fix type regressions before pushing, especially around payload shapes and optional session context
+- napraw regresję typów, szczególnie tam, gdzie chodzi o kształty payloadów i opcjonalny kontekst sesji
 
-If Docker build fails:
+Jeśli pada build Docker:
 
-- check dependency changes, package metadata, and path assumptions
+- sprawdź zależności, metadane pakietu i założenia dotyczące ścieżek
 
-## Current testing gaps
+## Aktualne luki w testowaniu
 
-- PostgreSQL integration tests are not yet enforced in CI
-- CI quality gates are still softer than the target architecture suggests
-- web and Android do not yet have meaningful automated checks in this repo
+- testy integracyjne PostgreSQL nie są jeszcze wymuszane w CI
+- quality gates w CI są nadal bardziej miękkie niż sugeruje docelowa architektura
+- web i Android nie mają jeszcze sensownych automatycznych checków w tym repo

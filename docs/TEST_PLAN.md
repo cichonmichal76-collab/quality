@@ -1,28 +1,28 @@
-# Test Plan — MVP
+# Plan testów - MVP
 
 ## Backend
 
 - healthcheck
-- create device
-- assign component
-- block READY_FOR_SHIPMENT without FINAL_TEST_PASSED
-- final test PASS changes status
-- final test FAIL creates NCR
-- service package upload computes SHA256
+- utworzenie urządzenia
+- przypisanie komponentu
+- blokada `READY_FOR_SHIPMENT` bez `FINAL_TEST_PASSED`
+- wynik `PASS` testu końcowego zmienia status
+- wynik `FAIL` testu końcowego tworzy NCR
+- upload paczki serwisowej wylicza `SHA256`
 
-## Final Test Runner
+## Final-test-runner
 
-- MockMcuClient PING
-- MockMcuClient RUN_SELF_TEST PASS
-- result JSON generation
-- backend upload
+- `MockMcuClient` dla `PING`
+- `MockMcuClient` dla `RUN_SELF_TEST` z wynikiem `PASS`
+- generowanie wyniku JSON
+- wysyłka do backendu
 
 ## Mobile
 
-- create local session
-- run 10-step checklist
-- add comment
-- add photo
-- generate ZIP
-- queue upload when offline
-- upload after network returns
+- utworzenie lokalnej sesji
+- wykonanie checklisty 10-krokowej
+- dodanie komentarza
+- dodanie zdjęcia
+- wygenerowanie ZIP
+- ustawienie wysyłki w kolejce przy braku internetu
+- wysyłka po powrocie sieci

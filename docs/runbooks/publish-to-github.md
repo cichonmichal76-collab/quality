@@ -1,33 +1,33 @@
-# Publish Changes To GitHub
+# Publikacja zmian do GitHuba
 
-This runbook describes the current practical publication flow for the repository.
+Ten runbook opisuje praktyczny flow publikacji zmian do repozytorium.
 
-## Current repository state
+## Aktualny stan repo
 
-The repository is published at:
+Repo jest publikowane pod:
 
 [cichonmichal76-collab/Quality](https://github.com/cichonmichal76-collab/Quality)
 
-The local repository currently tracks:
+Lokalne repo śledzi:
 
 ```text
 origin -> https://github.com/cichonmichal76-collab/Quality.git
 ```
 
-The default branch in use is `main`.
+Domyślny branch to `main`.
 
-## Recommended workflow
+## Rekomendowany przepływ
 
-1. make changes in a clean local branch or clean local `main`
-2. run relevant tests and checks
-3. inspect the diff
-4. commit with a focused message
-5. push to GitHub
-6. verify remote state
+1. wprowadzaj zmiany na czystym lokalnym branchu albo na czystym `main`
+2. uruchom odpowiednie testy i checki
+3. przejrzyj diff
+4. zrób commit z konkretnym zakresem
+5. wypchnij zmiany do GitHuba
+6. zweryfikuj stan zdalny
 
-## Minimal local commands
+## Minimalny zestaw komend
 
-Inspect local state:
+Sprawdzenie lokalnego stanu:
 
 ```bash
 git status -sb
@@ -35,22 +35,22 @@ git log --oneline --decorate -5
 git remote -v
 ```
 
-Commit changes:
+Commit zmian:
 
 ```bash
-git add <paths>
-git commit -m "short-message"
+git add <ścieżki>
+git commit -m "krótka-wiadomość"
 ```
 
-Push to the tracked remote branch:
+Push do śledzonego brancha:
 
 ```bash
 git push
 ```
 
-## First push or remote setup
+## Pierwszy push albo konfiguracja remote
 
-If the repository has no remote yet:
+Jeśli repo nie ma jeszcze zdalnego `origin`:
 
 ```bash
 git remote add origin https://github.com/cichonmichal76-collab/Quality.git
@@ -58,59 +58,59 @@ git branch -M main
 git push -u origin main
 ```
 
-## What to verify before pushing
+## Co sprawdzić przed pushem
 
-- working tree is clean apart from intentional changes
-- migrations are included when schema changed
-- docs and code match each other
-- commit message describes one coherent unit of work
-- branch target is the one you actually intend to update
+- working tree jest czysty poza zmianami, które rzeczywiście chcesz opublikować
+- migracje są dodane, jeśli zmienił się schemat
+- dokumentacja i kod opisują ten sam stan
+- commit message opisuje jeden spójny pakiet pracy
+- target pushu jest dokładnie tym branchem, który chcesz zaktualizować
 
-## Suggested publishing habits
+## Dobre nawyki publikacyjne
 
-- prefer small, reviewable commits over one large batch
-- keep code, docs, and migrations in sync
-- avoid pushing broken lint or typing even if CI is currently permissive
-- do not rewrite shared history unless there is a specific reason
+- preferuj małe, reviewowalne commity zamiast jednego dużego pakietu
+- utrzymuj kod, dokumentację i migracje w synchronizacji
+- nie pushuj zepsutego linta ani typechecku, nawet jeśli CI jest dziś zbyt łagodne
+- nie przepisuj wspólnej historii bez wyraźnego powodu
 
-## Current environment note
+## Uwaga o obecnym środowisku
 
-In the environment used for this repository work, `gh` may not be installed. The repository can still be published normally through plain `git` commands.
+W środowisku używanym do tej pracy `gh` może nie być zainstalowane. Repo nadal można normalnie publikować zwykłym `git`.
 
-That means this is a valid and supported flow here:
+To oznacza, że poprawnym i wspieranym flow jest tutaj:
 
 ```bash
-git commit -m "message"
+git commit -m "wiadomość"
 git push
 ```
 
-## Post-push verification
+## Weryfikacja po pushu
 
-After pushing, check:
+Po pushu sprawdź:
 
 - `git status -sb`
 - `git log --oneline --decorate -2`
-- the GitHub repo page for the latest commit on `main`
+- stronę repo na GitHubie z najnowszym commitem na `main`
 
-## Safe failure recovery
+## Bezpieczne kroki naprawcze
 
-If push fails because remote moved:
+Jeśli push nie przejdzie, bo remote się przesunął:
 
-1. stop
-2. fetch latest changes
-3. inspect divergence
-4. rebase or merge deliberately
-5. rerun checks if needed
-6. push again
+1. zatrzymaj się
+2. pobierz najnowsze zmiany
+3. sprawdź rozjazd
+4. świadomie użyj rebase albo merge
+5. w razie potrzeby uruchom checki jeszcze raz
+6. wypchnij ponownie
 
-If push fails because of credentials:
+Jeśli push nie przejdzie z powodu autoryzacji:
 
-1. verify remote URL
-2. verify local git credential setup
-3. retry after auth is fixed
+1. sprawdź URL remote
+2. sprawdź lokalny setup credentiali Git
+3. spróbuj ponownie po naprawieniu autoryzacji
 
-## What not to do
+## Czego nie robić
 
-- do not use destructive history rewrites casually on shared work
-- do not push schema changes without migrations
-- do not assume CI will catch every local issue
+- nie używaj lekkomyślnie destrukcyjnego przepisywania historii przy pracy współdzielonej
+- nie pushuj zmian schematu bez migracji
+- nie zakładaj, że CI wychwyci każdy lokalny problem

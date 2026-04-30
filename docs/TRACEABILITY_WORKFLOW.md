@@ -1,4 +1,4 @@
-# Traceability Workflow — RFID + barcode/QR
+# Przepływ traceability - RFID + barcode/QR
 
 ## Główna zasada
 

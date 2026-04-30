@@ -1,36 +1,36 @@
-# Architecture Decision Records
+# ADR-y
 
-This directory stores architecture decisions that have long-term impact on the project.
+Ten katalog przechowuje decyzje architektoniczne, które mają długofalowy wpływ na projekt.
 
-Use ADRs for choices that affect:
+Używaj ADR-ów do wyborów wpływających na:
 
-- system structure
-- integration boundaries
-- operational assumptions
-- technology constraints
-- product-specific engineering rules
+- strukturę systemu
+- granice integracyjne
+- założenia operacyjne
+- ograniczenia technologiczne
+- reguły inżynierskie specyficzne dla produktu
 
-## Naming convention
+## Konwencja nazewnicza
 
-- use zero-padded numbers such as `0001`, `0002`, `0003`
-- use short kebab-case titles
-- keep one decision per file
+- używaj numerów z zerami wiodącymi, takich jak `0001`, `0002`, `0003`
+- używaj krótkich nazw w kebab-case
+- jeden plik powinien opisywać jedną decyzję
 
-## Suggested ADR structure
+## Sugerowana struktura ADR
 
-Each ADR should contain:
+Każdy ADR powinien zawierać:
 
 1. status
-2. context
-3. decision
-4. consequences
+2. kontekst
+3. decyzję
+4. konsekwencje
 
-## Current ADRs
+## Aktualne ADR-y
 
-- [0001 - Modular monolith backend](./0001-modular-monolith-backend.md)
-- [0002 - USB-only device communication](./0002-usb-only-device-communication.md)
-- [0003 - Backend-first MVP delivery order](./0003-backend-first-mvp-delivery-order.md)
+- [0001 - Modularny monolit backendu](./0001-modular-monolith-backend.md)
+- [0002 - Komunikacja z urządzeniem wyłącznie po USB](./0002-usb-only-device-communication.md)
+- [0003 - Kolejność dostarczania MVP z backendem na pierwszym planie](./0003-backend-first-mvp-delivery-order.md)
 
-## When to add a new ADR
+## Kiedy dodać nowy ADR
 
-Add an ADR when the answer to "why is the system built this way?" is important enough that future contributors should not have to reconstruct it from code, chat history, or old commits.
+Dodaj ADR wtedy, gdy odpowiedź na pytanie „dlaczego system jest zbudowany właśnie tak?” jest na tyle ważna, że przyszli współtwórcy nie powinni odtwarzać jej z kodu, historii czatu albo starych commitów.

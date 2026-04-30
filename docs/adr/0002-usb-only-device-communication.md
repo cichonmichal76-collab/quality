@@ -1,44 +1,44 @@
-# ADR 0002: USB-Only Device Communication
+# ADR 0002: Komunikacja z urządzeniem wyłącznie po USB
 
-- Status: accepted
+- Status: zaakceptowany
 
-## Context
+## Kontekst
 
-The target product is a medical device. Product constraints explicitly reject Wi-Fi, Bluetooth, and BLE as the communication path between the device and the service or test tooling.
+Docelowy produkt jest urządzeniem medycznym. Ograniczenia produktowe jednoznacznie odrzucają Wi-Fi, Bluetooth i BLE jako ścieżkę komunikacji między urządzeniem a narzędziami serwisowymi lub testowymi.
 
-Both production diagnostics and field service workflows still need access to:
+Jednocześnie produkcja i późniejszy serwis nadal potrzebują dostępu do:
 
-- device serial number
-- firmware and bootloader versions
-- health and status information
-- self-test results
-- logs and error information
+- numeru seryjnego urządzenia
+- wersji firmware i bootloadera
+- informacji o stanie i zdrowiu urządzenia
+- wyników self-testu
+- logów i błędów
 
-## Decision
+## Decyzja
 
-Technical communication with the device MCU will use wired USB communication.
+Komunikacja techniczna z MCU urządzenia będzie odbywać się przewodowo po USB.
 
-For the current MVP this is represented as USB CDC or serial-over-USB behavior, with a simple command interface used by the final-test runner and later by the Android service flow.
+W aktualnym MVP jest to odwzorowane jako USB CDC albo serial over USB z prostym interfejsem poleceń używanym przez final-test-runner i później przez mobilny przepływ serwisowy.
 
-Wireless connectivity is out of scope for the device itself.
+Łączność bezprzewodowa po stronie samego urządzenia jest poza zakresem.
 
-## Consequences
+## Konsekwencje
 
-Positive:
+Pozytywne:
 
-- aligned with the medical-device communication constraint
-- simpler security and compliance story for the device
-- predictable transport for workstation final-test scenarios
-- consistent transport assumption for backend, runner, and mobile planning
+- zgodność z ograniczeniem komunikacyjnym urządzenia medycznego
+- prostsza historia bezpieczeństwa i compliance po stronie urządzenia
+- przewidywalny transport dla scenariuszy final testu na stanowisku
+- spójne założenie transportowe dla backendu, runnera i planowanej aplikacji mobilnej
 
-Tradeoffs:
+Koszty i kompromisy:
 
-- service workflows depend on cable and USB host support
-- mobile UX is more constrained than a wireless pairing approach
-- tooling must handle serial and USB edge cases directly
+- przepływy serwisowe zależą od kabla i wsparcia USB Host
+- UX na telefonie jest bardziej ograniczony niż przy podejściu bezprzewodowym
+- narzędzia muszą bezpośrednio obsługiwać przypadki brzegowe serial/USB
 
-Implementation guidance:
+Wskazówki implementacyjne:
 
-- keep MCU tooling built around USB transport assumptions
-- do not design production or service flows that require device Wi-Fi or Bluetooth
-- any future transport expansion would require a new ADR
+- narzędzia MCU powinny być projektowane wokół USB jako założenia transportowego
+- nie należy projektować przepływów produkcyjnych ani serwisowych wymagających Wi-Fi albo Bluetooth w urządzeniu
+- każda przyszła zmiana transportu wymaga nowego ADR

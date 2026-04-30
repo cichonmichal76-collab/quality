@@ -1,81 +1,81 @@
-# Database Migrations
+# Migracje bazy danych
 
-This runbook describes how to work with Alembic migrations in the backend.
+Ten runbook opisuje, jak pracować z migracjami Alembic w backendzie.
 
-## Why this matters
+## Dlaczego to ważne
 
-The backend no longer creates tables automatically at application startup. Schema changes must go through Alembic.
+Backend nie tworzy już tabel automatycznie przy starcie aplikacji. Zmiany schematu muszą przechodzić przez Alembic.
 
-That means:
+To oznacza:
 
-- model change without migration is incomplete work
-- local database drift is a real failure mode
-- tests and runtime setup assume schema has been prepared explicitly
+- zmiana modelu bez migracji jest pracą niekompletną
+- lokalny drift bazy jest realnym trybem awarii
+- testy i runtime zakładają, że schemat został przygotowany jawnie
 
-## Current migration location
+## Gdzie są migracje
 
-Alembic files live in:
+Pliki Alembic znajdują się w:
 
 ```text
 backend/alembic/
 ```
 
-Main entry files:
+Główne pliki wejściowe:
 
 - `backend/alembic.ini`
 - `backend/alembic/env.py`
 - `backend/alembic/versions/`
 
-## Apply the latest schema
+## Zastosowanie aktualnego schematu
 
-From the repository root:
-
-```bash
-cd backend
-alembic upgrade head
-```
-
-Run this:
-
-- after pulling changes
-- after switching branches
-- before manual backend testing
-
-## Create a new migration
-
-Typical flow:
-
-1. update SQLAlchemy models
-2. generate migration
-3. inspect migration manually
-4. apply it locally
-5. run tests
-
-Generate:
-
-```bash
-cd backend
-alembic revision --autogenerate -m "describe change"
-```
-
-## Review checklist for a new migration
-
-Before committing a generated migration, verify:
-
-- the file touches only the tables and columns you intended
-- no accidental drop or rename slipped in
-- nullable and default behavior matches the application logic
-- indexes and unique constraints are what you expect
-- data-preserving behavior is acceptable for the change
-
-## Upgrade after generating
+Z katalogu głównego repo:
 
 ```bash
 cd backend
 alembic upgrade head
 ```
 
-Then run:
+Uruchamiaj to:
+
+- po pobraniu zmian
+- po zmianie brancha
+- przed ręcznym testowaniem backendu
+
+## Tworzenie nowej migracji
+
+Typowy flow:
+
+1. zaktualizuj modele SQLAlchemy
+2. wygeneruj migrację
+3. przeczytaj wygenerowany plik ręcznie
+4. zastosuj migrację lokalnie
+5. uruchom testy
+
+Generowanie:
+
+```bash
+cd backend
+alembic revision --autogenerate -m "opis zmiany"
+```
+
+## Checklista przeglądu nowej migracji
+
+Zanim commitniesz wygenerowaną migrację, sprawdź:
+
+- czy plik dotyka tylko tych tabel i kolumn, które planowałeś
+- czy nie wślizgnął się przypadkowy drop albo rename
+- czy nullability i defaulty zgadzają się z logiką aplikacji
+- czy indeksy i unikalności są dokładnie takie, jak chcesz
+- czy zachowanie danych przy zmianie jest akceptowalne
+
+## Upgrade po wygenerowaniu
+
+```bash
+cd backend
+alembic upgrade head
+```
+
+Następnie uruchom:
 
 ```bash
 pytest
@@ -83,42 +83,42 @@ ruff check .
 mypy app
 ```
 
-## When model and migration are both required
+## Kiedy model i migracja są wymagane razem
 
-You should make both changes in the same code change when:
+Obie zmiany powinny wejść w tym samym pakiecie, gdy:
 
-- adding a new entity
-- adding or renaming a column
-- changing nullability
-- changing uniqueness constraints
-- changing foreign-key structure
+- dodajesz nową encję
+- dodajesz albo zmieniasz nazwę kolumny
+- zmieniasz nullability
+- zmieniasz unikalność
+- zmieniasz strukturę foreign key
 
-## Common migration mistakes
+## Typowe błędy przy migracjach
 
-- editing models and forgetting a migration
-- trusting autogenerate without reading the file
-- leaving unrelated model noise in the generated migration
-- not applying the migration locally before pushing
+- edycja modeli bez dodania migracji
+- bezkrytyczne zaufanie autogenerate bez przeczytania pliku
+- pozostawienie niepowiązanego szumu modelowego w wygenerowanej migracji
+- brak lokalnego `alembic upgrade head` przed pushem
 
-## Current migration expectations in this repo
+## Aktualna zasada w tym repo
 
-Today the backend has already moved to an Alembic-based workflow, so future backend work should follow this rule:
+Backend już przeszedł na przepływ oparty o Alembic, więc przyszła praca backendowa powinna stosować prostą zasadę:
 
-- no schema change is complete without a migration file
+- żadna zmiana schematu nie jest kompletna bez pliku migracji
 
-## Practical recovery steps
+## Praktyczne kroki naprawcze
 
-If local backend startup fails after a schema-related change:
+Jeśli backend nie startuje po zmianie związanej ze schematem:
 
-1. stop the backend
-2. go to `backend/`
-3. run `alembic upgrade head`
-4. rerun tests
-5. restart `uvicorn`
+1. zatrzymaj backend
+2. przejdź do `backend/`
+3. uruchom `alembic upgrade head`
+4. odpal testy jeszcze raz
+5. uruchom ponownie `uvicorn`
 
-If a generated migration looks suspicious:
+Jeśli wygenerowana migracja wygląda podejrzanie:
 
-1. do not commit it yet
-2. inspect model changes
-3. regenerate or edit carefully
-4. rerun `alembic upgrade head`
+1. nie commituj jej od razu
+2. sprawdź dokładnie zmiany modeli
+3. wygeneruj ją ponownie albo popraw ostrożnie ręcznie
+4. jeszcze raz uruchom `alembic upgrade head`

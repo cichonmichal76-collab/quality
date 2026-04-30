@@ -1,57 +1,55 @@
 # ServiceTrace Platform
 
-ServiceTrace Platform is a traceability and quality system for a medical device production and service workflow.
+ServiceTrace Platform to system traceability i quality dla procesu produkcji oraz serwisu urządzenia medycznego.
 
-The platform tracks physical parts and subassemblies from machine output, through QC and final assembly, to final test, shipment, commissioning, and later service history.
+Platforma śledzi fizyczne części i podzespoły od zejścia z maszyny, przez QC i montaż końcowy, aż po final test, wysyłkę, commissioning i późniejszą historię serwisową.
 
-Detailed product and process documents in `docs/` are currently maintained mostly in Polish.
+## Jaki problem rozwiązuje repo
 
-## What problem this repo solves
+- każda fizyczna część dostaje własny unikalny barcode, QR albo DataMatrix
+- operator loguje się kartą RFID na stanowisku
+- każdy scan, krok QC, final test i akcja montażowa są przypisane do osoby, stanowiska, maszyny i czasu
+- gotowe urządzenie można prześledzić do konkretnych egzemplarzy komponentów
+- wysyłka może zostać zablokowana, jeśli warunki jakościowe lub final test nie są spełnione
 
-- each physical part gets its own unique barcode, QR code, or DataMatrix
-- operators log in with RFID at a workstation
-- every scan, QC step, final test, and assembly action is attributed to a person, workstation, machine, and timestamp
-- finished devices can be traced back to exact component instances
-- shipment can be blocked if quality or final test rules are not satisfied
+## Aktualny stan
 
-## Current status
+To repo jest obecnie MVP budowanym z backendem na pierwszym planie.
 
-This repository is currently a backend-first MVP.
+Już zaimplementowane:
 
-Implemented now:
+- backend FastAPI z modelami SQLAlchemy i migracjami Alembic
+- logowanie RFID i sesje stanowiskowe
+- lifecycle barcode oraz historia skanów
+- traceability `production_item`
+- MVP checklist QC z automatyczną oceną PASS/FAIL
+- tworzenie NCR przy blokujących błędach QC lub final testu
+- linki montażowe między urządzeniem a zeskanowanymi komponentami
+- Pythonowy final-test-runner z mock MCU i interfejsem serial/USB
+- przepływ CI dla backendu, runnera i buildu Docker
 
-- FastAPI backend with SQLAlchemy models and Alembic migrations
-- RFID login and workstation work sessions
-- barcode lifecycle and scan history
-- production item traceability
-- QC checklist MVP with automatic PASS/FAIL evaluation
-- NCR creation on blocking QC or final test failures
-- assembly links between device and scanned components
-- Python final-test runner with mock MCU and serial/USB interface
-- CI workflow for backend, runner, and Docker build
+Na poziomie scaffoldu lub szkicu:
 
-In scaffold / placeholder state:
+- `web-app/` jako UI dla produkcji i jakości
+- `android-app/` jako mobilny klient offline-first dla serwisu
+- Service AR Part Identification
 
-- `web-app/` production and quality UI
-- `android-app/` offline-first service mobile app
-- service AR part identification
-
-## Repository layout
+## Struktura repozytorium
 
 ```text
 .
-|-- backend/             FastAPI backend, DB models, API, tests, Alembic
-|-- final-test-runner/   Python CLI runner for final device test
-|-- web-app/             front-end scaffold for production / quality UI
-|-- android-app/         Android scaffold for service workflows
-|-- docs/                PRD, pipeline, stack, mechanisms, backlog
-|-- .github/             CI workflow, PR template, CODEOWNERS
-`-- docker-compose.yml   local backend + PostgreSQL startup
+|-- backend/             backend FastAPI, modele DB, API, testy, Alembic
+|-- final-test-runner/   Python CLI do final testu urządzenia
+|-- web-app/             scaffold frontendu Production / Quality
+|-- android-app/         scaffold aplikacji Android dla serwisu
+|-- docs/                PRD, pipeline, stack, mechanizmy, backlog
+|-- .github/             przepływ CI, szablon PR, CODEOWNERS
+`-- docker-compose.yml   lokalny start backendu i PostgreSQL
 ```
 
-## Backend architecture at a glance
+## Architektura backendu w skrócie
 
-The backend is evolving toward a modular monolith with domain modules such as:
+Backend ewoluuje w kierunku modularnego monolitu z modułami domenowymi takimi jak:
 
 - `auth_rfid`
 - `traceability`
@@ -62,21 +60,21 @@ The backend is evolving toward a modular monolith with domain modules such as:
 - `service`
 - `files`
 
-There is still some legacy routing code in the repo, but the new module layout is already in place and active for selected domains.
+Część kodu nadal żyje w legacy routes, ale nowy podział modułowy jest już aktywny dla kilku kluczowych domen.
 
-## Quick start
+## Szybki start
 
-### Option 1: Docker
+### Opcja 1: Docker
 
-Start PostgreSQL and the backend:
+Uruchom PostgreSQL i backend:
 
 ```bash
 docker compose up --build
 ```
 
-Backend will be available at `http://localhost:8000`.
+Backend będzie dostępny pod `http://localhost:8000`.
 
-### Option 2: Local backend development
+### Opcja 2: lokalny development backendu
 
 ```bash
 cd backend
@@ -85,9 +83,9 @@ alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
-Useful local environment variables are listed in [`.env.example`](./.env.example).
+Przydatne zmienne środowiskowe są opisane w [`.env.example`](./.env.example).
 
-## Tests and quality checks
+## Testy i quality checks
 
 Backend:
 
@@ -98,7 +96,7 @@ ruff check .
 mypy app
 ```
 
-Final test runner:
+Final-test-runner:
 
 ```bash
 cd final-test-runner
@@ -106,23 +104,23 @@ pytest
 ruff check .
 ```
 
-## Final test runner
+## Final-test-runner
 
-Mock mode:
+Tryb mock:
 
 ```bash
 cd final-test-runner
 python -m servicetrace_runner.main --device ZSS-000123 --backend http://localhost:8000 --mock --work-session-id WS-1234567890AB
 ```
 
-Serial / USB CDC mode:
+Tryb serial / USB CDC:
 
 ```bash
 cd final-test-runner
 python -m servicetrace_runner.main --device ZSS-000123 --backend http://localhost:8000 --port COM5 --work-session-id WS-1234567890AB
 ```
 
-## Key backend capabilities
+## Najważniejsze możliwości backendu
 
 - `GET /health`
 - `POST /api/operators`
@@ -142,50 +140,50 @@ python -m servicetrace_runner.main --device ZSS-000123 --backend http://localhos
 - `PATCH /api/devices/{serial_number}/status`
 - `GET /api/audit-events`
 
-## Constraints specific to the product
+## Ograniczenia produktowe
 
-- the target device is a medical device
-- the device itself does not use Wi-Fi, Bluetooth, or BLE
-- technical communication with MCU is wired over USB
-- the mobile phone used by a service technician may have internet, but the device does not communicate wirelessly
+- urządzenie docelowe jest urządzeniem medycznym
+- samo urządzenie nie używa Wi-Fi, Bluetooth ani BLE
+- komunikacja techniczna z MCU odbywa się przewodowo po USB
+- telefon serwisanta może mieć internet, ale urządzenie nie komunikuje się bezprzewodowo
 
-## Product roadmap
+## Roadmapa produktu
 
-The implementation plan is described in [docs/CODEX_PIPELINE.md](./docs/CODEX_PIPELINE.md).
+Kolejność implementacji jest opisana w [docs/CODEX_PIPELINE.md](./docs/CODEX_PIPELINE.md).
 
-High-level order:
+Wysokopoziomowo:
 
-1. repository and CI foundation
-2. backend core and data model
-3. RFID sessions
-4. barcode lifecycle
+1. fundament repo i CI
+2. backend core i model danych
+3. sesje RFID
+4. lifecycle barcode
 5. QC
 6. assembly by scan
-7. final test runner
+7. final-test-runner
 8. shipment gate
-9. offline mobile commissioning
-10. service AR identification
+9. commissioning mobilny offline
+10. identyfikacja serwisowa AR
 
-## Documentation
+## Dokumentacja
 
-- [docs/PRD.md](./docs/PRD.md) - product requirements
-- [docs/api/README.md](./docs/api/README.md) - current API guide and example flows
-- [docs/domain/README.md](./docs/domain/README.md) - domain model and business entity map
-- [docs/diagrams/README.md](./docs/diagrams/README.md) - architecture and workflow diagrams
-- [docs/runbooks/README.md](./docs/runbooks/README.md) - operational procedures for local work and release flow
-- [docs/TECH_STACK.md](./docs/TECH_STACK.md) - proposed technology stack
-- [docs/MECHANISMS.md](./docs/MECHANISMS.md) - system mechanisms
-- [docs/BACKLOG.md](./docs/BACKLOG.md) - functional backlog
-- [docs/CI_CD.md](./docs/CI_CD.md) - CI/CD direction
-- [docs/adr/README.md](./docs/adr/README.md) - architecture decisions
-- [backend/README.md](./backend/README.md) - backend-specific notes
-- [final-test-runner/README.md](./final-test-runner/README.md) - runner usage
-- [AGENTS.md](./AGENTS.md) - coding-agent workflow and project rules
+- [docs/PRD.md](./docs/PRD.md) - wymagania produktowe
+- [docs/api/README.md](./docs/api/README.md) - aktualny przewodnik po API i przykładowe flow
+- [docs/domain/README.md](./docs/domain/README.md) - model domenowy i mapa encji biznesowych
+- [docs/diagrams/README.md](./docs/diagrams/README.md) - diagramy architektury i przepływów
+- [docs/runbooks/README.md](./docs/runbooks/README.md) - procedury operacyjne do pracy lokalnej i publikacji
+- [docs/TECH_STACK.md](./docs/TECH_STACK.md) - proponowany stack technologiczny
+- [docs/MECHANISMS.md](./docs/MECHANISMS.md) - mechanizmy systemowe
+- [docs/BACKLOG.md](./docs/BACKLOG.md) - backlog funkcjonalny
+- [docs/CI_CD.md](./docs/CI_CD.md) - kierunek CI/CD
+- [docs/adr/README.md](./docs/adr/README.md) - decyzje architektoniczne
+- [backend/README.md](./backend/README.md) - notatki specyficzne dla backendu
+- [final-test-runner/README.md](./final-test-runner/README.md) - użycie runnera
+- [AGENTS.md](./AGENTS.md) - zasady pracy dla agentów kodujących
 
-## Near-term improvement targets
+## Najbliższe cele
 
-- split the remaining legacy API routes into domain modules
-- harden CI so lint and type checks are blocking
-- add PostgreSQL integration tests in CI
-- build a usable web UI for production and quality flows
-- start the Android commissioning MVP
+- przenieść pozostałe legacy routes do modułów domenowych
+- zaostrzyć CI tak, aby lint i typecheck były blokujące
+- dodać testy integracyjne PostgreSQL do CI
+- zbudować używalny UI dla produkcji i jakości
+- rozpocząć MVP Android commissioning

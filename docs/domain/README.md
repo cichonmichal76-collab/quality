@@ -1,25 +1,25 @@
-# Domain Model Guide
+# Przewodnik po modelu domenowym
 
-This document describes the current business domains, core entities, and main relationships in the ServiceTrace MVP.
+Ten dokument opisuje aktualne domeny biznesowe, główne encje i najważniejsze relacje w MVP ServiceTrace.
 
-It is intentionally grounded in what exists in the repository now, while also calling out areas that are still only partially moved into the new modular layout.
+Opis jest świadomie oparty na tym, co naprawdę istnieje dziś w repo, ale wskazuje też obszary, które nadal są tylko częściowo przeniesione do nowego układu modułowego.
 
-## Domain overview
+## Przegląd domen
 
-ServiceTrace currently revolves around these domains:
+ServiceTrace obraca się obecnie wokół następujących domen:
 
-- auth and RFID
+- auth i RFID
 - traceability
-- QC and NCR
+- QC i NCR
 - assembly
 - final test
 - shipment gate
-- service and commissioning
-- files and audit trail
+- service i commissioning
+- pliki oraz audit trail
 
-At the moment, some of these domains already have active module routers and services, while others still execute through legacy API routes.
+Część z tych domen ma już aktywne routery i serwisy modułowe, a część nadal wykonuje się przez legacy API routes.
 
-## High-level domain flow
+## Wysokopoziomowy przepływ domenowy
 
 ```mermaid
 graph TD
@@ -54,94 +54,94 @@ graph TD
     AE --> FTR
 ```
 
-## Key business identifiers
+## Kluczowe identyfikatory biznesowe
 
-The most important identifiers in the current model are:
+Najważniejsze identyfikatory w obecnym modelu to:
 
 - `operator_id`
-  Human operator identity used in production, QC, and final test.
+  Tożsamość operatora używana w produkcji, QC i final teście.
 - `work_session_id`
-  Active RFID-authenticated session that gives process context.
+  Aktywna sesja RFID nadająca kontekst procesowy.
 - `barcode_value`
-  Unique code attached to a physical part instance.
+  Unikalny kod przypisany do fizycznego egzemplarza części.
 - `item_serial_number`
-  Unique serial of a production item or component instance.
+  Unikalny numer seryjny production itemu albo komponentu.
 - `device_serial_number`
-  Unique serial of the final assembled device.
+  Unikalny numer seryjny gotowego urządzenia.
 - `run_id`
-  QC run identifier.
+  Identyfikator `qc_run`.
 - `test_run_id`
-  Final test identifier.
+  Identyfikator final testu.
 - `ncr_id`
-  Nonconformity identifier.
+  Identyfikator niezgodności.
 
-These ids are more important for business traceability than internal UUID primary keys.
+Te identyfikatory są ważniejsze dla traceability niż wewnętrzne UUID primary key.
 
-## Bounded contexts
+## Konteksty ograniczone
 
-### 1. Auth and RFID
+### 1. Auth i RFID
 
-Purpose:
+Cel:
 
-- identify operators
-- identify workstation context
-- create and validate active work sessions
+- identyfikacja operatorów
+- identyfikacja kontekstu stanowiska
+- tworzenie i walidacja aktywnych work sessions
 
-Core entities:
+Główne encje:
 
 - `Operator`
 - `Workstation`
 - `Machine`
 - `WorkSession`
 
-Main rules:
+Najważniejsze reguły:
 
-- RFID login starts or reuses an active work session
-- timed-out sessions are automatically invalidated
-- operator role determines which actions are allowed
-- downstream traceability actions depend on the active session context
+- logowanie RFID uruchamia albo ponownie wykorzystuje aktywną work session
+- przeterminowane sesje są automatycznie unieważniane
+- rola operatora decyduje, które akcje są dozwolone
+- dalsze akcje traceability zależą od aktywnego kontekstu sesji
 
-Implementation status:
+Stan implementacji:
 
-- implemented in the `auth_rfid` module
+- zaimplementowane w module `auth_rfid`
 
 ### 2. Traceability
 
-Purpose:
+Cel:
 
-- give every physical part instance a unique identity
-- record scan history
-- maintain status of production items
+- nadanie każdej fizycznej części unikalnej tożsamości
+- zapis historii skanów
+- utrzymanie statusu production itemów
 
-Core entities:
+Główne encje:
 
 - `BarcodeLabel`
 - `ProductionItem`
 - `ScanEvent`
 - `AuditEvent`
 
-Main rules:
+Najważniejsze reguły:
 
-- barcode values must be unique
-- production item serials must be unique
-- inactive or voided barcodes cannot be scanned successfully
-- blocked items and scrapped items must not pass normal scan flow
-- accepted and rejected scans both leave a ledger trail
+- wartości barcode muszą być unikalne
+- numery seryjne production itemów muszą być unikalne
+- nieaktywne albo unieważnione barcode nie mogą być poprawnie skanowane
+- zablokowane albo zezłomowane itemy nie przechodzą normalnego flow skanowania
+- zarówno zaakceptowane, jak i odrzucone skany zostawiają ślad w ledgerze
 
-Implementation status:
+Stan implementacji:
 
-- implemented in the `traceability` module
+- zaimplementowane w module `traceability`
 
-### 3. QC and NCR
+### 3. QC i NCR
 
-Purpose:
+Cel:
 
-- define checklists and steps
-- execute QC against items or devices
-- derive pass or fail outcomes
-- open nonconformities on blocking failure
+- definiowanie checklist i kroków
+- wykonywanie QC dla itemów albo urządzeń
+- wyliczanie wyników pass/fail
+- otwieranie NCR przy blokującej porażce
 
-Core entities:
+Główne encje:
 
 - `QcChecklist`
 - `QcStep`
@@ -149,151 +149,151 @@ Core entities:
 - `QcStepResult`
 - `Nonconformity`
 
-Main rules:
+Najważniejsze reguły:
 
-- QC requires an active work session with quality permissions
-- a QC run targets either a device or a production item
-- measurement-based steps can auto-fail when outside tolerance
-- failed QC moves the target item to `QC_FAILED`
-- failed QC can create a critical open NCR
+- QC wymaga aktywnej work session z uprawnieniami jakościowymi
+- `qc_run` celuje albo w device, albo w production item
+- kroki pomiarowe mogą automatycznie zwracać `FAIL`, gdy wyjdą poza tolerancję
+- nieudane QC przenosi target itemu do `QC_FAILED`
+- nieudane QC może utworzyć krytyczną otwartą NCR
 
-Implementation status:
+Stan implementacji:
 
-- checklist and QC run flow implemented in the `qc` module
-- NCR CRUD still lives in legacy routes
+- checklisty i flow `qc_run` są zaimplementowane w module `qc`
+- CRUD NCR nadal żyje w legacy routes
 
 ### 4. Assembly
 
-Purpose:
+Cel:
 
-- build a device from concrete, scanned physical components
-- keep a record of exactly which item instance was installed into which device
+- złożenie urządzenia z konkretnych, zeskanowanych fizycznych komponentów
+- utrzymanie informacji, który dokładnie egzemplarz itemu został zainstalowany w którym urządzeniu
 
-Core entities:
+Główne encje:
 
 - `Device`
 - `AssemblyLink`
 - `ProductionItem`
 - `ScanEvent`
 
-Main rules:
+Najważniejsze reguły:
 
-- a component must exist before it can be installed
-- a component with bad status cannot be installed
-- a component cannot be installed twice while already active in another device
-- assembly produces both component relation data and scan trail data
+- komponent musi istnieć, zanim zostanie zainstalowany
+- komponent ze złym statusem nie może być zamontowany
+- komponent nie może zostać zainstalowany drugi raz, jeśli jest już aktywny w innym urządzeniu
+- assembly produkuje zarówno relację montażową, jak i ślad skanu
 
-Implementation status:
+Stan implementacji:
 
-- implemented in the `assembly` module
-- device CRUD still lives outside the assembly module in shared legacy routes
+- zaimplementowane w module `assembly`
+- CRUD urządzeń nadal żyje poza modułem assembly, w części współdzielonej / legacy
 
 ### 5. Final test
 
-Purpose:
+Cel:
 
-- store workstation final test results for finished devices
-- capture test result as a shipment-relevant business event
+- zapis wyników final testu wykonanego na stanowisku
+- zapisanie wyniku testu jako zdarzenia biznesowego wpływającego na shipment
 
-Core entities:
+Główne encje:
 
 - `FinalTestRun`
 - `Device`
 - `Nonconformity`
 - `AuditEvent`
 
-Main rules:
+Najważniejsze reguły:
 
-- final test requires an active work session with final-test permissions
-- PASS moves the device to `FINAL_TEST_PASSED`
-- FAIL moves the device to `FINAL_TEST_FAILED`
-- FAIL creates a critical NCR
+- final test wymaga aktywnej work session z rolą final-testową
+- `PASS` przenosi urządzenie do `FINAL_TEST_PASSED`
+- `FAIL` przenosi urządzenie do `FINAL_TEST_FAILED`
+- `FAIL` tworzy krytyczną NCR
 
-Implementation status:
+Stan implementacji:
 
-- implemented in the `final_test` module
-- shipment status transitions still live outside the final-test module in shared legacy routes
+- zaimplementowane w module `final_test`
+- przejścia statusów shipment nadal żyją poza modułem final-test, w części współdzielonej / legacy
 
 ### 6. Shipment gate
 
-Purpose:
+Cel:
 
-- prevent a device from being marked ready for shipment if critical preconditions are not met
+- zablokowanie ustawienia urządzenia jako gotowego do wysyłki, jeśli krytyczne warunki nie są spełnione
 
-Core entities:
+Główne encje:
 
 - `Device`
 - `FinalTestRun`
 - `Nonconformity`
 
-Current implemented rule:
+Aktualnie zaimplementowana reguła:
 
-- `READY_FOR_SHIPMENT` requires device status `FINAL_TEST_PASSED`
-- open critical NCR blocks shipment
+- `READY_FOR_SHIPMENT` wymaga statusu `FINAL_TEST_PASSED`
+- otwarta krytyczna NCR blokuje shipment
 
-Implementation status:
+Stan implementacji:
 
-- minimal gate is implemented in legacy device status logic
-- `shipment` module is currently only a scaffold
+- minimalna bramka jest zaimplementowana w logice statusu urządzenia
+- moduł `shipment` nadal jest scaffolodem
 
-### 7. Service and commissioning
+### 7. Service i commissioning
 
-Purpose:
+Cel:
 
-- receive uploaded service session packages
-- attach service artifacts to a device history
+- przyjmowanie paczek z sesji serwisowych
+- podpinanie artefaktów serwisowych do historii urządzenia
 
-Core entities:
+Główne encje:
 
 - `ServiceSession`
 - `StoredFile`
 
-Current scope in code:
+Aktualny zakres w kodzie:
 
-- upload and list service-session packages
-- store package path and hash
+- upload i listing paczek sesji serwisowych
+- zapis ścieżki i hasha paczki
 
-Planned but not yet implemented as a full workflow:
+Planowane, ale jeszcze niezaimplementowane jako pełny przepływ:
 
-- full offline commissioning mobile flow
-- guided technician session lifecycle
-- richer service event model
+- pełny mobilny commissioning offline
+- prowadzenie technika przez sesję krok po kroku
+- bogatszy model zdarzeń serwisowych
 
-Implementation status:
+Stan implementacji:
 
-- upload flow exists in legacy API code
-- `service` module is currently only a scaffold
+- flow uploadu istnieje w legacy API routes
+- moduł `service` nadal jest scaffolodem
 
-### 8. Files and audit trail
+### 8. Pliki i audit trail
 
-Purpose:
+Cel:
 
-- attach files to business entities
-- keep an append-like audit history of important actions
+- podpinanie plików do encji biznesowych
+- utrzymywanie append-like historii ważnych działań
 
-Core entities:
+Główne encje:
 
 - `StoredFile`
 - `AuditEvent`
 
-Design role:
+Rola w projekcie:
 
-- `StoredFile` is a generic attachment table keyed by entity type and entity id
-- `AuditEvent` is the cross-domain accountability ledger
+- `StoredFile` jest generyczną tabelą załączników powiązaną przez typ i id encji
+- `AuditEvent` jest cross-domenowym ledgerem odpowiedzialności
 
-Implementation status:
+Stan implementacji:
 
-- file upload and download exist in legacy API code
-- audit listing exists in the `traceability` module
-- `files` module is currently only a scaffold
+- upload i download plików istnieją w legacy API routes
+- listing audit eventów istnieje w module `traceability`
+- moduł `files` nadal jest scaffolodem
 
-## Entity-by-entity map
+## Mapa encji
 
 ### `Operator`
 
-Represents a named human actor with a role and optional RFID hash.
+Nazwany aktor ludzki z rolą i opcjonalnym hashem RFID.
 
-Key fields:
+Kluczowe pola:
 
 - `operator_id`
 - `full_name`
@@ -303,9 +303,9 @@ Key fields:
 
 ### `Workstation`
 
-Represents the physical or logical station where work is performed.
+Fizyczne albo logiczne stanowisko, na którym wykonywana jest praca.
 
-Key fields:
+Kluczowe pola:
 
 - `workstation_id`
 - `name`
@@ -315,9 +315,9 @@ Key fields:
 
 ### `Machine`
 
-Represents a machine that can be associated with a work session or item creation context.
+Maszyna, która może być powiązana z work session albo z kontekstem wytworzenia itemu.
 
-Key fields:
+Kluczowe pola:
 
 - `machine_id`
 - `name`
@@ -327,9 +327,9 @@ Key fields:
 
 ### `WorkSession`
 
-Represents the authenticated operating context used to authorize downstream workflow actions.
+Uwierzytelniony kontekst pracy używany do autoryzacji dalszych akcji przepływu.
 
-Key fields:
+Kluczowe pola:
 
 - `work_session_id`
 - `operator_id`
@@ -339,7 +339,7 @@ Key fields:
 - `started_at`
 - `ended_at`
 
-Typical statuses:
+Typowe statusy:
 
 - `ACTIVE`
 - `CLOSED`
@@ -347,9 +347,9 @@ Typical statuses:
 
 ### `BarcodeLabel`
 
-Represents the unique code attached to a physical instance.
+Unikalny kod przypisany do fizycznego egzemplarza.
 
-Key fields:
+Kluczowe pola:
 
 - `barcode_value`
 - `entity_type`
@@ -357,7 +357,7 @@ Key fields:
 - `label_type`
 - `status`
 
-Typical statuses:
+Typowe statusy:
 
 - `ACTIVE`
 - `INACTIVE`
@@ -365,9 +365,9 @@ Typical statuses:
 
 ### `ProductionItem`
 
-Represents a concrete physical part or component instance in the production flow.
+Konkretny fizyczny egzemplarz części albo komponentu w procesie produkcyjnym.
 
-Key fields:
+Kluczowe pola:
 
 - `item_serial_number`
 - `barcode_value`
@@ -378,7 +378,7 @@ Key fields:
 - `created_by_operator_id`
 - `current_status`
 
-Typical statuses currently used:
+Typowe aktualnie używane statusy:
 
 - `LABELED`
 - `PRODUCED`
@@ -392,9 +392,9 @@ Typical statuses currently used:
 
 ### `ScanEvent`
 
-Represents one scan ledger event for a barcode.
+Pojedyncze zdarzenie skanu dla barcode.
 
-Key fields:
+Kluczowe pola:
 
 - `scan_event_id`
 - `barcode_value`
@@ -404,13 +404,13 @@ Key fields:
 - `result`
 - `message`
 
-The current design uses scan events as an operational history log rather than as the sole source of truth for all item state.
+Obecny model traktuje scan eventy jako operacyjny log historii, a nie jedyne źródło prawdy o stanie itemu.
 
 ### `QcChecklist`
 
-Represents a versioned QC template for a given process stage.
+Wersjonowany szablon QC dla danego etapu procesu.
 
-Key fields:
+Kluczowe pola:
 
 - `checklist_code`
 - `name`
@@ -420,9 +420,9 @@ Key fields:
 
 ### `QcStep`
 
-Represents a single step within a checklist.
+Pojedynczy krok wewnątrz checklisty.
 
-Key fields:
+Kluczowe pola:
 
 - `checklist_id`
 - `step_order`
@@ -435,9 +435,9 @@ Key fields:
 
 ### `QcRun`
 
-Represents one execution of a QC process.
+Jedno wykonanie procesu QC.
 
-Key fields:
+Kluczowe pola:
 
 - `run_id`
 - `device_serial_number`
@@ -449,15 +449,15 @@ Key fields:
 - `status`
 - `result`
 
-Important note:
+Ważna uwaga:
 
-- the field name `device_serial_number` is currently also used as a general target serial slot in some QC flows, even when the run is about a production item
+- pole `device_serial_number` bywa dziś używane jako ogólne pole docelowego numeru, nawet gdy `qc_run` dotyczy production itemu
 
 ### `QcStepResult`
 
-Represents the result of one QC step within a run.
+Wynik jednego kroku QC wewnątrz `qc_run`.
 
-Key fields:
+Kluczowe pola:
 
 - `qc_run_id`
 - `step_id`
@@ -468,9 +468,9 @@ Key fields:
 
 ### `Device`
 
-Represents the assembled medical device as the top-level production object.
+Gotowe urządzenie medyczne jako top-level obiekt produkcyjny.
 
-Key fields:
+Kluczowe pola:
 
 - `device_serial_number`
 - `device_type`
@@ -479,7 +479,7 @@ Key fields:
 - `bootloader_version`
 - `production_status`
 
-Typical statuses currently seen:
+Typowe widoczne dziś statusy:
 
 - `CREATED`
 - `FINAL_TEST_PASSED`
@@ -488,9 +488,9 @@ Typical statuses currently seen:
 
 ### `AssemblyLink`
 
-Represents one installed component relation inside a device tree.
+Jedna relacja instalacji komponentu w drzewie urządzenia.
 
-Key fields:
+Kluczowe pola:
 
 - `parent_device_serial_number`
 - `child_item_serial_number`
@@ -503,9 +503,9 @@ Key fields:
 
 ### `FinalTestRun`
 
-Represents one final test execution for a device.
+Jedno wykonanie final testu dla urządzenia.
 
-Key fields:
+Kluczowe pola:
 
 - `test_run_id`
 - `device_serial_number`
@@ -516,7 +516,7 @@ Key fields:
 - `report_path`
 - `mcu_log_path`
 
-Typical results:
+Typowe wyniki:
 
 - `PASS`
 - `FAIL`
@@ -524,9 +524,9 @@ Typical results:
 
 ### `Nonconformity`
 
-Represents a recorded quality issue that may block downstream flow.
+Zapisana niezgodność jakościowa, która może blokować dalszy flow.
 
-Key fields:
+Kluczowe pola:
 
 - `ncr_id`
 - `device_serial_number`
@@ -537,16 +537,16 @@ Key fields:
 - `status`
 - `detected_by`
 
-Typical values:
+Typowe wartości:
 
 - severity: `MEDIUM`, `CRITICAL`
 - status: `OPEN`, `CLOSED`
 
 ### `ServiceSession`
 
-Represents a service or commissioning package uploaded for a device.
+Paczka sesji serwisowej albo commissioningowej przypisana do urządzenia.
 
-Key fields:
+Kluczowe pola:
 
 - `session_id`
 - `device_serial_number`
@@ -558,9 +558,9 @@ Key fields:
 
 ### `StoredFile`
 
-Represents a generic stored file attached to a business entity.
+Generyczny plik zapisany i przypięty do encji biznesowej.
 
-Key fields:
+Kluczowe pola:
 
 - `related_entity_type`
 - `related_entity_id`
@@ -570,9 +570,9 @@ Key fields:
 
 ### `AuditEvent`
 
-Represents a cross-domain audit record.
+Cross-domenowy rekord audytowy.
 
-Key fields:
+Kluczowe pola:
 
 - `event_type`
 - `entity_type`
@@ -585,30 +585,30 @@ Key fields:
 - `message`
 - `payload`
 
-## Important cross-domain invariants
+## Ważne niezmienniki cross-domenowe
 
-- every accepted production action should be attributable to an operator and workstation context
-- every physical production item should have one unique business identity
-- every final device should be traceable to concrete component instances
-- blocking QC or final-test failures should surface as downstream business constraints
-- audit history should preserve who did what, where, and with what outcome
+- każda zaakceptowana akcja produkcyjna powinna być przypisana do operatora i stanowiska
+- każdy fizyczny production item powinien mieć jedną unikalną tożsamość biznesową
+- każde gotowe urządzenie powinno być śledzalne do konkretnych egzemplarzy komponentów
+- blokujące błędy QC albo final testu powinny przekładać się na późniejsze ograniczenia biznesowe
+- audit history powinien zachowywać kto, co, gdzie i z jakim wynikiem zrobił
 
-## Current implementation truth vs target architecture
+## Aktualna prawda implementacyjna vs architektura docelowa
 
-Current reality:
+Aktualna rzeczywistość:
 
-- `auth_rfid`, `traceability`, `qc`, `assembly`, and `final_test` already contain active module logic
-- shipment, service, files, device CRUD, and NCR are still partly or mostly handled in legacy routes
+- `auth_rfid`, `traceability`, `qc`, `assembly` i `final_test` mają już aktywną logikę modułową
+- `shipment`, `service`, `files`, CRUD urządzeń i NCR nadal żyją częściowo albo głównie w legacy routes
 
-Target direction:
+Kierunek docelowy:
 
-- move each domain behind its own router, service, and repository boundary
-- keep a single backend and database
-- make domain transitions explicit and test-covered
+- przenosić każdą domenę za własną granicę router / service / repository
+- utrzymać jeden backend i jedną bazę danych
+- mieć jawne, testowane przejścia domenowe
 
-## Recommended next domain-level cleanups
+## Rekomendowane dalsze porządki domenowe
 
-- move NCR logic into a dedicated domain module
-- move device CRUD and shipment gate into explicit domain ownership
-- clarify the QC target model so device-target and item-target semantics are explicit
-- formalize status enums instead of relying on free-form strings
+- wydzielić NCR do osobnego modułu domenowego
+- przenieść device CRUD i shipment gate do jawnie wskazanej domeny
+- doprecyzować model targetu w QC, tak aby semantyka device-target i item-target była jednoznaczna
+- sformalizować statusy jako enumy zamiast polegać na swobodnych stringach

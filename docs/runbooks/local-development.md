@@ -1,30 +1,30 @@
-# Local Development
+# Lokalny development
 
-This runbook describes how to get the repository running locally for backend-focused work.
+Ten runbook opisuje, jak uruchomić repo lokalnie do pracy skoncentrowanej głównie na backendzie.
 
-## Current reality
+## Aktualna rzeczywistość
 
-The repository is currently easiest to work with in this order:
+Najłatwiej pracuje się dziś z repo w kolejności:
 
 1. backend
 2. final-test-runner
-3. documentation
-4. web and Android scaffolds later
+3. dokumentacja
+4. web i Android później
 
-The backend is the most complete part of the repo and is the center of gravity for local development.
+Backend jest najbardziej kompletną częścią repo i stanowi centrum ciężkości dla lokalnego developmentu.
 
-## Prerequisites
+## Wymagania wstępne
 
-- Python 3.11 or newer
-- Docker Desktop if you want the containerized PostgreSQL stack
+- Python 3.11 lub nowszy
+- Docker Desktop, jeśli chcesz użyć kontenerowego PostgreSQL
 - Git
 
-Recommended:
+Rekomendowane:
 
-- PostgreSQL via Docker
-- a dedicated virtual environment per package if you are not using editable installs globally
+- PostgreSQL przez Docker
+- osobne virtual environment dla pakietów, jeśli nie używasz editable install globalnie
 
-## Repository layout you will touch most often
+## Struktura repo, której będziesz dotykać najczęściej
 
 ```text
 service-trace-v4/
@@ -35,28 +35,28 @@ service-trace-v4/
 `-- android-app/
 ```
 
-## Option 1: start with Docker
+## Opcja 1: start przez Docker
 
-From the repository root:
+Z katalogu głównego repo:
 
 ```bash
 docker compose up --build
 ```
 
-What this gives you:
+To daje:
 
-- PostgreSQL on `localhost:5432`
-- backend on `localhost:8000`
+- PostgreSQL na `localhost:5432`
+- backend na `localhost:8000`
 
-Use this option when:
+Wybierz tę opcję, gdy:
 
-- you want behavior closer to the target stack
-- you are working on database-sensitive backend changes
-- you want to avoid local PostgreSQL setup
+- chcesz mieć zachowanie bliższe docelowemu stackowi
+- pracujesz nad zmianami backendowymi zależnymi od bazy
+- nie chcesz stawiać PostgreSQL lokalnie ręcznie
 
-## Option 2: run backend directly
+## Opcja 2: uruchomienie backendu bezpośrednio
 
-From the repository root:
+Z katalogu głównego repo:
 
 ```bash
 cd backend
@@ -65,17 +65,17 @@ alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
-Default local backend URL:
+Domyślny lokalny adres backendu:
 
 ```text
 http://localhost:8000
 ```
 
-## Environment variables
+## Zmienne środowiskowe
 
-The main local defaults are defined in [`.env.example`](../../.env.example).
+Główne lokalne wartości domyślne są opisane w [`.env.example`](../../.env.example).
 
-Important values:
+Najważniejsze zmienne:
 
 - `DATABASE_URL`
 - `STORAGE_DIR`
@@ -84,61 +84,61 @@ Important values:
 - `SERVICE_TRACE_ENV`
 - `WORK_SESSION_TIMEOUT_MINUTES`
 
-Current defaults are suitable for local work, but PostgreSQL is recommended over SQLite when you are validating real persistence behavior.
+Domyślne wartości nadają się do pracy lokalnej, ale przy walidacji realnego zachowania persistence rekomendowany jest PostgreSQL zamiast SQLite.
 
-## Local backend sanity check
+## Szybki sanity check backendu
 
-After startup:
+Po starcie:
 
 ```bash
 curl http://localhost:8000/health
 ```
 
-Expected response:
+Oczekiwana odpowiedź:
 
 ```json
 {"status":"ok"}
 ```
 
-You can also use:
+Możesz też użyć:
 
 - `http://localhost:8000/docs`
 - `http://localhost:8000/openapi.json`
 
-## Final-test-runner local setup
+## Lokalny setup final-test-runnera
 
-From the repository root:
+Z katalogu głównego repo:
 
 ```bash
 cd final-test-runner
 pip install -e .[dev]
 ```
 
-Run the mock flow:
+Uruchomienie flow mock:
 
 ```bash
 python -m servicetrace_runner.main --device ZSS-000123 --backend http://localhost:8000 --mock --work-session-id WS-1234567890AB
 ```
 
-Important:
+Ważne:
 
-- the runner currently requires a valid `work_session_id` for backend upload
-- in a real end-to-end flow, create that session first through the backend API
+- runner wymaga dziś poprawnego `work_session_id`, jeśli ma wysłać wynik do backendu
+- w realnym flow end-to-end najpierw trzeba utworzyć taką sesję przez API backendu
 
-## Recommended daily loop
+## Rekomendowana codzienna pętla pracy
 
-1. pull latest changes
-2. start backend
-3. apply migrations
-4. make code changes
-5. run backend tests and lint
-6. run runner tests if you touched runner code
-7. push only after checks are green
+1. pobierz najnowsze zmiany
+2. uruchom backend
+3. zastosuj migracje
+4. wprowadź zmiany w kodzie
+5. uruchom testy i lint backendu
+6. uruchom testy runnera, jeśli go dotykałeś
+7. pushuj dopiero po zielonych checkach
 
-## Common local pitfalls
+## Częste lokalne pułapki
 
-- forgetting `alembic upgrade head` after a schema change
-- using SQLite behavior as if it were identical to PostgreSQL
-- trying to run final-test uploads without a valid active work session
-- changing backend models without adding a migration
-- expanding legacy routes instead of moving logic into modules
+- zapomnienie o `alembic upgrade head` po zmianie schematu
+- traktowanie SQLite tak, jakby zachowywał się identycznie jak PostgreSQL
+- próba uruchomienia uploadu final testu bez aktywnej work session
+- zmiana modeli backendu bez dodania migracji
+- dokładanie logiki do legacy routes zamiast do modułów

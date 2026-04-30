@@ -1,63 +1,63 @@
-# ADR 0003: Backend-First MVP Delivery Order
+# ADR 0003: Kolejność dostarczania MVP z backendem na pierwszym planie
 
-- Status: accepted
+- Status: zaakceptowany
 
-## Context
+## Kontekst
 
-ServiceTrace contains multiple application surfaces:
+ServiceTrace ma kilka powierzchni aplikacyjnych:
 
 - backend API
-- production and quality web UI
-- final-test runner
-- Android mobile app
-- future service AR workflows
+- web UI dla produkcji i jakości
+- final-test-runner
+- aplikację mobilną Android
+- przyszłe przepływy AR dla serwisu
 
-However, all important product value depends on a reliable traceability core:
+Jednak cała wartość produktu opiera się na stabilnym rdzeniu traceability:
 
-- operators and RFID sessions
-- barcode identity for physical parts
-- item and device history
-- QC decisions and NCR creation
-- final-test recording
-- shipment blocking rules
+- operatorzy i sesje RFID
+- tożsamość barcode dla fizycznych części
+- historia itemu i urządzenia
+- decyzje QC i tworzenie NCR
+- zapis final testu
+- reguły blokujące shipment
 - audit trail
 
-Without that backend foundation, UI and mobile work would produce demos rather than durable system capability.
+Bez takiego fundamentu backendowego warstwy UI i mobile dawałyby raczej demo niż trwałą zdolność systemową.
 
-## Decision
+## Decyzja
 
-MVP delivery will proceed backend first.
+Dostarczanie MVP będzie przebiegać z backendem na pierwszym planie.
 
-The preferred order is:
+Preferowana kolejność:
 
-1. repository and CI foundation
-2. backend core and schema migrations
-3. RFID sessions
-4. barcode lifecycle
-5. QC flows
+1. fundament repo i CI
+2. backend core i migracje schematu
+3. sesje RFID
+4. lifecycle barcode
+5. flow QC
 6. assembly by scan
-7. final-test runner integration
+7. integracja final-test-runnera
 8. shipment gate
-9. offline mobile commissioning
-10. service AR identification
+9. commissioning mobilny offline
+10. identyfikacja serwisowa AR
 
-## Consequences
+## Konsekwencje
 
-Positive:
+Pozytywne:
 
-- core traceability rules are stabilized before UI layers multiply
-- hardware and service clients integrate against a real backend contract
-- tests can focus on domain behavior before front-end polish
-- later apps have a clearer API and workflow target
+- reguły traceability stabilizują się przed rozbudową warstw UI
+- klienci sprzętowi i serwisowi integrują się z realnym kontraktem backendowym
+- testy mogą skupić się na zachowaniu domenowym przed dopieszczaniem frontendu
+- późniejsze aplikacje dostają jaśniejszy target API i przepływu
 
-Tradeoffs:
+Koszty i kompromisy:
 
-- repository may temporarily contain scaffolds before full applications exist
-- early demos may look backend-heavy
-- product visibility for non-technical stakeholders may lag behind infrastructure progress
+- repo przez pewien czas może zawierać scaffoldy zanim powstaną pełne aplikacje
+- wczesne demo mogą wyglądać mocno backendowo
+- widoczność produktu dla osób nietechnicznych może chwilowo odstawać od postępu infrastrukturalnego
 
-Implementation guidance:
+Wskazówki implementacyjne:
 
-- prioritize backend domain completeness over premature front-end breadth
-- document placeholder applications clearly so the repo does not overstate implementation status
-- use the backend contract as the shared foundation for later web, runner, and mobile work
+- priorytetem powinna być kompletność domenowa backendu ponad przedwczesne rozszerzanie frontendu
+- szkice aplikacji powinny być jasno opisane, żeby repo nie sugerowało większego poziomu gotowości niż w rzeczywistości
+- kontrakt backendowy powinien być wspólnym fundamentem dla dalszej pracy web, runnera i mobile

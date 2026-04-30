@@ -1,33 +1,33 @@
-# ADR 0001: Modular Monolith Backend
+# ADR 0001: Modularny monolit backendu
 
-- Status: accepted
+- Status: zaakceptowany
 
-## Context
+## Kontekst
 
-ServiceTrace covers tightly connected domains: RFID sessions, traceability, QC, NCR, assembly, final test, shipment decisions, service sessions, and audit history.
+ServiceTrace obejmuje ściśle powiązane domeny: sesje RFID, traceability, QC, NCR, assembly, final test, decyzje shipment, sesje serwisowe i historię audytową.
 
-These domains share a single source of truth and are linked through strong transactional rules. Examples include:
+Te domeny współdzielą jedno źródło prawdy i są spięte silnymi regułami transakcyjnymi. Przykłady:
 
-- a final test failure creating a blocking NCR
-- a barcode scan changing production item history
-- shipment being blocked by upstream QC or final test state
-- audit events needing the same identifiers used by production workflows
+- final test FAIL tworzy blokującą NCR
+- skan barcode zmienia historię production itemu
+- shipment może zostać zablokowany przez wcześniejsze QC albo final test
+- audit eventy muszą używać tych samych identyfikatorów co przepływy produkcyjne
 
-At the current stage, the product is still in MVP construction and several modules are only partially implemented.
+Na obecnym etapie produkt nadal jest w budowie MVP, a kilka modułów jest zaimplementowanych tylko częściowo.
 
-## Decision
+## Decyzja
 
-The backend will be built as a modular monolith.
+Backend będzie budowany jako modularny monolit.
 
-This means:
+To oznacza:
 
-- one deployable backend service
-- one primary relational database
-- domain-oriented module boundaries in code
-- shared migrations and shared operational tooling
-- internal service boundaries expressed through modules, schemas, and services rather than network calls
+- jeden wdrażalny serwis backendowy
+- jedną główną relacyjną bazę danych
+- granice domenowe wyrażone przez moduły w kodzie
+- wspólne migracje i wspólne narzędzia operacyjne
+- granice usługowe realizowane przez moduły, schematy i serwisy, a nie przez wywołania sieciowe
 
-The intended backend split is represented by modules such as:
+Docelowy podział backendu reprezentują moduły takie jak:
 
 - `auth_rfid`
 - `traceability`
@@ -38,23 +38,23 @@ The intended backend split is represented by modules such as:
 - `service`
 - `files`
 
-## Consequences
+## Konsekwencje
 
-Positive:
+Pozytywne:
 
-- easier to enforce cross-domain consistency
-- simpler local development and CI
-- lower operational overhead for an MVP team
-- faster refactoring while domain rules are still changing
+- łatwiej egzekwować spójność między domenami
+- prostszy lokalny development i CI
+- mniejszy narzut operacyjny dla zespołu budującego MVP
+- szybszy refaktor, gdy reguły domenowe nadal się zmieniają
 
-Tradeoffs:
+Koszty i kompromisy:
 
-- stronger need for discipline inside one codebase
-- risk of route and service sprawl if module boundaries are ignored
-- future extraction of services would require deliberate interface hardening
+- większa potrzeba dyscypliny wewnątrz jednego codebase
+- ryzyko rozrastania się routerów i serwisów, jeśli granice modułów będą ignorowane
+- ewentualne wydzielanie serwisów w przyszłości będzie wymagało świadomego utwardzenia interfejsów
 
-Implementation guidance:
+Wskazówki implementacyjne:
 
-- new backend work should prefer module routers and module services
-- shared state transitions should stay explicit and test-covered
-- microservice extraction is not a goal unless scaling or organizational constraints clearly justify it
+- nowa praca backendowa powinna trafiać do routerów i serwisów modułowych
+- współdzielone przejścia stanów powinny być jawne i pokryte testami
+- wydzielanie mikroserwisów nie jest celem, dopóki skala albo organizacja nie uzasadni tego wprost

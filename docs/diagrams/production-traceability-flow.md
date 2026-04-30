@@ -1,38 +1,38 @@
-# Production Traceability Flow
+# Przepływ traceability w produkcji
 
-This diagram focuses on the currently implemented backbone of the production workflow.
+Ten diagram skupia się na aktualnie zaimplementowanym szkielecie przepływu produkcyjnego.
 
 ```mermaid
 flowchart TD
-    A["Create operator, workstation, machine"] --> B["RFID login"]
-    B --> C{"Active session?"}
-    C -- "No" --> D["Reject action"]
-    C -- "Yes" --> E["Create production item"]
-    E --> F["Assign or auto-create barcode"]
-    F --> G["Record scan event"]
-    G --> H{"Barcode active and item allowed?"}
-    H -- "No" --> I["Rejected scan event + audit event"]
-    H -- "Yes" --> J["Accepted scan event + audit event"]
-    J --> K["Start QC run"]
-    K --> L["Submit QC step results"]
-    L --> M{"QC result"}
-    M -- "FAIL" --> N["Set item to QC_FAILED"]
-    N --> O["Create NCR"]
-    M -- "PASS" --> P["Set item to QC_PASSED"]
-    P --> Q["Install component into device"]
-    Q --> R["Record assembly link"]
-    R --> S["Run final test"]
-    S --> T{"Final test result"}
-    T -- "FAIL" --> U["Set device to FINAL_TEST_FAILED + NCR"]
-    T -- "PASS" --> V["Set device to FINAL_TEST_PASSED"]
-    V --> W{"Critical NCR open?"}
-    W -- "Yes" --> X["Block READY_FOR_SHIPMENT"]
-    W -- "No" --> Y["Allow READY_FOR_SHIPMENT"]
+    A["Utwórz operatora, stanowisko i maszynę"] --> B["Logowanie RFID"]
+    B --> C{"Aktywna sesja?"}
+    C -- "Nie" --> D["Odrzuć akcję"]
+    C -- "Tak" --> E["Utwórz production item"]
+    E --> F["Przypisz albo auto-utwórz barcode"]
+    F --> G["Zapisz scan event"]
+    G --> H{"Barcode aktywny i item dozwolony?"}
+    H -- "Nie" --> I["Rejected scan event + audit event"]
+    H -- "Tak" --> J["Zaakceptowany scan event + audit event"]
+    J --> K["Uruchom qc_run"]
+    K --> L["Zapisz wyniki kroków QC"]
+    L --> M{"Wynik QC"}
+    M -- "FAIL" --> N["Ustaw item na QC_FAILED"]
+    N --> O["Utwórz NCR"]
+    M -- "PASS" --> P["Ustaw item na QC_PASSED"]
+    P --> Q["Zainstaluj komponent w urządzeniu"]
+    Q --> R["Zapisz assembly link"]
+    R --> S["Uruchom final test"]
+    S --> T{"Wynik final testu"}
+    T -- "FAIL" --> U["Ustaw device na FINAL_TEST_FAILED + NCR"]
+    T -- "PASS" --> V["Ustaw device na FINAL_TEST_PASSED"]
+    V --> W{"Czy otwarta NCR krytyczna?"}
+    W -- "Tak" --> X["Zablokuj READY_FOR_SHIPMENT"]
+    W -- "Nie" --> Y["Pozwól na READY_FOR_SHIPMENT"]
 ```
 
-## What is important in this flow
+## Co jest ważne w tym flow
 
-- almost every meaningful production action depends on an active `work_session_id`
-- scan events and audit events are both part of the traceability record
-- QC and final test are the current main gatekeepers for downstream progression
-- shipment is not a free status change; it is constrained by test and NCR state
+- prawie każda istotna akcja produkcyjna zależy od aktywnego `work_session_id`
+- scan eventy i audit eventy są równoległą częścią śladu traceability
+- QC i final test są dziś głównymi bramkami dla dalszego przejścia procesu
+- shipment nie jest swobodną zmianą statusu; zależy od testu i stanu NCR

@@ -1,23 +1,23 @@
-# MCU Protocol — MVP
+# Protokół MCU - MVP
 
 ## Warstwa fizyczna
 
 - USB CDC / serial over USB
-- Komunikacja tekstowa
-- Komenda zakończona `\n`
-- Odpowiedź JSON zakończona `\n`
+- komunikacja tekstowa
+- polecenie zakończone `\n`
+- odpowiedź JSON zakończona `\n`
 
-## Komendy
+## Polecenia
 
 ### PING
 
-Request:
+Żądanie:
 
 ```text
 PING
 ```
 
-Response:
+Odpowiedź:
 
 ```json
 {"status":"ok","response":"PONG"}
@@ -82,9 +82,9 @@ Response:
 }
 ```
 
-## Komendy niedozwolone w MVP
+## Polecenia niedozwolone w MVP
 
-- firmware update
+- `firmware update`
 - sterowanie napędami
 - reset błędów krytycznych
 - zmiana konfiguracji medycznej

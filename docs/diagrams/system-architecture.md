@@ -1,44 +1,44 @@
-# System Architecture
+# Architektura systemu
 
-This diagram shows the current system shape of the repository.
+Ten diagram pokazuje aktualny kształt systemu w repozytorium.
 
-- the backend is the implemented center of gravity
-- the final-test runner is already connected to the backend
-- web and Android remain scaffold-level surfaces
+- backend jest dziś zaimplementowanym centrum ciężkości
+- final-test-runner jest już realnie połączony z backendem
+- web i Android pozostają na poziomie scaffoldów
 
 ```mermaid
 graph TD
-    subgraph Users["Human users"]
-        PROD["Production operator"]
-        QUAL["Quality inspector"]
-        TEST["Final-test operator"]
-        TECH["Service technician"]
+    subgraph Users["Użytkownicy"]
+        PROD["Operator produkcji"]
+        QUAL["Inspektor jakości"]
+        TEST["Operator final testu"]
+        TECH["Serwisant"]
     end
 
-    subgraph Clients["Client surfaces"]
-        WEB["Web app<br/>scaffold / future UI"]
-        RUNNER["Final-test runner<br/>implemented Python CLI"]
-        MOBILE["Android app<br/>scaffold / future offline client"]
+    subgraph Clients["Powierzchnie klienckie"]
+        WEB["Web app<br/>scaffold / przyszły UI"]
+        RUNNER["Final-test runner<br/>zaimplementowany Python CLI"]
+        MOBILE["Android app<br/>scaffold / przyszły klient offline"]
     end
 
-    subgraph Backend["ServiceTrace backend"]
+    subgraph Backend["Backend ServiceTrace"]
         API["FastAPI API"]
-        AUTH["auth_rfid module"]
-        TRACE["traceability module"]
-        QC["qc module"]
-        ASSEMBLY["assembly module"]
-        FINALTEST["final_test module"]
+        AUTH["moduł auth_rfid"]
+        TRACE["moduł traceability"]
+        QC["moduł qc"]
+        ASSEMBLY["moduł assembly"]
+        FINALTEST["moduł final_test"]
         LEGACY["legacy routes<br/>device CRUD, shipment gate, service, files, NCR"]
         AUDIT["audit trail"]
     end
 
-    subgraph Data["Persistence"]
-        DB["PostgreSQL target<br/>SQLite fallback in local dev"]
-        FILES["filesystem storage<br/>uploads, packages, reports"]
+    subgraph Data["Persistencja"]
+        DB["docelowo PostgreSQL<br/>lokalnie możliwy fallback SQLite"]
+        FILES["storage plikowy<br/>uploady, paczki, raporty"]
     end
 
-    subgraph DeviceSide["Device-side communication"]
-        MCU["Medical device MCU"]
+    subgraph DeviceSide["Komunikacja po stronie urządzenia"]
+        MCU["MCU urządzenia medycznego"]
         USB["USB CDC / serial"]
     end
 
@@ -72,10 +72,10 @@ graph TD
     USB --> MCU
 ```
 
-## Interpretation
+## Jak czytać ten diagram
 
-- today, the backend is the operational core of the product
-- `auth_rfid`, `traceability`, `qc`, `assembly`, and `final_test` are already active backend modules
-- device CRUD, shipment gate, service uploads, files, and NCR still partly depend on legacy route code
-- the final-test runner is the most real client outside the backend
-- mobile and web are repo-visible, but not yet product-complete
+- backend jest dziś operacyjnym rdzeniem produktu
+- `auth_rfid`, `traceability`, `qc`, `assembly` i `final_test` są już aktywnymi modułami backendu
+- device CRUD, shipment gate, uploady serwisowe, pliki i NCR nadal częściowo zależą od legacy route code
+- final-test-runner jest najbardziej realnym klientem poza backendem
+- mobile i web są widoczne w repo, ale nie są jeszcze pełnymi aplikacjami produktowymi

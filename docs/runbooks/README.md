@@ -1,25 +1,25 @@
-# Runbooks
+# Runbooki
 
-This directory contains practical operating procedures for day-to-day work in the ServiceTrace repository.
+Ten katalog zawiera praktyczne procedury operacyjne do codziennej pracy w repo ServiceTrace.
 
-The goal is to make common engineering tasks repeatable without reconstructing steps from multiple README files or chat history.
+Celem jest to, żeby powtarzalne zadania inżynierskie nie wymagały rekonstruowania kroków z kilku README albo historii rozmów.
 
-## Available runbooks
+## Dostępne runbooki
 
-- [Local development](./local-development.md)
-- [Database migrations](./database-migrations.md)
-- [Testing and CI](./testing-and-ci.md)
-- [Publish changes to GitHub](./publish-to-github.md)
+- [Lokalny development](./local-development.md)
+- [Migracje bazy danych](./database-migrations.md)
+- [Testy i CI](./testing-and-ci.md)
+- [Publikacja zmian do GitHuba](./publish-to-github.md)
 
-## Suggested reading order
+## Sugerowana kolejność czytania
 
-1. start with [Local development](./local-development.md)
-2. then read [Database migrations](./database-migrations.md)
-3. use [Testing and CI](./testing-and-ci.md) before every push
-4. finish with [Publish changes to GitHub](./publish-to-github.md) when shipping work
+1. zacznij od [Lokalnego developmentu](./local-development.md)
+2. potem przeczytaj [Migracje bazy danych](./database-migrations.md)
+3. użyj [Testów i CI](./testing-and-ci.md) przed każdym pushem
+4. na końcu skorzystaj z [Publikacji zmian do GitHuba](./publish-to-github.md), gdy chcesz wypchnąć pracę
 
-## Scope notes
+## Uwagi o zakresie
 
-- runbooks describe the current backend-first MVP workflow
-- they prefer commands that already work in this repository today
-- where the repo still has legacy behavior, the runbooks call it out explicitly
+- runbooki opisują aktualny przepływ MVP z backendem na pierwszym planie
+- preferują komendy, które już dziś działają w tym repo
+- tam, gdzie repo nadal ma zachowanie legacy, runbooki mówią o tym wprost

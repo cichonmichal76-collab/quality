@@ -1,6 +1,6 @@
-# Production Item Lifecycle
+# Lifecycle production itemu
 
-This diagram reflects the production item state machine currently implemented in the backend rules.
+Ten diagram odzwierciedla maszynę stanów `ProductionItem`, która jest obecnie zaimplementowana w regułach backendu.
 
 ```mermaid
 stateDiagram-v2
@@ -39,9 +39,9 @@ stateDiagram-v2
     SCRAPPED --> [*]
 ```
 
-## Related barcode lifecycle
+## Powiązany lifecycle barcode
 
-The production item lifecycle is complemented by a separate barcode status lifecycle:
+Lifecycle production itemu jest uzupełniony o osobny lifecycle statusu barcode:
 
 ```mermaid
 stateDiagram-v2
@@ -52,9 +52,9 @@ stateDiagram-v2
     VOID --> [*]
 ```
 
-## Practical meaning
+## Znaczenie praktyczne
 
-- `QC_PASSED` is the state that allows installation into a device
-- `QC_FAILED`, `REWORK_REQUIRED`, and `SCRAPPED` block normal downstream flow
-- `BLOCKED` is a catch-all stop state that can later re-enter controlled rework or QC
-- barcode state and production-item state are related, but they are not the same thing
+- `QC_PASSED` jest stanem, który pozwala na montaż do urządzenia
+- `QC_FAILED`, `REWORK_REQUIRED` i `SCRAPPED` blokują normalny dalszy flow
+- `BLOCKED` jest ogólnym stanem stop, z którego item może później wrócić do kontrolowanego reworku albo QC
+- status barcode i status production itemu są ze sobą powiązane, ale nie są tym samym
