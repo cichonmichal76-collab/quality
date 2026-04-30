@@ -172,6 +172,7 @@ High-level order:
 - [docs/api/README.md](./docs/api/README.md) - current API guide and example flows
 - [docs/domain/README.md](./docs/domain/README.md) - domain model and business entity map
 - [docs/diagrams/README.md](./docs/diagrams/README.md) - architecture and workflow diagrams
+- [docs/runbooks/README.md](./docs/runbooks/README.md) - operational procedures for local work and release flow
 - [docs/TECH_STACK.md](./docs/TECH_STACK.md) - proposed technology stack
 - [docs/MECHANISMS.md](./docs/MECHANISMS.md) - system mechanisms
 - [docs/BACKLOG.md](./docs/BACKLOG.md) - functional backlog
