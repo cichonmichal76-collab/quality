@@ -170,6 +170,7 @@ High-level order:
 
 - [docs/PRD.md](./docs/PRD.md) - product requirements
 - [docs/api/README.md](./docs/api/README.md) - current API guide and example flows
+- [docs/domain/README.md](./docs/domain/README.md) - domain model and business entity map
 - [docs/TECH_STACK.md](./docs/TECH_STACK.md) - proposed technology stack
 - [docs/MECHANISMS.md](./docs/MECHANISMS.md) - system mechanisms
 - [docs/BACKLOG.md](./docs/BACKLOG.md) - functional backlog
