@@ -1,0 +1,38 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+*.egg-info/
+
+# Node / web
+node_modules/
+dist/
+coverage/
+
+# Android / Gradle
+.gradle/
+local.properties
+build/
+**/build/
+
+# Environment / secrets
+.env
+.env.local
+
+# Runtime data
+backend/servicetrace_dev.db
+backend/app/storage/
+backend_storage/
+

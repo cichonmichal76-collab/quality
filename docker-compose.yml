@@ -1,0 +1,27 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: servicetrace
+      POSTGRES_USER: servicetrace
+      POSTGRES_PASSWORD: servicetrace
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://servicetrace:servicetrace@postgres:5432/servicetrace
+      STORAGE_DIR: /data/storage
+    ports:
+      - "8000:8000"
+    volumes:
+      - backend_storage:/data/storage
+    depends_on:
+      - postgres
+
+volumes:
+  postgres_data:
+  backend_storage:

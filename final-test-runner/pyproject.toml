@@ -1,0 +1,15 @@
+[project]
+name = "servicetrace-final-test-runner"
+version = "0.1.0"
+description = "Final test runner for ServiceTrace"
+requires-python = ">=3.11"
+dependencies = [
+  "requests>=2.32",
+  "pyserial>=3.5",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+servicetrace-final-test = "servicetrace_runner.main:main"
