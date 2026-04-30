@@ -173,6 +173,7 @@ High-level order:
 - [docs/MECHANISMS.md](./docs/MECHANISMS.md) - system mechanisms
 - [docs/BACKLOG.md](./docs/BACKLOG.md) - functional backlog
 - [docs/CI_CD.md](./docs/CI_CD.md) - CI/CD direction
+- [docs/adr/README.md](./docs/adr/README.md) - architecture decisions
 - [backend/README.md](./backend/README.md) - backend-specific notes
 - [final-test-runner/README.md](./final-test-runner/README.md) - runner usage
 - [AGENTS.md](./AGENTS.md) - coding-agent workflow and project rules
