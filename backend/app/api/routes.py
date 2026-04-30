@@ -5,30 +5,23 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db, utc_now
 from app.models import (
-    AuditEvent,
     AssemblyLink,
-    BarcodeLabel,
     Device,
     DeviceComponent,
     FinalTestRun,
-    Machine,
     Nonconformity,
-    Operator,
     ProductionItem,
     QcRun,
     QcStepResult,
     ScanEvent,
     ServiceSession,
     StoredFile,
-    WorkSession,
-    Workstation,
 )
+from app.modules.auth_rfid.service import resolve_active_work_session
+from app.modules.traceability.service import record_audit_event
 from app.schemas import (
     AssemblyLinkRead,
     AssemblyScanRequest,
-    AuditEventRead,
-    BarcodeCreate,
-    BarcodeRead,
     ComponentCreate,
     ComponentRead,
     DeviceCreate,
@@ -37,28 +30,14 @@ from app.schemas import (
     FileRead,
     FinalTestCreate,
     FinalTestRead,
-    MachineCreate,
-    MachineRead,
     NonconformityCreate,
     NonconformityRead,
     NonconformityUpdate,
-    OperatorCreate,
-    OperatorRead,
-    ProductionItemCreate,
-    ProductionItemRead,
-    ProductionItemStatusUpdate,
     QcRunCreate,
     QcRunRead,
     QcStepResultCreate,
     QcStepResultRead,
-    RfidLoginRequest,
-    ScanEventCreate,
-    ScanEventRead,
     ServiceSessionRead,
-    WorkSessionCloseRequest,
-    WorkSessionRead,
-    WorkstationCreate,
-    WorkstationRead,
 )
 from app.services.files import save_upload
 
@@ -88,67 +67,6 @@ def has_critical_open_ncr(db: Session, serial_number: str) -> bool:
         .first()
         is not None
     )
-
-
-def get_work_session_or_404(db: Session, work_session_id: str) -> WorkSession:
-    session = db.query(WorkSession).filter(WorkSession.work_session_id == work_session_id).first()
-    if not session:
-        raise HTTPException(status_code=404, detail="Work session not found")
-    return session
-
-
-def resolve_active_work_session(
-    db: Session,
-    work_session_id: str | None,
-    *,
-    operator_id: str | None = None,
-    workstation_id: str | None = None,
-    machine_id: str | None = None,
-) -> WorkSession | None:
-    if not work_session_id:
-        return None
-
-    session = get_work_session_or_404(db, work_session_id)
-    if session.status != "ACTIVE" or session.ended_at is not None:
-        raise HTTPException(status_code=400, detail="Work session is not active")
-    if operator_id and session.operator_id != operator_id:
-        raise HTTPException(status_code=400, detail="Work session operator mismatch")
-    if workstation_id and session.workstation_id != workstation_id:
-        raise HTTPException(status_code=400, detail="Work session workstation mismatch")
-    if machine_id and session.machine_id and session.machine_id != machine_id:
-        raise HTTPException(status_code=400, detail="Work session machine mismatch")
-    return session
-
-
-def record_audit_event(
-    db: Session,
-    *,
-    event_type: str,
-    entity_type: str,
-    entity_id: str,
-    work_session: WorkSession | None = None,
-    operator_id: str | None = None,
-    workstation_id: str | None = None,
-    machine_id: str | None = None,
-    result: str | None = None,
-    message: str | None = None,
-    payload: dict | None = None,
-) -> None:
-    db.add(
-        AuditEvent(
-            event_type=event_type,
-            entity_type=entity_type,
-            entity_id=entity_id,
-            work_session_id=work_session.work_session_id if work_session else None,
-            operator_id=operator_id or (work_session.operator_id if work_session else None),
-            workstation_id=workstation_id or (work_session.workstation_id if work_session else None),
-            machine_id=machine_id or (work_session.machine_id if work_session else None),
-            result=result,
-            message=message,
-            payload=payload,
-        )
-    )
-
 
 @router.post("/devices", response_model=DeviceRead)
 def create_device(payload: DeviceCreate, db: Session = Depends(get_db)):
@@ -507,302 +425,6 @@ def download_file(file_id: str, db: Session = Depends(get_db)):
     return FileResponse(stored.file_path, filename=stored.file_name)
 
 # --- Traceability-first core endpoints ---
-
-@router.post("/operators", response_model=OperatorRead)
-def create_operator(payload: OperatorCreate, db: Session = Depends(get_db)):
-    exists = db.query(Operator).filter(Operator.operator_id == payload.operator_id).first()
-    if exists:
-        raise HTTPException(status_code=409, detail="Operator already exists")
-    operator = Operator(**payload.model_dump())
-    db.add(operator)
-    db.commit()
-    db.refresh(operator)
-    return operator
-
-
-@router.get("/operators", response_model=list[OperatorRead])
-def list_operators(db: Session = Depends(get_db)):
-    return db.query(Operator).order_by(Operator.created_at.desc()).all()
-
-
-@router.post("/auth/rfid-login", response_model=WorkSessionRead)
-def rfid_login(payload: RfidLoginRequest, db: Session = Depends(get_db)):
-    operator = db.query(Operator).filter(Operator.rfid_uid_hash == payload.rfid_uid_hash).first()
-    if not operator or not operator.is_active:
-        raise HTTPException(status_code=401, detail="Unknown or inactive RFID card")
-    workstation = db.query(Workstation).filter(Workstation.workstation_id == payload.workstation_id).first()
-    if not workstation or not workstation.is_active:
-        raise HTTPException(status_code=400, detail="Unknown or inactive workstation")
-    if payload.machine_id:
-        machine = db.query(Machine).filter(Machine.machine_id == payload.machine_id).first()
-        if not machine or not machine.is_active:
-            raise HTTPException(status_code=400, detail="Unknown or inactive machine")
-    session = (
-        db.query(WorkSession)
-        .filter(
-            WorkSession.operator_id == operator.operator_id,
-            WorkSession.workstation_id == payload.workstation_id,
-            WorkSession.machine_id == payload.machine_id,
-            WorkSession.status == "ACTIVE",
-            WorkSession.ended_at.is_(None),
-        )
-        .first()
-    )
-    if session:
-        record_audit_event(
-            db,
-            event_type="RFID_LOGIN_REUSED",
-            entity_type="WORK_SESSION",
-            entity_id=session.work_session_id,
-            work_session=session,
-            result="ACTIVE",
-            message="RFID login reused active work session",
-            payload=payload.model_dump(),
-        )
-        db.commit()
-        db.refresh(session)
-        return session
-    session = WorkSession(
-        work_session_id=f"WS-{uuid.uuid4().hex[:12]}",
-        operator_id=operator.operator_id,
-        workstation_id=payload.workstation_id,
-        machine_id=payload.machine_id,
-        rfid_uid_hash=payload.rfid_uid_hash,
-    )
-    db.add(session)
-    record_audit_event(
-        db,
-        event_type="RFID_LOGIN",
-        entity_type="WORK_SESSION",
-        entity_id=session.work_session_id,
-        work_session=session,
-        result="ACTIVE",
-        message="RFID login started work session",
-        payload=payload.model_dump(),
-    )
-    db.commit()
-    db.refresh(session)
-    return session
-
-
-@router.get("/work-sessions", response_model=list[WorkSessionRead])
-def list_work_sessions(db: Session = Depends(get_db)):
-    return db.query(WorkSession).order_by(WorkSession.started_at.desc()).all()
-
-
-@router.post("/work-sessions/{work_session_id}/close", response_model=WorkSessionRead)
-def close_work_session(
-    work_session_id: str,
-    payload: WorkSessionCloseRequest | None = None,
-    db: Session = Depends(get_db),
-):
-    session = get_work_session_or_404(db, work_session_id)
-    if session.status != "CLOSED":
-        session.status = "CLOSED"
-        session.ended_at = utc_now()
-    record_audit_event(
-        db,
-        event_type="WORK_SESSION_CLOSED",
-        entity_type="WORK_SESSION",
-        entity_id=work_session_id,
-        work_session=session,
-        result=session.status,
-        message=(payload.reason if payload and payload.reason else "Work session closed"),
-        payload=payload.model_dump(exclude_none=True) if payload else None,
-    )
-    db.commit()
-    db.refresh(session)
-    return session
-
-
-@router.get("/audit-events", response_model=list[AuditEventRead])
-def list_audit_events(
-    entity_type: str | None = None,
-    entity_id: str | None = None,
-    work_session_id: str | None = None,
-    db: Session = Depends(get_db),
-):
-    query = db.query(AuditEvent)
-    if entity_type:
-        query = query.filter(AuditEvent.entity_type == entity_type)
-    if entity_id:
-        query = query.filter(AuditEvent.entity_id == entity_id)
-    if work_session_id:
-        query = query.filter(AuditEvent.work_session_id == work_session_id)
-    return query.order_by(AuditEvent.created_at.desc()).all()
-
-
-@router.post("/workstations", response_model=WorkstationRead)
-def create_workstation(payload: WorkstationCreate, db: Session = Depends(get_db)):
-    if db.query(Workstation).filter(Workstation.workstation_id == payload.workstation_id).first():
-        raise HTTPException(status_code=409, detail="Workstation already exists")
-    workstation = Workstation(**payload.model_dump())
-    db.add(workstation)
-    db.commit()
-    db.refresh(workstation)
-    return workstation
-
-
-@router.get("/workstations", response_model=list[WorkstationRead])
-def list_workstations(db: Session = Depends(get_db)):
-    return db.query(Workstation).all()
-
-
-@router.post("/machines", response_model=MachineRead)
-def create_machine(payload: MachineCreate, db: Session = Depends(get_db)):
-    if db.query(Machine).filter(Machine.machine_id == payload.machine_id).first():
-        raise HTTPException(status_code=409, detail="Machine already exists")
-    machine = Machine(**payload.model_dump())
-    db.add(machine)
-    db.commit()
-    db.refresh(machine)
-    return machine
-
-
-@router.get("/machines", response_model=list[MachineRead])
-def list_machines(db: Session = Depends(get_db)):
-    return db.query(Machine).all()
-
-
-@router.post("/barcodes/create", response_model=BarcodeRead)
-def create_barcode(payload: BarcodeCreate, db: Session = Depends(get_db)):
-    if db.query(BarcodeLabel).filter(BarcodeLabel.barcode_value == payload.barcode_value).first():
-        raise HTTPException(status_code=409, detail="Barcode already exists")
-    label = BarcodeLabel(**payload.model_dump())
-    db.add(label)
-    db.commit()
-    db.refresh(label)
-    return label
-
-
-@router.get("/barcodes/{barcode_value}", response_model=BarcodeRead)
-def get_barcode(barcode_value: str, db: Session = Depends(get_db)):
-    label = db.query(BarcodeLabel).filter(BarcodeLabel.barcode_value == barcode_value).first()
-    if not label:
-        raise HTTPException(status_code=404, detail="Barcode not found")
-    return label
-
-
-@router.post("/production-items", response_model=ProductionItemRead)
-def create_production_item(payload: ProductionItemCreate, db: Session = Depends(get_db)):
-    if db.query(ProductionItem).filter(ProductionItem.item_serial_number == payload.item_serial_number).first():
-        raise HTTPException(status_code=409, detail="Production item serial already exists")
-    if db.query(ProductionItem).filter(ProductionItem.barcode_value == payload.barcode_value).first():
-        raise HTTPException(status_code=409, detail="Production item barcode already exists")
-    work_session = resolve_active_work_session(
-        db,
-        payload.work_session_id,
-        operator_id=payload.created_by_operator_id,
-        workstation_id=payload.workstation_id,
-        machine_id=payload.machine_id,
-    )
-    item = ProductionItem(
-        item_serial_number=payload.item_serial_number,
-        barcode_value=payload.barcode_value,
-        item_type=payload.item_type,
-        part_number=payload.part_number,
-        revision=payload.revision,
-        drawing_number=payload.drawing_number,
-        drawing_revision=payload.drawing_revision,
-        production_order=payload.production_order,
-        material_batch=payload.material_batch,
-        machine_id=payload.machine_id or (work_session.machine_id if work_session else None),
-        created_by_operator_id=payload.created_by_operator_id or (work_session.operator_id if work_session else None),
-        current_status=payload.current_status,
-        produced_at=utc_now(),
-    )
-    db.add(item)
-    label = db.query(BarcodeLabel).filter(BarcodeLabel.barcode_value == payload.barcode_value).first()
-    if not label:
-        db.add(
-            BarcodeLabel(
-                barcode_value=payload.barcode_value,
-                entity_type="PRODUCTION_ITEM",
-                entity_serial_number=payload.item_serial_number,
-                printed_by=item.created_by_operator_id,
-            )
-        )
-    record_audit_event(
-        db,
-        event_type="PRODUCTION_ITEM_CREATED",
-        entity_type="PRODUCTION_ITEM",
-        entity_id=payload.item_serial_number,
-        work_session=work_session,
-        operator_id=item.created_by_operator_id,
-        workstation_id=payload.workstation_id,
-        machine_id=item.machine_id,
-        result=item.current_status,
-        message=f"Production item created with barcode {payload.barcode_value}",
-        payload=payload.model_dump(exclude_none=True),
-    )
-    db.commit()
-    db.refresh(item)
-    return item
-
-
-@router.get("/production-items/{item_serial_number}", response_model=ProductionItemRead)
-def get_production_item(item_serial_number: str, db: Session = Depends(get_db)):
-    item = db.query(ProductionItem).filter(ProductionItem.item_serial_number == item_serial_number).first()
-    if not item:
-        raise HTTPException(status_code=404, detail="Production item not found")
-    return item
-
-
-@router.get("/production-items/by-barcode/{barcode_value}", response_model=ProductionItemRead)
-def get_production_item_by_barcode(barcode_value: str, db: Session = Depends(get_db)):
-    item = db.query(ProductionItem).filter(ProductionItem.barcode_value == barcode_value).first()
-    if not item:
-        raise HTTPException(status_code=404, detail="Production item not found")
-    return item
-
-
-@router.patch("/production-items/{item_serial_number}/status", response_model=ProductionItemRead)
-def update_production_item_status(
-    item_serial_number: str, payload: ProductionItemStatusUpdate, db: Session = Depends(get_db)
-):
-    item = db.query(ProductionItem).filter(ProductionItem.item_serial_number == item_serial_number).first()
-    if not item:
-        raise HTTPException(status_code=404, detail="Production item not found")
-    item.current_status = payload.current_status
-    db.commit()
-    db.refresh(item)
-    return item
-
-
-@router.post("/scan-events", response_model=ScanEventRead)
-def create_scan_event(payload: ScanEventCreate, db: Session = Depends(get_db)):
-    work_session = resolve_active_work_session(
-        db,
-        payload.work_session_id,
-        operator_id=payload.operator_id,
-        workstation_id=payload.workstation_id,
-    )
-    event = ScanEvent(
-        scan_event_id=payload.scan_event_id,
-        barcode_value=payload.barcode_value,
-        operator_id=payload.operator_id or (work_session.operator_id if work_session else None),
-        workstation_id=payload.workstation_id or (work_session.workstation_id if work_session else None),
-        context=payload.context,
-        result=payload.result,
-        message=payload.message,
-    )
-    db.add(event)
-    record_audit_event(
-        db,
-        event_type="SCAN_EVENT_RECORDED",
-        entity_type="SCAN_EVENT",
-        entity_id=payload.scan_event_id,
-        work_session=work_session,
-        operator_id=event.operator_id,
-        workstation_id=event.workstation_id,
-        result=payload.result,
-        message=payload.message,
-        payload=payload.model_dump(exclude_none=True),
-    )
-    db.commit()
-    db.refresh(event)
-    return event
-
 
 @router.post("/devices/{device_serial_number}/assembly/scan-component", response_model=AssemblyLinkRead)
 def scan_component_for_assembly(
