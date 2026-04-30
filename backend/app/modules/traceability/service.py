@@ -9,7 +9,17 @@ from app.modules.auth_rfid.service import (
     require_active_work_session,
 )
 from app.modules.traceability import repository
-from app.schemas import BarcodeCreate, ProductionItemCreate, ProductionItemStatusUpdate, ScanEventCreate
+from app.modules.traceability.rules import (
+    ALLOWED_BARCODE_STATUSES,
+    ALLOWED_PRODUCTION_ITEM_TRANSITIONS,
+)
+from app.schemas import (
+    BarcodeCreate,
+    BarcodeStatusUpdate,
+    ProductionItemCreate,
+    ProductionItemStatusUpdate,
+    ScanEventCreate,
+)
 
 
 def create_barcode(db: Session, payload: BarcodeCreate) -> BarcodeLabel:
@@ -26,6 +36,28 @@ def get_barcode_or_404(db: Session, barcode_value: str) -> BarcodeLabel:
     label = repository.get_barcode_label(db, barcode_value)
     if not label:
         raise HTTPException(status_code=404, detail="Barcode not found")
+    return label
+
+
+def update_barcode_status(
+    db: Session,
+    barcode_value: str,
+    payload: BarcodeStatusUpdate,
+) -> BarcodeLabel:
+    label = get_barcode_or_404(db, barcode_value)
+    if payload.status not in ALLOWED_BARCODE_STATUSES:
+        raise HTTPException(status_code=400, detail="Unsupported barcode status")
+    label.status = payload.status
+    record_audit_event(
+        db,
+        event_type="BARCODE_STATUS_UPDATED",
+        entity_type="BARCODE",
+        entity_id=barcode_value,
+        result=payload.status,
+        payload={"status": payload.status},
+    )
+    db.commit()
+    db.refresh(label)
     return label
 
 
@@ -109,7 +141,22 @@ def update_production_item_status(
     payload: ProductionItemStatusUpdate,
 ) -> ProductionItem:
     item = get_production_item_or_404(db, item_serial_number)
+    if item.current_status != payload.current_status:
+        allowed_targets = ALLOWED_PRODUCTION_ITEM_TRANSITIONS.get(item.current_status, set())
+        if payload.current_status not in allowed_targets:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid production item status transition: {item.current_status} -> {payload.current_status}",
+            )
     item.current_status = payload.current_status
+    record_audit_event(
+        db,
+        event_type="PRODUCTION_ITEM_STATUS_UPDATED",
+        entity_type="PRODUCTION_ITEM",
+        entity_id=item_serial_number,
+        result=payload.current_status,
+        payload={"current_status": payload.current_status},
+    )
     db.commit()
     db.refresh(item)
     return item
@@ -123,6 +170,26 @@ def create_scan_event(db: Session, payload: ScanEventCreate) -> ScanEvent:
         workstation_id=payload.workstation_id,
         allowed_roles=PRODUCTION_SESSION_ROLES,
     )
+    label = get_barcode_or_404(db, payload.barcode_value)
+    if label.status != "ACTIVE":
+        _record_rejected_scan_event(
+            db,
+            payload,
+            work_session=work_session,
+            message=f"Barcode {payload.barcode_value} is not active",
+        )
+        raise HTTPException(status_code=400, detail="Barcode is not active")
+
+    item = repository.get_production_item_by_barcode(db, payload.barcode_value)
+    if item and item.current_status in {"BLOCKED", "SCRAPPED"}:
+        _record_rejected_scan_event(
+            db,
+            payload,
+            work_session=work_session,
+            message=f"Production item status {item.current_status} blocks scanning",
+        )
+        raise HTTPException(status_code=400, detail="Production item status blocks scanning")
+
     event = ScanEvent(
         scan_event_id=payload.scan_event_id,
         barcode_value=payload.barcode_value,
@@ -148,3 +215,40 @@ def create_scan_event(db: Session, payload: ScanEventCreate) -> ScanEvent:
     db.commit()
     db.refresh(event)
     return event
+
+
+def list_scan_history(db: Session, barcode_value: str) -> list[ScanEvent]:
+    return repository.list_scan_events_for_barcode(db, barcode_value)
+
+
+def _record_rejected_scan_event(
+    db: Session,
+    payload: ScanEventCreate,
+    *,
+    work_session,
+    message: str,
+) -> None:
+    db.add(
+        ScanEvent(
+            scan_event_id=payload.scan_event_id,
+            barcode_value=payload.barcode_value,
+            operator_id=payload.operator_id or work_session.operator_id,
+            workstation_id=payload.workstation_id or work_session.workstation_id,
+            context=payload.context,
+            result="REJECTED",
+            message=message,
+        )
+    )
+    record_audit_event(
+        db,
+        event_type="SCAN_EVENT_REJECTED",
+        entity_type="SCAN_EVENT",
+        entity_id=payload.scan_event_id,
+        work_session=work_session,
+        operator_id=payload.operator_id or work_session.operator_id,
+        workstation_id=payload.workstation_id or work_session.workstation_id,
+        result="REJECTED",
+        message=message,
+        payload=payload.model_dump(exclude_none=True),
+    )
+    db.commit()

@@ -34,6 +34,8 @@ docker compose up --build
 - `POST /api/auth/rfid-login`
 - `GET /api/work-sessions`
 - `POST /api/work-sessions/{work_session_id}/close`
+- `PATCH /api/barcodes/{barcode_value}/status`
+- `GET /api/barcodes/{barcode_value}/scan-history`
 - `POST /api/devices`
 - `GET /api/devices`
 - `GET /api/devices/{serial_number}`

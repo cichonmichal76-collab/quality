@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 
-from app.models import AuditEvent, BarcodeLabel, ProductionItem
+from app.models import AuditEvent, BarcodeLabel, ProductionItem, ScanEvent
 
 
 def get_barcode_label(db: Session, barcode_value: str) -> BarcodeLabel | None:
@@ -30,3 +30,12 @@ def list_audit_events(
     if work_session_id:
         query = query.filter(AuditEvent.work_session_id == work_session_id)
     return query.order_by(AuditEvent.created_at.desc()).all()
+
+
+def list_scan_events_for_barcode(db: Session, barcode_value: str) -> list[ScanEvent]:
+    return (
+        db.query(ScanEvent)
+        .filter(ScanEvent.barcode_value == barcode_value)
+        .order_by(ScanEvent.created_at.desc())
+        .all()
+    )

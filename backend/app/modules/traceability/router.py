@@ -8,6 +8,7 @@ from app.schemas import (
     AuditEventRead,
     BarcodeCreate,
     BarcodeRead,
+    BarcodeStatusUpdate,
     ProductionItemCreate,
     ProductionItemRead,
     ProductionItemStatusUpdate,
@@ -43,6 +44,15 @@ def get_barcode(barcode_value: str, db: Session = Depends(get_db)):
     return service.get_barcode_or_404(db, barcode_value)
 
 
+@router.patch("/barcodes/{barcode_value}/status", response_model=BarcodeRead)
+def update_barcode_status(
+    barcode_value: str,
+    payload: BarcodeStatusUpdate,
+    db: Session = Depends(get_db),
+):
+    return service.update_barcode_status(db, barcode_value, payload)
+
+
 @router.post("/production-items", response_model=ProductionItemRead)
 def create_production_item(payload: ProductionItemCreate, db: Session = Depends(get_db)):
     return service.create_production_item(db, payload)
@@ -70,3 +80,8 @@ def update_production_item_status(
 @router.post("/scan-events", response_model=ScanEventRead)
 def create_scan_event(payload: ScanEventCreate, db: Session = Depends(get_db)):
     return service.create_scan_event(db, payload)
+
+
+@router.get("/barcodes/{barcode_value}/scan-history", response_model=list[ScanEventRead])
+def list_scan_history(barcode_value: str, db: Session = Depends(get_db)):
+    return service.list_scan_history(db, barcode_value)

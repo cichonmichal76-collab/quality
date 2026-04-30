@@ -194,6 +194,80 @@ def test_traceability_blocks_wrong_operator_role():
     assert "not allowed" in response.json()["detail"]
 
 
+def test_barcode_can_be_deactivated_and_blocks_scan():
+    session = start_work_session()
+    barcode_value = unique_id("BC")
+    item_serial_number = unique_id("ITEM")
+
+    item_response = client.post(
+        "/api/production-items",
+        json={
+            "item_serial_number": item_serial_number,
+            "barcode_value": barcode_value,
+            "item_type": "PCB",
+            "work_session_id": session["work_session_id"],
+            "workstation_id": session["workstation_id"],
+        },
+    )
+    assert item_response.status_code == 200
+
+    deactivate = client.patch(
+        f"/api/barcodes/{barcode_value}/status",
+        json={"status": "INACTIVE"},
+    )
+    assert deactivate.status_code == 200
+    assert deactivate.json()["status"] == "INACTIVE"
+
+    blocked_scan = client.post(
+        "/api/scan-events",
+        json={
+            "scan_event_id": unique_id("SCAN"),
+            "barcode_value": barcode_value,
+            "context": "MANUAL_SCAN",
+            "result": "ACCEPTED",
+            "work_session_id": session["work_session_id"],
+        },
+    )
+    assert blocked_scan.status_code == 400
+    assert blocked_scan.json()["detail"] == "Barcode is not active"
+
+    history = client.get(f"/api/barcodes/{barcode_value}/scan-history")
+    assert history.status_code == 200
+    assert history.json()[0]["result"] == "REJECTED"
+
+
+def test_production_item_status_transition_is_validated():
+    session = start_work_session()
+    item_serial_number = unique_id("ITEM")
+    barcode_value = unique_id("BC")
+
+    create = client.post(
+        "/api/production-items",
+        json={
+            "item_serial_number": item_serial_number,
+            "barcode_value": barcode_value,
+            "item_type": "PCB",
+            "work_session_id": session["work_session_id"],
+            "workstation_id": session["workstation_id"],
+        },
+    )
+    assert create.status_code == 200
+
+    invalid = client.patch(
+        f"/api/production-items/{item_serial_number}/status",
+        json={"current_status": "INSTALLED"},
+    )
+    assert invalid.status_code == 400
+    assert "Invalid production item status transition" in invalid.json()["detail"]
+
+    valid = client.patch(
+        f"/api/production-items/{item_serial_number}/status",
+        json={"current_status": "PRODUCED"},
+    )
+    assert valid.status_code == 200
+    assert valid.json()["current_status"] == "PRODUCED"
+
+
 def test_expired_work_session_is_timed_out_and_blocked():
     session = start_work_session()
     db = SessionLocal()

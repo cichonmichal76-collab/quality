@@ -259,6 +259,10 @@ class BarcodeRead(BarcodeCreate):
     model_config = {"from_attributes": True}
 
 
+class BarcodeStatusUpdate(BaseModel):
+    status: str
+
+
 class ProductionItemBase(BaseModel):
     item_serial_number: str
     barcode_value: str
