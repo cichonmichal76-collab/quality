@@ -1,128 +1,186 @@
 # ServiceTrace Platform
 
-ServiceTrace Platform to system traceability, Quality, final test, commissioning i serwisowej identyfikacji części dla urządzenia medycznego.
+ServiceTrace Platform is a traceability and quality system for a medical device production and service workflow.
 
-System śledzi fizyczne egzemplarze części i podzespołów od momentu zejścia z maszyny, przez kontrolę jakości, montaż końcowy, test gotowego urządzenia, wysyłkę, uruchomienie u klienta i późniejszy serwis.
+The platform tracks physical parts and subassemblies from machine output, through QC and final assembly, to final test, shipment, commissioning, and later service history.
 
-## Najważniejsza idea
+Detailed product and process documents in `docs/` are currently maintained mostly in Polish.
 
-Każda istotna fizyczna część ma własny unikalny kod kreskowy, QR albo DataMatrix. Operator loguje się kartą RFID, skanuje część i wykonuje procedurę. System zapisuje, kto wykonał czynność, kiedy, na jakiej maszynie, na jakim stanowisku i z jakim wynikiem.
+## What problem this repo solves
 
-Gotowe urządzenie powstaje przez skanowanie wszystkich komponentów. Dzięki temu system wie, z jakich konkretnych podzespołów składa się dane urządzenie.
+- each physical part gets its own unique barcode, QR code, or DataMatrix
+- operators log in with RFID at a workstation
+- every scan, QC step, final test, and assembly action is attributed to a person, workstation, machine, and timestamp
+- finished devices can be traced back to exact component instances
+- shipment can be blocked if quality or final test rules are not satisfied
 
-## Zakres systemu
+## Current status
 
-- produkcja części mechanicznych,
-- kontrola jakości mechaniki,
-- produkcja i test elektroniki,
-- montaż końcowy przez skanowanie komponentów,
-- final test gotowego urządzenia przez USB,
-- blokada wysyłki bez pozytywnego testu,
-- aplikacja mobilna serwisanta,
-- offline commissioning u klienta,
-- paczka serwisowa z logami i zdjęciami,
-- Service AR Part Identification dla serwisanta.
+This repository is currently a backend-first MVP.
 
-## Ograniczenia medyczne
+Implemented now:
 
-Urządzenie nie ma Wi‑Fi, Bluetooth ani BLE. Komunikacja z MCU odbywa się przewodowo przez USB. Telefon serwisanta może mieć internet, ale urządzenie medyczne nie komunikuje się radiowo.
+- FastAPI backend with SQLAlchemy models and Alembic migrations
+- RFID login and workstation work sessions
+- barcode lifecycle and scan history
+- production item traceability
+- QC checklist MVP with automatic PASS/FAIL evaluation
+- NCR creation on blocking QC or final test failures
+- assembly links between device and scanned components
+- Python final-test runner with mock MCU and serial/USB interface
+- CI workflow for backend, runner, and Docker build
 
-## Moduły repozytorium
+In scaffold / placeholder state:
 
-- `backend/` — FastAPI + PostgreSQL, centralne API i baza traceability.
-- `web-app/` — panel Production / Quality.
-- `final-test-runner/` — narzędzie stanowiskowe do testu końcowego przez USB/mock MCU.
-- `android-app/` — aplikacja mobilna serwisanta.
-- `docs/` — PRD, mechanizmy, backlog, CI/CD, stack, protokół MCU.
+- `web-app/` production and quality UI
+- `android-app/` offline-first service mobile app
+- service AR part identification
 
-## Dokumenty
+## Repository layout
 
-- `docs/PRD.md` — główne wymagania produktu.
-- `docs/CODEX_PIPELINE.md` — kolejność implementacji dla Codex.
-- `docs/MECHANISMS.md` — mechanizmy systemowe.
-- `docs/BACKLOG.md` — backlog funkcjonalny.
-- `docs/UNREALIZED_CONCEPTS.md` — koncepcje odłożone poza MVP.
-- `docs/TECH_STACK.md` — proponowane technologie i języki.
-- `docs/CI_CD.md` — propozycja CI/CD.
-- `AGENTS.md` — instrukcje dla Codex i innych agentów kodujących.
+```text
+.
+|-- backend/             FastAPI backend, DB models, API, tests, Alembic
+|-- final-test-runner/   Python CLI runner for final device test
+|-- web-app/             front-end scaffold for production / quality UI
+|-- android-app/         Android scaffold for service workflows
+|-- docs/                PRD, pipeline, stack, mechanisms, backlog
+|-- .github/             CI workflow, PR template, CODEOWNERS
+`-- docker-compose.yml   local backend + PostgreSQL startup
+```
 
-## Koncepcyjna historia zmian — styl commitów
+## Backend architecture at a glance
 
-### commit: init-service-app-concept
+The backend is evolving toward a modular monolith with domain modules such as:
 
-Początkowa idea: aplikacja mobilna dla serwisanta do rozpoznawania części urządzenia i prowadzenia tutoriala uruchomienia.
+- `auth_rfid`
+- `traceability`
+- `qc`
+- `assembly`
+- `final_test`
+- `shipment`
+- `service`
+- `files`
 
-### commit: add-offline-mobile-commissioning
+There is still some legacy routing code in the repo, but the new module layout is already in place and active for selected domains.
 
-Dodano wymóg pracy offline u klienta, lokalnego zapisu zdjęć, checklist i późniejszej wysyłki paczki na serwer.
+## Quick start
 
-### commit: reject-wireless-for-medical-device
+### Option 1: Docker
 
-Odrzucono Wi‑Fi, Bluetooth i BLE w urządzeniu medycznym. Ustalono, że komunikacja diagnostyczna z MCU odbywa się przewodowo przez USB.
-
-### commit: add-mcu-usb-diagnostics
-
-Dodano koncepcję odczytu numeru seryjnego, firmware, statusów, błędów i logów z MCU przez USB.
-
-### commit: add-production-quality-traceability
-
-Rozszerzono zakres poza aplikację mobilną. Dodano produkcję, Quality, testy części, elektronikę, montaż i final test.
-
-### commit: add-rfid-workstation-login
-
-Dodano wymóg logowania operatora kartą RFID na stanowisku produkcyjnym lub QC oraz przypisania każdej czynności do operatora, maszyny i stanowiska.
-
-### commit: add-barcode-lifecycle-for-physical-parts
-
-Ustalono, że unikalny kod dotyczy fizycznego egzemplarza części, a nie tylko typu części. Dodano lifecycle etykiety i scan event ledger.
-
-### commit: add-assembly-by-scan
-
-Dodano montaż końcowy przez skanowanie wszystkich komponentów. System buduje drzewo urządzenia z konkretnych podzespołów.
-
-### commit: add-final-test-gate
-
-Dodano obowiązkowy test końcowy przez USB i blokadę wysyłki bez wyniku PASS.
-
-### commit: add-ncr-engine
-
-Dodano mechanizm niezgodności NCR. Krytyczna otwarta NCR blokuje montaż i wysyłkę.
-
-### commit: scope-ar-to-service-only
-
-Doprecyzowano, że AR/VR dotyczy wyłącznie serwisanta. AR ma służyć rozpoznaniu części i pokazaniu numeru części oraz historii, a nie tworzeniu traceability na produkcji.
-
-### commit: define-codex-pipeline
-
-Dodano AGENTS.md, pipeline pracy dla Codex, backlog, techniczny stack, CI/CD i listę koncepcji odłożonych poza MVP.
-
-## Szybki start lokalny
-
-Backend i baza:
+Start PostgreSQL and the backend:
 
 ```bash
 docker compose up --build
 ```
 
-Testy backendu:
+Backend will be available at `http://localhost:8000`.
+
+### Option 2: Local backend development
+
+```bash
+cd backend
+pip install -e .[dev]
+alembic upgrade head
+uvicorn app.main:app --reload
+```
+
+Useful local environment variables are listed in [`.env.example`](./.env.example).
+
+## Tests and quality checks
+
+Backend:
 
 ```bash
 cd backend
 pytest
+ruff check .
+mypy app
 ```
 
-Final-test-runner:
+Final test runner:
 
 ```bash
 cd final-test-runner
 pytest
-python -m servicetrace_runner.main --mock
+ruff check .
 ```
 
-## Docelowa kolejność implementacji
+## Final test runner
 
-Najpierw backend i model danych. Potem RFID i sesje stanowiskowe. Następnie barcode lifecycle, QC, elektronika, assembly by scan, final-test-runner, shipment gate, aplikacja mobilna i Service AR Part Identification jako atlas z hotspotami.
+Mock mode:
 
-## Definicja MVP
+```bash
+cd final-test-runner
+python -m servicetrace_runner.main --device ZSS-000123 --backend http://localhost:8000 --mock --work-session-id WS-1234567890AB
+```
 
-MVP jest gotowe, gdy system pozwala zalogować operatora RFID, nadać kod części, zeskanować część, wykonać QC, zablokować część NOK, zarejestrować elektronikę, złożyć urządzenie przez skanowanie komponentów, wykonać final test, zablokować wysyłkę bez PASS, przeprowadzić commissioning z aplikacji mobilnej i zobaczyć historię urządzenia.
+Serial / USB CDC mode:
+
+```bash
+cd final-test-runner
+python -m servicetrace_runner.main --device ZSS-000123 --backend http://localhost:8000 --port COM5 --work-session-id WS-1234567890AB
+```
+
+## Key backend capabilities
+
+- `GET /health`
+- `POST /api/operators`
+- `POST /api/workstations`
+- `POST /api/machines`
+- `POST /api/auth/rfid-login`
+- `GET /api/work-sessions`
+- `POST /api/work-sessions/{work_session_id}/close`
+- `POST /api/production-items`
+- `POST /api/scan-events`
+- `PATCH /api/barcodes/{barcode_value}/status`
+- `GET /api/barcodes/{barcode_value}/scan-history`
+- `POST /api/qc-runs`
+- `POST /api/final-tests`
+- `POST /api/devices`
+- `GET /api/devices/{serial_number}`
+- `PATCH /api/devices/{serial_number}/status`
+- `GET /api/audit-events`
+
+## Constraints specific to the product
+
+- the target device is a medical device
+- the device itself does not use Wi-Fi, Bluetooth, or BLE
+- technical communication with MCU is wired over USB
+- the mobile phone used by a service technician may have internet, but the device does not communicate wirelessly
+
+## Product roadmap
+
+The implementation plan is described in [docs/CODEX_PIPELINE.md](./docs/CODEX_PIPELINE.md).
+
+High-level order:
+
+1. repository and CI foundation
+2. backend core and data model
+3. RFID sessions
+4. barcode lifecycle
+5. QC
+6. assembly by scan
+7. final test runner
+8. shipment gate
+9. offline mobile commissioning
+10. service AR identification
+
+## Documentation
+
+- [docs/PRD.md](./docs/PRD.md) - product requirements
+- [docs/TECH_STACK.md](./docs/TECH_STACK.md) - proposed technology stack
+- [docs/MECHANISMS.md](./docs/MECHANISMS.md) - system mechanisms
+- [docs/BACKLOG.md](./docs/BACKLOG.md) - functional backlog
+- [docs/CI_CD.md](./docs/CI_CD.md) - CI/CD direction
+- [backend/README.md](./backend/README.md) - backend-specific notes
+- [final-test-runner/README.md](./final-test-runner/README.md) - runner usage
+- [AGENTS.md](./AGENTS.md) - coding-agent workflow and project rules
+
+## Near-term improvement targets
+
+- split the remaining legacy API routes into domain modules
+- harden CI so lint and type checks are blocking
+- add PostgreSQL integration tests in CI
+- build a usable web UI for production and quality flows
+- start the Android commissioning MVP
