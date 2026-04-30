@@ -185,9 +185,8 @@ Main rules:
 
 Implementation status:
 
-- business flow exists
-- route still lives in legacy API code
-- `assembly` module is currently only a scaffold
+- implemented in the `assembly` module
+- device CRUD still lives outside the assembly module in shared legacy routes
 
 ### 5. Final test
 
@@ -212,9 +211,8 @@ Main rules:
 
 Implementation status:
 
-- business flow exists
-- route still lives in legacy API code
-- `final_test` module is currently only a scaffold
+- implemented in the `final_test` module
+- shipment status transitions still live outside the final-test module in shared legacy routes
 
 ### 6. Shipment gate
 
@@ -599,8 +597,8 @@ Key fields:
 
 Current reality:
 
-- `auth_rfid`, `traceability`, and `qc` already contain active module logic
-- assembly, final test, shipment, service, files, and NCR are still partly or mostly handled in legacy routes
+- `auth_rfid`, `traceability`, `qc`, `assembly`, and `final_test` already contain active module logic
+- shipment, service, files, device CRUD, and NCR are still partly or mostly handled in legacy routes
 
 Target direction:
 
@@ -611,6 +609,6 @@ Target direction:
 ## Recommended next domain-level cleanups
 
 - move NCR logic into a dedicated domain module
-- move assembly and final-test flows out of legacy routes
+- move device CRUD and shipment gate into explicit domain ownership
 - clarify the QC target model so device-target and item-target semantics are explicit
 - formalize status enums instead of relying on free-form strings

@@ -1,4 +1,3 @@
-import uuid
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
@@ -6,32 +5,19 @@ from sqlalchemy.orm import Session
 from app.core.audit import record_audit_event
 from app.database import get_db, utc_now
 from app.models import (
-    AssemblyLink,
     Device,
     DeviceComponent,
-    FinalTestRun,
     Nonconformity,
-    ProductionItem,
-    ScanEvent,
     ServiceSession,
     StoredFile,
 )
-from app.modules.auth_rfid.service import (
-    FINAL_TEST_SESSION_ROLES,
-    PRODUCTION_SESSION_ROLES,
-    require_active_work_session,
-)
 from app.schemas import (
-    AssemblyLinkRead,
-    AssemblyScanRequest,
     ComponentCreate,
     ComponentRead,
     DeviceCreate,
     DeviceRead,
     DeviceStatusUpdate,
     FileRead,
-    FinalTestCreate,
-    FinalTestRead,
     NonconformityCreate,
     NonconformityRead,
     NonconformityUpdate,
@@ -139,80 +125,6 @@ def list_components(serial_number: str, db: Session = Depends(get_db)):
         .order_by(DeviceComponent.installed_at.desc())
         .all()
     )
-
-
-@router.post("/final-tests", response_model=FinalTestRead)
-def create_final_test(payload: FinalTestCreate, db: Session = Depends(get_db)):
-    device = get_device_or_404(db, payload.device_serial_number)
-    work_session = require_active_work_session(
-        db,
-        payload.work_session_id,
-        operator_id=payload.operator_id,
-        allowed_roles=FINAL_TEST_SESSION_ROLES,
-    )
-    operator_id = payload.operator_id or (work_session.operator_id if work_session else None)
-    test = FinalTestRun(
-        test_run_id=payload.test_run_id,
-        device_serial_number=payload.device_serial_number,
-        operator_id=operator_id,
-        result=payload.result,
-        firmware_version=payload.firmware_version,
-        bootloader_version=payload.bootloader_version,
-        report_path=payload.report_path,
-        mcu_log_path=payload.mcu_log_path,
-        started_at=utc_now(),
-        ended_at=utc_now(),
-    )
-    db.add(test)
-
-    if payload.result == "PASS":
-        device.production_status = FINAL_TEST_PASSED
-    elif payload.result == "FAIL":
-        device.production_status = FINAL_TEST_FAILED
-        ncr = Nonconformity(
-            ncr_id=f"NCR-{payload.test_run_id}",
-            device_serial_number=payload.device_serial_number,
-            process_stage="FINAL_TEST",
-            description="Final test failed",
-            severity="CRITICAL",
-            status="OPEN",
-            detected_by=operator_id,
-        )
-        db.add(ncr)
-    device.updated_at = utc_now()
-    record_audit_event(
-        db,
-        event_type="FINAL_TEST_RECORDED",
-        entity_type="FINAL_TEST",
-        entity_id=payload.test_run_id,
-        work_session=work_session,
-        operator_id=operator_id,
-        result=payload.result,
-        message=f"Final test {payload.result} for {payload.device_serial_number}",
-        payload=payload.model_dump(exclude_none=True),
-    )
-    db.commit()
-    db.refresh(test)
-    return test
-
-
-@router.get("/final-tests/{test_run_id}", response_model=FinalTestRead)
-def get_final_test(test_run_id: str, db: Session = Depends(get_db)):
-    test = db.query(FinalTestRun).filter(FinalTestRun.test_run_id == test_run_id).first()
-    if not test:
-        raise HTTPException(status_code=404, detail="Final test not found")
-    return test
-
-
-@router.post("/final-tests/{test_run_id}/complete", response_model=FinalTestRead)
-def complete_final_test(test_run_id: str, db: Session = Depends(get_db)):
-    test = db.query(FinalTestRun).filter(FinalTestRun.test_run_id == test_run_id).first()
-    if not test:
-        raise HTTPException(status_code=404, detail="Final test not found")
-    test.ended_at = utc_now()
-    db.commit()
-    db.refresh(test)
-    return test
 
 
 @router.post("/service-sessions/upload", response_model=ServiceSessionRead)
@@ -343,76 +255,3 @@ def download_file(file_id: str, db: Session = Depends(get_db)):
     if not stored:
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(stored.file_path, filename=stored.file_name)
-
-# --- Traceability-first core endpoints ---
-
-@router.post("/devices/{device_serial_number}/assembly/scan-component", response_model=AssemblyLinkRead)
-def scan_component_for_assembly(
-    device_serial_number: str,
-    payload: AssemblyScanRequest,
-    db: Session = Depends(get_db),
-):
-    get_device_or_404(db, device_serial_number)
-    work_session = require_active_work_session(
-        db,
-        payload.work_session_id,
-        operator_id=payload.installed_by,
-        workstation_id=payload.workstation_id,
-        allowed_roles=PRODUCTION_SESSION_ROLES,
-    )
-    item = db.query(ProductionItem).filter(ProductionItem.barcode_value == payload.child_barcode_value).first()
-    if not item:
-        raise HTTPException(status_code=404, detail="Component barcode not found")
-    if item.current_status in {"QC_FAILED", "SCRAPPED", "REWORK_REQUIRED"}:
-        raise HTTPException(status_code=400, detail="Component status blocks assembly")
-    existing = db.query(AssemblyLink).filter(
-        AssemblyLink.child_barcode_value == payload.child_barcode_value,
-        AssemblyLink.status == "INSTALLED",
-    ).first()
-    if existing:
-        raise HTTPException(status_code=409, detail="Component already installed in another device")
-    scan_event_id = f"SCAN-{uuid.uuid4().hex[:12]}"
-    event = ScanEvent(
-        scan_event_id=scan_event_id,
-        barcode_value=payload.child_barcode_value,
-        operator_id=payload.installed_by or (work_session.operator_id if work_session else None),
-        workstation_id=payload.workstation_id or (work_session.workstation_id if work_session else None),
-        context="ASSEMBLY_SCAN",
-        result="ACCEPTED",
-        message=f"Installed as {payload.component_type} in {device_serial_number}",
-    )
-    link = AssemblyLink(
-        parent_device_serial_number=device_serial_number,
-        child_item_serial_number=item.item_serial_number,
-        child_barcode_value=item.barcode_value,
-        component_type=payload.component_type,
-        installed_by=payload.installed_by or (work_session.operator_id if work_session else None),
-        workstation_id=payload.workstation_id or (work_session.workstation_id if work_session else None),
-        scan_event_id=scan_event_id,
-    )
-    item.current_status = "INSTALLED"
-    db.add(event)
-    db.add(link)
-    record_audit_event(
-        db,
-        event_type="ASSEMBLY_COMPONENT_INSTALLED",
-        entity_type="ASSEMBLY_LINK",
-        entity_id=scan_event_id,
-        work_session=work_session,
-        operator_id=link.installed_by,
-        workstation_id=link.workstation_id,
-        result=link.status,
-        message=f"Installed {item.item_serial_number} into {device_serial_number}",
-        payload=payload.model_dump(exclude_none=True),
-    )
-    db.commit()
-    db.refresh(link)
-    return link
-
-
-@router.get("/devices/{device_serial_number}/assembly-tree", response_model=list[AssemblyLinkRead])
-def get_assembly_tree(device_serial_number: str, db: Session = Depends(get_db)):
-    get_device_or_404(db, device_serial_number)
-    return db.query(AssemblyLink).filter(
-        AssemblyLink.parent_device_serial_number == device_serial_number
-    ).order_by(AssemblyLink.installed_at.asc()).all()

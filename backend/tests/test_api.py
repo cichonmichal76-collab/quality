@@ -418,6 +418,82 @@ def test_qc_run_pass_updates_item_status():
     assert item.json()["current_status"] == "QC_PASSED"
 
 
+def test_assembly_scan_installs_component_and_blocks_duplicate_use():
+    session = start_work_session(role="PRODUCTION_OPERATOR")
+    item_serial_number = unique_id("ITEM")
+    barcode_value = unique_id("BC")
+    device_serial_number = unique_id("ZSS")
+
+    create_device = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": "ZSS"},
+    )
+    assert create_device.status_code == 200
+
+    create_item = client.post(
+        "/api/production-items",
+        json={
+            "item_serial_number": item_serial_number,
+            "barcode_value": barcode_value,
+            "item_type": "PCB",
+            "work_session_id": session["work_session_id"],
+            "workstation_id": session["workstation_id"],
+        },
+    )
+    assert create_item.status_code == 200
+
+    produced = client.patch(
+        f"/api/production-items/{item_serial_number}/status",
+        json={"current_status": "PRODUCED"},
+    )
+    assert produced.status_code == 200
+
+    qc_in_progress = client.patch(
+        f"/api/production-items/{item_serial_number}/status",
+        json={"current_status": "QC_IN_PROGRESS"},
+    )
+    assert qc_in_progress.status_code == 200
+
+    qc_passed = client.patch(
+        f"/api/production-items/{item_serial_number}/status",
+        json={"current_status": "QC_PASSED"},
+    )
+    assert qc_passed.status_code == 200
+
+    install = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": barcode_value,
+            "component_type": "CONTROL_PCB",
+            "work_session_id": session["work_session_id"],
+        },
+    )
+    assert install.status_code == 200
+    assert install.json()["parent_device_serial_number"] == device_serial_number
+    assert install.json()["child_item_serial_number"] == item_serial_number
+    assert install.json()["status"] == "INSTALLED"
+
+    item = client.get(f"/api/production-items/{item_serial_number}")
+    assert item.status_code == 200
+    assert item.json()["current_status"] == "INSTALLED"
+
+    tree = client.get(f"/api/devices/{device_serial_number}/assembly-tree")
+    assert tree.status_code == 200
+    assert len(tree.json()) == 1
+    assert tree.json()[0]["child_barcode_value"] == barcode_value
+
+    duplicate = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": barcode_value,
+            "component_type": "CONTROL_PCB",
+            "work_session_id": session["work_session_id"],
+        },
+    )
+    assert duplicate.status_code == 409
+    assert duplicate.json()["detail"] == "Component already installed in another device"
+
+
 def test_expired_work_session_is_timed_out_and_blocked():
     session = start_work_session()
     db = SessionLocal()
@@ -486,3 +562,37 @@ def test_final_test_pass_sets_status_and_audit_context():
     assert audit.status_code == 200
     assert audit.json()[0]["work_session_id"] == session["work_session_id"]
     assert audit.json()[0]["result"] == "PASS"
+
+
+def test_final_test_fail_sets_device_status_and_creates_ncr():
+    device_serial_number = unique_id("ZSS")
+    device_response = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": "ZSS"},
+    )
+    assert device_response.status_code == 200
+
+    session = start_work_session(role="FINAL_TEST_OPERATOR")
+    test_run_id = unique_id("FT")
+    final_test_response = client.post(
+        "/api/final-tests",
+        json={
+            "test_run_id": test_run_id,
+            "device_serial_number": device_serial_number,
+            "result": "FAIL",
+            "firmware_version": "1.2.4",
+            "bootloader_version": "0.9.8",
+            "work_session_id": session["work_session_id"],
+        },
+    )
+    assert final_test_response.status_code == 200
+    assert final_test_response.json()["result"] == "FAIL"
+
+    device = client.get(f"/api/devices/{device_serial_number}")
+    assert device.status_code == 200
+    assert device.json()["production_status"] == "FINAL_TEST_FAILED"
+
+    ncr = client.get(f"/api/nonconformities/{'NCR-' + test_run_id}")
+    assert ncr.status_code == 200
+    assert ncr.json()["device_serial_number"] == device_serial_number
+    assert ncr.json()["severity"] == "CRITICAL"

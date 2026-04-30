@@ -26,7 +26,9 @@ graph TD
         AUTH["auth_rfid module"]
         TRACE["traceability module"]
         QC["qc module"]
-        LEGACY["legacy routes<br/>assembly, final test, service, files, NCR"]
+        ASSEMBLY["assembly module"]
+        FINALTEST["final_test module"]
+        LEGACY["legacy routes<br/>device CRUD, shipment gate, service, files, NCR"]
         AUDIT["audit trail"]
     end
 
@@ -52,10 +54,14 @@ graph TD
     API --> AUTH
     API --> TRACE
     API --> QC
+    API --> ASSEMBLY
+    API --> FINALTEST
     API --> LEGACY
     AUTH --> AUDIT
     TRACE --> AUDIT
     QC --> AUDIT
+    ASSEMBLY --> AUDIT
+    FINALTEST --> AUDIT
     LEGACY --> AUDIT
 
     API --> DB
@@ -69,7 +75,7 @@ graph TD
 ## Interpretation
 
 - today, the backend is the operational core of the product
-- `auth_rfid`, `traceability`, and `qc` are the most mature backend modules
-- assembly, final-test persistence, service uploads, files, and NCR still partly depend on legacy route code
+- `auth_rfid`, `traceability`, `qc`, `assembly`, and `final_test` are already active backend modules
+- device CRUD, shipment gate, service uploads, files, and NCR still partly depend on legacy route code
 - the final-test runner is the most real client outside the backend
 - mobile and web are repo-visible, but not yet product-complete
