@@ -1,8 +1,11 @@
+from datetime import timedelta
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
+from app.db import SessionLocal, utc_now
 from app.main import app
+from app.models import WorkSession
 
 client = TestClient(app)
 
@@ -160,6 +163,68 @@ def test_traceability_operations_pick_up_active_work_session_context():
     event_types = {row["event_type"] for row in audit.json()}
     assert "PRODUCTION_ITEM_CREATED" in event_types
     assert "SCAN_EVENT_RECORDED" in event_types
+
+
+def test_traceability_requires_active_work_session():
+    response = client.post(
+        "/api/production-items",
+        json={
+            "item_serial_number": unique_id("ITEM"),
+            "barcode_value": unique_id("BC"),
+            "item_type": "PCB",
+        },
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Active work session is required"
+
+
+def test_traceability_blocks_wrong_operator_role():
+    session = start_work_session(role="FINAL_TEST_OPERATOR")
+    response = client.post(
+        "/api/production-items",
+        json={
+            "item_serial_number": unique_id("ITEM"),
+            "barcode_value": unique_id("BC"),
+            "item_type": "PCB",
+            "work_session_id": session["work_session_id"],
+            "workstation_id": session["workstation_id"],
+        },
+    )
+    assert response.status_code == 403
+    assert "not allowed" in response.json()["detail"]
+
+
+def test_expired_work_session_is_timed_out_and_blocked():
+    session = start_work_session()
+    db = SessionLocal()
+    try:
+        work_session = (
+            db.query(WorkSession)
+            .filter(WorkSession.work_session_id == session["work_session_id"])
+            .first()
+        )
+        assert work_session is not None
+        work_session.started_at = utc_now() - timedelta(hours=24)
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.post(
+        "/api/scan-events",
+        json={
+            "scan_event_id": unique_id("SCAN"),
+            "barcode_value": unique_id("BC"),
+            "context": "QC_SCAN",
+            "result": "ACCEPTED",
+            "work_session_id": session["work_session_id"],
+        },
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Work session is not active"
+
+    audit = client.get(f"/api/audit-events?work_session_id={session['work_session_id']}")
+    assert audit.status_code == 200
+    assert any(row["event_type"] == "WORK_SESSION_TIMED_OUT" for row in audit.json())
 
 
 def test_final_test_pass_sets_status_and_audit_context():

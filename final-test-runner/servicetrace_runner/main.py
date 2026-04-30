@@ -47,6 +47,7 @@ def main():
     parser.add_argument("--mock", action="store_true")
     parser.add_argument("--port", default=None)
     parser.add_argument("--output", default="final-test-result.json")
+    parser.add_argument("--work-session-id", default=None)
     args = parser.parse_args()
 
     if args.mock or not args.port:
@@ -59,6 +60,8 @@ def main():
 
     api = ServiceTraceApiClient(args.backend)
     api.ensure_device(result["device_serial_number"])
+    if not args.work_session_id:
+        raise SystemExit("work_session_id is required when uploading final test to backend")
     response = api.submit_final_test(
         {
             "test_run_id": result["test_run_id"],
@@ -67,6 +70,7 @@ def main():
             "result": result["result"],
             "firmware_version": result["firmware_version"],
             "bootloader_version": result["bootloader_version"],
+            "work_session_id": args.work_session_id,
         }
     )
     print(json.dumps({"local_result": result, "backend_response": response}, indent=2, ensure_ascii=False))

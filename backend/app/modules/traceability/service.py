@@ -1,41 +1,15 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.audit import record_audit_event
 from app.database import utc_now
-from app.models import AuditEvent, BarcodeLabel, ProductionItem, ScanEvent, WorkSession
-from app.modules.auth_rfid.service import resolve_active_work_session
+from app.models import BarcodeLabel, ProductionItem, ScanEvent
+from app.modules.auth_rfid.service import (
+    PRODUCTION_SESSION_ROLES,
+    require_active_work_session,
+)
 from app.modules.traceability import repository
 from app.schemas import BarcodeCreate, ProductionItemCreate, ProductionItemStatusUpdate, ScanEventCreate
-
-
-def record_audit_event(
-    db: Session,
-    *,
-    event_type: str,
-    entity_type: str,
-    entity_id: str,
-    work_session: WorkSession | None = None,
-    operator_id: str | None = None,
-    workstation_id: str | None = None,
-    machine_id: str | None = None,
-    result: str | None = None,
-    message: str | None = None,
-    payload: dict | None = None,
-) -> None:
-    db.add(
-        AuditEvent(
-            event_type=event_type,
-            entity_type=entity_type,
-            entity_id=entity_id,
-            work_session_id=work_session.work_session_id if work_session else None,
-            operator_id=operator_id or (work_session.operator_id if work_session else None),
-            workstation_id=workstation_id or (work_session.workstation_id if work_session else None),
-            machine_id=machine_id or (work_session.machine_id if work_session else None),
-            result=result,
-            message=message,
-            payload=payload,
-        )
-    )
 
 
 def create_barcode(db: Session, payload: BarcodeCreate) -> BarcodeLabel:
@@ -61,12 +35,13 @@ def create_production_item(db: Session, payload: ProductionItemCreate) -> Produc
     if repository.get_production_item_by_barcode(db, payload.barcode_value):
         raise HTTPException(status_code=409, detail="Production item barcode already exists")
 
-    work_session = resolve_active_work_session(
+    work_session = require_active_work_session(
         db,
         payload.work_session_id,
         operator_id=payload.created_by_operator_id,
         workstation_id=payload.workstation_id,
         machine_id=payload.machine_id,
+        allowed_roles=PRODUCTION_SESSION_ROLES,
     )
     item = ProductionItem(
         item_serial_number=payload.item_serial_number,
@@ -141,11 +116,12 @@ def update_production_item_status(
 
 
 def create_scan_event(db: Session, payload: ScanEventCreate) -> ScanEvent:
-    work_session = resolve_active_work_session(
+    work_session = require_active_work_session(
         db,
         payload.work_session_id,
         operator_id=payload.operator_id,
         workstation_id=payload.workstation_id,
+        allowed_roles=PRODUCTION_SESSION_ROLES,
     )
     event = ScanEvent(
         scan_event_id=payload.scan_event_id,

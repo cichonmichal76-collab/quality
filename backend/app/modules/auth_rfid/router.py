@@ -2,9 +2,9 @@ from fastapi import APIRouter
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
+from app.core.audit import record_audit_event
 from app.database import get_db
 from app.modules.auth_rfid import repository, service
-from app.modules.traceability.service import record_audit_event
 from app.schemas import (
     MachineCreate,
     MachineRead,

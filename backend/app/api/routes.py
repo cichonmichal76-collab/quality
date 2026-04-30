@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
+from app.core.audit import record_audit_event
 from app.database import get_db, utc_now
 from app.models import (
     AssemblyLink,
@@ -17,8 +18,12 @@ from app.models import (
     ServiceSession,
     StoredFile,
 )
-from app.modules.auth_rfid.service import resolve_active_work_session
-from app.modules.traceability.service import record_audit_event
+from app.modules.auth_rfid.service import (
+    FINAL_TEST_SESSION_ROLES,
+    PRODUCTION_SESSION_ROLES,
+    QUALITY_SESSION_ROLES,
+    require_active_work_session,
+)
 from app.schemas import (
     AssemblyLinkRead,
     AssemblyScanRequest,
@@ -146,10 +151,11 @@ def list_components(serial_number: str, db: Session = Depends(get_db)):
 @router.post("/qc-runs", response_model=QcRunRead)
 def create_qc_run(payload: QcRunCreate, db: Session = Depends(get_db)):
     get_device_or_404(db, payload.device_serial_number)
-    work_session = resolve_active_work_session(
+    work_session = require_active_work_session(
         db,
         payload.work_session_id,
         operator_id=payload.operator_id,
+        allowed_roles=QUALITY_SESSION_ROLES,
     )
     run = QcRun(
         run_id=payload.run_id,
@@ -225,10 +231,11 @@ def complete_qc_run(run_id: str, result: str = Form(...), db: Session = Depends(
 @router.post("/final-tests", response_model=FinalTestRead)
 def create_final_test(payload: FinalTestCreate, db: Session = Depends(get_db)):
     device = get_device_or_404(db, payload.device_serial_number)
-    work_session = resolve_active_work_session(
+    work_session = require_active_work_session(
         db,
         payload.work_session_id,
         operator_id=payload.operator_id,
+        allowed_roles=FINAL_TEST_SESSION_ROLES,
     )
     operator_id = payload.operator_id or (work_session.operator_id if work_session else None)
     test = FinalTestRun(
@@ -433,11 +440,12 @@ def scan_component_for_assembly(
     db: Session = Depends(get_db),
 ):
     get_device_or_404(db, device_serial_number)
-    work_session = resolve_active_work_session(
+    work_session = require_active_work_session(
         db,
         payload.work_session_id,
         operator_id=payload.installed_by,
         workstation_id=payload.workstation_id,
+        allowed_roles=PRODUCTION_SESSION_ROLES,
     )
     item = db.query(ProductionItem).filter(ProductionItem.barcode_value == payload.child_barcode_value).first()
     if not item:

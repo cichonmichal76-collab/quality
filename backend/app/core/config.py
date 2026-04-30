@@ -10,6 +10,7 @@ class Settings:
     storage_dir: str
     api_host: str
     api_port: int
+    work_session_timeout_minutes: int
 
 
 @lru_cache
@@ -20,5 +21,5 @@ def get_settings() -> Settings:
         storage_dir=os.getenv("STORAGE_DIR", "./app/storage"),
         api_host=os.getenv("API_HOST", "0.0.0.0"),
         api_port=int(os.getenv("API_PORT", "8000")),
+        work_session_timeout_minutes=int(os.getenv("WORK_SESSION_TIMEOUT_MINUTES", "480")),
     )
-
