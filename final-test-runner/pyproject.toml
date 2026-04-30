@@ -9,7 +9,19 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.6",
+  "mypy>=1.11",
+  "types-requests>=2.32",
+]
 
 [project.scripts]
 servicetrace-final-test = "servicetrace_runner.main:main"
+
+[tool.mypy]
+python_version = "3.11"
+
+[[tool.mypy.overrides]]
+module = ["serial"]
+ignore_missing_imports = true

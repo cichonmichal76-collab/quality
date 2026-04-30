@@ -1,3 +1,5 @@
+from typing import Any
+
 import requests
 
 
@@ -11,7 +13,7 @@ class ServiceTraceApiClient:
         if response.status_code not in (200, 409):
             response.raise_for_status()
 
-    def submit_final_test(self, payload: dict) -> dict:
+    def submit_final_test(self, payload: dict[str, Any]) -> dict[str, Any]:
         response = requests.post(f"{self.base_url}/api/final-tests", json=payload, timeout=20)
         response.raise_for_status()
         return response.json()
