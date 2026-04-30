@@ -12,8 +12,6 @@ from app.models import (
     FinalTestRun,
     Nonconformity,
     ProductionItem,
-    QcRun,
-    QcStepResult,
     ScanEvent,
     ServiceSession,
     StoredFile,
@@ -21,7 +19,6 @@ from app.models import (
 from app.modules.auth_rfid.service import (
     FINAL_TEST_SESSION_ROLES,
     PRODUCTION_SESSION_ROLES,
-    QUALITY_SESSION_ROLES,
     require_active_work_session,
 )
 from app.schemas import (
@@ -38,10 +35,6 @@ from app.schemas import (
     NonconformityCreate,
     NonconformityRead,
     NonconformityUpdate,
-    QcRunCreate,
-    QcRunRead,
-    QcStepResultCreate,
-    QcStepResultRead,
     ServiceSessionRead,
 )
 from app.services.files import save_upload
@@ -146,86 +139,6 @@ def list_components(serial_number: str, db: Session = Depends(get_db)):
         .order_by(DeviceComponent.installed_at.desc())
         .all()
     )
-
-
-@router.post("/qc-runs", response_model=QcRunRead)
-def create_qc_run(payload: QcRunCreate, db: Session = Depends(get_db)):
-    get_device_or_404(db, payload.device_serial_number)
-    work_session = require_active_work_session(
-        db,
-        payload.work_session_id,
-        operator_id=payload.operator_id,
-        allowed_roles=QUALITY_SESSION_ROLES,
-    )
-    run = QcRun(
-        run_id=payload.run_id,
-        device_serial_number=payload.device_serial_number,
-        checklist_id=payload.checklist_id,
-        process_stage=payload.process_stage,
-        operator_id=payload.operator_id or (work_session.operator_id if work_session else None),
-        started_at=utc_now(),
-        status="IN_PROGRESS",
-    )
-    db.add(run)
-    record_audit_event(
-        db,
-        event_type="QC_RUN_STARTED",
-        entity_type="QC_RUN",
-        entity_id=payload.run_id,
-        work_session=work_session,
-        operator_id=run.operator_id,
-        result=run.status,
-        message=f"QC run started for {payload.device_serial_number}",
-        payload=payload.model_dump(exclude_none=True),
-    )
-    db.commit()
-    db.refresh(run)
-    return run
-
-
-@router.get("/qc-runs/{run_id}", response_model=QcRunRead)
-def get_qc_run(run_id: str, db: Session = Depends(get_db)):
-    run = db.query(QcRun).filter(QcRun.run_id == run_id).first()
-    if not run:
-        raise HTTPException(status_code=404, detail="QC run not found")
-    return run
-
-
-@router.post("/qc-runs/{run_id}/steps/{step_id}/result", response_model=QcStepResultRead)
-def add_qc_step_result(
-    run_id: str, step_id: str, payload: QcStepResultCreate, db: Session = Depends(get_db)
-):
-    run = db.query(QcRun).filter(QcRun.run_id == run_id).first()
-    if not run:
-        raise HTTPException(status_code=404, detail="QC run not found")
-    result = QcStepResult(qc_run_id=run.id, step_id=step_id, **payload.model_dump())
-    db.add(result)
-    db.commit()
-    db.refresh(result)
-    return result
-
-
-@router.post("/qc-runs/{run_id}/complete", response_model=QcRunRead)
-def complete_qc_run(run_id: str, result: str = Form(...), db: Session = Depends(get_db)):
-    run = db.query(QcRun).filter(QcRun.run_id == run_id).first()
-    if not run:
-        raise HTTPException(status_code=404, detail="QC run not found")
-    run.result = result
-    run.status = "COMPLETED"
-    run.ended_at = utc_now()
-    record_audit_event(
-        db,
-        event_type="QC_RUN_COMPLETED",
-        entity_type="QC_RUN",
-        entity_id=run_id,
-        operator_id=run.operator_id,
-        result=result,
-        message=f"QC run completed for {run.device_serial_number}",
-        payload={"result": result},
-    )
-    db.commit()
-    db.refresh(run)
-    return run
 
 
 @router.post("/final-tests", response_model=FinalTestRead)

@@ -73,6 +73,8 @@ class QcRun(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True, default=uuid_str)
     run_id: Mapped[str] = mapped_column(String, unique=True, index=True)
     device_serial_number: Mapped[str] = mapped_column(String, index=True)
+    item_serial_number: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
+    barcode_value: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
     checklist_id: Mapped[str | None] = mapped_column(String, ForeignKey("qc_checklists.id"), nullable=True)
     process_stage: Mapped[str] = mapped_column(String)
     operator_id: Mapped[str | None] = mapped_column(String, nullable=True)

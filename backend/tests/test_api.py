@@ -268,6 +268,156 @@ def test_production_item_status_transition_is_validated():
     assert valid.json()["current_status"] == "PRODUCED"
 
 
+def test_qc_run_fail_updates_item_and_creates_ncr():
+    quality_session = start_work_session(role="QUALITY_INSPECTOR")
+    item_serial_number = unique_id("ITEM")
+    barcode_value = unique_id("BC")
+
+    create_item = client.post(
+        "/api/production-items",
+        json={
+            "item_serial_number": item_serial_number,
+            "barcode_value": barcode_value,
+            "item_type": "PCB",
+            "work_session_id": quality_session["work_session_id"],
+            "workstation_id": quality_session["workstation_id"],
+        },
+    )
+    assert create_item.status_code == 200
+
+    checklist_code = unique_id("CHK")
+    checklist = client.post(
+        "/api/qc-checklists",
+        json={
+            "checklist_code": checklist_code,
+            "name": "Mechanical QC",
+            "process_stage": "MECHANICAL_QC",
+            "version": "1.0",
+        },
+    )
+    assert checklist.status_code == 200
+    checklist_id = checklist.json()["id"]
+
+    step = client.post(
+        f"/api/qc-checklists/{checklist_code}/steps",
+        json={
+            "step_order": 1,
+            "title": "Measure width",
+            "requires_measurement": True,
+            "tolerance_min": 10.0,
+            "tolerance_max": 20.0,
+        },
+    )
+    assert step.status_code == 200
+    step_id = step.json()["id"]
+
+    run_id = unique_id("QCRUN")
+    qc_run = client.post(
+        "/api/qc-runs",
+        json={
+            "run_id": run_id,
+            "item_serial_number": item_serial_number,
+            "barcode_value": barcode_value,
+            "checklist_id": checklist_id,
+            "process_stage": "MECHANICAL_QC",
+            "work_session_id": quality_session["work_session_id"],
+        },
+    )
+    assert qc_run.status_code == 200
+
+    step_result = client.post(
+        f"/api/qc-runs/{run_id}/steps/{step_id}/result",
+        json={"status": "PASS", "measurement_value": 25.0},
+    )
+    assert step_result.status_code == 200
+    assert step_result.json()["status"] == "FAIL"
+
+    completed = client.post(f"/api/qc-runs/{run_id}/complete", data={})
+    assert completed.status_code == 200
+    assert completed.json()["result"] == "FAIL"
+
+    item = client.get(f"/api/production-items/{item_serial_number}")
+    assert item.status_code == 200
+    assert item.json()["current_status"] == "QC_FAILED"
+
+    ncr = client.get("/api/nonconformities")
+    assert ncr.status_code == 200
+    assert any(row["ncr_id"] == f"NCR-QC-{run_id}" for row in ncr.json())
+
+
+def test_qc_run_pass_updates_item_status():
+    quality_session = start_work_session(role="QUALITY_INSPECTOR")
+    item_serial_number = unique_id("ITEM")
+    barcode_value = unique_id("BC")
+
+    create_item = client.post(
+        "/api/production-items",
+        json={
+            "item_serial_number": item_serial_number,
+            "barcode_value": barcode_value,
+            "item_type": "PCB",
+            "work_session_id": quality_session["work_session_id"],
+            "workstation_id": quality_session["workstation_id"],
+        },
+    )
+    assert create_item.status_code == 200
+
+    checklist_code = unique_id("CHK")
+    checklist = client.post(
+        "/api/qc-checklists",
+        json={
+            "checklist_code": checklist_code,
+            "name": "Electrical QC",
+            "process_stage": "ELECTRONICS_QC",
+            "version": "1.0",
+        },
+    )
+    assert checklist.status_code == 200
+    checklist_id = checklist.json()["id"]
+
+    step = client.post(
+        f"/api/qc-checklists/{checklist_code}/steps",
+        json={
+            "step_order": 1,
+            "title": "Measure voltage",
+            "requires_measurement": True,
+            "tolerance_min": 4.9,
+            "tolerance_max": 5.1,
+        },
+    )
+    assert step.status_code == 200
+    step_id = step.json()["id"]
+
+    run_id = unique_id("QCRUN")
+    qc_run = client.post(
+        "/api/qc-runs",
+        json={
+            "run_id": run_id,
+            "item_serial_number": item_serial_number,
+            "barcode_value": barcode_value,
+            "checklist_id": checklist_id,
+            "process_stage": "ELECTRONICS_QC",
+            "work_session_id": quality_session["work_session_id"],
+        },
+    )
+    assert qc_run.status_code == 200
+
+    step_result = client.post(
+        f"/api/qc-runs/{run_id}/steps/{step_id}/result",
+        json={"status": "FAIL", "measurement_value": 5.0},
+    )
+    assert step_result.status_code == 200
+    assert step_result.json()["status"] == "PASS"
+
+    completed = client.post(f"/api/qc-runs/{run_id}/complete", data={})
+    assert completed.status_code == 200
+    assert completed.json()["result"] == "PASS"
+
+    item = client.get(f"/api/production-items/{item_serial_number}")
+    assert item.status_code == 200
+    assert item.json()["current_status"] == "QC_PASSED"
+
+
 def test_expired_work_session_is_timed_out_and_blocked():
     session = start_work_session()
     db = SessionLocal()

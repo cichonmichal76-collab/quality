@@ -42,9 +42,46 @@ class ComponentRead(ComponentCreate):
     model_config = {"from_attributes": True}
 
 
+class QcChecklistCreate(BaseModel):
+    checklist_code: str
+    name: str
+    process_stage: str
+    version: str
+    is_active: bool = True
+
+
+class QcChecklistRead(QcChecklistCreate):
+    id: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class QcStepCreate(BaseModel):
+    step_order: int
+    title: str
+    instruction: str | None = None
+    requires_photo: bool = False
+    requires_measurement: bool = False
+    blocking_on_fail: bool = True
+    expected_value: str | None = None
+    unit: str | None = None
+    tolerance_min: float | None = None
+    tolerance_max: float | None = None
+
+
+class QcStepRead(QcStepCreate):
+    id: str
+    checklist_id: str
+
+    model_config = {"from_attributes": True}
+
+
 class QcRunBase(BaseModel):
     run_id: str
-    device_serial_number: str
+    device_serial_number: str | None = None
+    item_serial_number: str | None = None
+    barcode_value: str | None = None
     checklist_id: str | None = None
     process_stage: str
     operator_id: str | None = None
