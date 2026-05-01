@@ -586,16 +586,39 @@ def release_device_bom_template(
     payload: DeviceBomTemplateReleaseRequest,
     variant_code: str = "DEFAULT",
 ) -> DeviceBomTemplate:
-    template = approve_device_bom_template(
-        db,
-        device_type,
-        DeviceBomTemplateApproveRequest(
-            version=payload.version,
-            approved_by=payload.approved_by,
-            release_note=payload.release_note,
-        ),
-        variant_code,
-    )
+    template = get_device_bom_template_or_404(db, device_type, payload.version, variant_code)
+    if template.status == "RETIRED":
+        raise HTTPException(status_code=400, detail="Retired BOM template cannot be released")
+    if template.status == "ACTIVE":
+        raise HTTPException(status_code=400, detail="Active BOM template is already released")
+    if template.status == "INACTIVE":
+        if payload.approved_by is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Release requires approved_by when BOM template is not yet approved",
+            )
+        template = approve_device_bom_template(
+            db,
+            device_type,
+            DeviceBomTemplateApproveRequest(
+                version=payload.version,
+                approved_by=payload.approved_by,
+                release_note=payload.release_note,
+            ),
+            variant_code,
+        )
+    elif template.status == "APPROVED":
+        if (
+            payload.approved_by is not None
+            and template.approved_by is not None
+            and payload.approved_by != template.approved_by
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="Release approved_by does not match existing BOM approval",
+            )
+        if template.release_note is None and payload.release_note is not None:
+            template.release_note = payload.release_note
     if not template.is_active:
         template = activate_device_bom_template(
             db,

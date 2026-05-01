@@ -380,7 +380,7 @@ curl -X POST http://localhost:8000/api/device-bom-templates \
   }'
 ```
 
-Nowa wersja BOM zawsze startuje jako nieaktywna. Żeby weszła do produkcji, trzeba najpierw dodać pozycje, a potem przejść przez `approve` + `activate` albo od razu przez `release`.
+Nowa wersja BOM zawsze startuje jako nieaktywna. Żeby weszła do produkcji, trzeba najpierw dodać pozycje, a potem przejść przez `approve` + `activate` albo od razu przez `release`. Jeśli wersja jest już w stanie `APPROVED`, `release` robi już tylko aktywację bez powtarzania approval.
 
 Dodanie wymaganego komponentu do BOM:
 
@@ -535,7 +535,7 @@ curl -X POST "http://localhost:8000/api/device-bom-templates/ZSS/revoke-approval
   }'
 ```
 
-Release wersji BOM, czyli approval plus aktywacja w jednym kroku:
+Release wersji BOM. Dla stanu `INACTIVE` robi approval plus aktywację w jednym kroku, a dla stanu `APPROVED` wystarczy przekazać samo `version` i opcjonalnie `release_note`:
 
 ```bash
 curl -X POST "http://localhost:8000/api/device-bom-templates/ZSS/release?variant_code=DEFAULT" \
@@ -627,6 +627,7 @@ Reguły assembly:
 - endpointy `approve` i `release` pozwalają zapisać metadane zatwierdzenia BOM i użyć ich jako jawnej ścieżki wejścia wersji do produkcji
 - `POST /api/device-bom-templates` nie pozwala już tworzyć BOM od razu jako aktywnego; prawidłowy flow to create inactive -> add items -> approve/activate albo release
 - `approve` działa tylko dla wersji `INACTIVE`, które mają już co najmniej jedną pozycję i co najmniej jedną pozycję wymaganą; po zatwierdzeniu wersja przechodzi do statusu `APPROVED`
+- `release` działa dla wersji `INACTIVE` i `APPROVED`; dla `INACTIVE` wymaga `approved_by` i robi approval plus aktywację, a dla `APPROVED` aktywuje już zatwierdzony draft bez ponownego approval
 - `revoke-approval` pozwala ręcznie cofnąć approval tylko dla wersji `APPROVED`; aktywna albo niezatwierdzona wersja nie przejdzie tej operacji
 - `revoke-approval` cofa też status `APPROVED` z powrotem do `INACTIVE`
 - endpoint `readiness` zwraca, czy dana wersja ma zdefiniowane pozycje, co najmniej jedną pozycję wymaganą i approval przed aktywacją

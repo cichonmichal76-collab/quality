@@ -1120,6 +1120,84 @@ def test_device_bom_template_can_be_released_and_activated():
     assert readiness.json()["is_approved"] is True
 
 
+def test_approved_bom_template_can_be_released_without_reapproval():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=False,
+        variant_code="DEFAULT",
+    )
+
+    approved = client.post(
+        f"/api/device-bom-templates/{device_type}/approve?variant_code=DEFAULT",
+        json={
+            "version": "1.0",
+            "approved_by": "QA-LEAD",
+            "release_note": "Reviewed before activation",
+        },
+    )
+    assert approved.status_code == 200
+
+    released = client.post(
+        f"/api/device-bom-templates/{device_type}/release?variant_code=DEFAULT",
+        json={"version": "1.0"},
+    )
+    assert released.status_code == 200
+    payload = released.json()
+    assert payload["status"] == "ACTIVE"
+    assert payload["is_active"] is True
+    assert payload["approved_by"] == "QA-LEAD"
+    assert payload["release_note"] == "Reviewed before activation"
+
+
+def test_unapproved_bom_template_release_requires_approved_by():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=False,
+        variant_code="DEFAULT",
+    )
+
+    released = client.post(
+        f"/api/device-bom-templates/{device_type}/release?variant_code=DEFAULT",
+        json={"version": "1.0"},
+    )
+    assert released.status_code == 400
+    assert released.json()["detail"] == (
+        "Release requires approved_by when BOM template is not yet approved"
+    )
+
+
+def test_release_rejects_conflicting_approved_by_for_approved_bom():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=False,
+        variant_code="DEFAULT",
+    )
+
+    approved = client.post(
+        f"/api/device-bom-templates/{device_type}/approve?variant_code=DEFAULT",
+        json={"version": "1.0", "approved_by": "QA-LEAD"},
+    )
+    assert approved.status_code == 200
+
+    released = client.post(
+        f"/api/device-bom-templates/{device_type}/release?variant_code=DEFAULT",
+        json={"version": "1.0", "approved_by": "ENG-MFG"},
+    )
+    assert released.status_code == 400
+    assert released.json()["detail"] == (
+        "Release approved_by does not match existing BOM approval"
+    )
+
+
 def test_inactive_approved_bom_loses_approval_after_item_changes():
     device_type = unique_id("DT")
     ensure_device_bom_template(

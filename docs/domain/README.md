@@ -210,6 +210,7 @@ Najważniejsze reguły:
 - wersja BOM może mieć też jawne metadane release: `approved_by`, `approved_at` i `release_note`
 - wersja BOM nie może być utworzona od razu jako aktywna; prawidłowy flow to utworzenie wersji roboczej, dodanie pozycji, approval i dopiero aktywacja albo release
 - approval można nadać tylko wersji `INACTIVE`, która ma już sensowną strukturę BOM, czyli co najmniej jedną pozycję i co najmniej jedną pozycję wymaganą; po tym kroku BOM przechodzi do statusu `APPROVED`
+- `release` działa zarówno dla wersji `INACTIVE`, jak i `APPROVED`; w pierwszym wariancie wymaga `approved_by` i domyka approval razem z aktywacją, a w drugim tylko aktywuje już zatwierdzoną wersję
 - approval dla wersji `APPROVED` można też ręcznie cofnąć, jeśli BOM wraca do poprawek albo trafia na hold przed releasem
 - stan gotowości konkretnej wersji BOM jest dostępny przez odczyt `readiness`, który blokuje aktywację pustych, wyłącznie opcjonalnych albo niezatwierdzonych wersji
 - jeśli zatwierdzona wersja robocza BOM zostanie później zmodyfikowana na poziomie pozycji, approval jest zrzucany automatycznie, status wraca do `INACTIVE` i wymaga ponownego nadania

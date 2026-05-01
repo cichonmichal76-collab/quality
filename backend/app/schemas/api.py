@@ -175,7 +175,7 @@ class DeviceBomTemplateRevokeApprovalRequest(BaseModel):
 
 class DeviceBomTemplateReleaseRequest(BaseModel):
     version: str = Field(pattern=r"^\d+(?:\.\d+)*$")
-    approved_by: str
+    approved_by: str | None = None
     release_note: str | None = None
 
 
