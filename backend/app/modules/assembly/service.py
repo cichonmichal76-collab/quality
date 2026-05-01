@@ -18,6 +18,7 @@ from app.modules.assembly import repository
 from app.schemas import (
     AssemblyScanRequest,
     ComponentCreate,
+    DeviceBomTemplateActivateRequest,
     DeviceBomItemCreate,
     DeviceBomTemplateCreate,
     DeviceCreate,
@@ -64,8 +65,19 @@ def list_components(db: Session, device_serial_number: str) -> list[DeviceCompon
 
 
 def create_device_bom_template(db: Session, payload: DeviceBomTemplateCreate) -> DeviceBomTemplate:
-    if repository.get_bom_template_by_device_type(db, payload.device_type):
-        raise HTTPException(status_code=409, detail="BOM template already exists for device type")
+    if repository.get_bom_template_by_device_type_and_version(
+        db,
+        payload.device_type,
+        payload.version,
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="BOM template version already exists for device type",
+        )
+    if payload.is_active:
+        active_template = repository.get_active_bom_template_by_device_type(db, payload.device_type)
+        if active_template:
+            active_template.is_active = False
     template = DeviceBomTemplate(**payload.model_dump())
     db.add(template)
     db.commit()
@@ -77,19 +89,36 @@ def list_device_bom_templates(db: Session) -> list[DeviceBomTemplate]:
     return repository.list_bom_templates(db)
 
 
-def get_device_bom_template_or_404(db: Session, device_type: str) -> DeviceBomTemplate:
-    template = repository.get_bom_template_by_device_type(db, device_type)
+def get_device_bom_template_or_404(
+    db: Session,
+    device_type: str,
+    version: str | None = None,
+) -> DeviceBomTemplate:
+    if version is not None:
+        template = repository.get_bom_template_by_device_type_and_version(db, device_type, version)
+    else:
+        template = repository.get_active_bom_template_by_device_type(db, device_type)
     if not template:
         raise HTTPException(status_code=404, detail="BOM template not found")
     return template
+
+
+def activate_device_bom_template(
+    db: Session,
+    device_type: str,
+    payload: DeviceBomTemplateActivateRequest,
+) -> DeviceBomTemplate:
+    template = get_device_bom_template_or_404(db, device_type, payload.version)
+    return repository.set_active_bom_template(db, template)
 
 
 def add_device_bom_item(
     db: Session,
     device_type: str,
     payload: DeviceBomItemCreate,
+    version: str | None = None,
 ) -> DeviceBomItem:
-    template = get_device_bom_template_or_404(db, device_type)
+    template = get_device_bom_template_or_404(db, device_type, version)
     if repository.get_bom_item(db, template.id, payload.component_type):
         raise HTTPException(status_code=409, detail="BOM item already exists for component type")
     item = DeviceBomItem(template_id=template.id, **payload.model_dump())
@@ -99,34 +128,45 @@ def add_device_bom_item(
     return item
 
 
-def list_device_bom_items(db: Session, device_type: str) -> list[DeviceBomItem]:
-    template = get_device_bom_template_or_404(db, device_type)
+def list_device_bom_items(
+    db: Session,
+    device_type: str,
+    version: str | None = None,
+) -> list[DeviceBomItem]:
+    template = get_device_bom_template_or_404(db, device_type, version)
     return repository.list_bom_items_for_template(db, template.id)
 
 
-def _validate_component_against_active_bom(
+def _resolve_bom_template_for_device(db: Session, device: Device) -> DeviceBomTemplate | None:
+    bound_template = repository.get_bound_bom_template_for_device(db, device.device_serial_number)
+    if bound_template:
+        return bound_template
+    return repository.get_active_bom_template_by_device_type(db, device.device_type)
+
+
+def _validate_component_against_bom(
     db: Session,
     device: Device,
     item_type: str,
     component_type: str,
-) -> DeviceBomItem | None:
+) -> tuple[DeviceBomTemplate | None, DeviceBomItem | None]:
     if item_type != component_type:
         raise HTTPException(
             status_code=400,
             detail="Scanned item type does not match requested component type",
         )
 
-    bom_template = repository.get_active_bom_template_by_device_type(db, device.device_type)
+    bom_template = _resolve_bom_template_for_device(db, device)
     if not bom_template:
-        return None
+        return None, None
 
     bom_item = repository.get_bom_item(db, bom_template.id, component_type)
     if not bom_item:
         raise HTTPException(
             status_code=400,
-            detail="Component type is not allowed by active BOM",
+            detail="Component type is not allowed by device BOM",
         )
-    return bom_item
+    return bom_template, bom_item
 
 
 def scan_component_for_assembly(
@@ -147,7 +187,7 @@ def scan_component_for_assembly(
         raise HTTPException(status_code=404, detail="Component barcode not found")
     if item.current_status in {"QC_FAILED", "SCRAPPED", "REWORK_REQUIRED"}:
         raise HTTPException(status_code=400, detail="Component status blocks assembly")
-    bom_item = _validate_component_against_active_bom(
+    bom_template, bom_item = _validate_component_against_bom(
         db,
         device,
         item.item_type,
@@ -166,7 +206,7 @@ def scan_component_for_assembly(
         if installed_count >= bom_item.quantity_required:
             raise HTTPException(
                 status_code=409,
-                detail="Active BOM quantity already satisfied for component type",
+                detail="Device BOM quantity already satisfied for component type",
             )
 
     scan_event_id = f"SCAN-{uuid.uuid4().hex[:12]}"
@@ -189,6 +229,8 @@ def scan_component_for_assembly(
         installed_by=operator_id,
         workstation_id=workstation_id,
         scan_event_id=scan_event_id,
+        bom_template_id=bom_template.id if bom_template else None,
+        bom_version=bom_template.version if bom_template else None,
     )
     item.current_status = "INSTALLED"
     db.add(event)
@@ -203,7 +245,11 @@ def scan_component_for_assembly(
         workstation_id=workstation_id,
         result=link.status,
         message=f"Installed {item.item_serial_number} into {device_serial_number}",
-        payload=payload.model_dump(exclude_none=True),
+        payload={
+            **payload.model_dump(exclude_none=True),
+            "bom_template_id": bom_template.id if bom_template else None,
+            "bom_version": bom_template.version if bom_template else None,
+        },
     )
     db.commit()
     db.refresh(link)

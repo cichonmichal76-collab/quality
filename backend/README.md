@@ -139,6 +139,7 @@ Zaobserwowane domeny backendu działają już przez routery i serwisy modułowe.
 - `POST /api/final-tests`
 - `POST /api/devices`
 - `POST /api/device-bom-templates`
+- `POST /api/device-bom-templates/{device_type}/activate`
 - `POST /api/device-bom-templates/{device_type}/items`
 - `GET /api/devices`
 - `GET /api/devices/{serial_number}`

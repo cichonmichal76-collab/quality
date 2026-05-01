@@ -505,6 +505,8 @@ Kluczowe pola:
 - `installed_by`
 - `workstation_id`
 - `scan_event_id`
+- `bom_template_id`
+- `bom_version`
 - `status`
 
 ### `FinalTestRun`

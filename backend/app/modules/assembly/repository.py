@@ -55,6 +55,22 @@ def get_bom_template_by_device_type(db: Session, device_type: str) -> DeviceBomT
     return (
         db.query(DeviceBomTemplate)
         .filter(DeviceBomTemplate.device_type == device_type)
+        .order_by(DeviceBomTemplate.created_at.desc())
+        .first()
+    )
+
+
+def get_bom_template_by_device_type_and_version(
+    db: Session,
+    device_type: str,
+    version: str,
+) -> DeviceBomTemplate | None:
+    return (
+        db.query(DeviceBomTemplate)
+        .filter(
+            DeviceBomTemplate.device_type == device_type,
+            DeviceBomTemplate.version == version,
+        )
         .first()
     )
 
@@ -74,7 +90,23 @@ def get_active_bom_template_by_device_type(
 
 
 def list_bom_templates(db: Session) -> list[DeviceBomTemplate]:
-    return db.query(DeviceBomTemplate).order_by(DeviceBomTemplate.device_type.asc()).all()
+    return (
+        db.query(DeviceBomTemplate)
+        .order_by(DeviceBomTemplate.device_type.asc(), DeviceBomTemplate.created_at.desc())
+        .all()
+    )
+
+
+def set_active_bom_template(db: Session, template: DeviceBomTemplate) -> DeviceBomTemplate:
+    (
+        db.query(DeviceBomTemplate)
+        .filter(DeviceBomTemplate.device_type == template.device_type)
+        .update({"is_active": False}, synchronize_session=False)
+    )
+    template.is_active = True
+    db.commit()
+    db.refresh(template)
+    return template
 
 
 def list_bom_items_for_template(db: Session, template_id: str) -> list[DeviceBomItem]:
@@ -115,3 +147,21 @@ def count_installed_component_type_for_device(
         )
         .count()
     )
+
+
+def get_bound_bom_template_for_device(
+    db: Session,
+    device_serial_number: str,
+) -> DeviceBomTemplate | None:
+    link = (
+        db.query(AssemblyLink)
+        .filter(
+            AssemblyLink.parent_device_serial_number == device_serial_number,
+            AssemblyLink.bom_template_id.is_not(None),
+        )
+        .order_by(AssemblyLink.installed_at.asc())
+        .first()
+    )
+    if not link or not link.bom_template_id:
+        return None
+    return db.query(DeviceBomTemplate).filter(DeviceBomTemplate.id == link.bom_template_id).first()

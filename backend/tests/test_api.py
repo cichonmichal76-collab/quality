@@ -88,20 +88,22 @@ def ensure_device_bom_template(
     device_type: str,
     component_type: str = "CONTROL_PCB",
     quantity_required: int = 1,
+    version: str = "1.0",
+    is_active: bool = True,
 ) -> None:
     template_response = client.post(
         "/api/device-bom-templates",
         json={
             "device_type": device_type,
             "name": f"{device_type} Default BOM",
-            "version": "1.0",
-            "is_active": True,
+            "version": version,
+            "is_active": is_active,
         },
     )
     assert template_response.status_code in {200, 409}
 
     item_response = client.post(
-        f"/api/device-bom-templates/{device_type}/items",
+        f"/api/device-bom-templates/{device_type}/items?version={version}",
         json={
             "component_type": component_type,
             "quantity_required": quantity_required,
@@ -209,8 +211,12 @@ def test_device_bom_template_can_be_created_and_listed():
     assert len(listed_items.json()) == 1
     assert listed_items.json()[0]["component_type"] == "SENSOR_MODULE"
 
+    versioned_items = client.get(f"/api/device-bom-templates/{device_type}/items?version=2.0")
+    assert versioned_items.status_code == 200
+    assert versioned_items.json()[0]["component_type"] == "SENSOR_MODULE"
+
     invalid_item = client.post(
-        f"/api/device-bom-templates/{device_type}/items",
+        f"/api/device-bom-templates/{device_type}/items?version=2.0",
         json={
             "component_type": "INVALID_MODULE",
             "quantity_required": 0,
@@ -218,6 +224,38 @@ def test_device_bom_template_can_be_created_and_listed():
         },
     )
     assert invalid_item.status_code == 422
+
+
+def test_device_bom_template_versions_can_be_activated():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=True,
+    )
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="FAN_MODULE",
+        version="2.0",
+        is_active=False,
+    )
+
+    activated = client.post(
+        f"/api/device-bom-templates/{device_type}/activate",
+        json={"version": "2.0"},
+    )
+    assert activated.status_code == 200
+    assert activated.json()["version"] == "2.0"
+    assert activated.json()["is_active"] is True
+
+    templates = client.get("/api/device-bom-templates")
+    assert templates.status_code == 200
+    device_templates = [row for row in templates.json() if row["device_type"] == device_type]
+    assert len(device_templates) == 2
+    assert sum(1 for row in device_templates if row["is_active"]) == 1
+    assert next(row for row in device_templates if row["version"] == "2.0")["is_active"] is True
+    assert next(row for row in device_templates if row["version"] == "1.0")["is_active"] is False
 
 
 def test_rfid_work_session_lifecycle_and_audit_events():
@@ -623,7 +661,7 @@ def test_assembly_scan_blocks_component_type_not_in_active_bom():
         },
     )
     assert blocked.status_code == 400
-    assert blocked.json()["detail"] == "Component type is not allowed by active BOM"
+    assert blocked.json()["detail"] == "Component type is not allowed by device BOM"
 
 
 def test_assembly_scan_blocks_item_type_mismatch():
@@ -689,7 +727,7 @@ def test_assembly_scan_blocks_component_count_above_bom_quantity():
         },
     )
     assert blocked.status_code == 409
-    assert blocked.json()["detail"] == "Active BOM quantity already satisfied for component type"
+    assert blocked.json()["detail"] == "Device BOM quantity already satisfied for component type"
 
 
 def test_expired_work_session_is_timed_out_and_blocked():
@@ -869,6 +907,85 @@ def test_shipment_reads_bom_requirements_from_database():
         },
     )
     assert second_install.status_code == 200
+
+    ready = client.patch(
+        f"/api/devices/{device_serial_number}/status",
+        json={"production_status": "READY_FOR_SHIPMENT"},
+    )
+    assert ready.status_code == 200
+    assert ready.json()["production_status"] == "READY_FOR_SHIPMENT"
+
+
+def test_device_keeps_bound_bom_version_after_new_version_activation():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        quantity_required=2,
+        version="1.0",
+        is_active=True,
+    )
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="FAN_MODULE",
+        quantity_required=1,
+        version="2.0",
+        is_active=False,
+    )
+
+    device_serial_number = unique_id("DEV")
+    device_response = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
+    )
+    assert device_response.status_code == 200
+
+    production_session = start_work_session(role="PRODUCTION_OPERATOR")
+    first_item = create_qc_passed_item(production_session, item_type="CONTROL_PCB")
+    second_item = create_qc_passed_item(production_session, item_type="CONTROL_PCB")
+
+    first_install = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": first_item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": production_session["work_session_id"],
+        },
+    )
+    assert first_install.status_code == 200
+    assert first_install.json()["bom_version"] == "1.0"
+
+    activate_new_version = client.post(
+        f"/api/device-bom-templates/{device_type}/activate",
+        json={"version": "2.0"},
+    )
+    assert activate_new_version.status_code == 200
+    assert activate_new_version.json()["version"] == "2.0"
+
+    second_install = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": second_item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": production_session["work_session_id"],
+        },
+    )
+    assert second_install.status_code == 200
+    assert second_install.json()["bom_version"] == "1.0"
+
+    final_test_session = start_work_session(role="FINAL_TEST_OPERATOR")
+    final_test = client.post(
+        "/api/final-tests",
+        json={
+            "test_run_id": unique_id("FT"),
+            "device_serial_number": device_serial_number,
+            "result": "PASS",
+            "firmware_version": "1.2.4",
+            "bootloader_version": "0.9.8",
+            "work_session_id": final_test_session["work_session_id"],
+        },
+    )
+    assert final_test.status_code == 200
 
     ready = client.patch(
         f"/api/devices/{device_serial_number}/status",

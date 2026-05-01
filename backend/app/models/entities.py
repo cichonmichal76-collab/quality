@@ -44,7 +44,7 @@ class DeviceBomTemplate(Base):
     __tablename__ = "device_bom_templates"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=uuid_str)
-    device_type: Mapped[str] = mapped_column(String, unique=True, index=True)
+    device_type: Mapped[str] = mapped_column(String, index=True)
     name: Mapped[str] = mapped_column(String)
     version: Mapped[str] = mapped_column(String, default="1.0")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -296,6 +296,12 @@ class AssemblyLink(Base):
     installed_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     workstation_id: Mapped[str | None] = mapped_column(String, nullable=True)
     scan_event_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    bom_template_id: Mapped[str | None] = mapped_column(
+        String,
+        ForeignKey("device_bom_templates.id"),
+        nullable=True,
+    )
+    bom_version: Mapped[str | None] = mapped_column(String, nullable=True)
     status: Mapped[str] = mapped_column(String, default="INSTALLED")
 
 

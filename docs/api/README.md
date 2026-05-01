@@ -341,6 +341,41 @@ curl -X POST http://localhost:8000/api/device-bom-templates/ZSS/items \
   }'
 ```
 
+Utworzenie nowej, jeszcze nieaktywnej wersji BOM:
+
+```bash
+curl -X POST http://localhost:8000/api/device-bom-templates \
+  -H "Content-Type: application/json" \
+  -d '{
+    "device_type": "ZSS",
+    "name": "ZSS Default BOM",
+    "version": "2.0",
+    "is_active": false
+  }'
+```
+
+Dodanie komponentu do konkretnej wersji BOM:
+
+```bash
+curl -X POST "http://localhost:8000/api/device-bom-templates/ZSS/items?version=2.0" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "component_type": "FAN_MODULE",
+    "quantity_required": 1,
+    "is_required": true
+  }'
+```
+
+Aktywacja wybranej wersji BOM:
+
+```bash
+curl -X POST http://localhost:8000/api/device-bom-templates/ZSS/activate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "version": "2.0"
+  }'
+```
+
 Instalacja komponentu do urządzenia:
 
 ```bash
@@ -368,6 +403,7 @@ Reguły assembly:
 - jeśli aktywny BOM ogranicza ilość danego komponentu, assembly blokuje przekroczenie limitu już podczas skanu
 - komponent nie może być zainstalowany drugi raz, jeśli już ma aktywne `INSTALLED`
 - assembly zapisuje zarówno relację montażową, jak i ślad skanu oraz audytu
+- pierwszy poprawny skan dla urządzenia przypina je do konkretnego `bom_template_id` i `bom_version`; kolejne skany używają już tej samej wersji BOM
 
 ## 7. Final test
 
@@ -411,6 +447,7 @@ Shipment gate w aktualnym MVP:
 - brakujący komponent jest zwracany w treści błędu, np. `CONTROL_PCB` albo `FAN_MODULE x2`
 - otwarta krytyczna NCR blokuje shipment
 - shipment pozostaje końcową walidacją kompletności, nawet jeśli assembly wcześniej odrzuci niedozwolony skan
+- jeśli urządzenie zostało już przypięte do konkretnego `bom_version` podczas assembly, shipment używa tej samej wersji zamiast aktualnie aktywnej
 
 ## 8. Audit trail
 

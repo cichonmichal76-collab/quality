@@ -9,6 +9,7 @@ from app.schemas import (
     AssemblyScanRequest,
     ComponentCreate,
     ComponentRead,
+    DeviceBomTemplateActivateRequest,
     DeviceBomItemCreate,
     DeviceBomItemRead,
     DeviceBomTemplateCreate,
@@ -49,23 +50,40 @@ def list_device_bom_templates(db: Session = Depends(get_db)):
 
 
 @router.post(
+    "/device-bom-templates/{device_type}/activate",
+    response_model=DeviceBomTemplateRead,
+)
+def activate_device_bom_template(
+    device_type: str,
+    payload: DeviceBomTemplateActivateRequest,
+    db: Session = Depends(get_db),
+):
+    return service.activate_device_bom_template(db, device_type, payload)
+
+
+@router.post(
     "/device-bom-templates/{device_type}/items",
     response_model=DeviceBomItemRead,
 )
 def add_device_bom_item(
     device_type: str,
     payload: DeviceBomItemCreate,
+    version: str | None = None,
     db: Session = Depends(get_db),
 ):
-    return service.add_device_bom_item(db, device_type, payload)
+    return service.add_device_bom_item(db, device_type, payload, version)
 
 
 @router.get(
     "/device-bom-templates/{device_type}/items",
     response_model=list[DeviceBomItemRead],
 )
-def list_device_bom_items(device_type: str, db: Session = Depends(get_db)):
-    return service.list_device_bom_items(db, device_type)
+def list_device_bom_items(
+    device_type: str,
+    version: str | None = None,
+    db: Session = Depends(get_db),
+):
+    return service.list_device_bom_items(db, device_type, version)
 
 
 @router.post("/devices/{device_serial_number}/components", response_model=ComponentRead)

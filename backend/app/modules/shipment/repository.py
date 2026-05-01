@@ -48,6 +48,24 @@ def get_active_bom_template_by_device_type(
     )
 
 
+def get_bound_bom_template_for_device(
+    db: Session,
+    device_serial_number: str,
+) -> DeviceBomTemplate | None:
+    link = (
+        db.query(AssemblyLink)
+        .filter(
+            AssemblyLink.parent_device_serial_number == device_serial_number,
+            AssemblyLink.bom_template_id.is_not(None),
+        )
+        .order_by(AssemblyLink.installed_at.asc())
+        .first()
+    )
+    if not link or not link.bom_template_id:
+        return None
+    return db.query(DeviceBomTemplate).filter(DeviceBomTemplate.id == link.bom_template_id).first()
+
+
 def list_required_bom_items_for_template(db: Session, template_id: str) -> list[DeviceBomItem]:
     return (
         db.query(DeviceBomItem)

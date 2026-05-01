@@ -56,6 +56,10 @@ class DeviceBomTemplateRead(DeviceBomTemplateCreate):
     model_config = {"from_attributes": True}
 
 
+class DeviceBomTemplateActivateRequest(BaseModel):
+    version: str
+
+
 class DeviceBomItemCreate(BaseModel):
     component_type: str
     quantity_required: int = Field(default=1, ge=1)
@@ -399,6 +403,8 @@ class AssemblyLinkRead(BaseModel):
     installed_at: datetime
     workstation_id: str | None = None
     scan_event_id: str | None = None
+    bom_template_id: str | None = None
+    bom_version: str | None = None
     status: str
 
     model_config = {"from_attributes": True}
