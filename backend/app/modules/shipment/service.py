@@ -148,6 +148,18 @@ def _pick_primary_blocking_code(
     return min(blocking_codes, key=lambda code: (priority.get(code, 99), code))
 
 
+def _primary_blocking_message(
+    primary_blocking_code: str | None,
+    blocking_checks: list[DeviceShipmentBlockingCheckRead],
+) -> str | None:
+    if primary_blocking_code is None:
+        return None
+    for check in blocking_checks:
+        if check.code == primary_blocking_code:
+            return check.message
+    return None
+
+
 def _recommended_action_for_primary_blocking_code(primary_blocking_code: str | None) -> str:
     if primary_blocking_code is None:
         return MARK_READY_FOR_SHIPMENT_ACTION
@@ -210,6 +222,7 @@ def _build_device_shipment_readiness(db: Session, device: Device) -> DeviceShipm
         bom_compliance=bom_compliance,
         can_transition_to_ready_for_shipment=not blocking_reasons,
         primary_blocking_code=primary_blocking_code,
+        primary_blocking_message=_primary_blocking_message(primary_blocking_code, blocking_checks),
         recommended_action=_recommended_action_for_primary_blocking_code(primary_blocking_code),
         blocking_reasons=blocking_reasons,
         blocking_checks=blocking_checks,
@@ -246,6 +259,25 @@ def _build_blocking_summary(
     return sorted(summary.values(), key=lambda item: (item.device_count * -1, item.code))
 
 
+def _build_primary_blocking_summary(
+    readiness_rows: list[DeviceShipmentReadinessRead],
+) -> list[DeviceShipmentBlockingSummaryRead]:
+    summary: dict[str, DeviceShipmentBlockingSummaryRead] = {}
+    for row in readiness_rows:
+        if not row.primary_blocking_code:
+            continue
+        existing = summary.get(row.primary_blocking_code)
+        if existing:
+            existing.device_count += 1
+        else:
+            summary[row.primary_blocking_code] = DeviceShipmentBlockingSummaryRead(
+                code=row.primary_blocking_code,
+                message=row.primary_blocking_message,
+                device_count=1,
+            )
+    return sorted(summary.values(), key=lambda item: (item.device_count * -1, item.code))
+
+
 def _build_recommended_action_summary(
     readiness_rows: list[DeviceShipmentReadinessRead],
 ) -> list[DeviceShipmentActionSummaryRead]:
@@ -270,6 +302,7 @@ def list_device_shipment_readiness(
     device_type: str | None = None,
     variant_code: str | None = None,
     blocking_code: str | None = None,
+    primary_blocking_code: str | None = None,
     recommended_action: str | None = None,
     only_blocked: bool = False,
     only_ready: bool = False,
@@ -284,6 +317,11 @@ def list_device_shipment_readiness(
         raise HTTPException(
             status_code=400,
             detail="blocking_code cannot be combined with only_ready",
+        )
+    if primary_blocking_code and only_ready:
+        raise HTTPException(
+            status_code=400,
+            detail="primary_blocking_code cannot be combined with only_ready",
         )
     if recommended_action and only_ready and recommended_action != MARK_READY_FOR_SHIPMENT_ACTION:
         raise HTTPException(
@@ -315,6 +353,10 @@ def list_device_shipment_readiness(
             for row in readiness_rows
             if any(check.code == blocking_code for check in row.blocking_checks)
         ]
+    if primary_blocking_code:
+        readiness_rows = [
+            row for row in readiness_rows if row.primary_blocking_code == primary_blocking_code
+        ]
     if recommended_action:
         readiness_rows = [
             row for row in readiness_rows if row.recommended_action == recommended_action
@@ -331,12 +373,14 @@ def list_device_shipment_readiness(
             "device_type": device_type,
             "variant_code": variant_code,
             "blocking_code": blocking_code,
+            "primary_blocking_code": primary_blocking_code,
             "recommended_action": recommended_action,
             "only_blocked": only_blocked,
             "only_ready": only_ready,
             "limit": limit,
         },
         blocking_summary=_build_blocking_summary(readiness_rows),
+        primary_blocking_summary=_build_primary_blocking_summary(readiness_rows),
         recommended_action_summary=_build_recommended_action_summary(readiness_rows),
         devices=readiness_rows,
     )

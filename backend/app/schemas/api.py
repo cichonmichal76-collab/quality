@@ -258,6 +258,7 @@ class DeviceShipmentReadinessRead(BaseModel):
     bom_compliance: DeviceBomComplianceRead
     can_transition_to_ready_for_shipment: bool
     primary_blocking_code: str | None = None
+    primary_blocking_message: str | None = None
     recommended_action: str
     blocking_reasons: list[str]
     blocking_checks: list[DeviceShipmentBlockingCheckRead]
@@ -269,6 +270,7 @@ class DeviceShipmentQueueRead(BaseModel):
     blocked_count: int
     filters: dict[str, str | bool | int | None]
     blocking_summary: list[DeviceShipmentBlockingSummaryRead]
+    primary_blocking_summary: list[DeviceShipmentBlockingSummaryRead]
     recommended_action_summary: list[DeviceShipmentActionSummaryRead]
     devices: list[DeviceShipmentReadinessRead]
 
