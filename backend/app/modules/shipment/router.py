@@ -23,6 +23,8 @@ def list_device_component_quality(
     production_status: str | None = None,
     quality_status: str | None = None,
     only_blocking: bool = False,
+    sort_by: str = "blocked_components",
+    sort_desc: bool | None = None,
     offset: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
@@ -34,6 +36,8 @@ def list_device_component_quality(
         production_status=production_status,
         quality_status=quality_status,
         only_blocking=only_blocking,
+        sort_by=sort_by,
+        sort_desc=sort_desc,
         offset=offset,
         limit=limit,
     )

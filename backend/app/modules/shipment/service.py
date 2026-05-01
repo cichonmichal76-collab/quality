@@ -46,6 +46,11 @@ FIX_ASSEMBLY_MISMATCH_ACTION = "FIX_ASSEMBLY_MISMATCH"
 COMPLETE_ASSEMBLY_ACTION = "COMPLETE_ASSEMBLY"
 RUN_FINAL_TEST_ACTION = "RUN_FINAL_TEST"
 VALID_QUEUE_SORT_FIELDS = {"created_at", "device_serial_number", "priority", "recommended_action"}
+VALID_COMPONENT_QUALITY_SORT_FIELDS = {
+    "device_serial_number",
+    "blocked_components",
+    "production_status",
+}
 MAX_QUEUE_LIMIT = 500
 MAX_SHIPMENT_GATE_HISTORY_LIMIT = 200
 VALID_LATEST_GATE_RESULTS = {"PASS", "BLOCKED", "NONE"}
@@ -367,6 +372,36 @@ def _build_component_quality_status_summary(
     ]
 
 
+def _sort_component_quality_rows(
+    quality_rows: list[DeviceComponentQualityRead],
+    *,
+    sort_by: str,
+    sort_desc: bool | None,
+) -> list[DeviceComponentQualityRead]:
+    if sort_by not in VALID_COMPONENT_QUALITY_SORT_FIELDS:
+        raise HTTPException(status_code=400, detail="Unsupported component quality sort_by value")
+
+    effective_sort_desc = sort_desc if sort_desc is not None else sort_by == "blocked_components"
+
+    if sort_by == "device_serial_number":
+        return sorted(
+            quality_rows,
+            key=lambda row: row.device_serial_number,
+            reverse=effective_sort_desc,
+        )
+    if sort_by == "production_status":
+        return sorted(
+            quality_rows,
+            key=lambda row: (row.production_status, row.device_serial_number),
+            reverse=effective_sort_desc,
+        )
+    return sorted(
+        quality_rows,
+        key=lambda row: (row.blocked_components, row.device_serial_number),
+        reverse=effective_sort_desc,
+    )
+
+
 def list_device_component_quality(
     db: Session,
     *,
@@ -375,6 +410,8 @@ def list_device_component_quality(
     production_status: str | None = None,
     quality_status: str | None = None,
     only_blocking: bool = False,
+    sort_by: str = "blocked_components",
+    sort_desc: bool | None = None,
     offset: int = 0,
     limit: int = 100,
 ) -> DeviceComponentQualityQueueRead:
@@ -405,10 +442,10 @@ def list_device_component_quality(
             for row in quality_rows
             if any(component.quality_status == quality_status for component in row.components)
         ]
-
-    quality_rows = sorted(
+    quality_rows = _sort_component_quality_rows(
         quality_rows,
-        key=lambda row: (-row.blocked_components, row.device_serial_number),
+        sort_by=sort_by,
+        sort_desc=sort_desc,
     )
 
     total_devices = len(quality_rows)
@@ -432,6 +469,8 @@ def list_device_component_quality(
             "production_status": production_status,
             "quality_status": quality_status,
             "only_blocking": only_blocking,
+            "sort_by": sort_by,
+            "sort_desc": sort_desc,
             "offset": offset,
             "limit": limit,
         },

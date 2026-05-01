@@ -3881,6 +3881,13 @@ def test_component_quality_queue_supports_summary_and_filters():
     assert payload["devices_with_issues"] == 2
     assert payload["returned_count"] == 3
     assert payload["filters"]["device_type"] == queue_device_type
+    assert payload["filters"]["sort_by"] == "blocked_components"
+    assert payload["filters"]["sort_desc"] is None
+    assert payload["devices"][-1]["device_serial_number"] == passing_device
+    assert {
+        payload["devices"][0]["device_serial_number"],
+        payload["devices"][1]["device_serial_number"],
+    } == {qc_gap_device, ncr_device}
 
     status_summary = {
         entry["quality_status"]: (entry["component_count"], entry["device_count"])
@@ -3904,6 +3911,20 @@ def test_component_quality_queue_supports_summary_and_filters():
     )
     assert ncr_only.status_code == 200
     assert [row["device_serial_number"] for row in ncr_only.json()["devices"]] == [ncr_device]
+
+    serial_sorted = client.get(
+        f"/api/component-quality?device_type={queue_device_type}&sort_by=device_serial_number"
+    )
+    assert serial_sorted.status_code == 200
+    assert [row["device_serial_number"] for row in serial_sorted.json()["devices"]] == sorted(
+        [passing_device, qc_gap_device, ncr_device]
+    )
+
+
+def test_component_quality_queue_rejects_unsupported_sort_by():
+    response = client.get("/api/component-quality?sort_by=unsupported")
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Unsupported component quality sort_by value"
 
 
 def test_audit_events_can_filter_shipment_gate_by_event_type_and_result():
