@@ -27,6 +27,7 @@ Już zaimplementowane:
 - linki montażowe między urządzeniem a zeskanowanymi komponentami
 - Pythonowy final-test-runner z mock MCU i interfejsem serial/USB
 - webowy panel operacyjny dla shipment readiness i jakości komponentów
+- smoke test e2e Playwright dla panelu webowego
 - przepływ CI dla backendu, runnera, web-app i buildu Docker
 
 Na poziomie scaffoldu lub szkicu:
@@ -126,6 +127,7 @@ Web-app:
 cd web-app
 npm test
 npm run build
+npm run e2e
 ```
 
 ## Final-test-runner
@@ -213,5 +215,5 @@ Wysokopoziomowo:
 
 - wydzielić, jeśli zajdzie potrzeba, osobną domenę `devices`, zamiast zostawiać device CRUD w `assembly`
 - rozszerzyć testy PostgreSQL w CI o bardziej scenariuszowe przypadki integracyjne
-- dodać testy komponentów i e2e dla panelu webowego
+- dodać testy komponentów React dla panelu webowego
 - rozpocząć MVP Android commissioning

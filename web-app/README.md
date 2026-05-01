@@ -50,6 +50,9 @@ Skrypt dopisze przykładowe urządzenia dla `device_type=DEMO-OPS`.
 npm test
 npm run build
 npm run lint
+npm run e2e
 ```
 
 `npm run lint` wykonuje obecnie strict TypeScript check bez osobnego stosu ESLint.
+`npm run e2e` uruchamia Playwright smoke test panelu i wymaga backendu na
+`http://127.0.0.1:8000` z zasianymi danymi `DEMO-E2E`.

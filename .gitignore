@@ -22,6 +22,8 @@ dist/
 coverage/
 *.tsbuildinfo
 web-app/playwright-smoke*.png
+web-app/playwright-report/
+web-app/test-results/
 
 # Android / Gradle
 .gradle/
