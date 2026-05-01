@@ -6,6 +6,9 @@ kolejkach operacyjnych:
 - gotowość wysyłki (`GET /api/shipment-readiness`)
 - jakość zamontowanych komponentów (`GET /api/component-quality`)
 
+Obie kolejki wspierają filtrowanie, paginację opartą o `offset/limit`
+i zapamiętanie pola `API base` w `localStorage`.
+
 ## Uruchomienie lokalne
 
 Backend powinien działać pod `http://localhost:8000`.
@@ -16,7 +19,7 @@ npm run dev
 ```
 
 Domyślny adres API w aplikacji to `/api`. Vite proxy przekazuje ten ruch do
-backendu, więc panel działa bez dodatkowej konfiguracji CORS. Jeśli backend
+backendu, więc panel działa bez dodatkowej konfiguracji CORS. Jeżeli backend
 działa na innym adresie, ustaw:
 
 ```bash
@@ -24,25 +27,27 @@ $env:VITE_BACKEND_TARGET="http://localhost:8001"
 npm run dev
 ```
 
-W panelu można też ręcznie zmienić pole `API base`, np. na pełny adres
+W panelu można też ręcznie zmienić pole `API base`, na przykład na pełny adres
 `http://localhost:8000/api`.
 
-Jeśli chcesz szybko zobaczyć niepuste kolejki, po migracjach backendu uruchom:
+Jeżeli chcesz szybko zobaczyć niepuste kolejki, najwygodniej uruchom z katalogu
+repo:
 
 ```bash
-cd ../backend
-python -m app.services.demo_seed --verify
+python scripts/dev_dashboard_demo.py --reload
 ```
 
-Skrypt dopisze przykładowe urządzenia dla `device_type=DEMO-OPS`.
+Skrypt wykona migracje, zasieje dane demo, zweryfikuje kolejki i uruchomi
+backend pod `http://127.0.0.1:8000`.
 
 ## Dostępne widoki
 
 - `Wysyłka` - liczba urządzeń gotowych i zablokowanych, główne blokady,
-  rekomendowane akcje, ostatni wynik shipment gate oraz tabela urządzeń.
+  rekomendowane akcje, ostatni wynik shipment gate, tabela urządzeń
+  i paginacja kolejki.
 - `Komponenty` - gate jakości komponentów, blokujące typy komponentów,
-  primary quality status, rekomendowane akcje oraz tabela urządzeń z
-  komponentami blokującymi.
+  primary quality status, rekomendowane akcje, tabela urządzeń z
+  komponentami blokującymi i paginacja wyników.
 
 ## Walidacja
 

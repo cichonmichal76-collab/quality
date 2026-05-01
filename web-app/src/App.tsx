@@ -105,6 +105,7 @@ interface ShipmentFilters {
   sort_by: string;
   sort_desc: boolean;
   limit: number;
+  offset: number;
 }
 
 interface ComponentFilters {
@@ -120,6 +121,7 @@ interface ComponentFilters {
   sort_by: string;
   sort_desc: boolean;
   limit: number;
+  offset: number;
 }
 
 const DEFAULT_SHIPMENT_FILTERS: ShipmentFilters = {
@@ -134,6 +136,7 @@ const DEFAULT_SHIPMENT_FILTERS: ShipmentFilters = {
   sort_by: "created_at",
   sort_desc: true,
   limit: 100,
+  offset: 0,
 };
 
 const DEFAULT_COMPONENT_FILTERS: ComponentFilters = {
@@ -149,6 +152,7 @@ const DEFAULT_COMPONENT_FILTERS: ComponentFilters = {
   sort_by: "blocked_components",
   sort_desc: true,
   limit: 100,
+  offset: 0,
 };
 
 export function App() {
@@ -228,14 +232,26 @@ export function App() {
     key: Key,
     value: ShipmentFilters[Key],
   ) => {
-    setShipmentFilters((previous) => ({ ...previous, [key]: value }));
+    setShipmentFilters((previous) => {
+      const next = { ...previous, [key]: value } as ShipmentFilters;
+      if (key !== "offset") {
+        next.offset = 0;
+      }
+      return next;
+    });
   };
 
   const updateComponentFilter = <Key extends keyof ComponentFilters>(
     key: Key,
     value: ComponentFilters[Key],
   ) => {
-    setComponentFilters((previous) => ({ ...previous, [key]: value }));
+    setComponentFilters((previous) => {
+      const next = { ...previous, [key]: value } as ComponentFilters;
+      if (key !== "offset") {
+        next.offset = 0;
+      }
+      return next;
+    });
   };
 
   return (
@@ -304,6 +320,8 @@ export function App() {
             <ShipmentDashboard
               data={shipmentData}
               isLoading={loadState === "loading"}
+              onPageChange={(offset) => updateShipmentFilter("offset", offset)}
+              fallbackLimit={shipmentFilters.limit}
             />
           </>
         ) : (
@@ -316,6 +334,8 @@ export function App() {
             <ComponentDashboard
               data={componentData}
               isLoading={loadState === "loading"}
+              onPageChange={(offset) => updateComponentFilter("offset", offset)}
+              fallbackLimit={componentFilters.limit}
             />
           </>
         )}
@@ -527,9 +547,13 @@ function ComponentFiltersPanel({
 function ShipmentDashboard({
   data,
   isLoading,
+  onPageChange,
+  fallbackLimit,
 }: {
   data: DeviceShipmentQueue | null;
   isLoading: boolean;
+  onPageChange: (offset: number) => void;
+  fallbackLimit: number;
 }) {
   const readyCount = data?.ready_count ?? 0;
   const blockedCount = data?.blocked_count ?? 0;
@@ -583,6 +607,27 @@ function ShipmentDashboard({
       </div>
 
       <ShipmentTable devices={data?.devices ?? []} isLoading={isLoading} />
+      <PaginationBar
+        label="kolejki wysyłki"
+        total={totalDevices}
+        returned={data?.returned_count ?? 0}
+        offset={data?.offset ?? 0}
+        limit={data?.limit ?? fallbackLimit}
+        hasMore={data?.has_more ?? false}
+        nextOffset={data?.next_offset ?? null}
+        isLoading={isLoading}
+        onPrevious={() =>
+          onPageChange(
+            Math.max((data?.offset ?? 0) - (data?.limit ?? fallbackLimit), 0),
+          )
+        }
+        onNext={() =>
+          onPageChange(
+            data?.next_offset ??
+              (data?.offset ?? 0) + (data?.returned_count ?? 0),
+          )
+        }
+      />
     </section>
   );
 }
@@ -590,9 +635,13 @@ function ShipmentDashboard({
 function ComponentDashboard({
   data,
   isLoading,
+  onPageChange,
+  fallbackLimit,
 }: {
   data: DeviceComponentQualityQueue | null;
   isLoading: boolean;
+  onPageChange: (offset: number) => void;
+  fallbackLimit: number;
 }) {
   const totalDevices = data?.total_devices ?? 0;
   const devicesWithIssues = data?.devices_with_issues ?? 0;
@@ -648,6 +697,90 @@ function ComponentDashboard({
       </div>
 
       <ComponentTable devices={data?.devices ?? []} isLoading={isLoading} />
+      <PaginationBar
+        label="kolejki komponentów"
+        total={totalDevices}
+        returned={data?.returned_count ?? 0}
+        offset={data?.offset ?? 0}
+        limit={data?.limit ?? fallbackLimit}
+        hasMore={data?.has_more ?? false}
+        nextOffset={data?.next_offset ?? null}
+        isLoading={isLoading}
+        onPrevious={() =>
+          onPageChange(
+            Math.max((data?.offset ?? 0) - (data?.limit ?? fallbackLimit), 0),
+          )
+        }
+        onNext={() =>
+          onPageChange(
+            data?.next_offset ??
+              (data?.offset ?? 0) + (data?.returned_count ?? 0),
+          )
+        }
+      />
+    </section>
+  );
+}
+
+function PaginationBar({
+  label,
+  total,
+  returned,
+  offset,
+  limit,
+  hasMore,
+  nextOffset,
+  isLoading,
+  onPrevious,
+  onNext,
+}: {
+  label: string;
+  total: number;
+  returned: number;
+  offset: number;
+  limit: number;
+  hasMore: boolean;
+  nextOffset: number | null;
+  isLoading: boolean;
+  onPrevious: () => void;
+  onNext: () => void;
+}) {
+  if (total <= 0) {
+    return null;
+  }
+
+  const currentPage = Math.floor(offset / Math.max(limit, 1)) + 1;
+  const start = returned > 0 ? offset + 1 : 0;
+  const end = returned > 0 ? offset + returned : 0;
+
+  return (
+    <section className="pagination-bar" aria-label={`Paginacja ${label}`}>
+      <div className="pagination-copy">
+        <strong>
+          {formatNumber(start)}-{formatNumber(end)} z {formatNumber(total)} urządzeń
+        </strong>
+        <span>
+          Strona {formatNumber(currentPage)} · limit {formatNumber(limit)}
+        </span>
+      </div>
+      <div className="pagination-actions">
+        <button
+          className="ghost-button"
+          type="button"
+          onClick={onPrevious}
+          disabled={offset <= 0 || isLoading}
+        >
+          Poprzednia strona
+        </button>
+        <button
+          className="primary-button"
+          type="button"
+          onClick={onNext}
+          disabled={!hasMore || nextOffset === null || isLoading}
+        >
+          Następna strona
+        </button>
+      </div>
     </section>
   );
 }
@@ -1072,6 +1205,7 @@ function shipmentQueryParams(filters: ShipmentFilters): Record<string, QueryValu
     sort_by: filters.sort_by,
     sort_desc: filters.sort_desc,
     limit: clampLimit(filters.limit),
+    offset: filters.offset > 0 ? filters.offset : undefined,
   };
 }
 
@@ -1093,6 +1227,7 @@ function componentQueryParams(
     sort_by: filters.sort_by,
     sort_desc: filters.sort_desc,
     limit: clampLimit(filters.limit),
+    offset: filters.offset > 0 ? filters.offset : undefined,
   };
 }
 

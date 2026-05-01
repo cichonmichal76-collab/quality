@@ -154,6 +154,66 @@ const componentPayload: DeviceComponentQualityQueue = {
   ],
 };
 
+const paginatedShipmentPageOnePayload: DeviceShipmentQueue = {
+  ...shipmentPayload,
+  total_devices: 3,
+  ready_count: 2,
+  blocked_count: 1,
+  returned_count: 1,
+  limit: 1,
+  has_more: true,
+  next_offset: 1,
+  devices: [
+    {
+      ...shipmentPayload.devices[0],
+      device_serial_number: "SHIP-001",
+    },
+  ],
+};
+
+const paginatedShipmentPageTwoPayload: DeviceShipmentQueue = {
+  ...paginatedShipmentPageOnePayload,
+  offset: 1,
+  next_offset: 2,
+  devices: [
+    {
+      ...shipmentPayload.devices[0],
+      device_serial_number: "SHIP-002",
+      device_updated_at: "2026-05-01T10:00:00Z",
+    },
+  ],
+};
+
+const paginatedComponentPageOnePayload: DeviceComponentQualityQueue = {
+  ...componentPayload,
+  total_devices: 2,
+  devices_with_issues: 2,
+  returned_count: 1,
+  limit: 1,
+  has_more: true,
+  next_offset: 1,
+  devices: [
+    {
+      ...componentPayload.devices[0],
+      device_serial_number: "COMP-001",
+    },
+  ],
+};
+
+const paginatedComponentPageTwoPayload: DeviceComponentQualityQueue = {
+  ...paginatedComponentPageOnePayload,
+  offset: 1,
+  has_more: false,
+  next_offset: null,
+  devices: [
+    {
+      ...componentPayload.devices[0],
+      device_serial_number: "COMP-002",
+      primary_blocking_component_serial_number: "FAN-002",
+    },
+  ],
+};
+
 const emptyComponentPayload: DeviceComponentQualityQueue = {
   ...componentPayload,
   total_devices: 0,
@@ -427,5 +487,114 @@ describe("App", () => {
         signal: expect.any(AbortSignal),
       }),
     );
+  });
+
+  it("pages through shipment queue and resets offset after filter changes", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(createJsonResponse(paginatedShipmentPageOnePayload))
+      .mockResolvedValueOnce(createJsonResponse(paginatedShipmentPageOnePayload))
+      .mockResolvedValueOnce(createJsonResponse(paginatedShipmentPageTwoPayload))
+      .mockResolvedValue(createJsonResponse(paginatedShipmentPageOnePayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("SHIP-001")).toBeInTheDocument();
+    expect(screen.getByText("1-1 z 3 urządzeń")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Limit"), {
+      target: { value: "1" },
+    });
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/shipment-readiness?sort_by=created_at&sort_desc=true&limit=1",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Następna strona" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/shipment-readiness?sort_by=created_at&sort_desc=true&limit=1&offset=1",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+    expect(await screen.findByText("SHIP-002")).toBeInTheDocument();
+    expect(screen.getByText("2-2 z 3 urządzeń")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Typ urządzenia"), {
+      target: { value: "DEMO-OPS" },
+    });
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/shipment-readiness?device_type=DEMO-OPS&sort_by=created_at&sort_desc=true&limit=1",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+  });
+
+  it("pages through component queue in both directions", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(createJsonResponse(shipmentPayload))
+      .mockResolvedValueOnce(createJsonResponse(paginatedComponentPageOnePayload))
+      .mockResolvedValueOnce(createJsonResponse(paginatedComponentPageOnePayload))
+      .mockResolvedValueOnce(createJsonResponse(paginatedComponentPageTwoPayload))
+      .mockResolvedValueOnce(createJsonResponse(paginatedComponentPageOnePayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("SHIP-001")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Komponenty" }));
+    expect(await screen.findByText("COMP-001")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Limit"), {
+      target: { value: "1" },
+    });
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/component-quality?only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=1",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Następna strona" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/component-quality?only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=1&offset=1",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+    expect(await screen.findByText("COMP-002")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Poprzednia strona" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(5));
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/component-quality?only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=1",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+    expect(await screen.findByText("COMP-001")).toBeInTheDocument();
   });
 });
