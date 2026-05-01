@@ -245,6 +245,20 @@ def test_device_bom_template_can_be_created_and_listed():
     assert invalid_item.status_code == 422
 
 
+def test_device_bom_template_rejects_invalid_version_format():
+    device_type = unique_id("DT")
+    created = client.post(
+        "/api/device-bom-templates",
+        json={
+            "device_type": device_type,
+            "name": "Invalid Version BOM",
+            "version": "v1-beta",
+            "is_active": True,
+        },
+    )
+    assert created.status_code == 422
+
+
 def test_device_bom_template_versions_can_be_activated():
     device_type = unique_id("DT")
     ensure_device_bom_template(
@@ -327,6 +341,27 @@ def test_device_bom_template_can_be_cloned_with_all_items():
     assert cloned_rows["FAN_MODULE"]["quantity_required"] == 2
 
 
+def test_device_bom_template_clone_requires_greater_target_version():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="2.0",
+        is_active=True,
+    )
+
+    cloned = client.post(
+        f"/api/device-bom-templates/{device_type}/clone",
+        json={
+            "source_version": "2.0",
+            "target_version": "1.5",
+            "activate": False,
+        },
+    )
+    assert cloned.status_code == 400
+    assert cloned.json()["detail"] == "Target BOM version must be greater than source version"
+
+
 def test_cloned_bom_template_can_be_activated_immediately():
     device_type = unique_id("DT")
     ensure_device_bom_template(
@@ -405,6 +440,26 @@ def test_active_bom_template_can_be_promoted_in_one_operation():
     assert set(promoted_rows) == {"CONTROL_PCB", "FAN_MODULE"}
     assert promoted_rows["CONTROL_PCB"]["required_part_number"] == "PCB-CTRL-001"
     assert promoted_rows["FAN_MODULE"]["quantity_required"] == 2
+
+
+def test_bom_template_promotion_requires_greater_target_version():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="2.0",
+        is_active=True,
+    )
+
+    promoted = client.post(
+        f"/api/device-bom-templates/{device_type}/promote",
+        json={
+            "source_version": "2.0",
+            "target_version": "1.9",
+        },
+    )
+    assert promoted.status_code == 400
+    assert promoted.json()["detail"] == "Target BOM version must be greater than source version"
 
 
 def test_only_active_bom_template_can_be_promoted():

@@ -199,6 +199,7 @@ Najważniejsze reguły:
 - wersja `RETIRED` jest niemodyfikowalna i może być używana dalej tylko przez urządzenia już wcześniej przypięte do tej wersji
 - nowa wersja `DeviceBomTemplate` może powstać przez klonowanie istniejącej wersji razem z kompletem pozycji BOM
 - aktywna wersja `DeviceBomTemplate` może zostać promowana do nowej rewizji jako operacja biznesowa łącząca klonowanie, aktywację i wycofanie poprzedniej wersji
+- wersje BOM używają numerycznego formatu rozdzielanego kropkami, a `target_version` w `clone` i `promote` musi być semantycznie większy od `source_version`
 
 Stan implementacji:
 

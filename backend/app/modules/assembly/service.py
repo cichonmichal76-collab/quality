@@ -36,6 +36,21 @@ def get_device_or_404(db: Session, device_serial_number: str):
     return device
 
 
+def _normalize_bom_version(version: str) -> tuple[int, ...]:
+    parts = [int(part) for part in version.split(".")]
+    while len(parts) > 1 and parts[-1] == 0:
+        parts.pop()
+    return tuple(parts)
+
+
+def _ensure_target_version_progresses(source_version: str, target_version: str) -> None:
+    if _normalize_bom_version(target_version) <= _normalize_bom_version(source_version):
+        raise HTTPException(
+            status_code=400,
+            detail="Target BOM version must be greater than source version",
+        )
+
+
 def create_device(db: Session, payload: DeviceCreate) -> Device:
     if repository.get_device_by_serial_number(db, payload.device_serial_number):
         raise HTTPException(status_code=409, detail="Device already exists")
@@ -243,6 +258,7 @@ def clone_device_bom_template(
     payload: DeviceBomTemplateCloneRequest,
 ) -> DeviceBomTemplate:
     source_template = get_device_bom_template_or_404(db, device_type, payload.source_version)
+    _ensure_target_version_progresses(payload.source_version, payload.target_version)
     if repository.get_bom_template_by_device_type_and_version(
         db,
         device_type,
@@ -403,6 +419,7 @@ def promote_device_bom_template(
     source_template = get_device_bom_template_or_404(db, device_type, payload.source_version)
     if source_template.status != "ACTIVE":
         raise HTTPException(status_code=400, detail="Only active BOM template can be promoted")
+    _ensure_target_version_progresses(payload.source_version, payload.target_version)
 
     cloned_template = clone_device_bom_template(
         db,

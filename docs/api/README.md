@@ -66,6 +66,19 @@ Wyjątki:
 - `404` żądana encja nie istnieje
 - `409` duplikat identyfikatora albo już zainstalowany komponent
 
+## Format wersji BOM
+
+Wersje BOM używają formatu numerycznego rozdzielanego kropkami, na przykład:
+
+- `1`
+- `1.0`
+- `2.3`
+- `2.3.4`
+
+Niedozwolone są warianty tekstowe typu `v1`, `1.0-beta` albo `rev2`.
+
+Przy `clone` i `promote` backend wymaga też, żeby `target_version` był semantycznie większy od `source_version`. Końcowe zera są normalizowane, więc `1.0` i `1.0.0` są traktowane jako ta sama wersja.
+
 ## 1. Bootstrap danych podstawowych
 
 Utworzenie operatora:

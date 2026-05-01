@@ -45,7 +45,7 @@ class ComponentRead(ComponentCreate):
 class DeviceBomTemplateCreate(BaseModel):
     device_type: str
     name: str
-    version: str = "1.0"
+    version: str = Field(default="1.0", pattern=r"^\d+(?:\.\d+)*$")
     is_active: bool = True
 
 
@@ -58,24 +58,24 @@ class DeviceBomTemplateRead(DeviceBomTemplateCreate):
 
 
 class DeviceBomTemplateActivateRequest(BaseModel):
-    version: str
+    version: str = Field(pattern=r"^\d+(?:\.\d+)*$")
 
 
 class DeviceBomTemplateRetireRequest(BaseModel):
-    version: str
+    version: str = Field(pattern=r"^\d+(?:\.\d+)*$")
     reason: str | None = None
 
 
 class DeviceBomTemplateCloneRequest(BaseModel):
-    source_version: str
-    target_version: str
+    source_version: str = Field(pattern=r"^\d+(?:\.\d+)*$")
+    target_version: str = Field(pattern=r"^\d+(?:\.\d+)*$")
     name: str | None = None
     activate: bool = False
 
 
 class DeviceBomTemplatePromoteRequest(BaseModel):
-    source_version: str
-    target_version: str
+    source_version: str = Field(pattern=r"^\d+(?:\.\d+)*$")
+    target_version: str = Field(pattern=r"^\d+(?:\.\d+)*$")
     name: str | None = None
     retire_reason: str | None = None
 
