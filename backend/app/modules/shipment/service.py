@@ -53,6 +53,8 @@ VALID_COMPONENT_QUALITY_SORT_FIELDS = {
     "device_serial_number",
     "blocked_components",
     "production_status",
+    "variant_code",
+    "recommended_action",
 }
 MAX_QUEUE_LIMIT = 500
 MAX_SHIPMENT_GATE_HISTORY_LIMIT = 200
@@ -527,6 +529,18 @@ def _sort_component_quality_rows(
         return sorted(
             quality_rows,
             key=lambda row: (row.production_status, row.device_serial_number),
+            reverse=effective_sort_desc,
+        )
+    if sort_by == "variant_code":
+        return sorted(
+            quality_rows,
+            key=lambda row: (row.device_variant_code, row.device_serial_number),
+            reverse=effective_sort_desc,
+        )
+    if sort_by == "recommended_action":
+        return sorted(
+            quality_rows,
+            key=lambda row: (row.recommended_action, row.device_serial_number),
             reverse=effective_sort_desc,
         )
     return sorted(

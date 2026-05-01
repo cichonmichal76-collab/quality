@@ -4046,6 +4046,26 @@ def test_component_quality_queue_supports_summary_and_filters():
         [passing_device, qc_gap_device, ncr_device]
     )
 
+    variant_sorted = client.get(
+        f"/api/component-quality?device_type={queue_device_type}&sort_by=variant_code"
+    )
+    assert variant_sorted.status_code == 200
+    assert [row["device_variant_code"] for row in variant_sorted.json()["devices"]] == [
+        "DEFAULT",
+        "DEFAULT",
+        "SERVICE",
+    ]
+
+    action_sorted = client.get(
+        f"/api/component-quality?device_type={queue_device_type}&sort_by=recommended_action"
+    )
+    assert action_sorted.status_code == 200
+    assert [row["recommended_action"] for row in action_sorted.json()["devices"]] == [
+        "NO_ACTION",
+        "RESOLVE_COMPONENT_NCR",
+        "RUN_COMPONENT_QC_OR_REWORK",
+    ]
+
 
 def test_component_quality_queue_rejects_unsupported_sort_by():
     response = client.get("/api/component-quality?sort_by=unsupported")
