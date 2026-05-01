@@ -35,6 +35,14 @@ Skrypt jest addytywny: nie czyści bazy, tylko dopisuje nowy zestaw danych demo.
 Domyślnie używa `device_type=DEMO-OPS` i wypisuje na końcu numery seryjne oraz
 gotowe URL-e filtrów do obu kolejek.
 
+Jeśli chcesz od razu sprawdzić, czy po seedzie kolejki zwracają oczekiwany
+zestaw scenariuszy, użyj trybu weryfikacji:
+
+```bash
+cd backend
+python -m app.services.demo_seed --verify
+```
+
 ## Zmienne środowiskowe
 
 Backend czyta konfigurację ze zmiennych środowiskowych opisanych w [`.env.example`](../.env.example).

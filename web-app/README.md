@@ -31,7 +31,7 @@ Jeśli chcesz szybko zobaczyć niepuste kolejki, po migracjach backendu uruchom:
 
 ```bash
 cd ../backend
-python -m app.services.demo_seed
+python -m app.services.demo_seed --verify
 ```
 
 Skrypt dopisze przykładowe urządzenia dla `device_type=DEMO-OPS`.

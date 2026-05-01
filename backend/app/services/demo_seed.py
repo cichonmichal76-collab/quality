@@ -30,6 +30,17 @@ class SeedResult:
     component_qc_gap_device_serial_number: str
     component_ncr_device_serial_number: str
     device_ncr_device_serial_number: str
+    verified: bool = False
+
+
+@dataclass
+class DashboardSummary:
+    shipment_total: int
+    shipment_ready: int
+    shipment_actions: list[str]
+    component_total: int
+    component_issue_count: int
+    component_primary_statuses: list[str]
 
 
 @dataclass
@@ -377,10 +388,74 @@ def update_device_metadata(
     db.flush()
 
 
+def build_dashboard_summary(client: TestClient, *, device_type: str) -> DashboardSummary:
+    shipment = ensure_ok(
+        client.get(f"/api/shipment-readiness?device_type={device_type}"),
+        f"fetch shipment queue for {device_type}",
+    )
+    components = ensure_ok(
+        client.get(f"/api/component-quality?device_type={device_type}"),
+        f"fetch component quality queue for {device_type}",
+    )
+    return DashboardSummary(
+        shipment_total=shipment["total_devices"],
+        shipment_ready=shipment["ready_count"],
+        shipment_actions=sorted({row["recommended_action"] for row in shipment["devices"]}),
+        component_total=components["total_devices"],
+        component_issue_count=components["devices_with_issues"],
+        component_primary_statuses=sorted(
+            {row["primary_quality_status"] for row in components["devices"]}
+        ),
+    )
+
+
+def verify_dashboard_seed(client: TestClient, *, device_type: str) -> DashboardSummary:
+    summary = build_dashboard_summary(client, device_type=device_type)
+    expected_actions = {
+        "MARK_READY_FOR_SHIPMENT",
+        "COMPLETE_ASSEMBLY",
+        "RUN_FINAL_TEST",
+        "RESOLVE_COMPONENT_QUALITY",
+        "RESOLVE_CRITICAL_NCR",
+    }
+    expected_statuses = {"CRITICAL_NCR_OPEN", "QC_NOT_PASSED"}
+    if summary.shipment_total != 6:
+        raise RuntimeError(
+            f"expected shipment_total=6 for {device_type}, got {summary.shipment_total}"
+        )
+    if summary.shipment_ready != 1:
+        raise RuntimeError(
+            f"expected shipment_ready=1 for {device_type}, got {summary.shipment_ready}"
+        )
+    missing_actions = sorted(expected_actions.difference(summary.shipment_actions))
+    if missing_actions:
+        raise RuntimeError(
+            "missing expected shipment recommended_action values for "
+            f"{device_type}: {missing_actions}"
+        )
+    if summary.component_total != 6:
+        raise RuntimeError(
+            f"expected component_total=6 for {device_type}, got {summary.component_total}"
+        )
+    if summary.component_issue_count < 2:
+        raise RuntimeError(
+            "expected at least 2 devices_with_issues for "
+            f"{device_type}, got {summary.component_issue_count}"
+        )
+    missing_statuses = sorted(expected_statuses.difference(summary.component_primary_statuses))
+    if missing_statuses:
+        raise RuntimeError(
+            "missing expected primary_quality_status values for "
+            f"{device_type}: {missing_statuses}"
+        )
+    return summary
+
+
 def seed_operations_dashboard_demo(
     *,
     device_type: str = DEFAULT_DEVICE_TYPE,
     tag: str = "DEMO",
+    verify: bool = False,
 ) -> SeedResult:
     client = TestClient(app)
     template_ref = ensure_active_bom_template(
@@ -583,6 +658,9 @@ def seed_operations_dashboard_demo(
         )
         db.commit()
 
+    if verify:
+        verify_dashboard_seed(client, device_type=device_type)
+
     return SeedResult(
         device_type=device_type,
         bom_version=DEFAULT_BOM_VERSION,
@@ -594,6 +672,7 @@ def seed_operations_dashboard_demo(
         component_qc_gap_device_serial_number=component_qc_gap_serial,
         component_ncr_device_serial_number=component_ncr_serial,
         device_ncr_device_serial_number=device_ncr_serial,
+        verified=verify,
     )
 
 
@@ -611,6 +690,11 @@ def parse_args() -> argparse.Namespace:
         default="DEMO",
         help="Unique tag embedded into seeded serial numbers. Default: DEMO",
     )
+    parser.add_argument(
+        "--verify",
+        action="store_true",
+        help="Verify expected queue counts and statuses after seeding.",
+    )
     return parser.parse_args()
 
 
@@ -619,6 +703,7 @@ def main() -> None:
     result = seed_operations_dashboard_demo(
         device_type=args.device_type,
         tag=args.tag,
+        verify=args.verify,
     )
     print(json.dumps(asdict(result), indent=2))
 

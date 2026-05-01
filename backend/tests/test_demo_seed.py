@@ -39,12 +39,13 @@ def test_demo_seed_populates_dashboard_queues(tmp_path):
         [
             sys.executable,
             "-m",
-            "app.services.demo_seed",
-            "--device-type",
-            seeded_device_type,
-            "--tag",
-            "TEST",
-        ],
+        "app.services.demo_seed",
+        "--device-type",
+        seeded_device_type,
+        "--tag",
+        "TEST",
+        "--verify",
+    ],
         cwd=backend_dir,
         env=environment,
         capture_output=True,
@@ -59,6 +60,7 @@ def test_demo_seed_populates_dashboard_queues(tmp_path):
 
     payload = json.loads(seed.stdout)
     assert payload["device_type"] == seeded_device_type
+    assert payload["verified"] is True
 
     verification_code = f"""
 import json
