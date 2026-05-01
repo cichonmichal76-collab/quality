@@ -27,6 +27,8 @@ import "./App.css";
 
 const API_STORAGE_KEY = "servicetrace.web.apiBaseUrl";
 const VIEW_STORAGE_KEY = "servicetrace.web.activeView";
+const SHIPMENT_FILTERS_STORAGE_KEY = "servicetrace.web.shipmentFilters";
+const COMPONENT_FILTERS_STORAGE_KEY = "servicetrace.web.componentFilters";
 const DEFAULT_API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
 const PRODUCTION_STATUS_OPTIONS = [
@@ -163,12 +165,12 @@ export function App() {
   const [apiBaseUrl, setApiBaseUrl] = useState(() => {
     return localStorage.getItem(API_STORAGE_KEY) ?? DEFAULT_API_BASE_URL;
   });
-  const [shipmentFilters, setShipmentFilters] = useState(
-    DEFAULT_SHIPMENT_FILTERS,
-  );
-  const [componentFilters, setComponentFilters] = useState(
-    DEFAULT_COMPONENT_FILTERS,
-  );
+  const [shipmentFilters, setShipmentFilters] = useState(() => {
+    return readStoredShipmentFilters();
+  });
+  const [componentFilters, setComponentFilters] = useState(() => {
+    return readStoredComponentFilters();
+  });
   const [shipmentData, setShipmentData] = useState<DeviceShipmentQueue | null>(
     null,
   );
@@ -194,6 +196,20 @@ export function App() {
   useEffect(() => {
     localStorage.setItem(VIEW_STORAGE_KEY, activeView);
   }, [activeView]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      SHIPMENT_FILTERS_STORAGE_KEY,
+      JSON.stringify(shipmentFilters),
+    );
+  }, [shipmentFilters]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      COMPONENT_FILTERS_STORAGE_KEY,
+      JSON.stringify(componentFilters),
+    );
+  }, [componentFilters]);
 
   useEffect(() => {
     if (!apiBaseUrl.trim()) {
@@ -1302,4 +1318,158 @@ function isAbortError(error: unknown): boolean {
 function readStoredDashboardMode(): DashboardMode {
   const storedValue = localStorage.getItem(VIEW_STORAGE_KEY);
   return storedValue === "components" ? "components" : "shipment";
+}
+
+function readStoredShipmentFilters(): ShipmentFilters {
+  const storedValue = readStoredObject(SHIPMENT_FILTERS_STORAGE_KEY);
+
+  return {
+    device_type: readStoredString(
+      storedValue.device_type,
+      DEFAULT_SHIPMENT_FILTERS.device_type,
+    ),
+    variant_code: readStoredString(
+      storedValue.variant_code,
+      DEFAULT_SHIPMENT_FILTERS.variant_code,
+    ),
+    production_status: readStoredString(
+      storedValue.production_status,
+      DEFAULT_SHIPMENT_FILTERS.production_status,
+    ),
+    primary_blocking_code: readStoredString(
+      storedValue.primary_blocking_code,
+      DEFAULT_SHIPMENT_FILTERS.primary_blocking_code,
+    ),
+    recommended_action: readStoredString(
+      storedValue.recommended_action,
+      DEFAULT_SHIPMENT_FILTERS.recommended_action,
+    ),
+    latest_gate_result: readStoredString(
+      storedValue.latest_gate_result,
+      DEFAULT_SHIPMENT_FILTERS.latest_gate_result,
+    ),
+    only_blocked: readStoredBoolean(
+      storedValue.only_blocked,
+      DEFAULT_SHIPMENT_FILTERS.only_blocked,
+    ),
+    only_ready: readStoredBoolean(
+      storedValue.only_ready,
+      DEFAULT_SHIPMENT_FILTERS.only_ready,
+    ),
+    sort_by: readStoredString(
+      storedValue.sort_by,
+      DEFAULT_SHIPMENT_FILTERS.sort_by,
+    ),
+    sort_desc: readStoredBoolean(
+      storedValue.sort_desc,
+      DEFAULT_SHIPMENT_FILTERS.sort_desc,
+    ),
+    limit: clampLimit(
+      readStoredNumber(storedValue.limit, DEFAULT_SHIPMENT_FILTERS.limit),
+    ),
+    offset: clampOffset(
+      readStoredNumber(storedValue.offset, DEFAULT_SHIPMENT_FILTERS.offset),
+    ),
+  };
+}
+
+function readStoredComponentFilters(): ComponentFilters {
+  const storedValue = readStoredObject(COMPONENT_FILTERS_STORAGE_KEY);
+
+  return {
+    device_type: readStoredString(
+      storedValue.device_type,
+      DEFAULT_COMPONENT_FILTERS.device_type,
+    ),
+    variant_code: readStoredString(
+      storedValue.variant_code,
+      DEFAULT_COMPONENT_FILTERS.variant_code,
+    ),
+    production_status: readStoredString(
+      storedValue.production_status,
+      DEFAULT_COMPONENT_FILTERS.production_status,
+    ),
+    blocking_component_type: readStoredString(
+      storedValue.blocking_component_type,
+      DEFAULT_COMPONENT_FILTERS.blocking_component_type,
+    ),
+    primary_quality_status: readStoredString(
+      storedValue.primary_quality_status,
+      DEFAULT_COMPONENT_FILTERS.primary_quality_status,
+    ),
+    stale_bucket: readStoredString(
+      storedValue.stale_bucket,
+      DEFAULT_COMPONENT_FILTERS.stale_bucket,
+    ),
+    recommended_action: readStoredString(
+      storedValue.recommended_action,
+      DEFAULT_COMPONENT_FILTERS.recommended_action,
+    ),
+    passes_component_quality_gate: readStoredOptionalBooleanString(
+      storedValue.passes_component_quality_gate,
+      DEFAULT_COMPONENT_FILTERS.passes_component_quality_gate,
+    ),
+    only_blocking: readStoredBoolean(
+      storedValue.only_blocking,
+      DEFAULT_COMPONENT_FILTERS.only_blocking,
+    ),
+    sort_by: readStoredString(
+      storedValue.sort_by,
+      DEFAULT_COMPONENT_FILTERS.sort_by,
+    ),
+    sort_desc: readStoredBoolean(
+      storedValue.sort_desc,
+      DEFAULT_COMPONENT_FILTERS.sort_desc,
+    ),
+    limit: clampLimit(
+      readStoredNumber(storedValue.limit, DEFAULT_COMPONENT_FILTERS.limit),
+    ),
+    offset: clampOffset(
+      readStoredNumber(storedValue.offset, DEFAULT_COMPONENT_FILTERS.offset),
+    ),
+  };
+}
+
+function readStoredObject(storageKey: string): Record<string, unknown> {
+  const rawValue = localStorage.getItem(storageKey);
+
+  if (!rawValue) {
+    return {};
+  }
+
+  try {
+    const parsedValue = JSON.parse(rawValue);
+    return isRecord(parsedValue) ? parsedValue : {};
+  } catch {
+    return {};
+  }
+}
+
+function readStoredString(value: unknown, fallback: string): string {
+  return typeof value === "string" ? value : fallback;
+}
+
+function readStoredBoolean(value: unknown, fallback: boolean): boolean {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+function readStoredNumber(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function readStoredOptionalBooleanString(
+  value: unknown,
+  fallback: OptionalBooleanString,
+): OptionalBooleanString {
+  return value === "" || value === "true" || value === "false"
+    ? value
+    : fallback;
+}
+
+function clampOffset(value: number): number {
+  return Math.max(Math.trunc(value), 0);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }

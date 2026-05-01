@@ -13,6 +13,8 @@ import type { DeviceComponentQualityQueue, DeviceShipmentQueue } from "./api";
 
 const API_STORAGE_KEY = "servicetrace.web.apiBaseUrl";
 const VIEW_STORAGE_KEY = "servicetrace.web.activeView";
+const SHIPMENT_FILTERS_STORAGE_KEY = "servicetrace.web.shipmentFilters";
+const COMPONENT_FILTERS_STORAGE_KEY = "servicetrace.web.componentFilters";
 
 const shipmentPayload: DeviceShipmentQueue = {
   total_devices: 1,
@@ -586,6 +588,84 @@ describe("App", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     expect(fetchMock).toHaveBeenLastCalledWith(
       "http://localhost:9200/api/shipment-readiness?sort_by=created_at&sort_desc=true&limit=100",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+  });
+
+  it("loads shipment filters from localStorage and persists reset state", async () => {
+    localStorage.setItem(
+      SHIPMENT_FILTERS_STORAGE_KEY,
+      JSON.stringify({
+        device_type: "DEMO-OPS",
+        only_blocked: true,
+        sort_desc: false,
+        limit: 25,
+      }),
+    );
+
+    const fetchMock = vi.fn(async () => createJsonResponse(shipmentPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("SHIP-001")).toBeInTheDocument();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/shipment-readiness?device_type=DEMO-OPS&only_blocked=true&sort_by=created_at&sort_desc=false&limit=25",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Wyczyść" }));
+
+    await waitFor(() =>
+      expect(localStorage.getItem(SHIPMENT_FILTERS_STORAGE_KEY)).toBe(
+        JSON.stringify({
+          device_type: "",
+          variant_code: "",
+          production_status: "",
+          primary_blocking_code: "",
+          recommended_action: "",
+          latest_gate_result: "",
+          only_blocked: false,
+          only_ready: false,
+          sort_by: "created_at",
+          sort_desc: true,
+          limit: 100,
+          offset: 0,
+        }),
+      ),
+    );
+  });
+
+  it("loads component filters from localStorage and falls back for malformed values", async () => {
+    localStorage.setItem(VIEW_STORAGE_KEY, "components");
+    localStorage.setItem(
+      COMPONENT_FILTERS_STORAGE_KEY,
+      JSON.stringify({
+        device_type: "DEMO-OPS",
+        passes_component_quality_gate: "false",
+        only_blocking: false,
+        limit: 0,
+        offset: -5,
+        sort_desc: "nope",
+      }),
+    );
+
+    const fetchMock = vi.fn(async () => createJsonResponse(componentPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("COMP-001")).toBeInTheDocument();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/component-quality?device_type=DEMO-OPS&passes_component_quality_gate=false&sort_by=blocked_components&sort_desc=true&limit=1",
       expect.objectContaining({
         headers: { Accept: "application/json" },
         signal: expect.any(AbortSignal),

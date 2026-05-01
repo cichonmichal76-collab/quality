@@ -7,7 +7,11 @@ kolejkach operacyjnych:
 - jakość zamontowanych komponentów (`GET /api/component-quality`)
 
 Obie kolejki wspierają filtrowanie, paginację opartą o `offset/limit`
-i zapamiętanie pola `adres bazowy API` w `localStorage`.
+i zapamiętanie w `localStorage`:
+
+- pola `adres bazowy API`
+- aktywnej zakładki `Wysyłka` / `Komponenty`
+- ostatnich filtrów dla obu widoków
 
 ## Uruchomienie lokalne
 
