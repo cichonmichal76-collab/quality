@@ -17,6 +17,7 @@ from app.schemas import (
     DeviceBomTemplateApproveRequest,
     DeviceBomTemplateCloneRequest,
     DeviceBomTemplatePromoteRequest,
+    DeviceBomTemplateRevokeApprovalRequest,
     DeviceBomTemplateReleaseRequest,
     DeviceBomItemCreate,
     DeviceBomItemUpdate,
@@ -170,6 +171,19 @@ def approve_device_bom_template(
     db: Session = Depends(get_db),
 ):
     return service.approve_device_bom_template(db, device_type, payload, variant_code)
+
+
+@router.post(
+    "/device-bom-templates/{device_type}/revoke-approval",
+    response_model=DeviceBomTemplateRead,
+)
+def revoke_device_bom_template_approval(
+    device_type: str,
+    payload: DeviceBomTemplateRevokeApprovalRequest,
+    variant_code: str = "DEFAULT",
+    db: Session = Depends(get_db),
+):
+    return service.revoke_device_bom_template_approval(db, device_type, payload, variant_code)
 
 
 @router.post(

@@ -968,6 +968,97 @@ def test_active_bom_template_cannot_be_approved_again():
     assert approved.json()["detail"] == "Active BOM template cannot be approved again"
 
 
+def test_inactive_bom_template_approval_can_be_revoked_manually():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=False,
+        variant_code="DEFAULT",
+    )
+
+    approved = client.post(
+        f"/api/device-bom-templates/{device_type}/approve?variant_code=DEFAULT",
+        json={
+            "version": "1.0",
+            "approved_by": "QA-LEAD",
+            "release_note": "Ready before hold",
+        },
+    )
+    assert approved.status_code == 200
+
+    revoked = client.post(
+        f"/api/device-bom-templates/{device_type}/revoke-approval?variant_code=DEFAULT",
+        json={"version": "1.0", "reason": "Engineering hold"},
+    )
+    assert revoked.status_code == 200
+    payload = revoked.json()
+    assert payload["approved_by"] is None
+    assert payload["approved_at"] is None
+    assert payload["release_note"] is None
+    assert payload["is_active"] is False
+
+    usage = client.get(
+        f"/api/device-bom-templates/{device_type}/usage?version=1.0&variant_code=DEFAULT"
+    )
+    assert usage.status_code == 200
+    assert usage.json()["is_approved"] is False
+
+    readiness = client.get(
+        f"/api/device-bom-templates/{device_type}/readiness?version=1.0&variant_code=DEFAULT"
+    )
+    assert readiness.status_code == 200
+    assert "BOM template is not approved" in readiness.json()["blocking_reasons"]
+
+    template_audit = client.get("/api/audit-events?entity_type=DEVICE_BOM_TEMPLATE")
+    assert template_audit.status_code == 200
+    revoke_event = next(
+        row
+        for row in template_audit.json()
+        if row["event_type"] == "DEVICE_BOM_TEMPLATE_APPROVAL_REVOKED"
+        and row["payload"]
+        and row["payload"].get("device_type") == device_type
+        and row["payload"].get("version") == "1.0"
+    )
+    assert revoke_event["payload"]["reason"] == "Engineering hold"
+    assert revoke_event["payload"]["previous_approval"]["approved_by"] == "QA-LEAD"
+
+
+def test_unapproved_bom_template_cannot_revoke_approval():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=False,
+    )
+
+    revoked = client.post(
+        f"/api/device-bom-templates/{device_type}/revoke-approval",
+        json={"version": "1.0", "reason": "No-op"},
+    )
+    assert revoked.status_code == 400
+    assert revoked.json()["detail"] == "BOM template is not approved"
+
+
+def test_active_bom_template_cannot_revoke_approval():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=True,
+    )
+
+    revoked = client.post(
+        f"/api/device-bom-templates/{device_type}/revoke-approval",
+        json={"version": "1.0", "reason": "Too late"},
+    )
+    assert revoked.status_code == 400
+    assert revoked.json()["detail"] == "Active BOM template cannot have approval revoked"
+
+
 def test_device_bom_template_can_be_released_and_activated():
     device_type = unique_id("DT")
     ensure_device_bom_template(

@@ -524,6 +524,17 @@ curl -X POST "http://localhost:8000/api/device-bom-templates/ZSS/approve?variant
   }'
 ```
 
+Ręczne cofnięcie approval dla wersji roboczej BOM:
+
+```bash
+curl -X POST "http://localhost:8000/api/device-bom-templates/ZSS/revoke-approval?variant_code=DEFAULT" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "version": "3.0",
+    "reason": "Engineering hold"
+  }'
+```
+
 Release wersji BOM, czyli approval plus aktywacja w jednym kroku:
 
 ```bash
@@ -616,6 +627,7 @@ Reguły assembly:
 - endpointy `approve` i `release` pozwalają zapisać metadane zatwierdzenia BOM i użyć ich jako jawnej ścieżki wejścia wersji do produkcji
 - `POST /api/device-bom-templates` nie pozwala już tworzyć BOM od razu jako aktywnego; prawidłowy flow to create inactive -> add items -> approve/activate albo release
 - `approve` działa tylko dla wersji `INACTIVE`, które mają już co najmniej jedną pozycję i co najmniej jedną pozycję wymaganą
+- `revoke-approval` pozwala ręcznie cofnąć approval tylko dla wersji `INACTIVE`; aktywna albo niezatwierdzona wersja nie przejdzie tej operacji
 - endpoint `readiness` zwraca, czy dana wersja ma zdefiniowane pozycje, co najmniej jedną pozycję wymaganą i approval przed aktywacją
 - `clone` z `activate=true` oraz `promote` wymagają teraz `approved_by`, bo aktywują nową wersję BOM w tym samym kroku
 - jeśli zatwierdzona wersja robocza BOM zostanie zmieniona przez `POST/PATCH/DELETE` na pozycjach BOM, approval jest automatycznie czyszczony i wersję trzeba zatwierdzić ponownie przed aktywacją
@@ -686,6 +698,7 @@ Audit obejmuje także lifecycle BOM:
 - `DEVICE_BOM_TEMPLATE_CLONED`
 - `DEVICE_BOM_TEMPLATE_PROMOTED`
 - `DEVICE_BOM_TEMPLATE_APPROVAL_CLEARED`
+- `DEVICE_BOM_TEMPLATE_APPROVAL_REVOKED`
 - `DEVICE_BOM_ITEM_ADDED`
 
 Filtrowanie po work session:

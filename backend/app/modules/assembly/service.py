@@ -32,6 +32,7 @@ from app.schemas import (
     DeviceBomTemplateLineageRead,
     DeviceBomItemSnapshotRead,
     DeviceBomTemplatePromoteRequest,
+    DeviceBomTemplateRevokeApprovalRequest,
     DeviceBomTemplateReleaseRequest,
     DeviceBomItemCreate,
     DeviceBomItemUpdate,
@@ -524,6 +525,48 @@ def approve_device_bom_template(
             "approved_by": template.approved_by,
             "approved_at": template.approved_at.isoformat() if template.approved_at else None,
             "release_note": template.release_note,
+        },
+    )
+    db.commit()
+    db.refresh(template)
+    return template
+
+
+def revoke_device_bom_template_approval(
+    db: Session,
+    device_type: str,
+    payload: DeviceBomTemplateRevokeApprovalRequest,
+    variant_code: str = "DEFAULT",
+) -> DeviceBomTemplate:
+    template = get_device_bom_template_or_404(db, device_type, payload.version, variant_code)
+    if template.status == "RETIRED":
+        raise HTTPException(status_code=400, detail="Retired BOM template cannot have approval revoked")
+    if template.status == "ACTIVE":
+        raise HTTPException(status_code=400, detail="Active BOM template cannot have approval revoked")
+    if template.approved_at is None:
+        raise HTTPException(status_code=400, detail="BOM template is not approved")
+
+    previous_approval = {
+        "approved_by": template.approved_by,
+        "approved_at": template.approved_at.isoformat() if template.approved_at else None,
+        "release_note": template.release_note,
+    }
+    template.approved_by = None
+    template.approved_at = None
+    template.release_note = None
+    record_audit_event(
+        db,
+        event_type="DEVICE_BOM_TEMPLATE_APPROVAL_REVOKED",
+        entity_type="DEVICE_BOM_TEMPLATE",
+        entity_id=template.id,
+        result=template.status,
+        message=f"Revoked approval for BOM template {template.device_type} v{template.version}",
+        payload={
+            "device_type": template.device_type,
+            "variant_code": template.variant_code,
+            "version": template.version,
+            "reason": payload.reason,
+            "previous_approval": previous_approval,
         },
     )
     db.commit()

@@ -168,6 +168,11 @@ class DeviceBomTemplateApproveRequest(BaseModel):
     release_note: str | None = None
 
 
+class DeviceBomTemplateRevokeApprovalRequest(BaseModel):
+    version: str = Field(pattern=r"^\d+(?:\.\d+)*$")
+    reason: str | None = None
+
+
 class DeviceBomTemplateReleaseRequest(BaseModel):
     version: str = Field(pattern=r"^\d+(?:\.\d+)*$")
     approved_by: str
