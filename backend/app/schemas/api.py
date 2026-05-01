@@ -252,6 +252,8 @@ class DeviceShipmentReadinessRead(BaseModel):
     critical_open_ncr_ids: list[str]
     bom_compliance: DeviceBomComplianceRead
     can_transition_to_ready_for_shipment: bool
+    primary_blocking_code: str | None = None
+    recommended_action: str
     blocking_reasons: list[str]
     blocking_checks: list[DeviceShipmentBlockingCheckRead]
 

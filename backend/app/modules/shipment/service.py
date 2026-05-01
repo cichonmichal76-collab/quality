@@ -24,6 +24,12 @@ BOM_REQUIRED_COMPONENTS_MISSING_CODE = "BOM_REQUIRED_COMPONENTS_MISSING"
 BOM_OVER_INSTALLED_COMPONENTS_CODE = "BOM_OVER_INSTALLED_COMPONENTS"
 BOM_UNEXPECTED_COMPONENTS_CODE = "BOM_UNEXPECTED_COMPONENTS"
 CRITICAL_OPEN_NCR_CODE = "CRITICAL_OPEN_NCR"
+MARK_READY_FOR_SHIPMENT_ACTION = "MARK_READY_FOR_SHIPMENT"
+RESOLVE_CRITICAL_NCR_ACTION = "RESOLVE_CRITICAL_NCR"
+ACTIVATE_OR_CONFIGURE_BOM_ACTION = "ACTIVATE_OR_CONFIGURE_BOM"
+FIX_ASSEMBLY_MISMATCH_ACTION = "FIX_ASSEMBLY_MISMATCH"
+COMPLETE_ASSEMBLY_ACTION = "COMPLETE_ASSEMBLY"
+RUN_FINAL_TEST_ACTION = "RUN_FINAL_TEST"
 
 
 def get_device_or_404(db: Session, serial_number: str) -> Device:
@@ -124,6 +130,39 @@ def _build_bom_shipment_blocking_checks(
     return checks
 
 
+def _pick_primary_blocking_code(
+    blocking_checks: list[DeviceShipmentBlockingCheckRead],
+) -> str | None:
+    priority = {
+        CRITICAL_OPEN_NCR_CODE: 0,
+        BOM_TEMPLATE_NOT_EFFECTIVE_CODE: 1,
+        BOM_OVER_INSTALLED_COMPONENTS_CODE: 2,
+        BOM_UNEXPECTED_COMPONENTS_CODE: 2,
+        BOM_REQUIRED_COMPONENTS_MISSING_CODE: 3,
+        FINAL_TEST_NOT_PASSED_CODE: 4,
+    }
+    blocking_codes = [check.code for check in blocking_checks if check.is_blocking]
+    if not blocking_codes:
+        return None
+    return min(blocking_codes, key=lambda code: (priority.get(code, 99), code))
+
+
+def _recommended_action_for_primary_blocking_code(primary_blocking_code: str | None) -> str:
+    if primary_blocking_code is None:
+        return MARK_READY_FOR_SHIPMENT_ACTION
+    if primary_blocking_code == CRITICAL_OPEN_NCR_CODE:
+        return RESOLVE_CRITICAL_NCR_ACTION
+    if primary_blocking_code == BOM_TEMPLATE_NOT_EFFECTIVE_CODE:
+        return ACTIVATE_OR_CONFIGURE_BOM_ACTION
+    if primary_blocking_code in {BOM_OVER_INSTALLED_COMPONENTS_CODE, BOM_UNEXPECTED_COMPONENTS_CODE}:
+        return FIX_ASSEMBLY_MISMATCH_ACTION
+    if primary_blocking_code == BOM_REQUIRED_COMPONENTS_MISSING_CODE:
+        return COMPLETE_ASSEMBLY_ACTION
+    if primary_blocking_code == FINAL_TEST_NOT_PASSED_CODE:
+        return RUN_FINAL_TEST_ACTION
+    return RUN_FINAL_TEST_ACTION
+
+
 def _build_device_shipment_readiness(db: Session, device: Device) -> DeviceShipmentReadinessRead:
     final_test_passed = device.production_status == rules.FINAL_TEST_PASSED
     critical_open_ncr_ids = repository.list_critical_open_ncr_ids(db, device.device_serial_number)
@@ -157,6 +196,7 @@ def _build_device_shipment_readiness(db: Session, device: Device) -> DeviceShipm
                 details=critical_open_ncr_ids,
             )
         )
+    primary_blocking_code = _pick_primary_blocking_code(blocking_checks)
 
     return DeviceShipmentReadinessRead(
         device_serial_number=device.device_serial_number,
@@ -168,6 +208,8 @@ def _build_device_shipment_readiness(db: Session, device: Device) -> DeviceShipm
         critical_open_ncr_ids=critical_open_ncr_ids,
         bom_compliance=bom_compliance,
         can_transition_to_ready_for_shipment=not blocking_reasons,
+        primary_blocking_code=primary_blocking_code,
+        recommended_action=_recommended_action_for_primary_blocking_code(primary_blocking_code),
         blocking_reasons=blocking_reasons,
         blocking_checks=blocking_checks,
     )
@@ -209,6 +251,7 @@ def list_device_shipment_readiness(
     device_type: str | None = None,
     variant_code: str | None = None,
     blocking_code: str | None = None,
+    recommended_action: str | None = None,
     only_blocked: bool = False,
     only_ready: bool = False,
     limit: int = 100,
@@ -222,6 +265,16 @@ def list_device_shipment_readiness(
         raise HTTPException(
             status_code=400,
             detail="blocking_code cannot be combined with only_ready",
+        )
+    if recommended_action and only_ready and recommended_action != MARK_READY_FOR_SHIPMENT_ACTION:
+        raise HTTPException(
+            status_code=400,
+            detail="recommended_action is incompatible with only_ready unless it is MARK_READY_FOR_SHIPMENT",
+        )
+    if recommended_action and only_blocked and recommended_action == MARK_READY_FOR_SHIPMENT_ACTION:
+        raise HTTPException(
+            status_code=400,
+            detail="recommended_action MARK_READY_FOR_SHIPMENT cannot be combined with only_blocked",
         )
     devices = repository.list_devices_for_shipment(
         db,
@@ -243,6 +296,10 @@ def list_device_shipment_readiness(
             for row in readiness_rows
             if any(check.code == blocking_code for check in row.blocking_checks)
         ]
+    if recommended_action:
+        readiness_rows = [
+            row for row in readiness_rows if row.recommended_action == recommended_action
+        ]
 
     ready_count = sum(1 for row in readiness_rows if row.can_transition_to_ready_for_shipment)
     blocked_count = len(readiness_rows) - ready_count
@@ -255,6 +312,7 @@ def list_device_shipment_readiness(
             "device_type": device_type,
             "variant_code": variant_code,
             "blocking_code": blocking_code,
+            "recommended_action": recommended_action,
             "only_blocked": only_blocked,
             "only_ready": only_ready,
             "limit": limit,

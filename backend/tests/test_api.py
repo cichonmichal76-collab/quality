@@ -3436,6 +3436,8 @@ def test_device_shipment_readiness_reports_multiple_blockers():
         "READY_FOR_SHIPMENT requires FINAL_TEST_PASSED",
         "READY_FOR_SHIPMENT requires installed components: CONTROL_PCB",
     ]
+    assert payload["primary_blocking_code"] == "BOM_REQUIRED_COMPONENTS_MISSING"
+    assert payload["recommended_action"] == "COMPLETE_ASSEMBLY"
     assert [check["code"] for check in payload["blocking_checks"]] == [
         "FINAL_TEST_NOT_PASSED",
         "BOM_REQUIRED_COMPONENTS_MISSING",
@@ -3500,6 +3502,8 @@ def test_device_shipment_readiness_reports_critical_ncr_blocker():
     assert payload["has_critical_open_ncr"] is True
     assert len(payload["critical_open_ncr_ids"]) == 1
     assert payload["can_transition_to_ready_for_shipment"] is False
+    assert payload["primary_blocking_code"] == "CRITICAL_OPEN_NCR"
+    assert payload["recommended_action"] == "RESOLVE_CRITICAL_NCR"
     assert payload["blocking_reasons"] == ["Open critical NCR blocks shipment"]
     assert [check["code"] for check in payload["blocking_checks"]] == ["CRITICAL_OPEN_NCR"]
     assert payload["blocking_checks"][0]["details"] == payload["critical_open_ncr_ids"]
@@ -3549,6 +3553,8 @@ def test_device_shipment_readiness_passes_when_gate_is_clear():
     assert payload["has_critical_open_ncr"] is False
     assert payload["critical_open_ncr_ids"] == []
     assert payload["can_transition_to_ready_for_shipment"] is True
+    assert payload["primary_blocking_code"] is None
+    assert payload["recommended_action"] == "MARK_READY_FOR_SHIPMENT"
     assert payload["blocking_reasons"] == []
     assert payload["blocking_checks"] == []
     assert payload["bom_compliance"]["passes_bom_gate"] is True
@@ -3611,7 +3617,9 @@ def test_shipment_readiness_queue_lists_ready_and_blocked_devices():
 
     devices = {row["device_serial_number"]: row for row in payload["devices"]}
     assert devices[ready_device_serial_number]["can_transition_to_ready_for_shipment"] is True
+    assert devices[ready_device_serial_number]["recommended_action"] == "MARK_READY_FOR_SHIPMENT"
     assert devices[blocked_device_serial_number]["can_transition_to_ready_for_shipment"] is False
+    assert devices[blocked_device_serial_number]["recommended_action"] == "COMPLETE_ASSEMBLY"
 
 
 def test_shipment_readiness_queue_can_filter_only_blocked_devices():
@@ -3745,6 +3753,63 @@ def test_shipment_readiness_queue_can_filter_by_blocking_code():
     ]
 
 
+def test_shipment_readiness_queue_can_filter_by_recommended_action():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(device_type, component_type="CONTROL_PCB")
+
+    assembly_serial_number = unique_id("DEV")
+    ready_serial_number = unique_id("DEV")
+
+    assembly_created = client.post(
+        "/api/devices",
+        json={"device_serial_number": assembly_serial_number, "device_type": device_type},
+    )
+    assert assembly_created.status_code == 200
+    ready_created = client.post(
+        "/api/devices",
+        json={"device_serial_number": ready_serial_number, "device_type": device_type},
+    )
+    assert ready_created.status_code == 200
+
+    production_session = start_work_session(role="PRODUCTION_OPERATOR")
+    item = create_qc_passed_item(production_session, item_type="CONTROL_PCB")
+    install = client.post(
+        f"/api/devices/{ready_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": production_session["work_session_id"],
+        },
+    )
+    assert install.status_code == 200
+
+    final_test_session = start_work_session(role="FINAL_TEST_OPERATOR")
+    final_test = client.post(
+        "/api/final-tests",
+        json={
+            "test_run_id": unique_id("FT"),
+            "device_serial_number": ready_serial_number,
+            "result": "PASS",
+            "firmware_version": "1.2.4",
+            "bootloader_version": "0.9.8",
+            "work_session_id": final_test_session["work_session_id"],
+        },
+    )
+    assert final_test.status_code == 200
+
+    queue = client.get(
+        f"/api/shipment-readiness?device_type={device_type}&recommended_action=COMPLETE_ASSEMBLY"
+    )
+    assert queue.status_code == 200
+    payload = queue.json()
+    assert payload["total_devices"] == 1
+    assert payload["ready_count"] == 0
+    assert payload["blocked_count"] == 1
+    assert payload["filters"]["recommended_action"] == "COMPLETE_ASSEMBLY"
+    assert [row["device_serial_number"] for row in payload["devices"]] == [assembly_serial_number]
+    assert payload["devices"][0]["recommended_action"] == "COMPLETE_ASSEMBLY"
+
+
 def test_shipment_readiness_queue_rejects_conflicting_filters():
     response = client.get("/api/shipment-readiness?only_blocked=true&only_ready=true")
     assert response.status_code == 400
@@ -3755,6 +3820,24 @@ def test_shipment_readiness_queue_rejects_blocking_code_with_only_ready():
     response = client.get("/api/shipment-readiness?blocking_code=CRITICAL_OPEN_NCR&only_ready=true")
     assert response.status_code == 400
     assert response.json()["detail"] == "blocking_code cannot be combined with only_ready"
+
+
+def test_shipment_readiness_queue_rejects_incompatible_recommended_action_filters():
+    only_ready_response = client.get(
+        "/api/shipment-readiness?recommended_action=COMPLETE_ASSEMBLY&only_ready=true"
+    )
+    assert only_ready_response.status_code == 400
+    assert only_ready_response.json()["detail"] == (
+        "recommended_action is incompatible with only_ready unless it is MARK_READY_FOR_SHIPMENT"
+    )
+
+    only_blocked_response = client.get(
+        "/api/shipment-readiness?recommended_action=MARK_READY_FOR_SHIPMENT&only_blocked=true"
+    )
+    assert only_blocked_response.status_code == 400
+    assert only_blocked_response.json()["detail"] == (
+        "recommended_action MARK_READY_FOR_SHIPMENT cannot be combined with only_blocked"
+    )
 
 
 def test_shipment_reads_bom_requirements_from_database():
