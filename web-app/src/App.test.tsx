@@ -305,6 +305,7 @@ function createErrorResponse(
 
 afterEach(() => {
   localStorage.clear();
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -315,8 +316,12 @@ describe("App", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
 
-    expect(await screen.findByText("SHIP-001")).toBeInTheDocument();
+    expect(screen.getByText("SHIP-001")).toBeInTheDocument();
     expect(screen.getByText("API OK")).toBeInTheDocument();
     const shipmentActionsPanel = screen.getByText("Akcje operacyjne").closest("section");
     expect(shipmentActionsPanel).not.toBeNull();
@@ -342,8 +347,12 @@ describe("App", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
 
-    expect(await screen.findByText("SHIP-001")).toBeInTheDocument();
+    expect(screen.getByText("SHIP-001")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Komponenty" }));
 
@@ -360,7 +369,11 @@ describe("App", () => {
       ),
     ).toBeInTheDocument();
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock).toHaveBeenLastCalledWith(
       "/api/component-quality?only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=100",
       expect.objectContaining({
@@ -419,8 +432,12 @@ describe("App", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
 
-    expect(await screen.findByText("SHIP-001")).toBeInTheDocument();
+    expect(screen.getByText("SHIP-001")).toBeInTheDocument();
 
     fireEvent.change(screen.getByDisplayValue("/api"), {
       target: { value: "" },
@@ -483,6 +500,142 @@ describe("App", () => {
 
     expect(screen.getByText("SHIP-NEW")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("debounces shipment text filters before sending request", async () => {
+    vi.useFakeTimers();
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(createJsonResponse(shipmentPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText("SHIP-001")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    fireEvent.change(screen.getByLabelText("Typ urządzenia"), {
+      target: { value: "DEMO-OPS" },
+    });
+
+    expect(screen.getByLabelText("Typ urządzenia")).toHaveValue("DEMO-OPS");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      vi.advanceTimersByTime(249);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/shipment-readiness?device_type=DEMO-OPS&sort_by=created_at&sort_desc=true&limit=100",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+  });
+
+  it("flushes pending shipment text filters when a non-text filter changes", async () => {
+    vi.useFakeTimers();
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(createJsonResponse(shipmentPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText("SHIP-001")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    fireEvent.change(screen.getByLabelText("Typ urządzenia"), {
+      target: { value: "DEMO-OPS" },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByLabelText("Tylko zablokowane"));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/shipment-readiness?device_type=DEMO-OPS&only_blocked=true&sort_by=created_at&sort_desc=true&limit=100",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+
+    await act(async () => {
+      vi.advanceTimersByTime(300);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("flushes pending shipment text filters before manual refresh", async () => {
+    vi.useFakeTimers();
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(createJsonResponse(shipmentPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText("SHIP-001")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    fireEvent.change(screen.getByLabelText("Typ urządzenia"), {
+      target: { value: "DEMO-OPS" },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    const apiControls = screen.getByRole("region", { name: /API/i });
+    fireEvent.click(within(apiControls).getByRole("button", { name: "Odśwież" }));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/shipment-readiness?device_type=DEMO-OPS&sort_by=created_at&sort_desc=true&limit=100",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+
+    await act(async () => {
+      vi.advanceTimersByTime(300);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("applies shipment filters and keeps blocked and ready toggles exclusive", async () => {
@@ -967,11 +1120,11 @@ describe("App", () => {
     });
     fireEvent.click(screen.getByLabelText("Tylko zablokowane"));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
 
     fireEvent.click(screen.getByRole("button", { name: "Wyczyść" }));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
     expect(screen.getByLabelText("Typ urządzenia")).toHaveValue("");
     expect(screen.getByLabelText("Tylko zablokowane")).not.toBeChecked();
     expect(screen.getByLabelText("Tylko gotowe")).not.toBeChecked();

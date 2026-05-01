@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, CSSProperties, ReactNode } from "react";
 
 import {
@@ -30,6 +30,7 @@ const VIEW_STORAGE_KEY = "servicetrace.web.activeView";
 const SHIPMENT_FILTERS_STORAGE_KEY = "servicetrace.web.shipmentFilters";
 const COMPONENT_FILTERS_STORAGE_KEY = "servicetrace.web.componentFilters";
 const DEFAULT_API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
+const TEXT_FILTER_DEBOUNCE_MS = 250;
 
 const PRODUCTION_STATUS_OPTIONS = [
   "CREATED",
@@ -128,6 +129,17 @@ interface ComponentFilters {
   offset: number;
 }
 
+const SHIPMENT_TEXT_FILTER_KEYS: Array<keyof ShipmentFilters> = [
+  "device_type",
+  "variant_code",
+];
+
+const COMPONENT_TEXT_FILTER_KEYS: Array<keyof ComponentFilters> = [
+  "device_type",
+  "variant_code",
+  "blocking_component_type",
+];
+
 const DEFAULT_SHIPMENT_FILTERS: ShipmentFilters = {
   device_type: "",
   variant_code: "",
@@ -172,6 +184,18 @@ export function App() {
   const [componentFilters, setComponentFilters] = useState(() => {
     return readStoredComponentFilters();
   });
+  const [shipmentRequestFilters, flushShipmentRequestFilters] =
+    useDebouncedRequestFilters(
+      shipmentFilters,
+      SHIPMENT_TEXT_FILTER_KEYS,
+      TEXT_FILTER_DEBOUNCE_MS,
+    );
+  const [componentRequestFilters, flushComponentRequestFilters] =
+    useDebouncedRequestFilters(
+      componentFilters,
+      COMPONENT_TEXT_FILTER_KEYS,
+      TEXT_FILTER_DEBOUNCE_MS,
+    );
   const [shipmentData, setShipmentData] = useState<DeviceShipmentQueue | null>(
     null,
   );
@@ -226,8 +250,8 @@ export function App() {
       activeView === "shipment" ? "/shipment-readiness" : "/component-quality";
     const params =
       activeView === "shipment"
-        ? shipmentQueryParams(shipmentFilters)
-        : componentQueryParams(componentFilters);
+        ? shipmentQueryParams(shipmentRequestFilters)
+        : componentQueryParams(componentRequestFilters);
     const url = joinApiUrl(apiBaseUrl.trim(), path) + buildQuery(params);
 
     setLoadState("loading");
@@ -266,8 +290,8 @@ export function App() {
   }, [
     activeView,
     apiBaseUrl,
-    shipmentFilters,
-    componentFilters,
+    shipmentRequestFilters,
+    componentRequestFilters,
     refreshVersion,
   ]);
 
@@ -318,10 +342,21 @@ export function App() {
     localStorage.removeItem(SHIPMENT_FILTERS_STORAGE_KEY);
     localStorage.removeItem(COMPONENT_FILTERS_STORAGE_KEY);
 
+    flushShipmentRequestFilters(DEFAULT_SHIPMENT_FILTERS);
+    flushComponentRequestFilters(DEFAULT_COMPONENT_FILTERS);
     setApiBaseUrl(DEFAULT_API_BASE_URL);
     setActiveView("shipment");
     setShipmentFilters(DEFAULT_SHIPMENT_FILTERS);
     setComponentFilters(DEFAULT_COMPONENT_FILTERS);
+  };
+
+  const flushActiveRequestFilters = () => {
+    if (activeView === "shipment") {
+      flushShipmentRequestFilters();
+      return;
+    }
+
+    flushComponentRequestFilters();
   };
 
   return (
@@ -341,14 +376,20 @@ export function App() {
             <span>Adres bazowy API</span>
             <input
               value={apiBaseUrl}
-              onChange={(event) => setApiBaseUrl(event.target.value)}
+              onChange={(event) => {
+                flushActiveRequestFilters();
+                setApiBaseUrl(event.target.value);
+              }}
               spellCheck={false}
             />
           </label>
           <button
             className="primary-button"
             type="button"
-            onClick={() => setRefreshVersion((value) => value + 1)}
+            onClick={() => {
+              flushActiveRequestFilters();
+              setRefreshVersion((value) => value + 1);
+            }}
           >
             Odśwież
           </button>
@@ -367,14 +408,20 @@ export function App() {
           <button
             className={activeView === "shipment" ? "is-active" : ""}
             type="button"
-            onClick={() => setActiveView("shipment")}
+            onClick={() => {
+              flushShipmentRequestFilters();
+              setActiveView("shipment");
+            }}
           >
             Wysyłka
           </button>
           <button
             className={activeView === "components" ? "is-active" : ""}
             type="button"
-            onClick={() => setActiveView("components")}
+            onClick={() => {
+              flushComponentRequestFilters();
+              setActiveView("components");
+            }}
           >
             Komponenty
           </button>
@@ -1606,6 +1653,66 @@ function readStoredOptionalBooleanString(
 
 function clampOffset(value: number): number {
   return Math.max(Math.trunc(value), 0);
+}
+
+function useDebouncedRequestFilters<T extends object>(
+  filters: T,
+  textKeys: Array<keyof T>,
+  delayMs: number,
+): [T, (nextFilters?: T) => void] {
+  const [requestFilters, setRequestFilters] = useState(filters);
+  const previousFiltersRef = useRef(filters);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flush = (nextFilters: T = filters) => {
+    if (timeoutRef.current !== null) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+
+    previousFiltersRef.current = nextFilters;
+    setRequestFilters(nextFilters);
+  };
+
+  useEffect(() => {
+    const previousFilters = previousFiltersRef.current;
+    const changedKeys = (Object.keys(filters) as Array<keyof T>).filter(
+      (key) => !Object.is(filters[key], previousFilters[key]),
+    );
+
+    if (changedKeys.length === 0) {
+      return;
+    }
+
+    if (timeoutRef.current !== null) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+
+    const onlyTextChanges = changedKeys.every((key) => textKeys.includes(key));
+
+    if (onlyTextChanges) {
+      timeoutRef.current = setTimeout(() => {
+        previousFiltersRef.current = filters;
+        setRequestFilters(filters);
+        timeoutRef.current = null;
+      }, delayMs);
+    } else {
+      setRequestFilters(filters);
+    }
+
+    previousFiltersRef.current = filters;
+  }, [delayMs, filters, textKeys]);
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current !== null) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
+
+  return [requestFilters, flush];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
