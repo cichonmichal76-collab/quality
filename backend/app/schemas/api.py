@@ -265,6 +265,33 @@ class DeviceShipmentProductionStatusSummaryRead(BaseModel):
     device_count: int
 
 
+class DeviceInstalledComponentQualityRead(BaseModel):
+    component_serial_number: str
+    component_type: str
+    child_barcode_value: str
+    installed_at: datetime
+    installed_by: str | None = None
+    workstation_id: str | None = None
+    bom_template_id: str | None = None
+    bom_version: str | None = None
+    component_qc_passed: bool
+    has_critical_open_ncr: bool
+    critical_open_ncr_ids: list[str]
+    blocks_shipment: bool
+    quality_status: str
+
+
+class DeviceComponentQualityRead(BaseModel):
+    device_serial_number: str
+    device_type: str
+    device_variant_code: str
+    production_status: str
+    total_installed_components: int
+    passing_components: int
+    blocked_components: int
+    components: list[DeviceInstalledComponentQualityRead]
+
+
 class DeviceShipmentReadinessRead(BaseModel):
     device_serial_number: str
     device_type: str

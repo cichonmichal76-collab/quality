@@ -7,9 +7,11 @@ from app.models import AuditEvent, Device
 from app.modules.assembly.service import get_device_bom_compliance
 from app.modules.shipment import repository, rules
 from app.schemas import (
+    DeviceComponentQualityRead,
     DeviceShipmentActionSummaryRead,
     DeviceBomComplianceRead,
     DeviceShipmentBlockingCheckRead,
+    DeviceInstalledComponentQualityRead,
     DeviceShipmentBlockingSummaryRead,
     DeviceShipmentLatestDecisionRead,
     DeviceShipmentLatestDecisionSummaryRead,
@@ -277,20 +279,84 @@ def _recommended_action_for_primary_blocking_code(primary_blocking_code: str | N
     return RUN_FINAL_TEST_ACTION
 
 
+def _build_installed_component_quality_rows(
+    db: Session,
+    device: Device,
+) -> list[DeviceInstalledComponentQualityRead]:
+    installed_links = repository.list_installed_assembly_links_for_device(
+        db,
+        device.device_serial_number,
+    )
+    component_ncr_ids_by_serial = repository.list_component_critical_open_ncr_ids_grouped_for_device(
+        db,
+        device.device_serial_number,
+    )
+
+    component_rows: list[DeviceInstalledComponentQualityRead] = []
+    for link in installed_links:
+        critical_open_ncr_ids = component_ncr_ids_by_serial.get(link.child_item_serial_number, [])
+        if critical_open_ncr_ids:
+            quality_status = "CRITICAL_NCR_OPEN"
+        elif not link.component_qc_passed:
+            quality_status = "QC_NOT_PASSED"
+        else:
+            quality_status = "PASS"
+        component_rows.append(
+            DeviceInstalledComponentQualityRead(
+                component_serial_number=link.child_item_serial_number,
+                component_type=link.component_type,
+                child_barcode_value=link.child_barcode_value,
+                installed_at=link.installed_at,
+                installed_by=link.installed_by,
+                workstation_id=link.workstation_id,
+                bom_template_id=link.bom_template_id,
+                bom_version=link.bom_version,
+                component_qc_passed=link.component_qc_passed,
+                has_critical_open_ncr=bool(critical_open_ncr_ids),
+                critical_open_ncr_ids=critical_open_ncr_ids,
+                blocks_shipment=quality_status != "PASS",
+                quality_status=quality_status,
+            )
+        )
+    return component_rows
+
+
+def get_device_component_quality(
+    db: Session,
+    serial_number: str,
+) -> DeviceComponentQualityRead:
+    device = get_device_or_404(db, serial_number)
+    component_rows = _build_installed_component_quality_rows(db, device)
+    blocked_components = sum(1 for row in component_rows if row.blocks_shipment)
+    return DeviceComponentQualityRead(
+        device_serial_number=device.device_serial_number,
+        device_type=device.device_type,
+        device_variant_code=device.variant_code,
+        production_status=device.production_status,
+        total_installed_components=len(component_rows),
+        passing_components=len(component_rows) - blocked_components,
+        blocked_components=blocked_components,
+        components=component_rows,
+    )
+
+
 def _build_device_shipment_readiness(db: Session, device: Device) -> DeviceShipmentReadinessRead:
     final_test_passed = device.production_status == rules.FINAL_TEST_PASSED
     critical_open_ncr_ids = repository.list_critical_open_ncr_ids(db, device.device_serial_number)
     has_critical_open_ncr = bool(critical_open_ncr_ids)
     bom_compliance = get_device_bom_compliance(db, device.device_serial_number)
-    installed_links = repository.list_installed_assembly_links_for_device(db, device.device_serial_number)
+    component_quality_rows = _build_installed_component_quality_rows(db, device)
     component_qc_blocking_details = sorted(
-        f"{link.child_item_serial_number} ({link.component_type})"
-        for link in installed_links
-        if not link.component_qc_passed
+        f"{row.component_serial_number} ({row.component_type})"
+        for row in component_quality_rows
+        if not row.component_qc_passed
     )
-    component_critical_open_ncr_ids = repository.list_component_critical_open_ncr_ids_for_device(
-        db,
-        device.device_serial_number,
+    component_critical_open_ncr_ids = sorted(
+        {
+            ncr_id
+            for row in component_quality_rows
+            for ncr_id in row.critical_open_ncr_ids
+        }
     )
     latest_shipment_gate_event = repository.get_latest_shipment_gate_audit_event_for_device(
         db,

@@ -102,6 +102,36 @@ def list_component_critical_open_ncr_ids_for_device(
     ]
 
 
+def list_component_critical_open_ncr_ids_grouped_for_device(
+    db: Session,
+    device_serial_number: str,
+) -> dict[str, list[str]]:
+    grouped: dict[str, list[str]] = {}
+    rows = (
+        db.query(Nonconformity.component_serial_number, Nonconformity.ncr_id)
+        .join(
+            AssemblyLink,
+            AssemblyLink.child_item_serial_number == Nonconformity.component_serial_number,
+        )
+        .filter(
+            AssemblyLink.parent_device_serial_number == device_serial_number,
+            AssemblyLink.status == "INSTALLED",
+            Nonconformity.component_serial_number.is_not(None),
+            Nonconformity.severity == "CRITICAL",
+            Nonconformity.status != "CLOSED",
+        )
+        .order_by(
+            Nonconformity.component_serial_number.asc(),
+            Nonconformity.detected_at.asc(),
+            Nonconformity.ncr_id.asc(),
+        )
+        .all()
+    )
+    for component_serial_number, ncr_id in rows:
+        grouped.setdefault(component_serial_number, []).append(ncr_id)
+    return grouped
+
+
 def get_active_bom_template_by_device_type(
     db: Session,
     device_type: str,

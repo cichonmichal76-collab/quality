@@ -3,7 +3,14 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.modules.shipment import service
-from app.schemas import AuditEventRead, DeviceRead, DeviceShipmentQueueRead, DeviceShipmentReadinessRead, DeviceStatusUpdate
+from app.schemas import (
+    AuditEventRead,
+    DeviceComponentQualityRead,
+    DeviceRead,
+    DeviceShipmentQueueRead,
+    DeviceShipmentReadinessRead,
+    DeviceStatusUpdate,
+)
 
 router = APIRouter(tags=["shipment"])
 
@@ -52,6 +59,17 @@ def get_device_shipment_readiness(
     db: Session = Depends(get_db),
 ):
     return service.get_device_shipment_readiness(db, serial_number)
+
+
+@router.get(
+    "/devices/{serial_number}/component-quality",
+    response_model=DeviceComponentQualityRead,
+)
+def get_device_component_quality(
+    serial_number: str,
+    db: Session = Depends(get_db),
+):
+    return service.get_device_component_quality(db, serial_number)
 
 
 @router.get(

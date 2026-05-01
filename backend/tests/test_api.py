@@ -3663,6 +3663,122 @@ def test_shipment_is_blocked_when_installed_component_lacks_qc_passed_flag():
     )
 
 
+def test_component_quality_endpoint_reports_pass_qc_gap_and_component_ncr():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=True,
+    )
+    device_serial_number = unique_id("DEV")
+    device_response = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
+    )
+    assert device_response.status_code == 200
+
+    db = SessionLocal()
+    try:
+        template = (
+            db.query(DeviceBomTemplate)
+            .filter(
+                DeviceBomTemplate.device_type == device_type,
+                DeviceBomTemplate.variant_code == "DEFAULT",
+                DeviceBomTemplate.version == "1.0",
+            )
+            .first()
+        )
+        assert template is not None
+        db.add_all(
+            [
+                AssemblyLink(
+                    parent_device_serial_number=device_serial_number,
+                    child_item_serial_number=unique_id("ITEM"),
+                    child_barcode_value=unique_id("BC"),
+                    component_type="CONTROL_PCB",
+                    installed_by="pytest",
+                    installed_at=utc_now(),
+                    bom_template_id=template.id,
+                    bom_version=template.version,
+                    scan_event_id=unique_id("SCAN"),
+                    status="INSTALLED",
+                    component_qc_passed=True,
+                ),
+                AssemblyLink(
+                    parent_device_serial_number=device_serial_number,
+                    child_item_serial_number=unique_id("ITEM"),
+                    child_barcode_value=unique_id("BC"),
+                    component_type="FAN_MODULE",
+                    installed_by="pytest",
+                    installed_at=utc_now(),
+                    bom_template_id=template.id,
+                    bom_version=template.version,
+                    scan_event_id=unique_id("SCAN"),
+                    status="INSTALLED",
+                    component_qc_passed=False,
+                ),
+                AssemblyLink(
+                    parent_device_serial_number=device_serial_number,
+                    child_item_serial_number=unique_id("ITEM"),
+                    child_barcode_value=unique_id("BC"),
+                    component_type="IO_MODULE",
+                    installed_by="pytest",
+                    installed_at=utc_now(),
+                    bom_template_id=template.id,
+                    bom_version=template.version,
+                    scan_event_id=unique_id("SCAN"),
+                    status="INSTALLED",
+                    component_qc_passed=True,
+                ),
+            ]
+        )
+        db.commit()
+        component_with_ncr_serial = (
+            db.query(AssemblyLink.child_item_serial_number)
+            .filter(
+                AssemblyLink.parent_device_serial_number == device_serial_number,
+                AssemblyLink.component_type == "IO_MODULE",
+            )
+            .scalar()
+        )
+    finally:
+        db.close()
+
+    component_ncr = client.post(
+        "/api/nonconformities",
+        json={
+            "ncr_id": unique_id("NCR"),
+            "component_serial_number": component_with_ncr_serial,
+            "process_stage": "INCOMING_INSPECTION",
+            "description": "Critical issue on installed component",
+            "severity": "CRITICAL",
+            "detected_by": "pytest",
+        },
+    )
+    assert component_ncr.status_code == 200
+
+    response = client.get(f"/api/devices/{device_serial_number}/component-quality")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["device_serial_number"] == device_serial_number
+    assert payload["total_installed_components"] == 3
+    assert payload["passing_components"] == 1
+    assert payload["blocked_components"] == 2
+
+    quality_by_type = {row["component_type"]: row for row in payload["components"]}
+    assert quality_by_type["CONTROL_PCB"]["quality_status"] == "PASS"
+    assert quality_by_type["CONTROL_PCB"]["blocks_shipment"] is False
+    assert quality_by_type["FAN_MODULE"]["quality_status"] == "QC_NOT_PASSED"
+    assert quality_by_type["FAN_MODULE"]["blocks_shipment"] is True
+    assert quality_by_type["FAN_MODULE"]["critical_open_ncr_ids"] == []
+    assert quality_by_type["IO_MODULE"]["quality_status"] == "CRITICAL_NCR_OPEN"
+    assert quality_by_type["IO_MODULE"]["blocks_shipment"] is True
+    assert quality_by_type["IO_MODULE"]["critical_open_ncr_ids"] == [
+        component_ncr.json()["ncr_id"]
+    ]
+
+
 def test_audit_events_can_filter_shipment_gate_by_event_type_and_result():
     allowed_device_type = unique_id("DT")
     ensure_device_bom_template(allowed_device_type, component_type="CONTROL_PCB")
