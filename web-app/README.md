@@ -27,6 +27,15 @@ npm run dev
 W panelu można też ręcznie zmienić pole `API base`, np. na pełny adres
 `http://localhost:8000/api`.
 
+Jeśli chcesz szybko zobaczyć niepuste kolejki, po migracjach backendu uruchom:
+
+```bash
+cd ../backend
+python -m app.services.demo_seed
+```
+
+Skrypt dopisze przykładowe urządzenia dla `device_type=DEMO-OPS`.
+
 ## Dostępne widoki
 
 - `Wysyłka` - liczba urządzeń gotowych i zablokowanych, główne blokady,

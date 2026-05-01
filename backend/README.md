@@ -21,6 +21,20 @@ uvicorn app.main:app --reload
 
 API startuje domyślnie pod `http://localhost:8000`.
 
+### Dane demo pod dashboard operacyjny
+
+Po migracjach możesz zasilić lokalną bazę przykładowymi urządzeniami dla
+`shipment-readiness` i `component-quality`:
+
+```bash
+cd backend
+python -m app.services.demo_seed
+```
+
+Skrypt jest addytywny: nie czyści bazy, tylko dopisuje nowy zestaw danych demo.
+Domyślnie używa `device_type=DEMO-OPS` i wypisuje na końcu numery seryjne oraz
+gotowe URL-e filtrów do obu kolejek.
+
 ## Zmienne środowiskowe
 
 Backend czyta konfigurację ze zmiennych środowiskowych opisanych w [`.env.example`](../.env.example).
@@ -86,6 +100,10 @@ mypy app
 ```
 
 Testy tworzą i usuwają schemat jawnie, więc nie polegają na skutkach ubocznych startu aplikacji.
+Do smoke testu migracji i seedów dochodzą teraz też:
+
+- `tests/test_alembic_migrations.py`
+- `tests/test_demo_seed.py`
 
 ## Struktura pakietu
 
