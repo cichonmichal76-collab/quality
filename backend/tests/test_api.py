@@ -944,6 +944,101 @@ def test_device_bom_template_can_be_released_and_activated():
     assert readiness.json()["is_approved"] is True
 
 
+def test_inactive_approved_bom_loses_approval_after_item_changes():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=False,
+        variant_code="DEFAULT",
+    )
+
+    approved = client.post(
+        f"/api/device-bom-templates/{device_type}/approve?variant_code=DEFAULT",
+        json={
+            "version": "1.0",
+            "approved_by": "QA-LEAD",
+            "release_note": "Approved before edits",
+        },
+    )
+    assert approved.status_code == 200
+
+    added = client.post(
+        f"/api/device-bom-templates/{device_type}/items?version=1.0&variant_code=DEFAULT",
+        json={
+            "component_type": "FAN_MODULE",
+            "quantity_required": 1,
+            "is_required": False,
+        },
+    )
+    assert added.status_code == 200
+
+    usage_after_add = client.get(
+        f"/api/device-bom-templates/{device_type}/usage?version=1.0&variant_code=DEFAULT"
+    )
+    assert usage_after_add.status_code == 200
+    assert usage_after_add.json()["is_approved"] is False
+
+    readiness_after_add = client.get(
+        f"/api/device-bom-templates/{device_type}/readiness?version=1.0&variant_code=DEFAULT"
+    )
+    assert readiness_after_add.status_code == 200
+    assert "BOM template is not approved" in readiness_after_add.json()["blocking_reasons"]
+
+    reapproved = client.post(
+        f"/api/device-bom-templates/{device_type}/approve?variant_code=DEFAULT",
+        json={"version": "1.0", "approved_by": "QA-LEAD"},
+    )
+    assert reapproved.status_code == 200
+
+    updated = client.patch(
+        f"/api/device-bom-templates/{device_type}/items/CONTROL_PCB?version=1.0&variant_code=DEFAULT",
+        json={"quantity_required": 2},
+    )
+    assert updated.status_code == 200
+
+    usage_after_update = client.get(
+        f"/api/device-bom-templates/{device_type}/usage?version=1.0&variant_code=DEFAULT"
+    )
+    assert usage_after_update.status_code == 200
+    assert usage_after_update.json()["is_approved"] is False
+
+    reapproved_again = client.post(
+        f"/api/device-bom-templates/{device_type}/approve?variant_code=DEFAULT",
+        json={"version": "1.0", "approved_by": "QA-LEAD"},
+    )
+    assert reapproved_again.status_code == 200
+
+    removed = client.delete(
+        f"/api/device-bom-templates/{device_type}/items/FAN_MODULE?version=1.0&variant_code=DEFAULT"
+    )
+    assert removed.status_code == 200
+
+    usage_after_remove = client.get(
+        f"/api/device-bom-templates/{device_type}/usage?version=1.0&variant_code=DEFAULT"
+    )
+    assert usage_after_remove.status_code == 200
+    assert usage_after_remove.json()["is_approved"] is False
+
+    template_audit = client.get("/api/audit-events?entity_type=DEVICE_BOM_TEMPLATE")
+    assert template_audit.status_code == 200
+    approval_cleared_events = [
+        row
+        for row in template_audit.json()
+        if row["event_type"] == "DEVICE_BOM_TEMPLATE_APPROVAL_CLEARED"
+        and row["payload"]
+        and row["payload"].get("device_type") == device_type
+        and row["payload"].get("version") == "1.0"
+    ]
+    assert len(approval_cleared_events) == 3
+    assert {row["payload"]["mutation_type"] for row in approval_cleared_events} == {
+        "BOM_ITEM_ADDED",
+        "BOM_ITEM_UPDATED",
+        "BOM_ITEM_REMOVED",
+    }
+
+
 def test_device_bom_template_diff_reports_added_removed_modified_and_unchanged_items():
     device_type = unique_id("DT")
     ensure_device_bom_template(

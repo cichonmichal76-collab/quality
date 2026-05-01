@@ -617,6 +617,7 @@ Reguły assembly:
 - `POST /api/device-bom-templates` nie pozwala już tworzyć BOM od razu jako aktywnego; prawidłowy flow to create inactive -> add items -> approve/activate albo release
 - endpoint `readiness` zwraca, czy dana wersja ma zdefiniowane pozycje, co najmniej jedną pozycję wymaganą i approval przed aktywacją
 - `clone` z `activate=true` oraz `promote` wymagają teraz `approved_by`, bo aktywują nową wersję BOM w tym samym kroku
+- jeśli zatwierdzona wersja robocza BOM zostanie zmieniona przez `POST/PATCH/DELETE` na pozycjach BOM, approval jest automatycznie czyszczony i wersję trzeba zatwierdzić ponownie przed aktywacją
 - endpoint `diff` zwraca różnice między dwiema wersjami BOM jako `added`, `removed`, `modified` i `unchanged_count`
 - `READY_FOR_SHIPMENT` jest blokowany nie tylko przy brakujących komponentach, ale też przy nadmiarowych i nieoczekiwanych komponentach względem aktywnego albo przypiętego BOM
 - pozycje BOM można edytować i usuwać tylko wtedy, gdy wersja BOM jest jeszcze legalnie modyfikowalna
@@ -683,6 +684,7 @@ Audit obejmuje także lifecycle BOM:
 - `DEVICE_BOM_TEMPLATE_RETIRED`
 - `DEVICE_BOM_TEMPLATE_CLONED`
 - `DEVICE_BOM_TEMPLATE_PROMOTED`
+- `DEVICE_BOM_TEMPLATE_APPROVAL_CLEARED`
 - `DEVICE_BOM_ITEM_ADDED`
 
 Filtrowanie po work session:

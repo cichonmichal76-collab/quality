@@ -210,6 +210,7 @@ Najważniejsze reguły:
 - wersja BOM może mieć też jawne metadane release: `approved_by`, `approved_at` i `release_note`
 - wersja BOM nie może być utworzona od razu jako aktywna; prawidłowy flow to utworzenie wersji roboczej, dodanie pozycji, approval i dopiero aktywacja albo release
 - stan gotowości konkretnej wersji BOM jest dostępny przez odczyt `readiness`, który blokuje aktywację pustych, wyłącznie opcjonalnych albo niezatwierdzonych wersji
+- jeśli zatwierdzona wersja robocza BOM zostanie później zmodyfikowana na poziomie pozycji, approval jest zrzucany automatycznie i wymaga ponownego nadania
 - porównanie dwóch wersji BOM jest dostępne przez odczyt `diff`, który rozbija zmiany na pozycje dodane, usunięte i zmodyfikowane
 - shipment gate wymaga już nie tylko obecności komponentów wymaganych, ale też braku komponentów nieoczekiwanych i nadmiarowych względem BOM
 - baza wymusza już unikalność `component_type` w obrębie jednego template BOM, co stabilizuje dalsze rozszerzenia modelu

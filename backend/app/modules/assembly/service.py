@@ -651,6 +651,43 @@ def _ensure_bom_template_is_mutable(db: Session, template: DeviceBomTemplate) ->
         )
 
 
+def _clear_inactive_bom_template_approval(
+    db: Session,
+    template: DeviceBomTemplate,
+    mutation_type: str,
+    component_type: str | None = None,
+) -> None:
+    if template.status != "INACTIVE" or template.approved_at is None:
+        return
+    previous_approval = {
+        "approved_by": template.approved_by,
+        "approved_at": template.approved_at.isoformat() if template.approved_at else None,
+        "release_note": template.release_note,
+    }
+    template.approved_by = None
+    template.approved_at = None
+    template.release_note = None
+    record_audit_event(
+        db,
+        event_type="DEVICE_BOM_TEMPLATE_APPROVAL_CLEARED",
+        entity_type="DEVICE_BOM_TEMPLATE",
+        entity_id=template.id,
+        result=template.status,
+        message=(
+            f"Cleared approval for BOM template {template.device_type} v{template.version} "
+            f"after {mutation_type.lower()}"
+        ),
+        payload={
+            "device_type": template.device_type,
+            "variant_code": template.variant_code,
+            "version": template.version,
+            "mutation_type": mutation_type,
+            "component_type": component_type,
+            "previous_approval": previous_approval,
+        },
+    )
+
+
 def activate_device_bom_template(
     db: Session,
     device_type: str,
@@ -1102,6 +1139,12 @@ def add_device_bom_item(
     item = DeviceBomItem(template_id=template.id, **payload.model_dump())
     db.add(item)
     db.flush()
+    _clear_inactive_bom_template_approval(
+        db,
+        template,
+        mutation_type="BOM_ITEM_ADDED",
+        component_type=payload.component_type,
+    )
     record_audit_event(
         db,
         event_type="DEVICE_BOM_ITEM_ADDED",
@@ -1161,6 +1204,12 @@ def update_device_bom_item(
         item.quantity_required,
         item.is_required,
     )
+    _clear_inactive_bom_template_approval(
+        db,
+        template,
+        mutation_type="BOM_ITEM_UPDATED",
+        component_type=component_type,
+    )
 
     record_audit_event(
         db,
@@ -1217,6 +1266,12 @@ def delete_device_bom_item(
         "quantity_required": item.quantity_required,
         "is_required": item.is_required,
     }
+    _clear_inactive_bom_template_approval(
+        db,
+        template,
+        mutation_type="BOM_ITEM_REMOVED",
+        component_type=component_type,
+    )
     record_audit_event(
         db,
         event_type="DEVICE_BOM_ITEM_REMOVED",
