@@ -1,0 +1,258 @@
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { App } from "./App";
+import type { DeviceComponentQualityQueue, DeviceShipmentQueue } from "./api";
+
+const shipmentPayload: DeviceShipmentQueue = {
+  total_devices: 1,
+  ready_count: 1,
+  blocked_count: 0,
+  returned_count: 1,
+  offset: 0,
+  limit: 100,
+  has_more: false,
+  next_offset: null,
+  filters: {},
+  blocking_summary: [],
+  primary_blocking_summary: [],
+  recommended_action_summary: [
+    {
+      recommended_action: "MARK_READY_FOR_SHIPMENT",
+      device_count: 1,
+    },
+  ],
+  latest_shipment_gate_result_summary: [
+    {
+      result: "PASS",
+      device_count: 1,
+    },
+  ],
+  production_status_summary: [
+    {
+      production_status: "FINAL_TEST_PASSED",
+      device_count: 1,
+    },
+  ],
+  devices: [
+    {
+      device_serial_number: "SHIP-001",
+      device_type: "DEMO-OPS",
+      device_variant_code: "DEFAULT",
+      production_status: "FINAL_TEST_PASSED",
+      device_created_at: "2026-05-01T08:00:00Z",
+      device_updated_at: "2026-05-01T09:00:00Z",
+      final_test_passed: true,
+      has_critical_open_ncr: false,
+      critical_open_ncr_ids: [],
+      bom_compliance: {
+        passes_bom_gate: true,
+        installed_component_count: 1,
+        missing_required_components: [],
+        over_installed_components: [],
+        unexpected_component_types: [],
+        blocking_reason: null,
+      },
+      can_transition_to_ready_for_shipment: true,
+      latest_shipment_gate_decision: {
+        event_type: "SHIPMENT_GATE_PASSED",
+        result: "PASS",
+        message: "Ready",
+        recommended_action: "MARK_READY_FOR_SHIPMENT",
+        created_at: "2026-05-01T09:05:00Z",
+      },
+      primary_blocking_code: null,
+      primary_blocking_message: null,
+      recommended_action: "MARK_READY_FOR_SHIPMENT",
+      blocking_reasons: [],
+    },
+  ],
+};
+
+const componentPayload: DeviceComponentQualityQueue = {
+  total_devices: 1,
+  devices_with_issues: 1,
+  returned_count: 1,
+  offset: 0,
+  limit: 100,
+  has_more: false,
+  next_offset: null,
+  filters: {},
+  quality_status_summary: [
+    {
+      quality_status: "QC_NOT_PASSED",
+      component_count: 1,
+      device_count: 1,
+    },
+  ],
+  variant_code_summary: [{ variant_code: "DEFAULT", device_count: 1 }],
+  production_status_summary: [
+    {
+      production_status: "FINAL_TEST_PASSED",
+      device_count: 1,
+    },
+  ],
+  primary_quality_status_summary: [
+    {
+      primary_quality_status: "QC_NOT_PASSED",
+      device_count: 1,
+    },
+  ],
+  component_quality_gate_summary: [
+    {
+      passes_component_quality_gate: false,
+      device_count: 1,
+    },
+  ],
+  staleness_summary: [{ stale_bucket: "D1_TO_D3", device_count: 1 }],
+  component_type_summary: [
+    {
+      component_type: "FAN_MODULE",
+      component_count: 1,
+      device_count: 1,
+    },
+  ],
+  blocking_component_type_summary: [
+    {
+      component_type: "FAN_MODULE",
+      component_count: 1,
+      device_count: 1,
+    },
+  ],
+  primary_blocking_component_type_summary: [
+    {
+      component_type: "FAN_MODULE",
+      device_count: 1,
+    },
+  ],
+  recommended_action_summary: [
+    {
+      recommended_action: "RUN_COMPONENT_QC_OR_REWORK",
+      device_count: 1,
+    },
+  ],
+  devices: [
+    {
+      device_serial_number: "COMP-001",
+      device_type: "DEMO-OPS",
+      device_variant_code: "DEFAULT",
+      production_status: "FINAL_TEST_PASSED",
+      device_created_at: "2026-05-01T08:00:00Z",
+      device_updated_at: "2026-05-01T09:00:00Z",
+      stale_bucket: "D1_TO_D3",
+      total_installed_components: 2,
+      passing_components: 1,
+      blocked_components: 1,
+      passes_component_quality_gate: false,
+      primary_quality_status: "QC_NOT_PASSED",
+      primary_blocking_component_type: "FAN_MODULE",
+      primary_blocking_component_serial_number: "FAN-001",
+      recommended_action: "RUN_COMPONENT_QC_OR_REWORK",
+    },
+  ],
+};
+
+function createJsonResponse(payload: unknown): Response {
+  return {
+    ok: true,
+    status: 200,
+    statusText: "OK",
+    json: async () => payload,
+    text: async () => JSON.stringify(payload),
+  } as Response;
+}
+
+function createErrorResponse(
+  status: number,
+  statusText: string,
+  detail: string,
+): Response {
+  return {
+    ok: false,
+    status,
+    statusText,
+    json: async () => ({ detail }),
+    text: async () => detail,
+  } as Response;
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+
+describe("App", () => {
+  it("renders shipment queue data from API", async () => {
+    const fetchMock = vi.fn(async () => createJsonResponse(shipmentPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("SHIP-001")).toBeInTheDocument();
+    expect(screen.getByText("API OK")).toBeInTheDocument();
+    const shipmentActionsPanel = screen.getByText("Akcje operacyjne").closest("section");
+    expect(shipmentActionsPanel).not.toBeNull();
+    expect(
+      within(shipmentActionsPanel as HTMLElement).getByText(/Oznacz gotowe do wys/i),
+    ).toBeInTheDocument();
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/shipment-readiness?sort_by=created_at&sort_desc=true&limit=100",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+  });
+
+  it("switches to component view and renders component queue data", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(createJsonResponse(shipmentPayload))
+      .mockResolvedValueOnce(createJsonResponse(componentPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("SHIP-001")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Komponenty" }));
+
+    expect(await screen.findByText("COMP-001")).toBeInTheDocument();
+    expect(screen.getByText("FAN-001")).toBeInTheDocument();
+    const componentActionsPanel = screen.getByText("Akcje operacyjne").closest("section");
+    expect(componentActionsPanel).not.toBeNull();
+    expect(
+      within(componentActionsPanel as HTMLElement).getByText(
+        /Uruchom QC komponentu \/ rework/i,
+      ),
+    ).toBeInTheDocument();
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/component-quality?only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=100",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+  });
+
+  it("shows API error banner when request fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        createErrorResponse(503, "Service Unavailable", "backend temporarily down"),
+      ),
+    );
+
+    render(<App />);
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/API .* problem/i);
+    expect(alert).toHaveTextContent(
+      "API 503 Service Unavailable: backend temporarily down",
+    );
+  });
+});

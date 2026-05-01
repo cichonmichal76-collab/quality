@@ -1,7 +1,10 @@
 # Testy web
 
-Testy jednostkowe są w `src/*.test.ts` i obejmują helpery API oraz
-formatowanie dashboardu.
+Testy jednostkowe i komponentowe są w `src/*.test.ts[x]` i obejmują:
+
+- helpery API
+- formatowanie dashboardu
+- renderowanie `App`, przełączanie między zakładkami i obsługę błędu API
 
 Smoke test end-to-end jest w `tests/dashboard.e2e.ts` i przechodzi przez obie
 zakładki panelu na zasianych danych `DEMO-E2E`.
