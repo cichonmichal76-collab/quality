@@ -50,6 +50,8 @@ COMPLETE_ASSEMBLY_ACTION = "COMPLETE_ASSEMBLY"
 RUN_FINAL_TEST_ACTION = "RUN_FINAL_TEST"
 VALID_QUEUE_SORT_FIELDS = {"created_at", "device_serial_number", "priority", "recommended_action"}
 VALID_COMPONENT_QUALITY_SORT_FIELDS = {
+    "created_at",
+    "updated_at",
     "device_serial_number",
     "blocked_components",
     "production_status",
@@ -373,6 +375,8 @@ def get_device_component_quality(
         device_type=device.device_type,
         device_variant_code=device.variant_code,
         production_status=device.production_status,
+        device_created_at=device.created_at,
+        device_updated_at=device.updated_at,
         total_installed_components=len(component_rows),
         passing_components=len(component_rows) - blocked_components,
         blocked_components=blocked_components,
@@ -519,6 +523,18 @@ def _sort_component_quality_rows(
 
     effective_sort_desc = sort_desc if sort_desc is not None else sort_by == "blocked_components"
 
+    if sort_by == "created_at":
+        return sorted(
+            quality_rows,
+            key=lambda row: (row.device_created_at, row.device_serial_number),
+            reverse=effective_sort_desc,
+        )
+    if sort_by == "updated_at":
+        return sorted(
+            quality_rows,
+            key=lambda row: (row.device_updated_at, row.device_serial_number),
+            reverse=effective_sort_desc,
+        )
     if sort_by == "device_serial_number":
         return sorted(
             quality_rows,

@@ -3822,6 +3822,16 @@ def test_component_quality_queue_supports_summary_and_filters():
             qc_gap_device: "SERVICE",
             ncr_device: "DEFAULT",
         }
+        created_at_by_device = {
+            passing_device: utc_now() - timedelta(days=3),
+            qc_gap_device: utc_now() - timedelta(days=2),
+            ncr_device: utc_now() - timedelta(days=1),
+        }
+        updated_at_by_device = {
+            passing_device: utc_now() - timedelta(hours=3),
+            qc_gap_device: utc_now() - timedelta(hours=2),
+            ncr_device: utc_now() - timedelta(hours=1),
+        }
         for serial_number, production_status in status_by_device.items():
             device = (
                 db.query(Device)
@@ -3831,6 +3841,8 @@ def test_component_quality_queue_supports_summary_and_filters():
             assert device is not None
             device.production_status = production_status
             device.variant_code = variant_by_device[serial_number]
+            device.created_at = created_at_by_device[serial_number]
+            device.updated_at = updated_at_by_device[serial_number]
 
         passing_component_serial = unique_id("ITEM")
         qc_gap_component_serial = unique_id("ITEM")
@@ -3912,6 +3924,8 @@ def test_component_quality_queue_supports_summary_and_filters():
     device_rows = {row["device_serial_number"]: row for row in payload["devices"]}
     assert device_rows[passing_device]["primary_quality_status"] == "PASS"
     assert device_rows[passing_device]["recommended_action"] == "NO_ACTION"
+    assert device_rows[passing_device]["device_created_at"] is not None
+    assert device_rows[passing_device]["device_updated_at"] is not None
     assert device_rows[qc_gap_device]["primary_quality_status"] == "QC_NOT_PASSED"
     assert (
         device_rows[qc_gap_device]["recommended_action"]
@@ -4064,6 +4078,26 @@ def test_component_quality_queue_supports_summary_and_filters():
         "NO_ACTION",
         "RESOLVE_COMPONENT_NCR",
         "RUN_COMPONENT_QC_OR_REWORK",
+    ]
+
+    created_sorted = client.get(
+        f"/api/component-quality?device_type={queue_device_type}&sort_by=created_at"
+    )
+    assert created_sorted.status_code == 200
+    assert [row["device_serial_number"] for row in created_sorted.json()["devices"]] == [
+        passing_device,
+        qc_gap_device,
+        ncr_device,
+    ]
+
+    updated_sorted = client.get(
+        f"/api/component-quality?device_type={queue_device_type}&sort_by=updated_at&sort_desc=true"
+    )
+    assert updated_sorted.status_code == 200
+    assert [row["device_serial_number"] for row in updated_sorted.json()["devices"]] == [
+        ncr_device,
+        qc_gap_device,
+        passing_device,
     ]
 
 
