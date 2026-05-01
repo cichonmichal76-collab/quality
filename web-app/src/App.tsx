@@ -26,6 +26,7 @@ import {
 import "./App.css";
 
 const API_STORAGE_KEY = "servicetrace.web.apiBaseUrl";
+const VIEW_STORAGE_KEY = "servicetrace.web.activeView";
 const DEFAULT_API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
 const PRODUCTION_STATUS_OPTIONS = [
@@ -156,7 +157,9 @@ const DEFAULT_COMPONENT_FILTERS: ComponentFilters = {
 };
 
 export function App() {
-  const [activeView, setActiveView] = useState<DashboardMode>("shipment");
+  const [activeView, setActiveView] = useState<DashboardMode>(() => {
+    return readStoredDashboardMode();
+  });
   const [apiBaseUrl, setApiBaseUrl] = useState(() => {
     return localStorage.getItem(API_STORAGE_KEY) ?? DEFAULT_API_BASE_URL;
   });
@@ -187,6 +190,10 @@ export function App() {
   useEffect(() => {
     localStorage.setItem(API_STORAGE_KEY, apiBaseUrl);
   }, [apiBaseUrl]);
+
+  useEffect(() => {
+    localStorage.setItem(VIEW_STORAGE_KEY, activeView);
+  }, [activeView]);
 
   useEffect(() => {
     if (!apiBaseUrl.trim()) {
@@ -1290,4 +1297,9 @@ function isAbortError(error: unknown): boolean {
     "name" in error &&
     error.name === "AbortError"
   );
+}
+
+function readStoredDashboardMode(): DashboardMode {
+  const storedValue = localStorage.getItem(VIEW_STORAGE_KEY);
+  return storedValue === "components" ? "components" : "shipment";
 }

@@ -12,6 +12,7 @@ import { App } from "./App";
 import type { DeviceComponentQualityQueue, DeviceShipmentQueue } from "./api";
 
 const API_STORAGE_KEY = "servicetrace.web.apiBaseUrl";
+const VIEW_STORAGE_KEY = "servicetrace.web.activeView";
 
 const shipmentPayload: DeviceShipmentQueue = {
   total_devices: 1,
@@ -301,6 +302,7 @@ function createErrorResponse(
 }
 
 afterEach(() => {
+  localStorage.clear();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -364,6 +366,33 @@ describe("App", () => {
         signal: expect.any(AbortSignal),
       }),
     );
+  });
+
+  it("loads last active view from localStorage and persists tab changes", async () => {
+    localStorage.setItem(VIEW_STORAGE_KEY, "components");
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(createJsonResponse(componentPayload))
+      .mockResolvedValueOnce(createJsonResponse(shipmentPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("COMP-001")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Komponenty" })).toHaveClass("is-active");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/component-quality?only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=100",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Wysyłka" }));
+
+    expect(await screen.findByText("SHIP-001")).toBeInTheDocument();
+    expect(localStorage.getItem(VIEW_STORAGE_KEY)).toBe("shipment");
   });
 
   it("shows API error banner when request fails", async () => {
