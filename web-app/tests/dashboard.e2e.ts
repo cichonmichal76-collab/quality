@@ -110,3 +110,33 @@ test("dashboard clamps limit filters before calling the API", async ({
   await expect(page.locator(".table-card tbody tr")).toHaveCount(1);
   await expect(page.locator(".error-banner")).toHaveCount(0);
 });
+
+test("dashboard restores active tab and filters after reload", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  await expect(page.getByText("API OK")).toBeVisible();
+
+  await page.getByRole("button", { name: "Komponenty" }).click();
+  const componentTextFields = page.locator(".filters-card input");
+  const componentLimitField = page.locator('.filters-card input[type="number"]');
+
+  await componentTextFields.first().fill("DEMO-E2E");
+  await componentLimitField.fill("1");
+  await page.locator(".pagination-bar .primary-button").click();
+
+  const componentTable = page.locator(".table-card");
+  await expect(page.getByText(/2-2 z 2/)).toBeVisible();
+  await expect(componentTable.getByText(/CN-E2E-/)).toBeVisible();
+
+  await page.reload();
+
+  await expect(page.getByRole("button", { name: "Komponenty" })).toHaveClass(
+    /is-active/,
+  );
+  await expect(componentTextFields.first()).toHaveValue("DEMO-E2E");
+  await expect(componentLimitField).toHaveValue("1");
+  await expect(page.getByText(/2-2 z 2/)).toBeVisible();
+  await expect(componentTable.getByText(/CN-E2E-/)).toBeVisible();
+});
