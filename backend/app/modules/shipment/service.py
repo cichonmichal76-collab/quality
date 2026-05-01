@@ -13,6 +13,7 @@ from app.schemas import (
     DeviceShipmentBlockingSummaryRead,
     DeviceShipmentLatestDecisionRead,
     DeviceShipmentLatestDecisionSummaryRead,
+    DeviceShipmentProductionStatusSummaryRead,
     DeviceShipmentQueueRead,
     DeviceShipmentReadinessRead,
     DeviceStatusUpdate,
@@ -446,6 +447,24 @@ def _build_latest_shipment_gate_result_summary(
     ]
 
 
+def _build_production_status_summary(
+    readiness_rows: list[DeviceShipmentReadinessRead],
+) -> list[DeviceShipmentProductionStatusSummaryRead]:
+    summary: dict[str, int] = {}
+    for row in readiness_rows:
+        summary[row.production_status] = summary.get(row.production_status, 0) + 1
+    return [
+        DeviceShipmentProductionStatusSummaryRead(
+            production_status=production_status,
+            device_count=device_count,
+        )
+        for production_status, device_count in sorted(
+            summary.items(),
+            key=lambda item: (-item[1], item[0]),
+        )
+    ]
+
+
 def _sort_shipment_readiness_rows(
     readiness_rows: list[DeviceShipmentReadinessRead],
     *,
@@ -491,6 +510,7 @@ def list_device_shipment_readiness(
     *,
     device_type: str | None = None,
     variant_code: str | None = None,
+    production_status: str | None = None,
     blocking_code: str | None = None,
     primary_blocking_code: str | None = None,
     recommended_action: str | None = None,
@@ -555,6 +575,10 @@ def list_device_shipment_readiness(
             for row in readiness_rows
             if any(check.code == blocking_code for check in row.blocking_checks)
         ]
+    if production_status:
+        readiness_rows = [
+            row for row in readiness_rows if row.production_status == production_status
+        ]
     if primary_blocking_code:
         readiness_rows = [
             row for row in readiness_rows if row.primary_blocking_code == primary_blocking_code
@@ -593,6 +617,7 @@ def list_device_shipment_readiness(
         filters={
             "device_type": device_type,
             "variant_code": variant_code,
+            "production_status": production_status,
             "blocking_code": blocking_code,
             "primary_blocking_code": primary_blocking_code,
             "recommended_action": recommended_action,
@@ -610,5 +635,6 @@ def list_device_shipment_readiness(
         latest_shipment_gate_result_summary=_build_latest_shipment_gate_result_summary(
             readiness_rows
         ),
+        production_status_summary=_build_production_status_summary(readiness_rows),
         devices=paged_rows,
     )

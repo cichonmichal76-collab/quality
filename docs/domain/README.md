@@ -213,6 +213,7 @@ Najważniejsze reguły:
 - odczyt `/api/audit-events` pozwala teraz dodatkowo filtrować ten ślad po `event_type` i `result`, więc warstwa kliencka może pobrać same decyzje shipmentowe bez własnego filtrowania
 - dla pojedynczego urządzenia dostępny jest też dedykowany odczyt `shipment-gate-history`, który zwraca chronologiczną historię decyzji `PASS` i `BLOCKED` bez potrzeby ręcznego składania filtrów audytu
 - bieżący odczyt `shipment-readiness` niesie też snapshot `latest_shipment_gate_decision`, a widok kolejkowy pozwala filtrować urządzenia po `latest_gate_result`, więc można odróżnić sztuki nigdy niepróbowane od już wcześniej blokowanych albo dopuszczonych
+- widok kolejkowy pozwala też filtrować i agregować urządzenia po bieżącym `production_status`, więc da się łatwo rozdzielić np. sztuki na etapie `CREATED`, `FINAL_TEST_PASSED` i już `READY_FOR_SHIPMENT`
 - zbiorczy stan wszystkich wersji dla danego `device_type` i `variant_code` jest dostępny przez odczyt `catalog`, który pokazuje gotowość do aktywacji i release oraz blokady lifecycle bez potrzeby składania kilku osobnych endpointów
 - konkretne urządzenia związane z wersją BOM są dostępne przez odczyt `bindings`, co pozwala ocenić wpływ zmian na już rozpoczętą produkcję
 - kompletność tych urządzeń względem BOM jest dostępna przez odczyt `coverage`, który pokazuje braki, nadinstalacje i status per komponent; status `OVER_INSTALLED` oznacza teraz niekompletność z perspektywy gate’u

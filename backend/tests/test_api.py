@@ -3728,6 +3728,86 @@ def test_shipment_readiness_queue_can_filter_by_latest_gate_result():
     ]
 
 
+def test_shipment_readiness_queue_can_filter_by_production_status():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(device_type, component_type="CONTROL_PCB")
+
+    created_serial_number = unique_id("DEV")
+    final_test_serial_number = unique_id("DEV")
+    ready_serial_number = unique_id("DEV")
+    for serial_number in [
+        created_serial_number,
+        final_test_serial_number,
+        ready_serial_number,
+    ]:
+        response = client.post(
+            "/api/devices",
+            json={"device_serial_number": serial_number, "device_type": device_type},
+        )
+        assert response.status_code == 200
+
+    final_test_session = start_work_session(role="FINAL_TEST_OPERATOR")
+    for serial_number in [final_test_serial_number, ready_serial_number]:
+        final_test = client.post(
+            "/api/final-tests",
+            json={
+                "test_run_id": unique_id("FT"),
+                "device_serial_number": serial_number,
+                "result": "PASS",
+                "firmware_version": "1.2.4",
+                "bootloader_version": "0.9.8",
+                "work_session_id": final_test_session["work_session_id"],
+            },
+        )
+        assert final_test.status_code == 200
+
+    production_session = start_work_session(role="PRODUCTION_OPERATOR")
+    item = create_qc_passed_item(production_session, item_type="CONTROL_PCB")
+    install = client.post(
+        f"/api/devices/{ready_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": production_session["work_session_id"],
+        },
+    )
+    assert install.status_code == 200
+
+    ready_response = client.patch(
+        f"/api/devices/{ready_serial_number}/status",
+        json={"production_status": "READY_FOR_SHIPMENT"},
+    )
+    assert ready_response.status_code == 200
+
+    queue = client.get(f"/api/shipment-readiness?device_type={device_type}")
+    assert queue.status_code == 200
+    payload = queue.json()
+    status_summary = {
+        entry["production_status"]: entry["device_count"]
+        for entry in payload["production_status_summary"]
+    }
+    assert status_summary["CREATED"] == 1
+    assert status_summary["FINAL_TEST_PASSED"] == 1
+    assert status_summary["READY_FOR_SHIPMENT"] == 1
+
+    final_test_only = client.get(
+        f"/api/shipment-readiness?device_type={device_type}&production_status=FINAL_TEST_PASSED"
+    )
+    assert final_test_only.status_code == 200
+    assert final_test_only.json()["filters"]["production_status"] == "FINAL_TEST_PASSED"
+    assert [row["device_serial_number"] for row in final_test_only.json()["devices"]] == [
+        final_test_serial_number
+    ]
+
+    ready_only = client.get(
+        f"/api/shipment-readiness?device_type={device_type}&production_status=READY_FOR_SHIPMENT"
+    )
+    assert ready_only.status_code == 200
+    assert [row["device_serial_number"] for row in ready_only.json()["devices"]] == [
+        ready_serial_number
+    ]
+
+
 def test_device_shipment_readiness_reports_multiple_blockers():
     device_type = unique_id("DT")
     ensure_device_bom_template(device_type, component_type="CONTROL_PCB")

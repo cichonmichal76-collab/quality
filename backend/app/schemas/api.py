@@ -260,6 +260,11 @@ class DeviceShipmentLatestDecisionSummaryRead(BaseModel):
     device_count: int
 
 
+class DeviceShipmentProductionStatusSummaryRead(BaseModel):
+    production_status: str
+    device_count: int
+
+
 class DeviceShipmentReadinessRead(BaseModel):
     device_serial_number: str
     device_type: str
@@ -294,6 +299,7 @@ class DeviceShipmentQueueRead(BaseModel):
     primary_blocking_summary: list[DeviceShipmentBlockingSummaryRead]
     recommended_action_summary: list[DeviceShipmentActionSummaryRead]
     latest_shipment_gate_result_summary: list[DeviceShipmentLatestDecisionSummaryRead]
+    production_status_summary: list[DeviceShipmentProductionStatusSummaryRead]
     devices: list[DeviceShipmentReadinessRead]
 
 
