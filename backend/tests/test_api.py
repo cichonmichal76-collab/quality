@@ -369,6 +369,192 @@ def test_device_bom_resolution_reports_missing_active_effective_template():
     assert payload["has_variant_templates"] is True
 
 
+def test_device_bom_compliance_passes_when_no_template_is_configured():
+    device_serial_number = unique_id("DEV")
+    device_type = unique_id("DT")
+    created = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
+    )
+    assert created.status_code == 200
+
+    compliance = client.get(f"/api/devices/{device_serial_number}/bom-compliance")
+    assert compliance.status_code == 200
+    payload = compliance.json()
+    assert payload["resolution_source"] == "NO_TEMPLATE_CONFIGURED"
+    assert payload["is_bom_resolved"] is False
+    assert payload["passes_bom_gate"] is True
+    assert payload["installed_component_count"] == 0
+    assert payload["component_coverage"] == []
+
+
+def test_device_bom_compliance_reports_missing_required_components():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        quantity_required=2,
+        version="1.0",
+        is_active=True,
+    )
+
+    device_serial_number = unique_id("DEV")
+    created = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
+    )
+    assert created.status_code == 200
+
+    session = start_work_session(role="PRODUCTION_OPERATOR")
+    item = create_qc_passed_item(session, item_type="CONTROL_PCB")
+    installed = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": session["work_session_id"],
+        },
+    )
+    assert installed.status_code == 200
+
+    compliance = client.get(f"/api/devices/{device_serial_number}/bom-compliance")
+    assert compliance.status_code == 200
+    payload = compliance.json()
+    assert payload["resolution_source"] == "BOUND_TEMPLATE"
+    assert payload["passes_bom_gate"] is False
+    assert payload["missing_required_components"] == ["CONTROL_PCB x2"]
+    assert payload["over_installed_components"] == []
+    assert payload["unexpected_component_types"] == []
+    control_row = next(
+        component
+        for component in payload["component_coverage"]
+        if component["component_type"] == "CONTROL_PCB"
+    )
+    assert control_row["status"] == "MISSING"
+    assert control_row["installed_quantity"] == 1
+
+
+def test_device_bom_compliance_reports_default_fallback_when_compliant():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=True,
+        variant_code="DEFAULT",
+    )
+
+    device_serial_number = unique_id("DEV")
+    created = client.post(
+        "/api/devices",
+        json={
+            "device_serial_number": device_serial_number,
+            "device_type": device_type,
+            "variant_code": "PREMIUM",
+        },
+    )
+    assert created.status_code == 200
+
+    session = start_work_session(role="PRODUCTION_OPERATOR")
+    item = create_qc_passed_item(session, item_type="CONTROL_PCB")
+    installed = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": session["work_session_id"],
+        },
+    )
+    assert installed.status_code == 200
+
+    compliance = client.get(f"/api/devices/{device_serial_number}/bom-compliance")
+    assert compliance.status_code == 200
+    payload = compliance.json()
+    assert payload["resolution_source"] == "BOUND_TEMPLATE"
+    assert payload["resolved_variant_code"] == "DEFAULT"
+    assert payload["passes_bom_gate"] is True
+    assert payload["missing_required_components"] == []
+    assert payload["over_installed_components"] == []
+    assert payload["unexpected_component_types"] == []
+
+
+def test_device_bom_compliance_and_coverage_report_over_installed_components():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=True,
+    )
+
+    device_serial_number = unique_id("DEV")
+    device_response = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
+    )
+    assert device_response.status_code == 200
+
+    production_session = start_work_session(role="PRODUCTION_OPERATOR")
+    first_item = create_qc_passed_item(production_session, item_type="CONTROL_PCB")
+    first_install = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": first_item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": production_session["work_session_id"],
+        },
+    )
+    assert first_install.status_code == 200
+
+    db = SessionLocal()
+    try:
+        template = (
+            db.query(DeviceBomTemplate)
+            .filter(
+                DeviceBomTemplate.device_type == device_type,
+                DeviceBomTemplate.variant_code == "DEFAULT",
+                DeviceBomTemplate.version == "1.0",
+            )
+            .first()
+        )
+        assert template is not None
+        db.add(
+            AssemblyLink(
+                parent_device_serial_number=device_serial_number,
+                child_item_serial_number=unique_id("ITEM"),
+                child_barcode_value=unique_id("BC"),
+                component_type="CONTROL_PCB",
+                installed_by="pytest",
+                installed_at=utc_now(),
+                bom_template_id=template.id,
+                bom_version=template.version,
+                scan_event_id=unique_id("SCAN"),
+                status="INSTALLED",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    compliance = client.get(f"/api/devices/{device_serial_number}/bom-compliance")
+    assert compliance.status_code == 200
+    payload = compliance.json()
+    assert payload["passes_bom_gate"] is False
+    assert payload["over_installed_components"] == ["CONTROL_PCB x2/1"]
+    control_row = next(
+        component
+        for component in payload["component_coverage"]
+        if component["component_type"] == "CONTROL_PCB"
+    )
+    assert control_row["status"] == "OVER_INSTALLED"
+
+    coverage = client.get(f"/api/device-bom-templates/{device_type}/coverage?version=1.0")
+    assert coverage.status_code == 200
+    row = next(entry for entry in coverage.json() if entry["device_serial_number"] == device_serial_number)
+    assert row["is_complete"] is False
+    assert row["over_installed_components"] == ["CONTROL_PCB x2/1"]
+
+
 def test_manual_device_components_can_be_added_and_listed():
     serial_number = unique_id("ZSS")
     created = client.post(

@@ -202,8 +202,31 @@ class DeviceBomTemplateCoverageRead(BaseModel):
     first_bound_at: datetime
     is_complete: bool
     missing_required_components: list[str]
+    over_installed_components: list[str]
     unexpected_component_types: list[str]
     component_coverage: list[DeviceBomComponentCoverageRead]
+
+
+class DeviceBomComplianceRead(BaseModel):
+    device_serial_number: str
+    device_type: str
+    device_variant_code: str
+    production_status: str
+    resolution_source: str
+    resolved_template_id: str | None = None
+    resolved_variant_code: str | None = None
+    resolved_version: str | None = None
+    resolved_status: str | None = None
+    resolved_is_active: bool = False
+    resolved_is_effective_now: bool = False
+    is_bom_resolved: bool
+    passes_bom_gate: bool
+    installed_component_count: int
+    missing_required_components: list[str]
+    over_installed_components: list[str]
+    unexpected_component_types: list[str]
+    component_coverage: list[DeviceBomComponentCoverageRead]
+    blocking_reason: str | None = None
 
 
 class DeviceBomTemplateActivateRequest(BaseModel):

@@ -7,6 +7,7 @@ from app.modules.assembly import service
 from app.schemas import (
     AssemblyLinkRead,
     AssemblyScanRequest,
+    DeviceBomComplianceRead,
     ComponentCreate,
     ComponentRead,
     DeviceBomResolutionRead,
@@ -60,6 +61,17 @@ def get_device_bom_resolution(
     db: Session = Depends(get_db),
 ):
     return service.get_device_bom_resolution(db, device_serial_number)
+
+
+@router.get(
+    "/devices/{device_serial_number}/bom-compliance",
+    response_model=DeviceBomComplianceRead,
+)
+def get_device_bom_compliance(
+    device_serial_number: str,
+    db: Session = Depends(get_db),
+):
+    return service.get_device_bom_compliance(db, device_serial_number)
 
 
 @router.post("/device-bom-templates", response_model=DeviceBomTemplateRead)

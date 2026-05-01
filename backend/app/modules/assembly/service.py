@@ -21,6 +21,7 @@ from app.modules.assembly import repository
 from app.schemas import (
     AssemblyScanRequest,
     ComponentCreate,
+    DeviceBomComplianceRead,
     DeviceBomResolutionRead,
     DeviceBomComponentCoverageRead,
     DeviceBomTemplateBindingRead,
@@ -241,6 +242,175 @@ def get_device_bom_resolution(
         blocks_assembly=resolution_source == "NO_ACTIVE_EFFECTIVE_TEMPLATE",
         blocks_shipment=resolution_source == "NO_ACTIVE_EFFECTIVE_TEMPLATE",
         blocking_reason=blocking_reason,
+    )
+
+
+def _evaluate_installed_components_against_bom(
+    bom_items: list[DeviceBomItem],
+    installed_links: list[AssemblyLink],
+) -> tuple[
+    list[DeviceBomComponentCoverageRead],
+    list[str],
+    list[str],
+    list[str],
+]:
+    installed_counts: dict[str, int] = {}
+    for link in installed_links:
+        installed_counts[link.component_type] = installed_counts.get(link.component_type, 0) + 1
+
+    component_coverage: list[DeviceBomComponentCoverageRead] = []
+    missing_required_components: list[str] = []
+    over_installed_components: list[str] = []
+    unexpected_component_types: list[str] = []
+
+    evaluations, remaining_counts = evaluate_bom_requirement_groups(bom_items, installed_counts)
+
+    for evaluation in evaluations:
+        requirement = evaluation.requirement
+        if requirement.is_required and evaluation.installed_quantity < requirement.quantity_required:
+            if requirement.quantity_required == 1:
+                missing_required_components.append(requirement.display_name)
+            else:
+                missing_required_components.append(
+                    f"{requirement.display_name} x{requirement.quantity_required}"
+                )
+        if evaluation.installed_quantity > requirement.quantity_required:
+            over_installed_components.append(
+                f"{requirement.display_name} x{evaluation.installed_quantity}/{requirement.quantity_required}"
+            )
+
+        component_coverage.append(
+            DeviceBomComponentCoverageRead(
+                component_type=requirement.component_type,
+                substitution_group=requirement.substitution_group,
+                allowed_component_types=requirement.allowed_component_types,
+                required_quantity=requirement.quantity_required,
+                installed_quantity=evaluation.installed_quantity,
+                is_required=requirement.is_required,
+                status=evaluation.status,
+            )
+        )
+
+    for unexpected_component_type, installed_quantity in sorted(remaining_counts.items()):
+        unexpected_component_types.append(unexpected_component_type)
+        component_coverage.append(
+            DeviceBomComponentCoverageRead(
+                component_type=unexpected_component_type,
+                substitution_group=None,
+                allowed_component_types=[unexpected_component_type],
+                required_quantity=0,
+                installed_quantity=installed_quantity,
+                is_required=False,
+                status="UNEXPECTED",
+            )
+        )
+
+    return (
+        component_coverage,
+        missing_required_components,
+        over_installed_components,
+        unexpected_component_types,
+    )
+
+
+def _build_device_bom_compliance(
+    db: Session,
+    device: Device,
+    template: DeviceBomTemplate | None,
+    resolution_source: str,
+    blocking_reason: str | None,
+) -> DeviceBomComplianceRead:
+    installed_links = repository.list_installed_assembly_links_for_device(
+        db,
+        device.device_serial_number,
+    )
+    installed_component_count = len(installed_links)
+
+    if template is None:
+        return DeviceBomComplianceRead(
+            device_serial_number=device.device_serial_number,
+            device_type=device.device_type,
+            device_variant_code=device.variant_code,
+            production_status=device.production_status,
+            resolution_source=resolution_source,
+            is_bom_resolved=False,
+            passes_bom_gate=blocking_reason is None,
+            installed_component_count=installed_component_count,
+            missing_required_components=[],
+            over_installed_components=[],
+            unexpected_component_types=[],
+            component_coverage=[],
+            blocking_reason=blocking_reason,
+        )
+
+    bom_items = repository.list_bom_items_for_template(db, template.id)
+    if not bom_items:
+        return DeviceBomComplianceRead(
+            device_serial_number=device.device_serial_number,
+            device_type=device.device_type,
+            device_variant_code=device.variant_code,
+            production_status=device.production_status,
+            resolution_source=resolution_source,
+            resolved_template_id=template.id,
+            resolved_variant_code=template.variant_code,
+            resolved_version=template.version,
+            resolved_status=template.status,
+            resolved_is_active=template.is_active,
+            resolved_is_effective_now=_is_bom_template_effective_now(template),
+            is_bom_resolved=True,
+            passes_bom_gate=True,
+            installed_component_count=installed_component_count,
+            missing_required_components=[],
+            over_installed_components=[],
+            unexpected_component_types=[],
+            component_coverage=[],
+            blocking_reason=blocking_reason,
+        )
+
+    (
+        component_coverage,
+        missing_required_components,
+        over_installed_components,
+        unexpected_component_types,
+    ) = _evaluate_installed_components_against_bom(bom_items, installed_links)
+
+    return DeviceBomComplianceRead(
+        device_serial_number=device.device_serial_number,
+        device_type=device.device_type,
+        device_variant_code=device.variant_code,
+        production_status=device.production_status,
+        resolution_source=resolution_source,
+        resolved_template_id=template.id,
+        resolved_variant_code=template.variant_code,
+        resolved_version=template.version,
+        resolved_status=template.status,
+        resolved_is_active=template.is_active,
+        resolved_is_effective_now=_is_bom_template_effective_now(template),
+        is_bom_resolved=True,
+        passes_bom_gate=not missing_required_components
+        and not over_installed_components
+        and not unexpected_component_types,
+        installed_component_count=installed_component_count,
+        missing_required_components=missing_required_components,
+        over_installed_components=over_installed_components,
+        unexpected_component_types=unexpected_component_types,
+        component_coverage=component_coverage,
+        blocking_reason=blocking_reason,
+    )
+
+
+def get_device_bom_compliance(
+    db: Session,
+    device_serial_number: str,
+) -> DeviceBomComplianceRead:
+    device = get_device_or_404(db, device_serial_number)
+    template, resolution_source, blocking_reason, _, _ = resolve_bom_template_context(db, device)
+    return _build_device_bom_compliance(
+        db,
+        device,
+        template,
+        resolution_source,
+        blocking_reason,
     )
 
 
@@ -587,7 +757,6 @@ def list_device_bom_template_coverage(
     variant_code: str = "DEFAULT",
 ) -> list[DeviceBomTemplateCoverageRead]:
     template = get_device_bom_template_or_404(db, device_type, version, variant_code)
-    bom_items = repository.list_bom_items_for_template(db, template.id)
     coverage_rows: list[DeviceBomTemplateCoverageRead] = []
 
     for (
@@ -603,51 +772,13 @@ def list_device_bom_template_coverage(
             db,
             device_serial_number,
         )
-        installed_counts: dict[str, int] = {}
-        for link in installed_links:
-            installed_counts[link.component_type] = installed_counts.get(link.component_type, 0) + 1
-
-        component_coverage: list[DeviceBomComponentCoverageRead] = []
-        missing_required_components: list[str] = []
-        unexpected_component_types: list[str] = []
-
-        evaluations, remaining_counts = evaluate_bom_requirement_groups(bom_items, installed_counts)
-
-        for evaluation in evaluations:
-            requirement = evaluation.requirement
-            if requirement.is_required and evaluation.installed_quantity < requirement.quantity_required:
-                if requirement.quantity_required == 1:
-                    missing_required_components.append(requirement.display_name)
-                else:
-                    missing_required_components.append(
-                        f"{requirement.display_name} x{requirement.quantity_required}"
-                    )
-
-            component_coverage.append(
-                DeviceBomComponentCoverageRead(
-                    component_type=requirement.component_type,
-                    substitution_group=requirement.substitution_group,
-                    allowed_component_types=requirement.allowed_component_types,
-                    required_quantity=requirement.quantity_required,
-                    installed_quantity=evaluation.installed_quantity,
-                    is_required=requirement.is_required,
-                    status=evaluation.status,
-                )
-            )
-
-        for unexpected_component_type, installed_quantity in sorted(remaining_counts.items()):
-            unexpected_component_types.append(unexpected_component_type)
-            component_coverage.append(
-                DeviceBomComponentCoverageRead(
-                    component_type=unexpected_component_type,
-                    substitution_group=None,
-                    allowed_component_types=[unexpected_component_type],
-                    required_quantity=0,
-                    installed_quantity=installed_quantity,
-                    is_required=False,
-                    status="UNEXPECTED",
-                )
-            )
+        bom_items = repository.list_bom_items_for_template(db, template.id)
+        (
+            component_coverage,
+            missing_required_components,
+            over_installed_components,
+            unexpected_component_types,
+        ) = _evaluate_installed_components_against_bom(bom_items, installed_links)
 
         coverage_rows.append(
             DeviceBomTemplateCoverageRead(
@@ -659,8 +790,11 @@ def list_device_bom_template_coverage(
                 bom_version=bom_version,
                 installed_component_count=installed_component_count,
                 first_bound_at=first_bound_at,
-                is_complete=not missing_required_components and not unexpected_component_types,
+                is_complete=not missing_required_components
+                and not over_installed_components
+                and not unexpected_component_types,
                 missing_required_components=missing_required_components,
+                over_installed_components=over_installed_components,
                 unexpected_component_types=unexpected_component_types,
                 component_coverage=component_coverage,
             )

@@ -524,6 +524,12 @@ Odczyt kompletności powiązanych urządzeń względem wersji BOM:
 curl "http://localhost:8000/api/device-bom-templates/ZSS/coverage?version=3.0&variant_code=DEFAULT"
 ```
 
+Odczyt zgodności BOM dla konkretnego urządzenia:
+
+```bash
+curl "http://localhost:8000/api/devices/ZSS-000123/bom-compliance"
+```
+
 Zatwierdzenie wersji BOM z metadanymi release:
 
 ```bash
@@ -635,9 +641,10 @@ Reguły assembly:
 - aktywna wersja BOM nie może być już modyfikowana w miejscu, nawet jeśli nie została jeszcze użyta przez urządzenia; zmiany powinny iść przez `clone` albo `promote`
 - endpoint `usage` zwraca także `recommended_action`, np. `modify_or_approve`, `activate_or_modify`, `clone` albo `clone_or_promote`
 - endpoint `bom-resolution` pokazuje dla konkretnego urządzenia, czy backend używa BOM przypiętego po montażu, aktywnego BOM wariantowego, fallbacku `DEFAULT`, czy też nie ma dziś aktywnej skutecznej wersji do użycia
+- endpoint `bom-compliance` pokazuje dla konkretnego urządzenia końcową zgodność z rozwiązaną wersją BOM, w tym `missing_required_components`, `over_installed_components`, `unexpected_component_types`, `passes_bom_gate` i `component_coverage`
 - endpoint `catalog` zbiera wszystkie wersje BOM dla danego `device_type` i `variant_code` oraz pokazuje dla każdej z nich `can_activate`, `can_release`, liczbę pozycji, liczbę powiązanych urządzeń, blokady lifecycle i `recommended_action`
 - endpoint `bindings` zwraca konkretne urządzenia przypięte do wersji BOM wraz z `installed_component_count` i czasem pierwszego związania
-- endpoint `coverage` zwraca dla tych urządzeń kompletność względem BOM, w tym `missing_required_components` i status per komponent
+- endpoint `coverage` zwraca dla tych urządzeń kompletność względem BOM, w tym `missing_required_components`, `over_installed_components` i status per komponent; urządzenie z komponentem `OVER_INSTALLED` nie jest już traktowane jako kompletne
 - endpointy `approve` i `release` pozwalają zapisać metadane zatwierdzenia BOM i użyć ich jako jawnej ścieżki wejścia wersji do produkcji
 - `POST /api/device-bom-templates` nie pozwala już tworzyć BOM od razu jako aktywnego; prawidłowy flow to create inactive -> add items -> approve/activate albo release
 - `approve` działa tylko dla wersji `INACTIVE`, które mają już co najmniej jedną pozycję i co najmniej jedną pozycję wymaganą; po zatwierdzeniu wersja przechodzi do statusu `APPROVED`

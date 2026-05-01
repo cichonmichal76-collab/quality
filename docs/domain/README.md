@@ -206,9 +206,10 @@ Najważniejsze reguły:
 - aktywna wersja `DeviceBomTemplate`, która została już przypięta do urządzeń przez `AssemblyLink`, dostaje soft-lock i nie może być dalej rozszerzana o nowe pozycje
 - stan użycia konkretnej wersji BOM jest dostępny przez dedykowany odczyt `usage`, który zwraca też rekomendowaną dalszą akcję dla operatora lub klienta API
 - odczyt `bom-resolution` pokazuje dla konkretnego urządzenia źródło aktualnie rozwiązanego BOM: przypiętą wersję, aktywny BOM wariantowy, fallback `DEFAULT` albo brak aktywnej skutecznej konfiguracji
+- odczyt `bom-compliance` pokazuje dla konkretnego urządzenia, czy końcowo przechodzi ono bramkę BOM, z rozbiciem na `missing_required_components`, `over_installed_components`, `unexpected_component_types` i pokrycie per komponent
 - zbiorczy stan wszystkich wersji dla danego `device_type` i `variant_code` jest dostępny przez odczyt `catalog`, który pokazuje gotowość do aktywacji i release oraz blokady lifecycle bez potrzeby składania kilku osobnych endpointów
 - konkretne urządzenia związane z wersją BOM są dostępne przez odczyt `bindings`, co pozwala ocenić wpływ zmian na już rozpoczętą produkcję
-- kompletność tych urządzeń względem BOM jest dostępna przez odczyt `coverage`, który pokazuje braki i status per komponent
+- kompletność tych urządzeń względem BOM jest dostępna przez odczyt `coverage`, który pokazuje braki, nadinstalacje i status per komponent; status `OVER_INSTALLED` oznacza teraz niekompletność z perspektywy gate’u
 - wersja BOM może mieć też jawne metadane release: `approved_by`, `approved_at` i `release_note`
 - wersja BOM nie może być utworzona od razu jako aktywna; prawidłowy flow to utworzenie wersji roboczej, dodanie pozycji, approval i dopiero aktywacja albo release
 - approval można nadać tylko wersji `INACTIVE`, która ma już sensowną strukturę BOM, czyli co najmniej jedną pozycję i co najmniej jedną pozycję wymaganą; po tym kroku BOM przechodzi do statusu `APPROVED`
@@ -277,6 +278,7 @@ Aktualnie zaimplementowana reguła:
 - `READY_FOR_SHIPMENT` wymaga statusu `FINAL_TEST_PASSED`
 - wymagane komponenty są odczytywane z aktywnego BOM w tabelach `device_bom_templates` i `device_bom_items`
 - brakujący komponent jest raportowany w błędzie wraz z ilością, jeśli `quantity_required > 1`
+- komponent nadmiarowy względem BOM również blokuje shipment i jest raportowany jako `OVER_INSTALLED`
 - otwarta krytyczna NCR blokuje shipment
 - jeśli urządzenie nie jest jeszcze przypięte do BOM, a dla jego `device_type` nie ma aktywnej wersji, shipment jest blokowany
 
