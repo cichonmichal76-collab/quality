@@ -102,6 +102,9 @@ Ostatnia komenda nie dosiewa danych. Służy do szybkiego sanity checku istniej�
 kompletnego datasetu demo dla podanego `device_type` i kończy się błędem, jeśli taki
 zestaw nie istnieje albo nie spełnia oczekiwanego kontraktu dashboardu.
 
+Po zakończeniu skrypt wypisuje teraz nie tylko `DATABASE_URL`, ale też
+`DATABASE_PATH`, czyli rzeczywistą lokalną ścieżkę pliku SQLite użytego przez backend.
+
 Po przygotowaniu backendu możesz uruchomić panel:
 
 ```bash

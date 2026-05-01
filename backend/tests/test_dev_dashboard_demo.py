@@ -47,6 +47,7 @@ def test_dev_dashboard_demo_bootstraps_local_dashboard(tmp_path):
     )
     assert "Demo dashboardu przygotowane." in bootstrap.stdout
     assert f"DATABASE_URL={database_url}" in bootstrap.stdout
+    assert f"DATABASE_PATH={database_path.resolve()}" in bootstrap.stdout
     assert database_path.exists()
 
     verification_code = f"""
@@ -126,6 +127,7 @@ def test_dev_dashboard_demo_uses_database_url_from_environment(tmp_path):
         f"stderr:\n{bootstrap.stderr}"
     )
     assert f"DATABASE_URL={database_url}" in bootstrap.stdout
+    assert f"DATABASE_PATH={database_path.resolve()}" in bootstrap.stdout
     assert database_path.exists()
 
 
@@ -241,6 +243,7 @@ def test_dev_dashboard_demo_can_verify_existing_dataset_without_reseeding(tmp_pa
     )
     assert "Demo dashboardu zweryfikowane." in verify_run.stdout
     assert f"DATABASE_URL={database_url}" in verify_run.stdout
+    assert f"DATABASE_PATH={database_path.resolve()}" in verify_run.stdout
 
 
 def test_dev_dashboard_demo_rejects_verify_only_with_skip_seed(tmp_path):

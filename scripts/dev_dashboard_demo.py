@@ -101,6 +101,21 @@ def build_env(args: argparse.Namespace) -> dict[str, str]:
     return env
 
 
+def resolve_sqlite_database_path(database_url: str) -> Path | None:
+    sqlite_file_prefix = "sqlite:///"
+    if not database_url.startswith(sqlite_file_prefix):
+        return None
+
+    raw_path = database_url[len(sqlite_file_prefix) :]
+    if not raw_path or raw_path == ":memory:":
+        return None
+
+    path = Path(raw_path)
+    if path.is_absolute():
+        return path.resolve()
+    return (BACKEND_DIR / path).resolve()
+
+
 def main() -> int:
     args = parse_args()
     env = build_env(args)
@@ -139,6 +154,9 @@ def main() -> int:
             else:
                 print("Demo dashboardu przygotowane. Backend nie został uruchomiony.", flush=True)
             print(f"DATABASE_URL={args.database_url}", flush=True)
+            database_path = resolve_sqlite_database_path(args.database_url)
+            if database_path is not None:
+                print(f"DATABASE_PATH={database_path}", flush=True)
             return 0
 
         server_command = [
