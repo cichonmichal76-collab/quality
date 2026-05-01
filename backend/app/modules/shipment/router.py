@@ -19,6 +19,7 @@ def list_device_shipment_readiness(
     only_ready: bool = False,
     sort_by: str = "created_at",
     sort_desc: bool | None = None,
+    offset: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
 ):
@@ -33,6 +34,7 @@ def list_device_shipment_readiness(
         only_ready=only_ready,
         sort_by=sort_by,
         sort_desc=sort_desc,
+        offset=offset,
         limit=limit,
     )
 

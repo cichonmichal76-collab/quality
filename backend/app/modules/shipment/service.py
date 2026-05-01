@@ -32,6 +32,7 @@ FIX_ASSEMBLY_MISMATCH_ACTION = "FIX_ASSEMBLY_MISMATCH"
 COMPLETE_ASSEMBLY_ACTION = "COMPLETE_ASSEMBLY"
 RUN_FINAL_TEST_ACTION = "RUN_FINAL_TEST"
 VALID_QUEUE_SORT_FIELDS = {"created_at", "device_serial_number", "priority", "recommended_action"}
+MAX_QUEUE_LIMIT = 500
 
 
 def get_device_or_404(db: Session, serial_number: str) -> Device:
@@ -357,8 +358,15 @@ def list_device_shipment_readiness(
     only_ready: bool = False,
     sort_by: str = "created_at",
     sort_desc: bool | None = None,
+    offset: int = 0,
     limit: int = 100,
 ) -> DeviceShipmentQueueRead:
+    if offset < 0:
+        raise HTTPException(status_code=400, detail="offset must be >= 0")
+    if limit < 1:
+        raise HTTPException(status_code=400, detail="limit must be >= 1")
+    if limit > MAX_QUEUE_LIMIT:
+        raise HTTPException(status_code=400, detail=f"limit must be <= {MAX_QUEUE_LIMIT}")
     if only_blocked and only_ready:
         raise HTTPException(
             status_code=400,
@@ -388,7 +396,7 @@ def list_device_shipment_readiness(
         db,
         device_type=device_type,
         variant_code=variant_code,
-        limit=limit,
+        limit=None,
     )
     readiness_rows = [_build_device_shipment_readiness(db, device) for device in devices]
 
@@ -418,13 +426,23 @@ def list_device_shipment_readiness(
         sort_desc=sort_desc,
     )
 
+    total_devices = len(readiness_rows)
     ready_count = sum(1 for row in readiness_rows if row.can_transition_to_ready_for_shipment)
-    blocked_count = len(readiness_rows) - ready_count
+    blocked_count = total_devices - ready_count
+    paged_rows = readiness_rows[offset : offset + limit]
+    returned_count = len(paged_rows)
+    has_more = offset + returned_count < total_devices
+    next_offset = offset + returned_count if has_more else None
 
     return DeviceShipmentQueueRead(
-        total_devices=len(readiness_rows),
+        total_devices=total_devices,
         ready_count=ready_count,
         blocked_count=blocked_count,
+        returned_count=returned_count,
+        offset=offset,
+        limit=limit,
+        has_more=has_more,
+        next_offset=next_offset,
         filters={
             "device_type": device_type,
             "variant_code": variant_code,
@@ -435,10 +453,11 @@ def list_device_shipment_readiness(
             "only_ready": only_ready,
             "sort_by": sort_by,
             "sort_desc": sort_desc,
+            "offset": offset,
             "limit": limit,
         },
         blocking_summary=_build_blocking_summary(readiness_rows),
         primary_blocking_summary=_build_primary_blocking_summary(readiness_rows),
         recommended_action_summary=_build_recommended_action_summary(readiness_rows),
-        devices=readiness_rows,
+        devices=paged_rows,
     )

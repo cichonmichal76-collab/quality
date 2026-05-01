@@ -14,14 +14,20 @@ def list_devices_for_shipment(
     *,
     device_type: str | None = None,
     variant_code: str | None = None,
-    limit: int = 100,
+    limit: int | None = None,
+    offset: int = 0,
 ) -> list[Device]:
     query = db.query(Device)
     if device_type:
         query = query.filter(Device.device_type == device_type)
     if variant_code:
         query = query.filter(Device.variant_code == variant_code)
-    return query.order_by(Device.created_at.desc()).limit(limit).all()
+    query = query.order_by(Device.created_at.desc())
+    if offset:
+        query = query.offset(offset)
+    if limit is not None:
+        query = query.limit(limit)
+    return query.all()
 
 
 def has_critical_open_ncr(db: Session, device_serial_number: str) -> bool:

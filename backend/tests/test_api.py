@@ -3974,6 +3974,56 @@ def test_shipment_readiness_queue_can_sort_by_priority():
     assert payload["devices"][2]["primary_blocking_code"] is None
 
 
+def test_shipment_readiness_queue_supports_pagination_metadata():
+    device_type = unique_id("DT")
+    serial_numbers = [
+        f"{device_type}-001",
+        f"{device_type}-002",
+        f"{device_type}-003",
+    ]
+
+    for serial_number in serial_numbers:
+        response = client.post(
+            "/api/devices",
+            json={
+                "device_serial_number": serial_number,
+                "device_type": device_type,
+                "variant_code": "DEFAULT",
+            },
+        )
+        assert response.status_code == 200
+
+    first_page = client.get(
+        f"/api/shipment-readiness?device_type={device_type}&sort_by=device_serial_number&limit=2"
+    )
+    assert first_page.status_code == 200
+    first_payload = first_page.json()
+    assert first_payload["total_devices"] == 3
+    assert first_payload["ready_count"] == 0
+    assert first_payload["blocked_count"] == 3
+    assert first_payload["returned_count"] == 2
+    assert first_payload["offset"] == 0
+    assert first_payload["limit"] == 2
+    assert first_payload["has_more"] is True
+    assert first_payload["next_offset"] == 2
+    assert first_payload["filters"]["offset"] == 0
+    assert first_payload["filters"]["limit"] == 2
+    assert [row["device_serial_number"] for row in first_payload["devices"]] == serial_numbers[:2]
+
+    second_page = client.get(
+        f"/api/shipment-readiness?device_type={device_type}&sort_by=device_serial_number&limit=2&offset=2"
+    )
+    assert second_page.status_code == 200
+    second_payload = second_page.json()
+    assert second_payload["total_devices"] == 3
+    assert second_payload["returned_count"] == 1
+    assert second_payload["offset"] == 2
+    assert second_payload["limit"] == 2
+    assert second_payload["has_more"] is False
+    assert second_payload["next_offset"] is None
+    assert [row["device_serial_number"] for row in second_payload["devices"]] == serial_numbers[2:]
+
+
 def test_shipment_readiness_queue_rejects_conflicting_filters():
     response = client.get("/api/shipment-readiness?only_blocked=true&only_ready=true")
     assert response.status_code == 400
@@ -3998,6 +4048,16 @@ def test_shipment_readiness_queue_rejects_unsupported_sort_by():
     response = client.get("/api/shipment-readiness?sort_by=unsupported")
     assert response.status_code == 400
     assert response.json()["detail"] == "Unsupported sort_by value"
+
+
+def test_shipment_readiness_queue_rejects_invalid_pagination():
+    negative_offset = client.get("/api/shipment-readiness?offset=-1")
+    assert negative_offset.status_code == 400
+    assert negative_offset.json()["detail"] == "offset must be >= 0"
+
+    zero_limit = client.get("/api/shipment-readiness?limit=0")
+    assert zero_limit.status_code == 400
+    assert zero_limit.json()["detail"] == "limit must be >= 1"
 
 
 def test_shipment_readiness_queue_rejects_incompatible_recommended_action_filters():

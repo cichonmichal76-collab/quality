@@ -270,6 +270,11 @@ class DeviceShipmentQueueRead(BaseModel):
     total_devices: int
     ready_count: int
     blocked_count: int
+    returned_count: int
+    offset: int
+    limit: int
+    has_more: bool
+    next_offset: int | None = None
     filters: dict[str, str | bool | int | None]
     blocking_summary: list[DeviceShipmentBlockingSummaryRead]
     primary_blocking_summary: list[DeviceShipmentBlockingSummaryRead]
