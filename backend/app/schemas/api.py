@@ -293,6 +293,7 @@ class DeviceComponentQualityRead(BaseModel):
     production_status: str
     device_created_at: datetime
     device_updated_at: datetime
+    stale_bucket: str
     total_installed_components: int
     passing_components: int
     blocked_components: int

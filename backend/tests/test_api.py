@@ -3767,6 +3767,7 @@ def test_component_quality_endpoint_reports_pass_qc_gap_and_component_ncr():
     assert payload["blocked_components"] == 2
     assert payload["primary_quality_status"] == "CRITICAL_NCR_OPEN"
     assert payload["recommended_action"] == "RESOLVE_COMPONENT_NCR"
+    assert payload["stale_bucket"] == "LT_24H"
 
     quality_by_type = {row["component_type"]: row for row in payload["components"]}
     assert quality_by_type["CONTROL_PCB"]["quality_status"] == "PASS"
@@ -3926,15 +3927,18 @@ def test_component_quality_queue_supports_summary_and_filters():
     assert device_rows[passing_device]["recommended_action"] == "NO_ACTION"
     assert device_rows[passing_device]["device_created_at"] is not None
     assert device_rows[passing_device]["device_updated_at"] is not None
+    assert device_rows[passing_device]["stale_bucket"] == "GT_7D"
     assert device_rows[qc_gap_device]["primary_quality_status"] == "QC_NOT_PASSED"
     assert (
         device_rows[qc_gap_device]["recommended_action"]
         == "RUN_COMPONENT_QC_OR_REWORK"
     )
+    assert device_rows[qc_gap_device]["stale_bucket"] == "D1_TO_D3"
     assert device_rows[ncr_device]["primary_quality_status"] == "CRITICAL_NCR_OPEN"
     assert (
         device_rows[ncr_device]["recommended_action"] == "RESOLVE_COMPONENT_NCR"
     )
+    assert device_rows[ncr_device]["stale_bucket"] == "LT_24H"
 
     status_summary = {
         entry["quality_status"]: (entry["component_count"], entry["device_count"])
@@ -4191,6 +4195,16 @@ def test_component_quality_queue_supports_summary_and_filters():
         ncr_device,
         qc_gap_device,
         passing_device,
+    ]
+
+    stale_sorted = client.get(
+        f"/api/component-quality?device_type={queue_device_type}&sort_by=stale_bucket&sort_desc=true"
+    )
+    assert stale_sorted.status_code == 200
+    assert [row["stale_bucket"] for row in stale_sorted.json()["devices"]] == [
+        "GT_7D",
+        "D1_TO_D3",
+        "LT_24H",
     ]
 
 

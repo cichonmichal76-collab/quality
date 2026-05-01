@@ -58,6 +58,7 @@ VALID_COMPONENT_QUALITY_SORT_FIELDS = {
     "device_serial_number",
     "blocked_components",
     "production_status",
+    "stale_bucket",
     "variant_code",
     "recommended_action",
 }
@@ -380,6 +381,19 @@ def get_device_component_quality(
     serial_number: str,
 ) -> DeviceComponentQualityRead:
     device = get_device_or_404(db, serial_number)
+    return _build_device_component_quality_read(
+        db,
+        device,
+        reference_time=utc_now(),
+    )
+
+
+def _build_device_component_quality_read(
+    db: Session,
+    device: Device,
+    *,
+    reference_time: datetime,
+) -> DeviceComponentQualityRead:
     component_rows = _build_installed_component_quality_rows(db, device)
     blocked_components = sum(1 for row in component_rows if row.blocks_shipment)
     primary_quality_status = _primary_component_quality_status(component_rows)
@@ -390,6 +404,10 @@ def get_device_component_quality(
         production_status=device.production_status,
         device_created_at=device.created_at,
         device_updated_at=device.updated_at,
+        stale_bucket=_component_quality_stale_bucket(
+            device.updated_at,
+            reference_time=reference_time,
+        ),
         total_installed_components=len(component_rows),
         passing_components=len(component_rows) - blocked_components,
         blocked_components=blocked_components,
@@ -476,17 +494,21 @@ def _component_quality_stale_bucket(
     return STALE_BUCKET_GT_7D
 
 
+def _component_quality_stale_bucket_rank(stale_bucket: str) -> int:
+    return {
+        STALE_BUCKET_LT_24H: 0,
+        STALE_BUCKET_D1_TO_D3: 1,
+        STALE_BUCKET_D3_TO_D7: 2,
+        STALE_BUCKET_GT_7D: 3,
+    }.get(stale_bucket, -1)
+
+
 def _build_component_quality_staleness_summary(
     quality_rows: list[DeviceComponentQualityRead],
-    *,
-    reference_time: datetime,
 ) -> list[DeviceComponentStalenessSummaryRead]:
     summary: dict[str, int] = {}
     for row in quality_rows:
-        bucket = _component_quality_stale_bucket(
-            row.device_updated_at,
-            reference_time=reference_time,
-        )
+        bucket = row.stale_bucket
         summary[bucket] = summary.get(bucket, 0) + 1
     return [
         DeviceComponentStalenessSummaryRead(
@@ -599,6 +621,22 @@ def _sort_component_quality_rows(
             key=lambda row: (row.production_status, row.device_serial_number),
             reverse=effective_sort_desc,
         )
+    if sort_by == "stale_bucket":
+        if effective_sort_desc:
+            return sorted(
+                quality_rows,
+                key=lambda row: (
+                    -_component_quality_stale_bucket_rank(row.stale_bucket),
+                    row.device_serial_number,
+                ),
+            )
+        return sorted(
+            quality_rows,
+            key=lambda row: (
+                _component_quality_stale_bucket_rank(row.stale_bucket),
+                row.device_serial_number,
+            ),
+        )
     if sort_by == "variant_code":
         return sorted(
             quality_rows,
@@ -686,7 +724,14 @@ def list_device_component_quality(
         variant_code=variant_code,
         limit=None,
     )
-    quality_rows = [get_device_component_quality(db, device.device_serial_number) for device in devices]
+    quality_rows = [
+        _build_device_component_quality_read(
+            db,
+            device,
+            reference_time=reference_time,
+        )
+        for device in devices
+    ]
 
     if production_status:
         quality_rows = [row for row in quality_rows if row.production_status == production_status]
@@ -720,11 +765,7 @@ def list_device_component_quality(
         quality_rows = [
             row
             for row in quality_rows
-            if _component_quality_stale_bucket(
-                row.device_updated_at,
-                reference_time=reference_time,
-            )
-            == stale_bucket
+            if row.stale_bucket == stale_bucket
         ]
     if recommended_action:
         quality_rows = [row for row in quality_rows if row.recommended_action == recommended_action]
@@ -778,7 +819,6 @@ def list_device_component_quality(
         ),
         staleness_summary=_build_component_quality_staleness_summary(
             quality_rows,
-            reference_time=reference_time,
         ),
         component_type_summary=_build_component_type_summary(
             quality_rows,
