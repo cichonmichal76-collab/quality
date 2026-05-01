@@ -437,6 +437,24 @@ Odczyt użycia i mutowalności konkretnej wersji BOM:
 curl "http://localhost:8000/api/device-bom-templates/ZSS/usage?version=3.0"
 ```
 
+Edycja pozycji BOM w wersji roboczej:
+
+```bash
+curl -X PATCH "http://localhost:8000/api/device-bom-templates/ZSS/items/CONTROL_PCB?version=3.0" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "required_part_number": "PCB-CTRL-002",
+    "required_revision": "C",
+    "quantity_required": 2
+  }'
+```
+
+Usunięcie pozycji BOM z wersji roboczej:
+
+```bash
+curl -X DELETE "http://localhost:8000/api/device-bom-templates/ZSS/items/CONTROL_PCB?version=3.0"
+```
+
 Wycofanie wersji BOM:
 
 ```bash
@@ -487,6 +505,7 @@ Reguły assembly:
 - aktywną wersję BOM można też promować do nowej rewizji jednym endpointem, który klonuje pozycje, aktywuje nową wersję i wycofuje starą
 - aktywna wersja BOM, która została już użyta przez urządzenia w montażu, dostaje soft-lock i nie może być dalej rozszerzana; zmiany powinny iść przez `clone` albo `promote`
 - endpoint `usage` zwraca także `recommended_action`, np. `modify_in_place`, `modify_or_activate`, `clone` albo `clone_or_promote`
+- pozycje BOM można edytować i usuwać tylko wtedy, gdy wersja BOM jest jeszcze legalnie modyfikowalna
 
 ## 7. Final test
 

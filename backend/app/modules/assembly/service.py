@@ -23,6 +23,7 @@ from app.schemas import (
     DeviceBomTemplateCloneRequest,
     DeviceBomTemplatePromoteRequest,
     DeviceBomItemCreate,
+    DeviceBomItemUpdate,
     DeviceBomTemplateCreate,
     DeviceBomTemplateRetireRequest,
     DeviceBomTemplateUsageRead,
@@ -205,6 +206,16 @@ def get_device_bom_template_or_404(
     if not template:
         raise HTTPException(status_code=404, detail="BOM template not found")
     return template
+
+
+def _ensure_bom_template_is_mutable(db: Session, template: DeviceBomTemplate) -> None:
+    if template.status == "RETIRED":
+        raise HTTPException(status_code=400, detail="Retired BOM template cannot be modified")
+    if template.status == "ACTIVE" and repository.has_bom_template_bindings(db, template.id):
+        raise HTTPException(
+            status_code=400,
+            detail="Active BOM template already used by devices cannot be modified; use clone or promote",
+        )
 
 
 def activate_device_bom_template(
@@ -519,13 +530,7 @@ def add_device_bom_item(
     version: str | None = None,
 ) -> DeviceBomItem:
     template = get_device_bom_template_or_404(db, device_type, version)
-    if template.status == "RETIRED":
-        raise HTTPException(status_code=400, detail="Retired BOM template cannot be modified")
-    if template.status == "ACTIVE" and repository.has_bom_template_bindings(db, template.id):
-        raise HTTPException(
-            status_code=400,
-            detail="Active BOM template already used by devices cannot be modified; use clone or promote",
-        )
+    _ensure_bom_template_is_mutable(db, template)
     if repository.get_bom_item(db, template.id, payload.component_type):
         raise HTTPException(status_code=409, detail="BOM item already exists for component type")
     item = DeviceBomItem(template_id=template.id, **payload.model_dump())
@@ -549,6 +554,106 @@ def add_device_bom_item(
     )
     db.commit()
     db.refresh(item)
+    return item
+
+
+def update_device_bom_item(
+    db: Session,
+    device_type: str,
+    component_type: str,
+    payload: DeviceBomItemUpdate,
+    version: str | None = None,
+) -> DeviceBomItem:
+    template = get_device_bom_template_or_404(db, device_type, version)
+    _ensure_bom_template_is_mutable(db, template)
+    item = repository.get_bom_item(db, template.id, component_type)
+    if not item:
+        raise HTTPException(status_code=404, detail="BOM item not found")
+
+    changes = payload.model_dump(exclude_unset=True)
+    if not changes:
+        return item
+
+    previous_state = {
+        "required_part_number": item.required_part_number,
+        "required_revision": item.required_revision,
+        "required_drawing_number": item.required_drawing_number,
+        "required_drawing_revision": item.required_drawing_revision,
+        "quantity_required": item.quantity_required,
+        "is_required": item.is_required,
+    }
+    for field_name, value in changes.items():
+        setattr(item, field_name, value)
+
+    record_audit_event(
+        db,
+        event_type="DEVICE_BOM_ITEM_UPDATED",
+        entity_type="DEVICE_BOM_ITEM",
+        entity_id=item.id,
+        result="UPDATED",
+        message=(
+            f"Updated BOM item {component_type} in "
+            f"{template.device_type} v{template.version}"
+        ),
+        payload={
+            "device_type": template.device_type,
+            "version": template.version,
+            "component_type": component_type,
+            "before": previous_state,
+            "after": {
+                "required_part_number": item.required_part_number,
+                "required_revision": item.required_revision,
+                "required_drawing_number": item.required_drawing_number,
+                "required_drawing_revision": item.required_drawing_revision,
+                "quantity_required": item.quantity_required,
+                "is_required": item.is_required,
+            },
+        },
+    )
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+def delete_device_bom_item(
+    db: Session,
+    device_type: str,
+    component_type: str,
+    version: str | None = None,
+) -> DeviceBomItem:
+    template = get_device_bom_template_or_404(db, device_type, version)
+    _ensure_bom_template_is_mutable(db, template)
+    item = repository.get_bom_item(db, template.id, component_type)
+    if not item:
+        raise HTTPException(status_code=404, detail="BOM item not found")
+
+    removed_snapshot = {
+        "component_type": item.component_type,
+        "required_part_number": item.required_part_number,
+        "required_revision": item.required_revision,
+        "required_drawing_number": item.required_drawing_number,
+        "required_drawing_revision": item.required_drawing_revision,
+        "quantity_required": item.quantity_required,
+        "is_required": item.is_required,
+    }
+    record_audit_event(
+        db,
+        event_type="DEVICE_BOM_ITEM_REMOVED",
+        entity_type="DEVICE_BOM_ITEM",
+        entity_id=item.id,
+        result="REMOVED",
+        message=(
+            f"Removed BOM item {component_type} from "
+            f"{template.device_type} v{template.version}"
+        ),
+        payload={
+            "device_type": template.device_type,
+            "version": template.version,
+            **removed_snapshot,
+        },
+    )
+    db.delete(item)
+    db.commit()
     return item
 
 

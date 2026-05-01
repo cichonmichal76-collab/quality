@@ -13,6 +13,7 @@ from app.schemas import (
     DeviceBomTemplateCloneRequest,
     DeviceBomTemplatePromoteRequest,
     DeviceBomItemCreate,
+    DeviceBomItemUpdate,
     DeviceBomItemRead,
     DeviceBomTemplateCreate,
     DeviceBomTemplateRetireRequest,
@@ -124,6 +125,33 @@ def add_device_bom_item(
     db: Session = Depends(get_db),
 ):
     return service.add_device_bom_item(db, device_type, payload, version)
+
+
+@router.patch(
+    "/device-bom-templates/{device_type}/items/{component_type}",
+    response_model=DeviceBomItemRead,
+)
+def update_device_bom_item(
+    device_type: str,
+    component_type: str,
+    payload: DeviceBomItemUpdate,
+    version: str | None = None,
+    db: Session = Depends(get_db),
+):
+    return service.update_device_bom_item(db, device_type, component_type, payload, version)
+
+
+@router.delete(
+    "/device-bom-templates/{device_type}/items/{component_type}",
+    response_model=DeviceBomItemRead,
+)
+def delete_device_bom_item(
+    device_type: str,
+    component_type: str,
+    version: str | None = None,
+    db: Session = Depends(get_db),
+):
+    return service.delete_device_bom_item(db, device_type, component_type, version)
 
 
 @router.get(

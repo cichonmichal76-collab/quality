@@ -102,6 +102,15 @@ class DeviceBomItemCreate(BaseModel):
     is_required: bool = True
 
 
+class DeviceBomItemUpdate(BaseModel):
+    required_part_number: str | None = None
+    required_revision: str | None = None
+    required_drawing_number: str | None = None
+    required_drawing_revision: str | None = None
+    quantity_required: int | None = Field(default=None, ge=1)
+    is_required: bool | None = None
+
+
 class DeviceBomItemRead(DeviceBomItemCreate):
     id: str
     template_id: str

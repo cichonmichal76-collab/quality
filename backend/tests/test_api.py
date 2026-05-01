@@ -314,6 +314,39 @@ def test_device_bom_template_usage_reports_mutable_active_template():
     assert payload["recommended_action"] == "modify_in_place"
 
 
+def test_mutable_bom_item_can_be_updated_and_deleted():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=False,
+    )
+
+    updated = client.patch(
+        f"/api/device-bom-templates/{device_type}/items/CONTROL_PCB?version=1.0",
+        json={
+            "required_part_number": "PCB-CTRL-002",
+            "required_revision": "C",
+            "quantity_required": 3,
+        },
+    )
+    assert updated.status_code == 200
+    assert updated.json()["required_part_number"] == "PCB-CTRL-002"
+    assert updated.json()["required_revision"] == "C"
+    assert updated.json()["quantity_required"] == 3
+
+    removed = client.delete(
+        f"/api/device-bom-templates/{device_type}/items/CONTROL_PCB?version=1.0",
+    )
+    assert removed.status_code == 200
+    assert removed.json()["component_type"] == "CONTROL_PCB"
+
+    listed = client.get(f"/api/device-bom-templates/{device_type}/items?version=1.0")
+    assert listed.status_code == 200
+    assert listed.json() == []
+
+
 def test_device_bom_template_can_be_cloned_with_all_items():
     device_type = unique_id("DT")
     ensure_device_bom_template(
@@ -571,6 +604,19 @@ def test_retired_bom_template_cannot_be_modified():
     assert add_item.status_code == 400
     assert add_item.json()["detail"] == "Retired BOM template cannot be modified"
 
+    updated = client.patch(
+        f"/api/device-bom-templates/{device_type}/items/CONTROL_PCB?version=1.0",
+        json={"quantity_required": 2},
+    )
+    assert updated.status_code == 400
+    assert updated.json()["detail"] == "Retired BOM template cannot be modified"
+
+    removed = client.delete(
+        f"/api/device-bom-templates/{device_type}/items/CONTROL_PCB?version=1.0",
+    )
+    assert removed.status_code == 400
+    assert removed.json()["detail"] == "Retired BOM template cannot be modified"
+
 
 def test_active_bound_bom_template_cannot_be_modified():
     device_type = unique_id("DT")
@@ -610,6 +656,23 @@ def test_active_bound_bom_template_cannot_be_modified():
     )
     assert add_item.status_code == 400
     assert add_item.json()["detail"] == (
+        "Active BOM template already used by devices cannot be modified; use clone or promote"
+    )
+
+    updated = client.patch(
+        f"/api/device-bom-templates/{device_type}/items/CONTROL_PCB?version=1.0",
+        json={"quantity_required": 2},
+    )
+    assert updated.status_code == 400
+    assert updated.json()["detail"] == (
+        "Active BOM template already used by devices cannot be modified; use clone or promote"
+    )
+
+    removed = client.delete(
+        f"/api/device-bom-templates/{device_type}/items/CONTROL_PCB?version=1.0",
+    )
+    assert removed.status_code == 400
+    assert removed.json()["detail"] == (
         "Active BOM template already used by devices cannot be modified; use clone or promote"
     )
 
@@ -701,6 +764,49 @@ def test_device_bom_audit_events_are_recorded():
     }
     assert ("DEVICE_BOM_ITEM_ADDED", "1.0", "CONTROL_PCB") in item_markers
     assert ("DEVICE_BOM_ITEM_ADDED", "2.0", "FAN_MODULE") in item_markers
+
+
+def test_device_bom_item_update_and_remove_audit_events_are_recorded():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=False,
+    )
+
+    updated = client.patch(
+        f"/api/device-bom-templates/{device_type}/items/CONTROL_PCB?version=1.0",
+        json={"quantity_required": 2},
+    )
+    assert updated.status_code == 200
+
+    removed = client.delete(
+        f"/api/device-bom-templates/{device_type}/items/CONTROL_PCB?version=1.0",
+    )
+    assert removed.status_code == 200
+
+    item_audit = client.get("/api/audit-events?entity_type=DEVICE_BOM_ITEM")
+    assert item_audit.status_code == 200
+    update_event = next(
+        row
+        for row in item_audit.json()
+        if row["event_type"] == "DEVICE_BOM_ITEM_UPDATED"
+        and row["payload"]
+        and row["payload"].get("device_type") == device_type
+        and row["payload"].get("component_type") == "CONTROL_PCB"
+    )
+    assert update_event["payload"]["after"]["quantity_required"] == 2
+
+    remove_event = next(
+        row
+        for row in item_audit.json()
+        if row["event_type"] == "DEVICE_BOM_ITEM_REMOVED"
+        and row["payload"]
+        and row["payload"].get("device_type") == device_type
+        and row["payload"].get("component_type") == "CONTROL_PCB"
+    )
+    assert remove_event["result"] == "REMOVED"
 
 
 def test_device_bom_retire_audit_event_is_recorded():

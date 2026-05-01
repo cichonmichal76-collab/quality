@@ -202,6 +202,7 @@ Najważniejsze reguły:
 - wersje BOM używają numerycznego formatu rozdzielanego kropkami, a `target_version` w `clone` i `promote` musi być semantycznie większy od `source_version`
 - aktywna wersja `DeviceBomTemplate`, która została już przypięta do urządzeń przez `AssemblyLink`, dostaje soft-lock i nie może być dalej rozszerzana o nowe pozycje
 - stan użycia konkretnej wersji BOM jest dostępny przez dedykowany odczyt `usage`, który zwraca też rekomendowaną dalszą akcję dla operatora lub klienta API
+- pozycje `DeviceBomItem` w wersjach roboczych mogą być już nie tylko dodawane, ale też aktualizowane i usuwane w ramach tej samej polityki mutowalności
 
 Stan implementacji:
 
@@ -532,6 +533,8 @@ Zdarzenie audytowe obejmujące także administracyjny lifecycle BOM:
 - klonowanie wersji BOM
 - promocję aktywnej wersji BOM do nowej rewizji
 - dodanie pozycji BOM
+- aktualizację pozycji BOM
+- usunięcie pozycji BOM
 - aktywację wersji BOM
 - dezaktywację poprzednio aktywnej wersji BOM
 - wycofanie wersji BOM do stanu `RETIRED`
