@@ -4079,6 +4079,8 @@ def test_component_quality_queue_supports_summary_and_filters():
         params={
             "device_type": queue_device_type,
             "updated_after": updated_at_by_device[qc_gap_device].isoformat(),
+            "sort_by": "updated_at",
+            "sort_desc": True,
         },
     )
     assert updated_after_only.status_code == 200
@@ -4199,6 +4201,16 @@ def test_component_quality_queue_supports_summary_and_filters():
         "NO_ACTION",
         "RESOLVE_COMPONENT_NCR",
         "RUN_COMPONENT_QC_OR_REWORK",
+    ]
+
+    blocker_type_sorted = client.get(
+        f"/api/component-quality?device_type={queue_device_type}&sort_by=primary_blocking_component_type"
+    )
+    assert blocker_type_sorted.status_code == 200
+    assert [row["primary_blocking_component_type"] for row in blocker_type_sorted.json()["devices"]] == [
+        None,
+        "FAN_MODULE",
+        "IO_MODULE",
     ]
 
     created_sorted = client.get(

@@ -59,6 +59,7 @@ VALID_COMPONENT_QUALITY_SORT_FIELDS = {
     "device_serial_number",
     "blocked_components",
     "production_status",
+    "primary_blocking_component_type",
     "stale_bucket",
     "variant_code",
     "recommended_action",
@@ -663,6 +664,15 @@ def _sort_component_quality_rows(
         return sorted(
             quality_rows,
             key=lambda row: (row.production_status, row.device_serial_number),
+            reverse=effective_sort_desc,
+        )
+    if sort_by == "primary_blocking_component_type":
+        return sorted(
+            quality_rows,
+            key=lambda row: (
+                row.primary_blocking_component_type or "",
+                row.device_serial_number,
+            ),
             reverse=effective_sort_desc,
         )
     if sort_by == "stale_bucket":
