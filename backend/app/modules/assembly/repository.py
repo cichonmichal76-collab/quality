@@ -45,6 +45,21 @@ def list_assembly_links_for_device(db: Session, device_serial_number: str) -> li
     )
 
 
+def list_installed_assembly_links_for_device(
+    db: Session,
+    device_serial_number: str,
+) -> list[AssemblyLink]:
+    return (
+        db.query(AssemblyLink)
+        .filter(
+            AssemblyLink.parent_device_serial_number == device_serial_number,
+            AssemblyLink.status == "INSTALLED",
+        )
+        .order_by(AssemblyLink.installed_at.asc())
+        .all()
+    )
+
+
 def list_device_components(db: Session, device_serial_number: str) -> list[DeviceComponent]:
     return (
         db.query(DeviceComponent)

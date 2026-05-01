@@ -449,6 +449,12 @@ Odczyt urządzeń już przypiętych do wersji BOM:
 curl "http://localhost:8000/api/device-bom-templates/ZSS/bindings?version=3.0"
 ```
 
+Odczyt kompletności powiązanych urządzeń względem wersji BOM:
+
+```bash
+curl "http://localhost:8000/api/device-bom-templates/ZSS/coverage?version=3.0"
+```
+
 Porównanie dwóch wersji BOM:
 
 ```bash
@@ -524,6 +530,7 @@ Reguły assembly:
 - aktywna wersja BOM, która została już użyta przez urządzenia w montażu, dostaje soft-lock i nie może być dalej rozszerzana; zmiany powinny iść przez `clone` albo `promote`
 - endpoint `usage` zwraca także `recommended_action`, np. `modify_in_place`, `modify_or_activate`, `clone` albo `clone_or_promote`
 - endpoint `bindings` zwraca konkretne urządzenia przypięte do wersji BOM wraz z `installed_component_count` i czasem pierwszego związania
+- endpoint `coverage` zwraca dla tych urządzeń kompletność względem BOM, w tym `missing_required_components` i status per komponent
 - endpoint `readiness` zwraca, czy dana wersja ma zdefiniowane pozycje i co najmniej jedną pozycję wymaganą przed aktywacją
 - endpoint `diff` zwraca różnice między dwiema wersjami BOM jako `added`, `removed`, `modified` i `unchanged_count`
 - pozycje BOM można edytować i usuwać tylko wtedy, gdy wersja BOM jest jeszcze legalnie modyfikowalna

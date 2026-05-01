@@ -453,6 +453,113 @@ def test_device_bom_template_bindings_list_bound_devices():
     assert rows[second_device_serial_number]["installed_component_count"] == 1
 
 
+def test_device_bom_template_coverage_reports_complete_and_incomplete_devices():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        quantity_required=2,
+        version="1.0",
+        is_active=True,
+    )
+    optional_item = client.post(
+        f"/api/device-bom-templates/{device_type}/items?version=1.0",
+        json={
+            "component_type": "FAN_MODULE",
+            "quantity_required": 1,
+            "is_required": False,
+        },
+    )
+    assert optional_item.status_code == 200
+
+    incomplete_device_serial_number = unique_id("DEV")
+    complete_device_serial_number = unique_id("DEV")
+    incomplete_device = client.post(
+        "/api/devices",
+        json={"device_serial_number": incomplete_device_serial_number, "device_type": device_type},
+    )
+    assert incomplete_device.status_code == 200
+    complete_device = client.post(
+        "/api/devices",
+        json={"device_serial_number": complete_device_serial_number, "device_type": device_type},
+    )
+    assert complete_device.status_code == 200
+
+    production_session = start_work_session(role="PRODUCTION_OPERATOR")
+    incomplete_first_item = create_qc_passed_item(production_session, item_type="CONTROL_PCB")
+    complete_first_item = create_qc_passed_item(production_session, item_type="CONTROL_PCB")
+    complete_second_item = create_qc_passed_item(production_session, item_type="CONTROL_PCB")
+    complete_optional_item = create_qc_passed_item(production_session, item_type="FAN_MODULE")
+
+    incomplete_install = client.post(
+        f"/api/devices/{incomplete_device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": incomplete_first_item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": production_session["work_session_id"],
+        },
+    )
+    assert incomplete_install.status_code == 200
+
+    complete_install_first = client.post(
+        f"/api/devices/{complete_device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": complete_first_item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": production_session["work_session_id"],
+        },
+    )
+    assert complete_install_first.status_code == 200
+
+    complete_install_second = client.post(
+        f"/api/devices/{complete_device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": complete_second_item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": production_session["work_session_id"],
+        },
+    )
+    assert complete_install_second.status_code == 200
+
+    complete_optional_install = client.post(
+        f"/api/devices/{complete_device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": complete_optional_item["barcode_value"],
+            "component_type": "FAN_MODULE",
+            "work_session_id": production_session["work_session_id"],
+        },
+    )
+    assert complete_optional_install.status_code == 200
+
+    coverage = client.get(f"/api/device-bom-templates/{device_type}/coverage?version=1.0")
+    assert coverage.status_code == 200
+    payload = coverage.json()
+    assert len(payload) == 2
+
+    rows = {row["device_serial_number"]: row for row in payload}
+
+    incomplete_row = rows[incomplete_device_serial_number]
+    assert incomplete_row["is_complete"] is False
+    assert incomplete_row["missing_required_components"] == ["CONTROL_PCB x2"]
+    incomplete_components = {
+        row["component_type"]: row for row in incomplete_row["component_coverage"]
+    }
+    assert incomplete_components["CONTROL_PCB"]["installed_quantity"] == 1
+    assert incomplete_components["CONTROL_PCB"]["status"] == "MISSING"
+    assert incomplete_components["FAN_MODULE"]["status"] == "OPTIONAL_MISSING"
+
+    complete_row = rows[complete_device_serial_number]
+    assert complete_row["is_complete"] is True
+    assert complete_row["missing_required_components"] == []
+    complete_components = {
+        row["component_type"]: row for row in complete_row["component_coverage"]
+    }
+    assert complete_components["CONTROL_PCB"]["installed_quantity"] == 2
+    assert complete_components["CONTROL_PCB"]["status"] == "SATISFIED"
+    assert complete_components["FAN_MODULE"]["installed_quantity"] == 1
+    assert complete_components["FAN_MODULE"]["status"] == "OPTIONAL_PRESENT"
+
+
 def test_device_bom_template_diff_reports_added_removed_modified_and_unchanged_items():
     device_type = unique_id("DT")
     ensure_device_bom_template(

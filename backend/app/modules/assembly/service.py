@@ -19,7 +19,9 @@ from app.modules.assembly import repository
 from app.schemas import (
     AssemblyScanRequest,
     ComponentCreate,
+    DeviceBomComponentCoverageRead,
     DeviceBomTemplateBindingRead,
+    DeviceBomTemplateCoverageRead,
     DeviceBomItemDiffRead,
     DeviceBomTemplateActivateRequest,
     DeviceBomTemplateCloneRequest,
@@ -258,6 +260,96 @@ def list_device_bom_template_bindings(
             first_bound_at,
         ) in repository.list_bound_devices_for_template(db, template.id)
     ]
+
+
+def list_device_bom_template_coverage(
+    db: Session,
+    device_type: str,
+    version: str | None = None,
+) -> list[DeviceBomTemplateCoverageRead]:
+    template = get_device_bom_template_or_404(db, device_type, version)
+    bom_items = repository.list_bom_items_for_template(db, template.id)
+    coverage_rows: list[DeviceBomTemplateCoverageRead] = []
+
+    for (
+        device_serial_number,
+        bound_device_type,
+        production_status,
+        bom_version,
+        installed_component_count,
+        first_bound_at,
+    ) in repository.list_bound_devices_for_template(db, template.id):
+        installed_links = repository.list_installed_assembly_links_for_device(
+            db,
+            device_serial_number,
+        )
+        installed_counts: dict[str, int] = {}
+        for link in installed_links:
+            installed_counts[link.component_type] = installed_counts.get(link.component_type, 0) + 1
+
+        component_coverage: list[DeviceBomComponentCoverageRead] = []
+        missing_required_components: list[str] = []
+        unexpected_component_types: list[str] = []
+
+        for bom_item in bom_items:
+            installed_quantity = installed_counts.pop(bom_item.component_type, 0)
+            if installed_quantity > bom_item.quantity_required:
+                status = "OVER_INSTALLED"
+            elif bom_item.is_required and installed_quantity < bom_item.quantity_required:
+                status = "MISSING"
+            elif bom_item.is_required:
+                status = "SATISFIED"
+            elif installed_quantity > 0:
+                status = "OPTIONAL_PRESENT"
+            else:
+                status = "OPTIONAL_MISSING"
+
+            if bom_item.is_required and installed_quantity < bom_item.quantity_required:
+                if bom_item.quantity_required == 1:
+                    missing_required_components.append(bom_item.component_type)
+                else:
+                    missing_required_components.append(
+                        f"{bom_item.component_type} x{bom_item.quantity_required}"
+                    )
+
+            component_coverage.append(
+                DeviceBomComponentCoverageRead(
+                    component_type=bom_item.component_type,
+                    required_quantity=bom_item.quantity_required,
+                    installed_quantity=installed_quantity,
+                    is_required=bom_item.is_required,
+                    status=status,
+                )
+            )
+
+        for unexpected_component_type, installed_quantity in sorted(installed_counts.items()):
+            unexpected_component_types.append(unexpected_component_type)
+            component_coverage.append(
+                DeviceBomComponentCoverageRead(
+                    component_type=unexpected_component_type,
+                    required_quantity=0,
+                    installed_quantity=installed_quantity,
+                    is_required=False,
+                    status="UNEXPECTED",
+                )
+            )
+
+        coverage_rows.append(
+            DeviceBomTemplateCoverageRead(
+                device_serial_number=device_serial_number,
+                device_type=bound_device_type,
+                production_status=production_status,
+                bom_version=bom_version,
+                installed_component_count=installed_component_count,
+                first_bound_at=first_bound_at,
+                is_complete=not missing_required_components and not unexpected_component_types,
+                missing_required_components=missing_required_components,
+                unexpected_component_types=unexpected_component_types,
+                component_coverage=component_coverage,
+            )
+        )
+
+    return coverage_rows
 
 
 def _ensure_bom_template_can_be_activated(

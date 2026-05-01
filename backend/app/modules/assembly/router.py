@@ -10,6 +10,7 @@ from app.schemas import (
     ComponentCreate,
     ComponentRead,
     DeviceBomTemplateBindingRead,
+    DeviceBomTemplateCoverageRead,
     DeviceBomTemplateDiffRead,
     DeviceBomTemplateActivateRequest,
     DeviceBomTemplateCloneRequest,
@@ -91,6 +92,18 @@ def list_device_bom_template_bindings(
     db: Session = Depends(get_db),
 ):
     return service.list_device_bom_template_bindings(db, device_type, version)
+
+
+@router.get(
+    "/device-bom-templates/{device_type}/coverage",
+    response_model=list[DeviceBomTemplateCoverageRead],
+)
+def list_device_bom_template_coverage(
+    device_type: str,
+    version: str | None = None,
+    db: Session = Depends(get_db),
+):
+    return service.list_device_bom_template_coverage(db, device_type, version)
 
 
 @router.get(

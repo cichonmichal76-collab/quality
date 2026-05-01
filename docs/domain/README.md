@@ -203,6 +203,7 @@ Najważniejsze reguły:
 - aktywna wersja `DeviceBomTemplate`, która została już przypięta do urządzeń przez `AssemblyLink`, dostaje soft-lock i nie może być dalej rozszerzana o nowe pozycje
 - stan użycia konkretnej wersji BOM jest dostępny przez dedykowany odczyt `usage`, który zwraca też rekomendowaną dalszą akcję dla operatora lub klienta API
 - konkretne urządzenia związane z wersją BOM są dostępne przez odczyt `bindings`, co pozwala ocenić wpływ zmian na już rozpoczętą produkcję
+- kompletność tych urządzeń względem BOM jest dostępna przez odczyt `coverage`, który pokazuje braki i status per komponent
 - stan gotowości konkretnej wersji BOM jest dostępny przez odczyt `readiness`, który blokuje aktywację pustych albo wyłącznie opcjonalnych wersji
 - porównanie dwóch wersji BOM jest dostępne przez odczyt `diff`, który rozbija zmiany na pozycje dodane, usunięte i zmodyfikowane
 - pozycje `DeviceBomItem` w wersjach roboczych mogą być już nie tylko dodawane, ale też aktualizowane i usuwane w ramach tej samej polityki mutowalności

@@ -91,6 +91,27 @@ class DeviceBomTemplateBindingRead(BaseModel):
     first_bound_at: datetime
 
 
+class DeviceBomComponentCoverageRead(BaseModel):
+    component_type: str
+    required_quantity: int
+    installed_quantity: int
+    is_required: bool
+    status: str
+
+
+class DeviceBomTemplateCoverageRead(BaseModel):
+    device_serial_number: str
+    device_type: str
+    production_status: str
+    bom_version: str
+    installed_component_count: int
+    first_bound_at: datetime
+    is_complete: bool
+    missing_required_components: list[str]
+    unexpected_component_types: list[str]
+    component_coverage: list[DeviceBomComponentCoverageRead]
+
+
 class DeviceBomTemplateActivateRequest(BaseModel):
     version: str = Field(pattern=r"^\d+(?:\.\d+)*$")
 
