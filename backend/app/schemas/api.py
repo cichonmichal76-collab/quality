@@ -321,6 +321,7 @@ class DeviceComponentQualityQueueRead(BaseModel):
     next_offset: int | None = None
     filters: dict[str, str | bool | int | None]
     quality_status_summary: list[DeviceComponentQualityStatusSummaryRead]
+    production_status_summary: list[DeviceShipmentProductionStatusSummaryRead]
     primary_quality_status_summary: list[DeviceComponentPrimaryQualityStatusSummaryRead]
     component_type_summary: list[DeviceComponentTypeSummaryRead]
     recommended_action_summary: list[DeviceShipmentActionSummaryRead]

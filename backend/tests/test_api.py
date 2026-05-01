@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.db import SessionLocal, utc_now
 from app.main import app
-from app.models import AssemblyLink, DeviceBomTemplate, WorkSession
+from app.models import AssemblyLink, Device, DeviceBomTemplate, WorkSession
 
 client = TestClient(app)
 
@@ -3812,6 +3812,19 @@ def test_component_quality_queue_supports_summary_and_filters():
             .first()
         )
         assert template is not None
+        status_by_device = {
+            passing_device: "CREATED",
+            qc_gap_device: "FINAL_TEST_PASSED",
+            ncr_device: "READY_FOR_SHIPMENT",
+        }
+        for serial_number, production_status in status_by_device.items():
+            device = (
+                db.query(Device)
+                .filter(Device.device_serial_number == serial_number)
+                .first()
+            )
+            assert device is not None
+            device.production_status = production_status
 
         passing_component_serial = unique_id("ITEM")
         qc_gap_component_serial = unique_id("ITEM")
@@ -3910,6 +3923,13 @@ def test_component_quality_queue_supports_summary_and_filters():
     assert status_summary["PASS"] == (1, 1)
     assert status_summary["QC_NOT_PASSED"] == (1, 1)
     assert status_summary["CRITICAL_NCR_OPEN"] == (1, 1)
+    production_status_summary = {
+        entry["production_status"]: entry["device_count"]
+        for entry in payload["production_status_summary"]
+    }
+    assert production_status_summary["CREATED"] == 1
+    assert production_status_summary["FINAL_TEST_PASSED"] == 1
+    assert production_status_summary["READY_FOR_SHIPMENT"] == 1
     primary_status_summary = {
         entry["primary_quality_status"]: entry["device_count"]
         for entry in payload["primary_quality_status_summary"]
@@ -3946,6 +3966,17 @@ def test_component_quality_queue_supports_summary_and_filters():
     )
     assert ncr_only.status_code == 200
     assert [row["device_serial_number"] for row in ncr_only.json()["devices"]] == [ncr_device]
+
+    ready_only = client.get(
+        f"/api/component-quality?device_type={queue_device_type}&production_status=READY_FOR_SHIPMENT"
+    )
+    assert ready_only.status_code == 200
+    ready_only_payload = ready_only.json()
+    assert ready_only_payload["total_devices"] == 1
+    assert ready_only_payload["filters"]["production_status"] == "READY_FOR_SHIPMENT"
+    assert [row["device_serial_number"] for row in ready_only_payload["devices"]] == [
+        ncr_device
+    ]
 
     primary_qc_gap_only = client.get(
         f"/api/component-quality?device_type={queue_device_type}&primary_quality_status=QC_NOT_PASSED"
