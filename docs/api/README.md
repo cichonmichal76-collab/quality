@@ -336,6 +336,8 @@ curl -X POST http://localhost:8000/api/device-bom-templates/ZSS/items \
   -H "Content-Type: application/json" \
   -d '{
     "component_type": "CONTROL_PCB",
+    "required_part_number": "PCB-CTRL-01",
+    "required_revision": "A",
     "quantity_required": 1,
     "is_required": true
   }'
@@ -400,6 +402,8 @@ Reguły assembly:
 - status itemu nie może być `QC_FAILED`, `SCRAPPED` ani `REWORK_REQUIRED`
 - typ zeskanowanego itemu musi zgadzać się z `component_type`
 - jeśli dla `device_type` istnieje aktywny BOM, `component_type` musi być dozwolony przez ten BOM
+- jeśli BOM definiuje `required_part_number`, zeskanowany item musi mieć dokładnie ten `part_number`
+- jeśli BOM definiuje `required_revision`, zeskanowany item musi mieć dokładnie tę `revision`
 - jeśli aktywny BOM ogranicza ilość danego komponentu, assembly blokuje przekroczenie limitu już podczas skanu
 - komponent nie może być zainstalowany drugi raz, jeśli już ma aktywne `INSTALLED`
 - assembly zapisuje zarówno relację montażową, jak i ślad skanu oraz audytu
@@ -444,6 +448,7 @@ Shipment gate w aktualnym MVP:
 
 - `READY_FOR_SHIPMENT` wymaga `FINAL_TEST_PASSED`
 - wymagane komponenty są odczytywane z aktywnego `device_bom_template` dla `device_type`
+- jeśli pozycja BOM wymaga konkretnego `part_number` albo `revision`, ta zgodność jest sprawdzana już podczas assembly
 - brakujący komponent jest zwracany w treści błędu, np. `CONTROL_PCB` albo `FAN_MODULE x2`
 - otwarta krytyczna NCR blokuje shipment
 - shipment pozostaje końcową walidacją kompletności, nawet jeśli assembly wcześniej odrzuci niedozwolony skan

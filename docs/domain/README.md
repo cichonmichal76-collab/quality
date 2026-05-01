@@ -184,10 +184,13 @@ Najważniejsze reguły:
 - komponent ze złym statusem nie może być zamontowany
 - typ zeskanowanego itemu musi zgadzać się z deklarowanym `component_type`
 - jeśli aktywny BOM istnieje dla `device_type`, komponent musi być dozwolony przez ten BOM
+- jeśli pozycja BOM wymaga konkretnego `part_number`, zeskanowany item musi mieć dokładnie tę wartość
+- jeśli pozycja BOM wymaga konkretnej `revision`, zeskanowany item musi mieć dokładnie tę rewizję
 - jeśli BOM ogranicza ilość danego komponentu, assembly blokuje przekroczenie limitu już na etapie skanu
 - komponent nie może zostać zainstalowany drugi raz, jeśli jest już aktywny w innym urządzeniu
 - assembly produkuje zarówno relację montażową, jak i ślad skanu
 - definicje BOM dla `device_type` są utrzymywane w `DeviceBomTemplate` i `DeviceBomItem`
+- pozycja `DeviceBomItem` może dodatkowo zawęzić dopuszczalny `part_number` i `revision`
 
 Stan implementacji:
 

@@ -11,6 +11,7 @@ from app.models import (
     DeviceBomItem,
     DeviceBomTemplate,
     DeviceComponent,
+    ProductionItem,
     ScanEvent,
 )
 from app.modules.auth_rfid.service import PRODUCTION_SESSION_ROLES, require_active_work_session
@@ -147,10 +148,10 @@ def _resolve_bom_template_for_device(db: Session, device: Device) -> DeviceBomTe
 def _validate_component_against_bom(
     db: Session,
     device: Device,
-    item_type: str,
+    item: ProductionItem,
     component_type: str,
 ) -> tuple[DeviceBomTemplate | None, DeviceBomItem | None]:
-    if item_type != component_type:
+    if item.item_type != component_type:
         raise HTTPException(
             status_code=400,
             detail="Scanned item type does not match requested component type",
@@ -165,6 +166,16 @@ def _validate_component_against_bom(
         raise HTTPException(
             status_code=400,
             detail="Component type is not allowed by device BOM",
+        )
+    if bom_item.required_part_number and item.part_number != bom_item.required_part_number:
+        raise HTTPException(
+            status_code=400,
+            detail="Scanned item part number does not match device BOM",
+        )
+    if bom_item.required_revision and item.revision != bom_item.required_revision:
+        raise HTTPException(
+            status_code=400,
+            detail="Scanned item revision does not match device BOM",
         )
     return bom_template, bom_item
 
@@ -190,7 +201,7 @@ def scan_component_for_assembly(
     bom_template, bom_item = _validate_component_against_bom(
         db,
         device,
-        item.item_type,
+        item,
         payload.component_type,
     )
 

@@ -57,6 +57,8 @@ class DeviceBomItem(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True, default=uuid_str)
     template_id: Mapped[str] = mapped_column(String, ForeignKey("device_bom_templates.id"))
     component_type: Mapped[str] = mapped_column(String)
+    required_part_number: Mapped[str | None] = mapped_column(String, nullable=True)
+    required_revision: Mapped[str | None] = mapped_column(String, nullable=True)
     quantity_required: Mapped[int] = mapped_column(default=1)
     is_required: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)

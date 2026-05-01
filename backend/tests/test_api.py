@@ -58,7 +58,12 @@ def start_work_session(role: str = "PRODUCTION_OPERATOR", include_machine: bool 
     return session
 
 
-def create_qc_passed_item(session: dict, item_type: str = "PCB") -> dict:
+def create_qc_passed_item(
+    session: dict,
+    item_type: str = "PCB",
+    part_number: str | None = None,
+    revision: str | None = None,
+) -> dict:
     item_serial_number = unique_id("ITEM")
     barcode_value = unique_id("BC")
 
@@ -68,6 +73,8 @@ def create_qc_passed_item(session: dict, item_type: str = "PCB") -> dict:
             "item_serial_number": item_serial_number,
             "barcode_value": barcode_value,
             "item_type": item_type,
+            "part_number": part_number,
+            "revision": revision,
             "work_session_id": session["work_session_id"],
             "workstation_id": session["workstation_id"],
         },
@@ -90,6 +97,8 @@ def ensure_device_bom_template(
     quantity_required: int = 1,
     version: str = "1.0",
     is_active: bool = True,
+    required_part_number: str | None = None,
+    required_revision: str | None = None,
 ) -> None:
     template_response = client.post(
         "/api/device-bom-templates",
@@ -106,6 +115,8 @@ def ensure_device_bom_template(
         f"/api/device-bom-templates/{device_type}/items?version={version}",
         json={
             "component_type": component_type,
+            "required_part_number": required_part_number,
+            "required_revision": required_revision,
             "quantity_required": quantity_required,
             "is_required": True,
         },
@@ -256,6 +267,23 @@ def test_device_bom_template_versions_can_be_activated():
     assert sum(1 for row in device_templates if row["is_active"]) == 1
     assert next(row for row in device_templates if row["version"] == "2.0")["is_active"] is True
     assert next(row for row in device_templates if row["version"] == "1.0")["is_active"] is False
+
+
+def test_device_bom_item_can_store_part_number_and_revision_rules():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="3.0",
+        required_part_number="PCB-CTRL-001",
+        required_revision="B",
+    )
+
+    listed_items = client.get(f"/api/device-bom-templates/{device_type}/items?version=3.0")
+    assert listed_items.status_code == 200
+    assert len(listed_items.json()) == 1
+    assert listed_items.json()[0]["required_part_number"] == "PCB-CTRL-001"
+    assert listed_items.json()[0]["required_revision"] == "B"
 
 
 def test_rfid_work_session_lifecycle_and_audit_events():
@@ -728,6 +756,107 @@ def test_assembly_scan_blocks_component_count_above_bom_quantity():
     )
     assert blocked.status_code == 409
     assert blocked.json()["detail"] == "Device BOM quantity already satisfied for component type"
+
+
+def test_assembly_scan_blocks_part_number_mismatch():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        required_part_number="PCB-CTRL-001",
+    )
+    session = start_work_session(role="PRODUCTION_OPERATOR")
+    device_serial_number = unique_id("DEV")
+
+    create_device = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
+    )
+    assert create_device.status_code == 200
+
+    item = create_qc_passed_item(
+        session,
+        item_type="CONTROL_PCB",
+        part_number="PCB-CTRL-999",
+    )
+    blocked = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": session["work_session_id"],
+        },
+    )
+    assert blocked.status_code == 400
+    assert blocked.json()["detail"] == "Scanned item part number does not match device BOM"
+
+
+def test_assembly_scan_blocks_revision_mismatch():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        required_revision="B",
+    )
+    session = start_work_session(role="PRODUCTION_OPERATOR")
+    device_serial_number = unique_id("DEV")
+
+    create_device = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
+    )
+    assert create_device.status_code == 200
+
+    item = create_qc_passed_item(
+        session,
+        item_type="CONTROL_PCB",
+        revision="A",
+    )
+    blocked = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": session["work_session_id"],
+        },
+    )
+    assert blocked.status_code == 400
+    assert blocked.json()["detail"] == "Scanned item revision does not match device BOM"
+
+
+def test_assembly_scan_accepts_matching_part_number_and_revision():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        required_part_number="PCB-CTRL-001",
+        required_revision="B",
+    )
+    session = start_work_session(role="PRODUCTION_OPERATOR")
+    device_serial_number = unique_id("DEV")
+
+    create_device = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
+    )
+    assert create_device.status_code == 200
+
+    item = create_qc_passed_item(
+        session,
+        item_type="CONTROL_PCB",
+        part_number="PCB-CTRL-001",
+        revision="B",
+    )
+    installed = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": session["work_session_id"],
+        },
+    )
+    assert installed.status_code == 200
+    assert installed.json()["bom_version"] == "1.0"
 
 
 def test_expired_work_session_is_timed_out_and_blocked():

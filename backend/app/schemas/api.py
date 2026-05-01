@@ -62,6 +62,8 @@ class DeviceBomTemplateActivateRequest(BaseModel):
 
 class DeviceBomItemCreate(BaseModel):
     component_type: str
+    required_part_number: str | None = None
+    required_revision: str | None = None
     quantity_required: int = Field(default=1, ge=1)
     is_required: bool = True
 

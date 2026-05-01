@@ -26,7 +26,7 @@ NCR powstaje przy wyniku NOK albo ręcznym zgłoszeniu niezgodności. Krytyczna 
 
 ## Assembly by scan
 
-Montaż urządzenia odbywa się przez skanowanie komponentów. W obecnym MVP backend sprawdza aktywną sesję pracy, status komponentu, zgodność typu z aktywnym BOM, limit ilości z BOM i to, czy część nie jest już użyta w innym urządzeniu. Endpoint assembly zapisuje relację device → component, scan event i audit trail.
+Montaż urządzenia odbywa się przez skanowanie komponentów. W obecnym MVP backend sprawdza aktywną sesję pracy, status komponentu, zgodność typu z aktywnym BOM, zgodność `part_number` i `revision` z regułami BOM, limit ilości z BOM i to, czy część nie jest już użyta w innym urządzeniu. Endpoint assembly zapisuje relację device → component, scan event i audit trail.
 
 ## Digital device tree
 
