@@ -345,6 +345,9 @@ describe("App", () => {
 
     expect(await screen.findByText("COMP-001")).toBeInTheDocument();
     expect(screen.getByText("FAN-001")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Główny status jakości" }),
+    ).toBeInTheDocument();
     const componentActionsPanel = screen.getByText("Akcje operacyjne").closest("section");
     expect(componentActionsPanel).not.toBeNull();
     expect(

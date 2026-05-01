@@ -1,4 +1,4 @@
-# Web App - ServiceTrace Operations
+# Aplikacja webowa - Operacje ServiceTrace
 
 Panel webowy dla produkcji i jakości. Aktualny MVP skupia się na dwóch
 kolejkach operacyjnych:
@@ -7,7 +7,7 @@ kolejkach operacyjnych:
 - jakość zamontowanych komponentów (`GET /api/component-quality`)
 
 Obie kolejki wspierają filtrowanie, paginację opartą o `offset/limit`
-i zapamiętanie pola `API base` w `localStorage`.
+i zapamiętanie pola `adres bazowy API` w `localStorage`.
 
 ## Uruchomienie lokalne
 
@@ -27,7 +27,7 @@ $env:VITE_BACKEND_TARGET="http://localhost:8001"
 npm run dev
 ```
 
-W panelu można też ręcznie zmienić pole `API base`, na przykład na pełny adres
+W panelu można też ręcznie zmienić pole `adres bazowy API`, na przykład na pełny adres
 `http://localhost:8000/api`.
 
 Jeżeli chcesz szybko zobaczyć niepuste kolejki, najwygodniej uruchom z katalogu
@@ -46,7 +46,7 @@ backend pod `http://127.0.0.1:8000`.
   rekomendowane akcje, ostatni wynik shipment gate, tabela urządzeń
   i paginacja kolejki.
 - `Komponenty` - gate jakości komponentów, blokujące typy komponentów,
-  primary quality status, rekomendowane akcje, tabela urządzeń z
+  główny status jakości, rekomendowane akcje, tabela urządzeń z
   komponentami blokującymi i paginacja wyników.
 
 ## Walidacja

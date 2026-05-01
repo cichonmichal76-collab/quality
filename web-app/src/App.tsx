@@ -291,7 +291,7 @@ export function App() {
     <main className="app-shell">
       <header className="hero">
         <div className="hero-copy">
-          <p className="eyebrow">ServiceTrace Operations</p>
+          <p className="eyebrow">Operacje ServiceTrace</p>
           <h1>Panel gotowości wysyłki i jakości komponentów</h1>
           <p>
             Jedno miejsce do pilnowania blokad BOM, final testu, NCR i jakości
@@ -301,7 +301,7 @@ export function App() {
         <section className="control-deck" aria-label="Ustawienia API">
           <StatusBadge loadState={loadState} />
           <label className="api-field">
-            <span>API base</span>
+            <span>Adres bazowy API</span>
             <input
               value={apiBaseUrl}
               onChange={(event) => setApiBaseUrl(event.target.value)}
@@ -714,7 +714,7 @@ function ComponentDashboard({
           }
         />
         <SummaryPanel
-          title="Primary quality"
+          title="Główny status jakości"
           items={data?.primary_quality_status_summary ?? []}
           emptyMessage="Brak statusów"
           getKey={(item) => item.primary_quality_status}
@@ -849,7 +849,7 @@ function ShipmentTable({
               <th>Główna blokada</th>
               <th>Akcja</th>
               <th>Gate</th>
-              <th>Final / BOM</th>
+              <th>Final test i BOM</th>
               <th>Aktualizacja</th>
             </tr>
           </thead>
@@ -895,7 +895,7 @@ function ShipmentTable({
                   )}
                 </td>
                 <td>
-                  <span>Final: {labelForCode(device.final_test_passed)}</span>
+                  <span>Final test: {labelForCode(device.final_test_passed)}</span>
                   <span>
                     BOM: {labelForCode(device.bom_compliance.passes_bom_gate)}
                   </span>
@@ -944,7 +944,7 @@ function ComponentTable({
               <th>Status</th>
               <th>Gate</th>
               <th>Komponenty</th>
-              <th>Primary quality</th>
+              <th>Główny status jakości</th>
               <th>Blokujący komponent</th>
               <th>Akcja</th>
               <th>Wiek danych</th>
@@ -965,14 +965,14 @@ function ComponentTable({
                 <td>
                   <BooleanPill
                     value={device.passes_component_quality_gate}
-                    trueLabel="PASS"
+                    trueLabel="Zaliczone"
                     falseLabel="Blokada"
                   />
                 </td>
                 <td>
                   <strong>
                     {formatNumber(device.blocked_components)} blok. /{" "}
-                    {formatNumber(device.passing_components)} pass
+                    {formatNumber(device.passing_components)} zal.
                   </strong>
                   <span>
                     Łącznie {formatNumber(device.total_installed_components)}
@@ -1078,7 +1078,7 @@ function StatusBadge({ loadState }: { loadState: LoadState }) {
     idle: "Gotowe",
     loading: "Ładowanie",
     loaded: "API OK",
-    error: "API error",
+    error: "Błąd API",
   };
 
   return <span className={`status-badge state-${loadState}`}>{labels[loadState]}</span>;

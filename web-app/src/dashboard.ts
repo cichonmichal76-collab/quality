@@ -24,7 +24,7 @@ const CODE_LABELS: Record<string, string> = {
   MARK_READY_FOR_SHIPMENT: "Oznacz gotowe do wysyłki",
   NO_ACTION: "Bez akcji",
   NONE: "Brak decyzji",
-  PASS: "PASS",
+  PASS: "Zaliczone",
   QC_NOT_PASSED: "QC niezaliczone",
   passes_component_quality_gate: "Wynik gate komponentów",
   primary_blocking_component_serial_number: "Serial blokującego komponentu",
@@ -40,6 +40,8 @@ const CODE_LABELS: Record<string, string> = {
   RUN_FINAL_TEST: "Uruchom final test",
   SHIPPED: "Wysłane",
   stale_bucket: "Świeżość danych",
+  true: "Tak",
+  false: "Nie",
   updated_at: "Data aktualizacji",
   variant_code: "Wariant",
 };

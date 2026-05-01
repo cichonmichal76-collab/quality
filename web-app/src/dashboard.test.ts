@@ -15,6 +15,8 @@ describe("labelForCode", () => {
   it("obsługuje booleany i brak danych", () => {
     expect(labelForCode(true)).toBe("Tak");
     expect(labelForCode(false)).toBe("Nie");
+    expect(labelForCode("true")).toBe("Tak");
+    expect(labelForCode("false")).toBe("Nie");
     expect(labelForCode(null)).toBe("Brak danych");
   });
 });
