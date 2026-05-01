@@ -72,6 +72,7 @@ const COMPONENT_STATUS_OPTIONS = [
 ];
 
 const COMPONENT_STALE_OPTIONS = ["LT_24H", "D1_TO_D3", "D3_TO_D7", "GT_7D"];
+const SHIPMENT_GATE_RESULT_OPTIONS = ["PASS", "BLOCKED", "NONE"];
 
 const SHIPMENT_SORT_OPTIONS = [
   "created_at",
@@ -458,7 +459,7 @@ function ShipmentFiltersPanel({
         <SelectField
           label="Ostatni gate"
           value={filters.latest_gate_result}
-          options={["PASS", "BLOCKED", "NONE"]}
+          options={SHIPMENT_GATE_RESULT_OPTIONS}
           onChange={(value) => onChange("latest_gate_result", value)}
         />
         <SelectField
@@ -1403,20 +1404,24 @@ function readStoredShipmentFilters(): ShipmentFilters {
       storedValue.variant_code,
       DEFAULT_SHIPMENT_FILTERS.variant_code,
     ),
-    production_status: readStoredString(
+    production_status: readStoredOption(
       storedValue.production_status,
+      PRODUCTION_STATUS_OPTIONS,
       DEFAULT_SHIPMENT_FILTERS.production_status,
     ),
-    primary_blocking_code: readStoredString(
+    primary_blocking_code: readStoredOption(
       storedValue.primary_blocking_code,
+      SHIPMENT_BLOCKING_OPTIONS,
       DEFAULT_SHIPMENT_FILTERS.primary_blocking_code,
     ),
-    recommended_action: readStoredString(
+    recommended_action: readStoredOption(
       storedValue.recommended_action,
+      SHIPMENT_ACTION_OPTIONS,
       DEFAULT_SHIPMENT_FILTERS.recommended_action,
     ),
-    latest_gate_result: readStoredString(
+    latest_gate_result: readStoredOption(
       storedValue.latest_gate_result,
+      SHIPMENT_GATE_RESULT_OPTIONS,
       DEFAULT_SHIPMENT_FILTERS.latest_gate_result,
     ),
     only_blocked: readStoredBoolean(
@@ -1427,8 +1432,9 @@ function readStoredShipmentFilters(): ShipmentFilters {
       storedValue.only_ready,
       DEFAULT_SHIPMENT_FILTERS.only_ready,
     ),
-    sort_by: readStoredString(
+    sort_by: readStoredOption(
       storedValue.sort_by,
+      SHIPMENT_SORT_OPTIONS,
       DEFAULT_SHIPMENT_FILTERS.sort_by,
     ),
     sort_desc: readStoredBoolean(
@@ -1456,24 +1462,28 @@ function readStoredComponentFilters(): ComponentFilters {
       storedValue.variant_code,
       DEFAULT_COMPONENT_FILTERS.variant_code,
     ),
-    production_status: readStoredString(
+    production_status: readStoredOption(
       storedValue.production_status,
+      PRODUCTION_STATUS_OPTIONS,
       DEFAULT_COMPONENT_FILTERS.production_status,
     ),
     blocking_component_type: readStoredString(
       storedValue.blocking_component_type,
       DEFAULT_COMPONENT_FILTERS.blocking_component_type,
     ),
-    primary_quality_status: readStoredString(
+    primary_quality_status: readStoredOption(
       storedValue.primary_quality_status,
+      COMPONENT_STATUS_OPTIONS,
       DEFAULT_COMPONENT_FILTERS.primary_quality_status,
     ),
-    stale_bucket: readStoredString(
+    stale_bucket: readStoredOption(
       storedValue.stale_bucket,
+      COMPONENT_STALE_OPTIONS,
       DEFAULT_COMPONENT_FILTERS.stale_bucket,
     ),
-    recommended_action: readStoredString(
+    recommended_action: readStoredOption(
       storedValue.recommended_action,
+      COMPONENT_ACTION_OPTIONS,
       DEFAULT_COMPONENT_FILTERS.recommended_action,
     ),
     passes_component_quality_gate: readStoredOptionalBooleanString(
@@ -1484,8 +1494,9 @@ function readStoredComponentFilters(): ComponentFilters {
       storedValue.only_blocking,
       DEFAULT_COMPONENT_FILTERS.only_blocking,
     ),
-    sort_by: readStoredString(
+    sort_by: readStoredOption(
       storedValue.sort_by,
+      COMPONENT_SORT_OPTIONS,
       DEFAULT_COMPONENT_FILTERS.sort_by,
     ),
     sort_desc: readStoredBoolean(
@@ -1518,6 +1529,16 @@ function readStoredObject(storageKey: string): Record<string, unknown> {
 
 function readStoredString(value: unknown, fallback: string): string {
   return typeof value === "string" ? value : fallback;
+}
+
+function readStoredOption(
+  value: unknown,
+  allowedValues: string[],
+  fallback: string,
+): string {
+  return typeof value === "string" && allowedValues.includes(value)
+    ? value
+    : fallback;
 }
 
 function readStoredBoolean(value: unknown, fallback: boolean): boolean {

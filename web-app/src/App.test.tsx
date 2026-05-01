@@ -725,6 +725,35 @@ describe("App", () => {
     );
   });
 
+  it("falls back for unsupported shipment filter options restored from localStorage", async () => {
+    localStorage.setItem(
+      SHIPMENT_FILTERS_STORAGE_KEY,
+      JSON.stringify({
+        device_type: "DEMO-OPS",
+        production_status: "BROKEN",
+        primary_blocking_code: "UNKNOWN_BLOCKER",
+        recommended_action: "UNSUPPORTED_ACTION",
+        latest_gate_result: "INVALID_GATE",
+        sort_by: "unknown_field",
+        sort_desc: false,
+      }),
+    );
+
+    const fetchMock = vi.fn(async () => createJsonResponse(shipmentPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("SHIP-001")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/shipment-readiness?device_type=DEMO-OPS&sort_by=created_at&sort_desc=false&limit=100",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+  });
+
   it("sanitizes incompatible shipment filters restored from localStorage", async () => {
     localStorage.setItem(
       SHIPMENT_FILTERS_STORAGE_KEY,
@@ -777,8 +806,13 @@ describe("App", () => {
       COMPONENT_FILTERS_STORAGE_KEY,
       JSON.stringify({
         device_type: "DEMO-OPS",
-        passes_component_quality_gate: "false",
+        production_status: "BROKEN",
+        primary_quality_status: "INVALID_STATUS",
+        stale_bucket: "LAST_MONTH",
+        recommended_action: "UNSUPPORTED_ACTION",
+        passes_component_quality_gate: "maybe",
         only_blocking: false,
+        sort_by: "mystery_field",
         limit: 0,
         offset: -5,
         sort_desc: "nope",
@@ -793,7 +827,7 @@ describe("App", () => {
     expect(await screen.findByText("COMP-001")).toBeInTheDocument();
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/component-quality?device_type=DEMO-OPS&passes_component_quality_gate=false&sort_by=blocked_components&sort_desc=true&limit=1",
+      "/api/component-quality?device_type=DEMO-OPS&sort_by=blocked_components&sort_desc=true&limit=1",
       expect.objectContaining({
         headers: { Accept: "application/json" },
         signal: expect.any(AbortSignal),
