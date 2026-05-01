@@ -67,6 +67,11 @@ def parse_args() -> argparse.Namespace:
         help="Nie uruchamiaj weryfikacji kolejek dashboardu po seedzie.",
     )
     parser.add_argument(
+        "--verify-only",
+        action="store_true",
+        help="Nie seeduj danych; zweryfikuj tylko istniejący kompletny dataset demo.",
+    )
+    parser.add_argument(
         "--no-server",
         action="store_true",
         help="Przygotuj bazę i zakończ bez uruchamiania uvicorn.",
@@ -76,7 +81,12 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Uruchom uvicorn z --reload.",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.verify_only and args.skip_seed:
+        parser.error("--verify-only nie może być łączone z --skip-seed.")
+    if args.verify_only and args.skip_verify:
+        parser.error("--verify-only nie może być łączone z --skip-verify.")
+    return args
 
 
 def run_command(command: list[str], *, env: dict[str, str]) -> None:
@@ -95,47 +105,63 @@ def main() -> int:
     args = parse_args()
     env = build_env(args)
 
-    if not args.skip_migrate:
-        run_command([sys.executable, "-m", "alembic", "upgrade", "head"], env=env)
+    try:
+        if not args.skip_migrate:
+            run_command([sys.executable, "-m", "alembic", "upgrade", "head"], env=env)
 
-    if not args.skip_seed:
-        seed_command = [
+        if args.verify_only:
+            verify_command = [
+                sys.executable,
+                "-m",
+                "app.services.demo_seed",
+                "--device-type",
+                args.device_type,
+                "--verify-only",
+            ]
+            run_command(verify_command, env=env)
+        elif not args.skip_seed:
+            seed_command = [
+                sys.executable,
+                "-m",
+                "app.services.demo_seed",
+                "--device-type",
+                args.device_type,
+                "--tag",
+                args.tag,
+            ]
+            if not args.skip_verify:
+                seed_command.append("--verify")
+            run_command(seed_command, env=env)
+
+        if args.no_server:
+            if args.verify_only:
+                print("Demo dashboardu zweryfikowane. Backend nie został uruchomiony.", flush=True)
+            else:
+                print("Demo dashboardu przygotowane. Backend nie został uruchomiony.", flush=True)
+            print(f"DATABASE_URL={args.database_url}", flush=True)
+            return 0
+
+        server_command = [
             sys.executable,
             "-m",
-            "app.services.demo_seed",
-            "--device-type",
-            args.device_type,
-            "--tag",
-            args.tag,
+            "uvicorn",
+            "app.main:app",
+            "--host",
+            args.host,
+            "--port",
+            str(args.port),
         ]
-        if not args.skip_verify:
-            seed_command.append("--verify")
-        run_command(seed_command, env=env)
+        if args.reload:
+            server_command.append("--reload")
 
-    if args.no_server:
-        print("Demo dashboardu przygotowane. Backend nie został uruchomiony.", flush=True)
-        print(f"DATABASE_URL={args.database_url}", flush=True)
+        print(
+            f"Start backendu demo pod http://{args.host}:{args.port} z DATABASE_URL={args.database_url}",
+            flush=True,
+        )
+        run_command(server_command, env=env)
         return 0
-
-    server_command = [
-        sys.executable,
-        "-m",
-        "uvicorn",
-        "app.main:app",
-        "--host",
-        args.host,
-        "--port",
-        str(args.port),
-    ]
-    if args.reload:
-        server_command.append("--reload")
-
-    print(
-        f"Start backendu demo pod http://{args.host}:{args.port} z DATABASE_URL={args.database_url}",
-        flush=True,
-    )
-    run_command(server_command, env=env)
-    return 0
+    except subprocess.CalledProcessError as exc:
+        return exc.returncode
 
 
 if __name__ == "__main__":

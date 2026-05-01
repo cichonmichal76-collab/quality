@@ -95,7 +95,12 @@ Przydatne warianty:
 py scripts/dev_dashboard_demo.py --no-server
 py scripts/dev_dashboard_demo.py --device-type DEMO-QA --tag QA --reload
 py scripts/dev_dashboard_demo.py --database-url sqlite:///./servicetrace_dashboard_demo_alt.db --no-server
+py scripts/dev_dashboard_demo.py --device-type DEMO-LOCAL --verify-only --no-server
 ```
+
+Ostatnia komenda nie dosiewa danych. Służy do szybkiego sanity checku istniejącego
+kompletnego datasetu demo dla podanego `device_type` i kończy się błędem, jeśli taki
+zestaw nie istnieje albo nie spełnia oczekiwanego kontraktu dashboardu.
 
 Po przygotowaniu backendu możesz uruchomić panel:
 

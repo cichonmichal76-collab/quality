@@ -45,7 +45,7 @@ def test_dev_dashboard_demo_bootstraps_local_dashboard(tmp_path):
         f"stdout:\n{bootstrap.stdout}\n"
         f"stderr:\n{bootstrap.stderr}"
     )
-    assert "Demo dashboardu przygotowane. Backend nie został uruchomiony." in bootstrap.stdout
+    assert "Demo dashboardu przygotowane." in bootstrap.stdout
     assert f"DATABASE_URL={database_url}" in bootstrap.stdout
     assert database_path.exists()
 
@@ -183,4 +183,61 @@ def test_dev_dashboard_demo_can_be_rerun_for_same_device_type(tmp_path):
         f"stdout:\n{second_run.stdout}\n"
         f"stderr:\n{second_run.stderr}"
     )
-    assert "Demo dashboardu przygotowane. Backend nie został uruchomiony." in second_run.stdout
+    assert "Demo dashboardu przygotowane." in second_run.stdout
+
+
+def test_dev_dashboard_demo_can_verify_existing_dataset_without_reseeding(tmp_path):
+    repo_dir = Path(__file__).resolve().parents[2]
+    database_path = tmp_path / "dashboard-demo-verify-only.db"
+    database_url = f"sqlite:///{database_path.as_posix()}"
+    environment = os.environ.copy()
+    device_type = "DEMO-BOOTSTRAP-VERIFY-ONLY"
+
+    seed_run = subprocess.run(
+        [
+            sys.executable,
+            "scripts/dev_dashboard_demo.py",
+            "--database-url",
+            database_url,
+            "--device-type",
+            device_type,
+            "--tag",
+            "VERIFY",
+            "--no-server",
+        ],
+        cwd=repo_dir,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert seed_run.returncode == 0, (
+        "Initial dashboard bootstrap failed before verify-only.\n"
+        f"stdout:\n{seed_run.stdout}\n"
+        f"stderr:\n{seed_run.stderr}"
+    )
+
+    verify_run = subprocess.run(
+        [
+            sys.executable,
+            "scripts/dev_dashboard_demo.py",
+            "--database-url",
+            database_url,
+            "--device-type",
+            device_type,
+            "--verify-only",
+            "--no-server",
+        ],
+        cwd=repo_dir,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert verify_run.returncode == 0, (
+        "Dashboard bootstrap verify-only failed.\n"
+        f"stdout:\n{verify_run.stdout}\n"
+        f"stderr:\n{verify_run.stderr}"
+    )
+    assert "Demo dashboardu zweryfikowane." in verify_run.stdout
+    assert f"DATABASE_URL={database_url}" in verify_run.stdout

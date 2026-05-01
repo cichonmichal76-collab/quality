@@ -522,6 +522,23 @@ def verify_dashboard_seed(client: TestClient, *, device_type: str) -> DashboardS
     return summary
 
 
+def verify_existing_dashboard_seed(
+    *,
+    device_type: str = DEFAULT_DEVICE_TYPE,
+) -> SeedResult:
+    existing_result = try_get_existing_seed_result(device_type)
+    if existing_result is None:
+        raise RuntimeError(
+            "expected existing complete dashboard demo dataset for "
+            f"{device_type}, but none was found"
+        )
+
+    client = TestClient(app)
+    verify_dashboard_seed(client, device_type=device_type)
+    existing_result.verified = True
+    return existing_result
+
+
 def seed_operations_dashboard_demo(
     *,
     device_type: str = DEFAULT_DEVICE_TYPE,
@@ -768,21 +785,30 @@ def parse_args() -> argparse.Namespace:
         default="DEMO",
         help="Unique tag embedded into seeded serial numbers. Default: DEMO",
     )
-    parser.add_argument(
+    verification_mode = parser.add_mutually_exclusive_group()
+    verification_mode.add_argument(
         "--verify",
         action="store_true",
         help="Verify expected queue counts and statuses after seeding.",
+    )
+    verification_mode.add_argument(
+        "--verify-only",
+        action="store_true",
+        help="Verify an existing complete dashboard demo dataset without seeding.",
     )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    result = seed_operations_dashboard_demo(
-        device_type=args.device_type,
-        tag=args.tag,
-        verify=args.verify,
-    )
+    if args.verify_only:
+        result = verify_existing_dashboard_seed(device_type=args.device_type)
+    else:
+        result = seed_operations_dashboard_demo(
+            device_type=args.device_type,
+            tag=args.tag,
+            verify=args.verify,
+        )
     print(json.dumps(asdict(result), indent=2))
 
 

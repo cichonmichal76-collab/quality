@@ -46,6 +46,14 @@ cd backend
 python -m app.services.demo_seed --verify
 ```
 
+Jeżeli dataset demo już istnieje i chcesz tylko potwierdzić jego spójność bez
+dosiewania kolejnych rekordów, użyj:
+
+```bash
+cd backend
+python -m app.services.demo_seed --device-type DEMO-OPS --verify-only
+```
+
 ## Zmienne środowiskowe
 
 Backend czyta konfigurację ze zmiennych środowiskowych opisanych w [`.env.example`](../.env.example).

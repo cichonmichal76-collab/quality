@@ -105,3 +105,112 @@ print(json.dumps({{
     assert summary["component_issue_count"] >= 2
     assert "CRITICAL_NCR_OPEN" in summary["component_primary_statuses"]
     assert "QC_NOT_PASSED" in summary["component_primary_statuses"]
+
+
+def test_demo_seed_can_verify_existing_dataset_without_reseeding(tmp_path):
+    backend_dir = Path(__file__).resolve().parents[1]
+    database_path = tmp_path / "demo-seed-verify-only.db"
+    environment = os.environ.copy()
+    environment["DATABASE_URL"] = f"sqlite:///{database_path.as_posix()}"
+    seeded_device_type = "DEMO-SEED-VERIFY-ONLY"
+
+    migration = subprocess.run(
+        [sys.executable, "-m", "alembic", "upgrade", "head"],
+        cwd=backend_dir,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert migration.returncode == 0, (
+        "Alembic upgrade head failed before verify-only demo seed test.\n"
+        f"stdout:\n{migration.stdout}\n"
+        f"stderr:\n{migration.stderr}"
+    )
+
+    seed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "app.services.demo_seed",
+            "--device-type",
+            seeded_device_type,
+            "--tag",
+            "VERIFY",
+            "--verify",
+        ],
+        cwd=backend_dir,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert seed.returncode == 0, (
+        "Initial demo seed run failed before verify-only.\n"
+        f"stdout:\n{seed.stdout}\n"
+        f"stderr:\n{seed.stderr}"
+    )
+
+    verify_only = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "app.services.demo_seed",
+            "--device-type",
+            seeded_device_type,
+            "--verify-only",
+        ],
+        cwd=backend_dir,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert verify_only.returncode == 0, (
+        "Demo seed verify-only run failed.\n"
+        f"stdout:\n{verify_only.stdout}\n"
+        f"stderr:\n{verify_only.stderr}"
+    )
+
+    payload = json.loads(verify_only.stdout)
+    assert payload["device_type"] == seeded_device_type
+    assert payload["verified"] is True
+
+
+def test_demo_seed_verify_only_requires_existing_dataset(tmp_path):
+    backend_dir = Path(__file__).resolve().parents[1]
+    database_path = tmp_path / "demo-seed-verify-missing.db"
+    environment = os.environ.copy()
+    environment["DATABASE_URL"] = f"sqlite:///{database_path.as_posix()}"
+
+    migration = subprocess.run(
+        [sys.executable, "-m", "alembic", "upgrade", "head"],
+        cwd=backend_dir,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert migration.returncode == 0, (
+        "Alembic upgrade head failed before verify-only missing dataset test.\n"
+        f"stdout:\n{migration.stdout}\n"
+        f"stderr:\n{migration.stderr}"
+    )
+
+    verify_only = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "app.services.demo_seed",
+            "--device-type",
+            "DEMO-SEED-VERIFY-MISSING",
+            "--verify-only",
+        ],
+        cwd=backend_dir,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert verify_only.returncode != 0
+    assert "expected existing complete dashboard demo dataset" in verify_only.stderr
