@@ -6,11 +6,22 @@ from app.database import utc_now
 from app.models import Device
 from app.modules.assembly.service import get_device_bom_compliance
 from app.modules.shipment import repository, rules
-from app.schemas import DeviceBomComplianceRead, DeviceShipmentReadinessRead, DeviceStatusUpdate
+from app.schemas import (
+    DeviceBomComplianceRead,
+    DeviceShipmentBlockingCheckRead,
+    DeviceShipmentReadinessRead,
+    DeviceStatusUpdate,
+)
 
 READY_FOR_SHIPMENT_REQUIRES_FINAL_TEST = "READY_FOR_SHIPMENT requires FINAL_TEST_PASSED"
 READY_FOR_SHIPMENT_REQUIRES_ACTIVE_BOM = "READY_FOR_SHIPMENT requires an active effective BOM template"
 READY_FOR_SHIPMENT_BLOCKED_BY_NCR = "Open critical NCR blocks shipment"
+FINAL_TEST_NOT_PASSED_CODE = "FINAL_TEST_NOT_PASSED"
+BOM_TEMPLATE_NOT_EFFECTIVE_CODE = "BOM_TEMPLATE_NOT_EFFECTIVE"
+BOM_REQUIRED_COMPONENTS_MISSING_CODE = "BOM_REQUIRED_COMPONENTS_MISSING"
+BOM_OVER_INSTALLED_COMPONENTS_CODE = "BOM_OVER_INSTALLED_COMPONENTS"
+BOM_UNEXPECTED_COMPONENTS_CODE = "BOM_UNEXPECTED_COMPONENTS"
+CRITICAL_OPEN_NCR_CODE = "CRITICAL_OPEN_NCR"
 
 
 def get_device_or_404(db: Session, serial_number: str) -> Device:
@@ -67,21 +78,83 @@ def _build_bom_shipment_blocking_reason(
     return "READY_FOR_SHIPMENT requires BOM-compliant assembly: " + "; ".join(issue_fragments)
 
 
+def _build_bom_shipment_blocking_checks(
+    bom_compliance: DeviceBomComplianceRead,
+) -> list[DeviceShipmentBlockingCheckRead]:
+    if bom_compliance.blocking_reason:
+        return [
+            DeviceShipmentBlockingCheckRead(
+                code=BOM_TEMPLATE_NOT_EFFECTIVE_CODE,
+                is_blocking=True,
+                message=READY_FOR_SHIPMENT_REQUIRES_ACTIVE_BOM,
+                details=[bom_compliance.blocking_reason],
+            )
+        ]
+
+    checks: list[DeviceShipmentBlockingCheckRead] = []
+    if bom_compliance.missing_required_components:
+        checks.append(
+            DeviceShipmentBlockingCheckRead(
+                code=BOM_REQUIRED_COMPONENTS_MISSING_CODE,
+                is_blocking=True,
+                message="READY_FOR_SHIPMENT requires installed components",
+                details=bom_compliance.missing_required_components,
+            )
+        )
+    if bom_compliance.over_installed_components:
+        checks.append(
+            DeviceShipmentBlockingCheckRead(
+                code=BOM_OVER_INSTALLED_COMPONENTS_CODE,
+                is_blocking=True,
+                message="READY_FOR_SHIPMENT requires BOM-compliant assembly",
+                details=bom_compliance.over_installed_components,
+            )
+        )
+    if bom_compliance.unexpected_component_types:
+        checks.append(
+            DeviceShipmentBlockingCheckRead(
+                code=BOM_UNEXPECTED_COMPONENTS_CODE,
+                is_blocking=True,
+                message="READY_FOR_SHIPMENT requires BOM-compliant assembly",
+                details=sorted(bom_compliance.unexpected_component_types),
+            )
+        )
+    return checks
+
+
 def _build_device_shipment_readiness(db: Session, device: Device) -> DeviceShipmentReadinessRead:
     final_test_passed = device.production_status == rules.FINAL_TEST_PASSED
-    has_critical_open_ncr = repository.has_critical_open_ncr(db, device.device_serial_number)
+    critical_open_ncr_ids = repository.list_critical_open_ncr_ids(db, device.device_serial_number)
+    has_critical_open_ncr = bool(critical_open_ncr_ids)
     bom_compliance = get_device_bom_compliance(db, device.device_serial_number)
 
     blocking_reasons: list[str] = []
+    blocking_checks: list[DeviceShipmentBlockingCheckRead] = []
     if not final_test_passed:
         blocking_reasons.append(READY_FOR_SHIPMENT_REQUIRES_FINAL_TEST)
+        blocking_checks.append(
+            DeviceShipmentBlockingCheckRead(
+                code=FINAL_TEST_NOT_PASSED_CODE,
+                is_blocking=True,
+                message=READY_FOR_SHIPMENT_REQUIRES_FINAL_TEST,
+            )
+        )
 
     bom_blocking_reason = _build_bom_shipment_blocking_reason(bom_compliance)
     if bom_blocking_reason:
         blocking_reasons.append(bom_blocking_reason)
+    blocking_checks.extend(_build_bom_shipment_blocking_checks(bom_compliance))
 
     if has_critical_open_ncr:
         blocking_reasons.append(READY_FOR_SHIPMENT_BLOCKED_BY_NCR)
+        blocking_checks.append(
+            DeviceShipmentBlockingCheckRead(
+                code=CRITICAL_OPEN_NCR_CODE,
+                is_blocking=True,
+                message=READY_FOR_SHIPMENT_BLOCKED_BY_NCR,
+                details=critical_open_ncr_ids,
+            )
+        )
 
     return DeviceShipmentReadinessRead(
         device_serial_number=device.device_serial_number,
@@ -90,9 +163,11 @@ def _build_device_shipment_readiness(db: Session, device: Device) -> DeviceShipm
         production_status=device.production_status,
         final_test_passed=final_test_passed,
         has_critical_open_ncr=has_critical_open_ncr,
+        critical_open_ncr_ids=critical_open_ncr_ids,
         bom_compliance=bom_compliance,
         can_transition_to_ready_for_shipment=not blocking_reasons,
         blocking_reasons=blocking_reasons,
+        blocking_checks=blocking_checks,
     )
 
 

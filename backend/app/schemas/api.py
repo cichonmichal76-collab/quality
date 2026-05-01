@@ -229,6 +229,13 @@ class DeviceBomComplianceRead(BaseModel):
     blocking_reason: str | None = None
 
 
+class DeviceShipmentBlockingCheckRead(BaseModel):
+    code: str
+    is_blocking: bool
+    message: str | None = None
+    details: list[str] = []
+
+
 class DeviceShipmentReadinessRead(BaseModel):
     device_serial_number: str
     device_type: str
@@ -236,9 +243,11 @@ class DeviceShipmentReadinessRead(BaseModel):
     production_status: str
     final_test_passed: bool
     has_critical_open_ncr: bool
+    critical_open_ncr_ids: list[str]
     bom_compliance: DeviceBomComplianceRead
     can_transition_to_ready_for_shipment: bool
     blocking_reasons: list[str]
+    blocking_checks: list[DeviceShipmentBlockingCheckRead]
 
 
 class DeviceBomTemplateActivateRequest(BaseModel):

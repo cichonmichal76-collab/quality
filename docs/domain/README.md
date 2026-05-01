@@ -207,7 +207,7 @@ Najważniejsze reguły:
 - stan użycia konkretnej wersji BOM jest dostępny przez dedykowany odczyt `usage`, który zwraca też rekomendowaną dalszą akcję dla operatora lub klienta API
 - odczyt `bom-resolution` pokazuje dla konkretnego urządzenia źródło aktualnie rozwiązanego BOM: przypiętą wersję, aktywny BOM wariantowy, fallback `DEFAULT` albo brak aktywnej skutecznej konfiguracji
 - odczyt `bom-compliance` pokazuje dla konkretnego urządzenia, czy końcowo przechodzi ono bramkę BOM, z rozbiciem na `missing_required_components`, `over_installed_components`, `unexpected_component_types` i pokrycie per komponent
-- odczyt `shipment-readiness` składa dla konkretnego urządzenia pełny werdykt wysyłkowy z `FINAL_TEST_PASSED`, BOM i krytycznych NCR, dzięki czemu klient nie musi odtwarzać tej logiki po swojej stronie
+- odczyt `shipment-readiness` składa dla konkretnego urządzenia pełny werdykt wysyłkowy z `FINAL_TEST_PASSED`, BOM i krytycznych NCR, a dodatkowo zwraca `blocking_checks` i `critical_open_ncr_ids`, dzięki czemu klient nie musi odtwarzać tej logiki po swojej stronie
 - zbiorczy stan wszystkich wersji dla danego `device_type` i `variant_code` jest dostępny przez odczyt `catalog`, który pokazuje gotowość do aktywacji i release oraz blokady lifecycle bez potrzeby składania kilku osobnych endpointów
 - konkretne urządzenia związane z wersją BOM są dostępne przez odczyt `bindings`, co pozwala ocenić wpływ zmian na już rozpoczętą produkcję
 - kompletność tych urządzeń względem BOM jest dostępna przez odczyt `coverage`, który pokazuje braki, nadinstalacje i status per komponent; status `OVER_INSTALLED` oznacza teraz niekompletność z perspektywy gate’u

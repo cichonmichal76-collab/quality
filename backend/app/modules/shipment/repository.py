@@ -22,6 +22,20 @@ def has_critical_open_ncr(db: Session, device_serial_number: str) -> bool:
     )
 
 
+def list_critical_open_ncr_ids(db: Session, device_serial_number: str) -> list[str]:
+    return [
+        row.ncr_id
+        for row in db.query(Nonconformity.ncr_id)
+        .filter(
+            Nonconformity.device_serial_number == device_serial_number,
+            Nonconformity.severity == "CRITICAL",
+            Nonconformity.status != "CLOSED",
+        )
+        .order_by(Nonconformity.detected_at.asc())
+        .all()
+    ]
+
+
 def list_installed_assembly_links_for_device(
     db: Session,
     device_serial_number: str,

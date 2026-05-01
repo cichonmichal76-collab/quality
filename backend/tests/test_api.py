@@ -3430,10 +3430,15 @@ def test_device_shipment_readiness_reports_multiple_blockers():
     assert payload["device_serial_number"] == device_serial_number
     assert payload["final_test_passed"] is False
     assert payload["has_critical_open_ncr"] is False
+    assert payload["critical_open_ncr_ids"] == []
     assert payload["can_transition_to_ready_for_shipment"] is False
     assert payload["blocking_reasons"] == [
         "READY_FOR_SHIPMENT requires FINAL_TEST_PASSED",
         "READY_FOR_SHIPMENT requires installed components: CONTROL_PCB",
+    ]
+    assert [check["code"] for check in payload["blocking_checks"]] == [
+        "FINAL_TEST_NOT_PASSED",
+        "BOM_REQUIRED_COMPONENTS_MISSING",
     ]
     assert payload["bom_compliance"]["passes_bom_gate"] is False
     assert payload["bom_compliance"]["missing_required_components"] == ["CONTROL_PCB"]
@@ -3493,8 +3498,11 @@ def test_device_shipment_readiness_reports_critical_ncr_blocker():
     payload = readiness.json()
     assert payload["final_test_passed"] is True
     assert payload["has_critical_open_ncr"] is True
+    assert len(payload["critical_open_ncr_ids"]) == 1
     assert payload["can_transition_to_ready_for_shipment"] is False
     assert payload["blocking_reasons"] == ["Open critical NCR blocks shipment"]
+    assert [check["code"] for check in payload["blocking_checks"]] == ["CRITICAL_OPEN_NCR"]
+    assert payload["blocking_checks"][0]["details"] == payload["critical_open_ncr_ids"]
     assert payload["bom_compliance"]["passes_bom_gate"] is True
 
 
@@ -3539,8 +3547,10 @@ def test_device_shipment_readiness_passes_when_gate_is_clear():
     payload = readiness.json()
     assert payload["final_test_passed"] is True
     assert payload["has_critical_open_ncr"] is False
+    assert payload["critical_open_ncr_ids"] == []
     assert payload["can_transition_to_ready_for_shipment"] is True
     assert payload["blocking_reasons"] == []
+    assert payload["blocking_checks"] == []
     assert payload["bom_compliance"]["passes_bom_gate"] is True
 
 
