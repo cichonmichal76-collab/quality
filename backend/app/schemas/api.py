@@ -353,6 +353,7 @@ class DeviceComponentQualityQueueRead(BaseModel):
     component_quality_gate_summary: list[DeviceComponentQualityGateSummaryRead]
     staleness_summary: list[DeviceComponentStalenessSummaryRead]
     component_type_summary: list[DeviceComponentTypeSummaryRead]
+    blocking_component_type_summary: list[DeviceComponentTypeSummaryRead]
     primary_blocking_component_type_summary: list[DeviceComponentPrimaryBlockingTypeSummaryRead]
     recommended_action_summary: list[DeviceShipmentActionSummaryRead]
     devices: list[DeviceComponentQualityRead]

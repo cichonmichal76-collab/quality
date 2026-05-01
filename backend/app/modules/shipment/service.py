@@ -622,6 +622,39 @@ def _build_component_type_summary(
     ]
 
 
+def _build_blocking_component_type_summary(
+    quality_rows: list[DeviceComponentQualityRead],
+    *,
+    blocking_component_type_filter: str | None = None,
+) -> list[DeviceComponentTypeSummaryRead]:
+    component_counts: dict[str, int] = {}
+    device_sets: dict[str, set[str]] = {}
+    for row in quality_rows:
+        for component in row.components:
+            if not component.blocks_shipment:
+                continue
+            if (
+                blocking_component_type_filter
+                and component.component_type != blocking_component_type_filter
+            ):
+                continue
+            component_counts[component.component_type] = (
+                component_counts.get(component.component_type, 0) + 1
+            )
+            device_sets.setdefault(component.component_type, set()).add(row.device_serial_number)
+    return [
+        DeviceComponentTypeSummaryRead(
+            component_type=component_type,
+            component_count=component_count,
+            device_count=len(device_sets.get(component_type, set())),
+        )
+        for component_type, component_count in sorted(
+            component_counts.items(),
+            key=lambda item: (-item[1], item[0]),
+        )
+    ]
+
+
 def _build_primary_blocking_component_type_summary(
     quality_rows: list[DeviceComponentQualityRead],
 ) -> list[DeviceComponentPrimaryBlockingTypeSummaryRead]:
@@ -766,6 +799,7 @@ def list_device_component_quality(
     variant_code: str | None = None,
     production_status: str | None = None,
     component_type: str | None = None,
+    blocking_component_type: str | None = None,
     quality_status: str | None = None,
     primary_quality_status: str | None = None,
     primary_blocking_component_type: str | None = None,
@@ -855,6 +889,16 @@ def list_device_component_quality(
             for row in quality_rows
             if any(component.component_type == component_type for component in row.components)
         ]
+    if blocking_component_type:
+        quality_rows = [
+            row
+            for row in quality_rows
+            if any(
+                component.component_type == blocking_component_type
+                and component.blocks_shipment
+                for component in row.components
+            )
+        ]
     if only_blocking:
         quality_rows = [row for row in quality_rows if row.blocked_components > 0]
     if passes_component_quality_gate is not None:
@@ -920,6 +964,7 @@ def list_device_component_quality(
             "variant_code": variant_code,
             "production_status": production_status,
             "component_type": component_type,
+            "blocking_component_type": blocking_component_type,
             "quality_status": quality_status,
             "primary_quality_status": primary_quality_status,
             "primary_blocking_component_type": primary_blocking_component_type,
@@ -954,6 +999,10 @@ def list_device_component_quality(
         component_type_summary=_build_component_type_summary(
             quality_rows,
             component_type_filter=component_type,
+        ),
+        blocking_component_type_summary=_build_blocking_component_type_summary(
+            quality_rows,
+            blocking_component_type_filter=blocking_component_type,
         ),
         primary_blocking_component_type_summary=_build_primary_blocking_component_type_summary(
             quality_rows

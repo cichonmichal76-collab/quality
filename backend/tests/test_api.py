@@ -4005,6 +4005,13 @@ def test_component_quality_queue_supports_summary_and_filters():
     assert component_type_summary["CONTROL_PCB"] == (1, 1)
     assert component_type_summary["FAN_MODULE"] == (1, 1)
     assert component_type_summary["IO_MODULE"] == (1, 1)
+    blocking_component_type_summary = {
+        entry["component_type"]: (entry["component_count"], entry["device_count"])
+        for entry in payload["blocking_component_type_summary"]
+    }
+    assert blocking_component_type_summary["FAN_MODULE"] == (1, 1)
+    assert blocking_component_type_summary["IO_MODULE"] == (1, 1)
+    assert "CONTROL_PCB" not in blocking_component_type_summary
     primary_blocking_component_type_summary = {
         entry["component_type"]: entry["device_count"]
         for entry in payload["primary_blocking_component_type_summary"]
@@ -4217,6 +4224,20 @@ def test_component_quality_queue_supports_summary_and_filters():
     assert [row["device_serial_number"] for row in fan_payload["devices"]] == [qc_gap_device]
     assert fan_payload["filters"]["component_type"] == "FAN_MODULE"
     assert fan_payload["component_type_summary"] == [
+        {"component_type": "FAN_MODULE", "component_count": 1, "device_count": 1}
+    ]
+
+    blocking_fan_only = client.get(
+        f"/api/component-quality?device_type={queue_device_type}&blocking_component_type=FAN_MODULE"
+    )
+    assert blocking_fan_only.status_code == 200
+    blocking_fan_payload = blocking_fan_only.json()
+    assert blocking_fan_payload["total_devices"] == 1
+    assert blocking_fan_payload["filters"]["blocking_component_type"] == "FAN_MODULE"
+    assert [row["device_serial_number"] for row in blocking_fan_payload["devices"]] == [
+        qc_gap_device
+    ]
+    assert blocking_fan_payload["blocking_component_type_summary"] == [
         {"component_type": "FAN_MODULE", "component_count": 1, "device_count": 1}
     ]
 
