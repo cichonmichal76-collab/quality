@@ -1,4 +1,11 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
@@ -232,6 +239,27 @@ const emptyComponentPayload: DeviceComponentQualityQueue = {
   recommended_action_summary: [],
 };
 
+const staleShipmentPayload: DeviceShipmentQueue = {
+  ...shipmentPayload,
+  devices: [
+    {
+      ...shipmentPayload.devices[0],
+      device_serial_number: "SHIP-OLD",
+    },
+  ],
+};
+
+const freshShipmentPayload: DeviceShipmentQueue = {
+  ...shipmentPayload,
+  devices: [
+    {
+      ...shipmentPayload.devices[0],
+      device_serial_number: "SHIP-NEW",
+      device_updated_at: "2026-05-01T11:00:00Z",
+    },
+  ],
+};
+
 function createJsonResponse(payload: unknown): Response {
   return {
     ok: true,
@@ -240,6 +268,22 @@ function createJsonResponse(payload: unknown): Response {
     json: async () => payload,
     text: async () => JSON.stringify(payload),
   } as Response;
+}
+
+function createDeferredResponse() {
+  let resolveResponse!: (response: Response) => void;
+  let rejectResponse!: (error?: unknown) => void;
+
+  const promise = new Promise<Response>((resolve, reject) => {
+    resolveResponse = resolve;
+    rejectResponse = reject;
+  });
+
+  return {
+    promise,
+    resolveResponse,
+    rejectResponse,
+  };
 }
 
 function createErrorResponse(
@@ -352,6 +396,59 @@ describe("App", () => {
     expect(alert).toHaveTextContent("Podaj bazowy adres API.");
     expect(screen.queryByText("SHIP-001")).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores stale shipment success after a newer response wins", async () => {
+    const firstResponse = createDeferredResponse();
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() => firstResponse.promise)
+      .mockResolvedValueOnce(createJsonResponse(freshShipmentPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    fireEvent.change(screen.getByPlaceholderText("np. ZSS-VENT"), {
+      target: { value: "DEMO-OPS" },
+    });
+
+    expect(await screen.findByText("SHIP-NEW")).toBeInTheDocument();
+    expect(screen.queryByText("SHIP-OLD")).not.toBeInTheDocument();
+
+    await act(async () => {
+      firstResponse.resolveResponse(createJsonResponse(staleShipmentPayload));
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText("SHIP-NEW")).toBeInTheDocument();
+    expect(screen.queryByText("SHIP-OLD")).not.toBeInTheDocument();
+  });
+
+  it("ignores stale shipment error after a newer response wins", async () => {
+    const firstResponse = createDeferredResponse();
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() => firstResponse.promise)
+      .mockResolvedValueOnce(createJsonResponse(freshShipmentPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    fireEvent.change(screen.getByPlaceholderText("np. ZSS-VENT"), {
+      target: { value: "DEMO-OPS" },
+    });
+
+    expect(await screen.findByText("SHIP-NEW")).toBeInTheDocument();
+
+    await act(async () => {
+      firstResponse.resolveResponse(
+        createErrorResponse(503, "Service Unavailable", "stale shipment failure"),
+      );
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText("SHIP-NEW")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("applies shipment filters and keeps blocked and ready toggles exclusive", async () => {

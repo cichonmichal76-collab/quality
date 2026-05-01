@@ -197,6 +197,7 @@ export function App() {
     }
 
     const controller = new AbortController();
+    let isCurrentRequest = true;
     const path =
       activeView === "shipment" ? "/shipment-readiness" : "/component-quality";
     const params =
@@ -213,6 +214,10 @@ export function App() {
       controller.signal,
     )
       .then((payload) => {
+        if (!isCurrentRequest) {
+          return;
+        }
+
         if (activeView === "shipment") {
           setShipmentData(payload as DeviceShipmentQueue);
         } else {
@@ -221,7 +226,7 @@ export function App() {
         setLoadState("loaded");
       })
       .catch((error: unknown) => {
-        if (isAbortError(error)) {
+        if (!isCurrentRequest || isAbortError(error)) {
           return;
         }
 
@@ -230,7 +235,10 @@ export function App() {
         setErrorMessage(error instanceof Error ? error.message : String(error));
       });
 
-    return () => controller.abort();
+    return () => {
+      isCurrentRequest = false;
+      controller.abort();
+    };
   }, [
     activeView,
     apiBaseUrl,
