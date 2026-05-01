@@ -3817,6 +3817,11 @@ def test_component_quality_queue_supports_summary_and_filters():
             qc_gap_device: "FINAL_TEST_PASSED",
             ncr_device: "READY_FOR_SHIPMENT",
         }
+        variant_by_device = {
+            passing_device: "DEFAULT",
+            qc_gap_device: "SERVICE",
+            ncr_device: "DEFAULT",
+        }
         for serial_number, production_status in status_by_device.items():
             device = (
                 db.query(Device)
@@ -3825,6 +3830,7 @@ def test_component_quality_queue_supports_summary_and_filters():
             )
             assert device is not None
             device.production_status = production_status
+            device.variant_code = variant_by_device[serial_number]
 
         passing_component_serial = unique_id("ITEM")
         qc_gap_component_serial = unique_id("ITEM")
@@ -3923,6 +3929,12 @@ def test_component_quality_queue_supports_summary_and_filters():
     assert status_summary["PASS"] == (1, 1)
     assert status_summary["QC_NOT_PASSED"] == (1, 1)
     assert status_summary["CRITICAL_NCR_OPEN"] == (1, 1)
+    variant_summary = {
+        entry["variant_code"]: entry["device_count"]
+        for entry in payload["variant_code_summary"]
+    }
+    assert variant_summary["DEFAULT"] == 2
+    assert variant_summary["SERVICE"] == 1
     production_status_summary = {
         entry["production_status"]: entry["device_count"]
         for entry in payload["production_status_summary"]
@@ -3976,6 +3988,20 @@ def test_component_quality_queue_supports_summary_and_filters():
     assert ready_only_payload["filters"]["production_status"] == "READY_FOR_SHIPMENT"
     assert [row["device_serial_number"] for row in ready_only_payload["devices"]] == [
         ncr_device
+    ]
+
+    service_variant_only = client.get(
+        f"/api/component-quality?device_type={queue_device_type}&variant_code=SERVICE"
+    )
+    assert service_variant_only.status_code == 200
+    service_variant_payload = service_variant_only.json()
+    assert service_variant_payload["total_devices"] == 1
+    assert service_variant_payload["filters"]["variant_code"] == "SERVICE"
+    assert [row["device_serial_number"] for row in service_variant_payload["devices"]] == [
+        qc_gap_device
+    ]
+    assert service_variant_payload["variant_code_summary"] == [
+        {"variant_code": "SERVICE", "device_count": 1}
     ]
 
     primary_qc_gap_only = client.get(

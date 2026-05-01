@@ -23,6 +23,7 @@ from app.schemas import (
     DeviceShipmentQueueRead,
     DeviceShipmentReadinessRead,
     DeviceStatusUpdate,
+    DeviceVariantCodeSummaryRead,
 )
 
 READY_FOR_SHIPMENT_REQUIRES_FINAL_TEST = "READY_FOR_SHIPMENT requires FINAL_TEST_PASSED"
@@ -441,6 +442,24 @@ def _build_component_quality_production_status_summary(
     ]
 
 
+def _build_component_quality_variant_code_summary(
+    quality_rows: list[DeviceComponentQualityRead],
+) -> list[DeviceVariantCodeSummaryRead]:
+    summary: dict[str, int] = {}
+    for row in quality_rows:
+        summary[row.device_variant_code] = summary.get(row.device_variant_code, 0) + 1
+    return [
+        DeviceVariantCodeSummaryRead(
+            variant_code=variant_code,
+            device_count=device_count,
+        )
+        for variant_code, device_count in sorted(
+            summary.items(),
+            key=lambda item: (-item[1], item[0]),
+        )
+    ]
+
+
 def _build_component_type_summary(
     quality_rows: list[DeviceComponentQualityRead],
     *,
@@ -624,6 +643,7 @@ def list_device_component_quality(
             "limit": limit,
         },
         quality_status_summary=_build_component_quality_status_summary(quality_rows),
+        variant_code_summary=_build_component_quality_variant_code_summary(quality_rows),
         production_status_summary=_build_component_quality_production_status_summary(
             quality_rows
         ),

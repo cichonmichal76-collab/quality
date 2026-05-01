@@ -265,6 +265,11 @@ class DeviceShipmentProductionStatusSummaryRead(BaseModel):
     device_count: int
 
 
+class DeviceVariantCodeSummaryRead(BaseModel):
+    variant_code: str
+    device_count: int
+
+
 class DeviceInstalledComponentQualityRead(BaseModel):
     component_serial_number: str
     component_type: str
@@ -321,6 +326,7 @@ class DeviceComponentQualityQueueRead(BaseModel):
     next_offset: int | None = None
     filters: dict[str, str | bool | int | None]
     quality_status_summary: list[DeviceComponentQualityStatusSummaryRead]
+    variant_code_summary: list[DeviceVariantCodeSummaryRead]
     production_status_summary: list[DeviceShipmentProductionStatusSummaryRead]
     primary_quality_status_summary: list[DeviceComponentPrimaryQualityStatusSummaryRead]
     component_type_summary: list[DeviceComponentTypeSummaryRead]
