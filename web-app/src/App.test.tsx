@@ -677,6 +677,71 @@ describe("App", () => {
     );
   });
 
+  it("clears saved dashboard state back to defaults", async () => {
+    localStorage.setItem(API_STORAGE_KEY, "http://localhost:9100/api");
+    localStorage.setItem(VIEW_STORAGE_KEY, "components");
+    localStorage.setItem(
+      COMPONENT_FILTERS_STORAGE_KEY,
+      JSON.stringify({
+        device_type: "DEMO-OPS",
+        only_blocking: false,
+        limit: 25,
+      }),
+    );
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(createJsonResponse(componentPayload))
+      .mockResolvedValueOnce(createJsonResponse(shipmentPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("COMP-001")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("http://localhost:9100/api")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Wyczyść zapisany stan" }));
+
+    expect(await screen.findByText("SHIP-001")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Wysyłka" })).toHaveClass("is-active");
+    expect(screen.getByDisplayValue("/api")).toBeInTheDocument();
+    expect(screen.getByLabelText("Typ urządzenia")).toHaveValue("");
+    expect(screen.getByLabelText("Limit")).toHaveValue(100);
+
+    await waitFor(() =>
+      expect(localStorage.getItem(API_STORAGE_KEY)).toBe("/api"),
+    );
+    await waitFor(() =>
+      expect(localStorage.getItem(VIEW_STORAGE_KEY)).toBe("shipment"),
+    );
+    await waitFor(() =>
+      expect(localStorage.getItem(COMPONENT_FILTERS_STORAGE_KEY)).toBe(
+        JSON.stringify({
+          device_type: "",
+          variant_code: "",
+          production_status: "",
+          blocking_component_type: "",
+          primary_quality_status: "",
+          stale_bucket: "",
+          recommended_action: "",
+          passes_component_quality_gate: "",
+          only_blocking: true,
+          sort_by: "blocked_components",
+          sort_desc: true,
+          limit: 100,
+          offset: 0,
+        }),
+      ),
+    );
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/shipment-readiness?sort_by=created_at&sort_desc=true&limit=100",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+  });
+
   it("loads shipment filters from localStorage and persists reset state", async () => {
     localStorage.setItem(
       SHIPMENT_FILTERS_STORAGE_KEY,
@@ -866,7 +931,7 @@ describe("App", () => {
     expect(await screen.findByText("COMP-001")).toBeInTheDocument();
 
     const apiControls = screen.getByRole("region", { name: /API/i });
-    fireEvent.click(within(apiControls).getByRole("button"));
+    fireEvent.click(within(apiControls).getByRole("button", { name: "Odśwież" }));
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("API 503 Service Unavailable: component queue offline");

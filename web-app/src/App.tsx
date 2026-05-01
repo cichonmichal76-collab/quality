@@ -312,6 +312,18 @@ export function App() {
     });
   };
 
+  const resetStoredDashboardState = () => {
+    localStorage.removeItem(API_STORAGE_KEY);
+    localStorage.removeItem(VIEW_STORAGE_KEY);
+    localStorage.removeItem(SHIPMENT_FILTERS_STORAGE_KEY);
+    localStorage.removeItem(COMPONENT_FILTERS_STORAGE_KEY);
+
+    setApiBaseUrl(DEFAULT_API_BASE_URL);
+    setActiveView("shipment");
+    setShipmentFilters(DEFAULT_SHIPMENT_FILTERS);
+    setComponentFilters(DEFAULT_COMPONENT_FILTERS);
+  };
+
   return (
     <main className="app-shell">
       <header className="hero">
@@ -339,6 +351,13 @@ export function App() {
             onClick={() => setRefreshVersion((value) => value + 1)}
           >
             Odśwież
+          </button>
+          <button
+            className="ghost-button"
+            type="button"
+            onClick={resetStoredDashboardState}
+          >
+            Wyczyść zapisany stan
           </button>
         </section>
       </header>

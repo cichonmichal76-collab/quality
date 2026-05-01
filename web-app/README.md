@@ -34,6 +34,10 @@ npm run dev
 W panelu można też ręcznie zmienić pole `adres bazowy API`, na przykład na pełny adres
 `http://localhost:8000/api`.
 
+Jeżeli chcesz szybko wrócić do stanu domyślnego, użyj przycisku
+`Wyczyść zapisany stan`. Resetuje on adres API, aktywną zakładkę i zapisane
+filtry obu widoków.
+
 Jeżeli chcesz szybko zobaczyć niepuste kolejki, najwygodniej uruchom z katalogu
 repo:
 
