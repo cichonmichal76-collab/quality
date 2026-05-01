@@ -7,6 +7,7 @@ from app.models import AuditEvent, Device
 from app.modules.assembly.service import get_device_bom_compliance
 from app.modules.shipment import repository, rules
 from app.schemas import (
+    DeviceComponentPrimaryQualityStatusSummaryRead,
     DeviceComponentQualityRead,
     DeviceComponentQualityQueueRead,
     DeviceComponentQualityStatusSummaryRead,
@@ -402,6 +403,26 @@ def _build_component_quality_status_summary(
     ]
 
 
+def _build_primary_component_quality_status_summary(
+    quality_rows: list[DeviceComponentQualityRead],
+) -> list[DeviceComponentPrimaryQualityStatusSummaryRead]:
+    summary: dict[str, int] = {}
+    for row in quality_rows:
+        summary[row.primary_quality_status] = (
+            summary.get(row.primary_quality_status, 0) + 1
+        )
+    return [
+        DeviceComponentPrimaryQualityStatusSummaryRead(
+            primary_quality_status=primary_quality_status,
+            device_count=device_count,
+        )
+        for primary_quality_status, device_count in sorted(
+            summary.items(),
+            key=lambda item: (-item[1], item[0]),
+        )
+    ]
+
+
 def _build_component_type_summary(
     quality_rows: list[DeviceComponentQualityRead],
     *,
@@ -486,6 +507,7 @@ def list_device_component_quality(
     production_status: str | None = None,
     component_type: str | None = None,
     quality_status: str | None = None,
+    primary_quality_status: str | None = None,
     recommended_action: str | None = None,
     only_blocking: bool = False,
     sort_by: str = "blocked_components",
@@ -501,6 +523,14 @@ def list_device_component_quality(
         raise HTTPException(status_code=400, detail=f"limit must be <= {MAX_QUEUE_LIMIT}")
     if quality_status and quality_status not in VALID_COMPONENT_QUALITY_STATUSES:
         raise HTTPException(status_code=400, detail="Unsupported quality_status filter")
+    if (
+        primary_quality_status
+        and primary_quality_status not in VALID_COMPONENT_QUALITY_STATUSES
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported primary_quality_status filter",
+        )
     if (
         recommended_action
         and recommended_action not in VALID_COMPONENT_QUALITY_RECOMMENDED_ACTIONS
@@ -534,6 +564,10 @@ def list_device_component_quality(
             for row in quality_rows
             if any(component.quality_status == quality_status for component in row.components)
         ]
+    if primary_quality_status:
+        quality_rows = [
+            row for row in quality_rows if row.primary_quality_status == primary_quality_status
+        ]
     if recommended_action:
         quality_rows = [row for row in quality_rows if row.recommended_action == recommended_action]
     quality_rows = _sort_component_quality_rows(
@@ -563,6 +597,7 @@ def list_device_component_quality(
             "production_status": production_status,
             "component_type": component_type,
             "quality_status": quality_status,
+            "primary_quality_status": primary_quality_status,
             "recommended_action": recommended_action,
             "only_blocking": only_blocking,
             "sort_by": sort_by,
@@ -571,6 +606,9 @@ def list_device_component_quality(
             "limit": limit,
         },
         quality_status_summary=_build_component_quality_status_summary(quality_rows),
+        primary_quality_status_summary=_build_primary_component_quality_status_summary(
+            quality_rows
+        ),
         component_type_summary=_build_component_type_summary(
             quality_rows,
             component_type_filter=component_type,

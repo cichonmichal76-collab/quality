@@ -3910,6 +3910,13 @@ def test_component_quality_queue_supports_summary_and_filters():
     assert status_summary["PASS"] == (1, 1)
     assert status_summary["QC_NOT_PASSED"] == (1, 1)
     assert status_summary["CRITICAL_NCR_OPEN"] == (1, 1)
+    primary_status_summary = {
+        entry["primary_quality_status"]: entry["device_count"]
+        for entry in payload["primary_quality_status_summary"]
+    }
+    assert primary_status_summary["PASS"] == 1
+    assert primary_status_summary["QC_NOT_PASSED"] == 1
+    assert primary_status_summary["CRITICAL_NCR_OPEN"] == 1
     component_type_summary = {
         entry["component_type"]: (entry["component_count"], entry["device_count"])
         for entry in payload["component_type_summary"]
@@ -3939,6 +3946,17 @@ def test_component_quality_queue_supports_summary_and_filters():
     )
     assert ncr_only.status_code == 200
     assert [row["device_serial_number"] for row in ncr_only.json()["devices"]] == [ncr_device]
+
+    primary_qc_gap_only = client.get(
+        f"/api/component-quality?device_type={queue_device_type}&primary_quality_status=QC_NOT_PASSED"
+    )
+    assert primary_qc_gap_only.status_code == 200
+    primary_qc_gap_payload = primary_qc_gap_only.json()
+    assert primary_qc_gap_payload["total_devices"] == 1
+    assert primary_qc_gap_payload["filters"]["primary_quality_status"] == "QC_NOT_PASSED"
+    assert [row["device_serial_number"] for row in primary_qc_gap_payload["devices"]] == [
+        qc_gap_device
+    ]
 
     fan_only = client.get(
         f"/api/component-quality?device_type={queue_device_type}&component_type=FAN_MODULE"
@@ -3985,6 +4003,12 @@ def test_component_quality_queue_rejects_unsupported_recommended_action():
         response.json()["detail"]
         == "Unsupported component quality recommended_action filter"
     )
+
+
+def test_component_quality_queue_rejects_unsupported_primary_quality_status():
+    response = client.get("/api/component-quality?primary_quality_status=UNSUPPORTED")
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Unsupported primary_quality_status filter"
 
 
 def test_audit_events_can_filter_shipment_gate_by_event_type_and_result():
