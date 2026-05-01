@@ -531,6 +531,88 @@ describe("App", () => {
     expect(screen.getByLabelText("Tylko gotowe")).toBeChecked();
   });
 
+  it("clears incompatible shipment filters when only ready is enabled", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(createJsonResponse(shipmentPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("SHIP-001")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Główna blokada"), {
+      target: { value: "FINAL_TEST_NOT_PASSED" },
+    });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+
+    fireEvent.change(screen.getByLabelText("Akcja"), {
+      target: { value: "COMPLETE_ASSEMBLY" },
+    });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+
+    fireEvent.click(screen.getByLabelText("Tylko gotowe"));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/shipment-readiness?only_ready=true&sort_by=created_at&sort_desc=true&limit=100",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+
+    expect(screen.getByLabelText("Główna blokada")).toHaveValue("");
+    expect(screen.getByLabelText("Akcja")).toHaveValue("");
+    expect(screen.getByLabelText("Tylko gotowe")).toBeChecked();
+    expect(screen.getByLabelText("Tylko zablokowane")).not.toBeChecked();
+  });
+
+  it("turns off incompatible shipment toggles when explicit filters are selected", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(createJsonResponse(shipmentPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("SHIP-001")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText("Tylko gotowe"));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+
+    fireEvent.change(screen.getByLabelText("Główna blokada"), {
+      target: { value: "FINAL_TEST_NOT_PASSED" },
+    });
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/shipment-readiness?primary_blocking_code=FINAL_TEST_NOT_PASSED&sort_by=created_at&sort_desc=true&limit=100",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+    expect(screen.getByLabelText("Tylko gotowe")).not.toBeChecked();
+
+    fireEvent.click(screen.getByLabelText("Tylko zablokowane"));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+
+    fireEvent.change(screen.getByLabelText("Akcja"), {
+      target: { value: "MARK_READY_FOR_SHIPMENT" },
+    });
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(5));
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/shipment-readiness?primary_blocking_code=FINAL_TEST_NOT_PASSED&recommended_action=MARK_READY_FOR_SHIPMENT&sort_by=created_at&sort_desc=true&limit=100",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+    expect(screen.getByLabelText("Tylko zablokowane")).not.toBeChecked();
+  });
+
   it("renders empty state for component queue when API returns no devices", async () => {
     const fetchMock = vi
       .fn()
@@ -634,6 +716,52 @@ describe("App", () => {
           latest_gate_result: "",
           only_blocked: false,
           only_ready: false,
+          sort_by: "created_at",
+          sort_desc: true,
+          limit: 100,
+          offset: 0,
+        }),
+      ),
+    );
+  });
+
+  it("sanitizes incompatible shipment filters restored from localStorage", async () => {
+    localStorage.setItem(
+      SHIPMENT_FILTERS_STORAGE_KEY,
+      JSON.stringify({
+        device_type: "DEMO-OPS",
+        only_blocked: true,
+        only_ready: true,
+        primary_blocking_code: "FINAL_TEST_NOT_PASSED",
+        recommended_action: "COMPLETE_ASSEMBLY",
+      }),
+    );
+
+    const fetchMock = vi.fn(async () => createJsonResponse(shipmentPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("SHIP-001")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/shipment-readiness?device_type=DEMO-OPS&only_ready=true&sort_by=created_at&sort_desc=true&limit=100",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+
+    await waitFor(() =>
+      expect(localStorage.getItem(SHIPMENT_FILTERS_STORAGE_KEY)).toBe(
+        JSON.stringify({
+          device_type: "DEMO-OPS",
+          variant_code: "",
+          production_status: "",
+          primary_blocking_code: "",
+          recommended_action: "",
+          latest_gate_result: "",
+          only_blocked: false,
+          only_ready: true,
           sort_by: "created_at",
           sort_desc: true,
           limit: 100,

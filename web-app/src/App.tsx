@@ -279,10 +279,11 @@ export function App() {
         key === "limit"
           ? (clampLimit(value as number) as ShipmentFilters[Key])
           : value;
-      const next = {
-        ...previous,
-        [key]: normalizedValue,
-      } as ShipmentFilters;
+      const next = reconcileShipmentFilterChange(
+        previous,
+        key,
+        normalizedValue,
+      );
       if (key !== "offset") {
         next.offset = 0;
       }
@@ -1302,6 +1303,76 @@ function setExclusiveShipmentQueueFilter<Key extends "only_blocked" | "only_read
   }
 }
 
+function reconcileShipmentFilterChange<Key extends keyof ShipmentFilters>(
+  previous: ShipmentFilters,
+  key: Key,
+  value: ShipmentFilters[Key],
+): ShipmentFilters {
+  const next = {
+    ...previous,
+    [key]: value,
+  } as ShipmentFilters;
+
+  if (key === "only_blocked" && next.only_blocked) {
+    next.only_ready = false;
+    if (next.recommended_action === "MARK_READY_FOR_SHIPMENT") {
+      next.recommended_action = "";
+    }
+    return next;
+  }
+
+  if (key === "only_ready" && next.only_ready) {
+    next.only_blocked = false;
+    next.primary_blocking_code = "";
+    if (
+      next.recommended_action !== "" &&
+      next.recommended_action !== "MARK_READY_FOR_SHIPMENT"
+    ) {
+      next.recommended_action = "";
+    }
+    return next;
+  }
+
+  if (key === "primary_blocking_code" && next.primary_blocking_code !== "") {
+    next.only_ready = false;
+    return next;
+  }
+
+  if (key === "recommended_action") {
+    if (next.recommended_action === "MARK_READY_FOR_SHIPMENT") {
+      next.only_blocked = false;
+    } else if (next.recommended_action !== "") {
+      next.only_ready = false;
+    }
+  }
+
+  return next;
+}
+
+function sanitizeShipmentFilters(filters: ShipmentFilters): ShipmentFilters {
+  const next = { ...filters };
+
+  if (next.only_ready) {
+    next.only_blocked = false;
+    next.primary_blocking_code = "";
+    if (
+      next.recommended_action !== "" &&
+      next.recommended_action !== "MARK_READY_FOR_SHIPMENT"
+    ) {
+      next.recommended_action = "";
+    }
+  }
+
+  if (
+    next.only_blocked &&
+    next.recommended_action === "MARK_READY_FOR_SHIPMENT"
+  ) {
+    next.recommended_action = "";
+  }
+
+  return next;
+}
+
 function clampLimit(value: number): number {
   return Math.min(Math.max(Math.trunc(value), 1), 500);
 }
@@ -1323,7 +1394,7 @@ function readStoredDashboardMode(): DashboardMode {
 function readStoredShipmentFilters(): ShipmentFilters {
   const storedValue = readStoredObject(SHIPMENT_FILTERS_STORAGE_KEY);
 
-  return {
+  return sanitizeShipmentFilters({
     device_type: readStoredString(
       storedValue.device_type,
       DEFAULT_SHIPMENT_FILTERS.device_type,
@@ -1370,7 +1441,7 @@ function readStoredShipmentFilters(): ShipmentFilters {
     offset: clampOffset(
       readStoredNumber(storedValue.offset, DEFAULT_SHIPMENT_FILTERS.offset),
     ),
-  };
+  });
 }
 
 function readStoredComponentFilters(): ComponentFilters {
