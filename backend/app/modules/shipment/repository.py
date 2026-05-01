@@ -2,7 +2,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.database import utc_now
-from app.models import AssemblyLink, Device, DeviceBomItem, DeviceBomTemplate, Nonconformity
+from app.models import AuditEvent, AssemblyLink, Device, DeviceBomItem, DeviceBomTemplate, Nonconformity
 
 
 def get_device_by_serial_number(db: Session, device_serial_number: str) -> Device | None:
@@ -143,3 +143,27 @@ def list_required_bom_items_for_template(db: Session, template_id: str) -> list[
 
 def list_bom_items_for_template(db: Session, template_id: str) -> list[DeviceBomItem]:
     return db.query(DeviceBomItem).filter(DeviceBomItem.template_id == template_id).all()
+
+
+def list_shipment_gate_audit_events_for_device(
+    db: Session,
+    device_serial_number: str,
+    *,
+    result: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[AuditEvent]:
+    query = (
+        db.query(AuditEvent)
+        .filter(
+            AuditEvent.entity_type == "DEVICE",
+            AuditEvent.entity_id == device_serial_number,
+            AuditEvent.event_type.in_(["SHIPMENT_GATE_PASSED", "SHIPMENT_GATE_BLOCKED"]),
+        )
+        .order_by(AuditEvent.created_at.desc())
+    )
+    if result:
+        query = query.filter(AuditEvent.result == result)
+    if offset:
+        query = query.offset(offset)
+    return query.limit(limit).all()

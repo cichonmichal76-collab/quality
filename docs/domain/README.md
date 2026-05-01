@@ -211,6 +211,7 @@ Najważniejsze reguły:
 - widok kolejkowy `shipment-readiness` pozwala pobrać zbiorczo urządzenia gotowe i zablokowane do wysyłki, a także ich agregację per `blocking_code`, `primary_blocking_code` i `recommended_action`; wspiera też sortowanie oraz paginację przez `offset` i `limit`, więc dashboard może ustawić najbardziej pilne sztuki na górze bez gubienia pełnych liczników i summary
 - sama decyzja o wejściu w `READY_FOR_SHIPMENT` ma już osobny ślad audytowy `SHIPMENT_GATE_PASSED` albo `SHIPMENT_GATE_BLOCKED`, niezależny od zwykłego `DEVICE_STATUS_UPDATED`
 - odczyt `/api/audit-events` pozwala teraz dodatkowo filtrować ten ślad po `event_type` i `result`, więc warstwa kliencka może pobrać same decyzje shipmentowe bez własnego filtrowania
+- dla pojedynczego urządzenia dostępny jest też dedykowany odczyt `shipment-gate-history`, który zwraca chronologiczną historię decyzji `PASS` i `BLOCKED` bez potrzeby ręcznego składania filtrów audytu
 - zbiorczy stan wszystkich wersji dla danego `device_type` i `variant_code` jest dostępny przez odczyt `catalog`, który pokazuje gotowość do aktywacji i release oraz blokady lifecycle bez potrzeby składania kilku osobnych endpointów
 - konkretne urządzenia związane z wersją BOM są dostępne przez odczyt `bindings`, co pozwala ocenić wpływ zmian na już rozpoczętą produkcję
 - kompletność tych urządzeń względem BOM jest dostępna przez odczyt `coverage`, który pokazuje braki, nadinstalacje i status per komponent; status `OVER_INSTALLED` oznacza teraz niekompletność z perspektywy gate’u

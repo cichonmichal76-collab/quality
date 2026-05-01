@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.modules.shipment import service
-from app.schemas import DeviceRead, DeviceShipmentQueueRead, DeviceShipmentReadinessRead, DeviceStatusUpdate
+from app.schemas import AuditEventRead, DeviceRead, DeviceShipmentQueueRead, DeviceShipmentReadinessRead, DeviceStatusUpdate
 
 router = APIRouter(tags=["shipment"])
 
@@ -48,6 +48,26 @@ def get_device_shipment_readiness(
     db: Session = Depends(get_db),
 ):
     return service.get_device_shipment_readiness(db, serial_number)
+
+
+@router.get(
+    "/devices/{serial_number}/shipment-gate-history",
+    response_model=list[AuditEventRead],
+)
+def get_device_shipment_gate_history(
+    serial_number: str,
+    result: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+):
+    return service.get_device_shipment_gate_history(
+        db,
+        serial_number,
+        result=result,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.patch("/devices/{serial_number}/status", response_model=DeviceRead)

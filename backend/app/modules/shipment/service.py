@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.core.audit import record_audit_event
 from app.database import utc_now
-from app.models import Device
+from app.models import AuditEvent, Device
 from app.modules.assembly.service import get_device_bom_compliance
 from app.modules.shipment import repository, rules
 from app.schemas import (
@@ -33,6 +33,7 @@ COMPLETE_ASSEMBLY_ACTION = "COMPLETE_ASSEMBLY"
 RUN_FINAL_TEST_ACTION = "RUN_FINAL_TEST"
 VALID_QUEUE_SORT_FIELDS = {"created_at", "device_serial_number", "priority", "recommended_action"}
 MAX_QUEUE_LIMIT = 500
+MAX_SHIPMENT_GATE_HISTORY_LIMIT = 200
 
 
 def get_device_or_404(db: Session, serial_number: str) -> Device:
@@ -304,6 +305,35 @@ def get_device_shipment_readiness(
 ) -> DeviceShipmentReadinessRead:
     device = get_device_or_404(db, serial_number)
     return _build_device_shipment_readiness(db, device)
+
+
+def get_device_shipment_gate_history(
+    db: Session,
+    serial_number: str,
+    *,
+    result: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[AuditEvent]:
+    get_device_or_404(db, serial_number)
+    if offset < 0:
+        raise HTTPException(status_code=400, detail="offset must be >= 0")
+    if limit < 1:
+        raise HTTPException(status_code=400, detail="limit must be >= 1")
+    if limit > MAX_SHIPMENT_GATE_HISTORY_LIMIT:
+        raise HTTPException(
+            status_code=400,
+            detail=f"limit must be <= {MAX_SHIPMENT_GATE_HISTORY_LIMIT}",
+        )
+    if result and result not in {"PASS", "BLOCKED"}:
+        raise HTTPException(status_code=400, detail="Unsupported shipment gate result filter")
+    return repository.list_shipment_gate_audit_events_for_device(
+        db,
+        serial_number,
+        result=result,
+        limit=limit,
+        offset=offset,
+    )
 
 
 def _build_blocking_summary(

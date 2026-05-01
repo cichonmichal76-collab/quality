@@ -169,6 +169,7 @@ Wersje BOM mają też teraz jawne lineage przez `source_template_id` i `replaced
 - `GET /api/devices/{serial_number}/bom-resolution`
 - `GET /api/devices/{serial_number}/bom-compliance`
 - `GET /api/devices/{serial_number}/shipment-readiness`
+- `GET /api/devices/{serial_number}/shipment-gate-history`
 - `PATCH /api/devices/{serial_number}/status`
 - `GET /api/audit-events`
   Obsługuje filtry `entity_type`, `entity_id`, `work_session_id`, `event_type` i `result`.
