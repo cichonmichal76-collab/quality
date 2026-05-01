@@ -57,6 +57,18 @@ class DeviceBomTemplateRead(DeviceBomTemplateCreate):
     model_config = {"from_attributes": True}
 
 
+class DeviceBomTemplateUsageRead(BaseModel):
+    template_id: str
+    device_type: str
+    version: str
+    status: str
+    is_active: bool
+    bound_device_count: int
+    is_bound: bool
+    can_modify: bool
+    recommended_action: str
+
+
 class DeviceBomTemplateActivateRequest(BaseModel):
     version: str = Field(pattern=r"^\d+(?:\.\d+)*$")
 

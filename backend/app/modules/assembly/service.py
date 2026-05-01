@@ -25,6 +25,7 @@ from app.schemas import (
     DeviceBomItemCreate,
     DeviceBomTemplateCreate,
     DeviceBomTemplateRetireRequest,
+    DeviceBomTemplateUsageRead,
     DeviceCreate,
 )
 
@@ -159,6 +160,37 @@ def create_device_bom_template(db: Session, payload: DeviceBomTemplateCreate) ->
 
 def list_device_bom_templates(db: Session) -> list[DeviceBomTemplate]:
     return repository.list_bom_templates(db)
+
+
+def get_device_bom_template_usage(
+    db: Session,
+    device_type: str,
+    version: str | None = None,
+) -> DeviceBomTemplateUsageRead:
+    template = get_device_bom_template_or_404(db, device_type, version)
+    bound_device_count = repository.count_bound_devices_for_template(db, template.id)
+    is_bound = bound_device_count > 0
+    can_modify = template.status != "RETIRED" and not (template.status == "ACTIVE" and is_bound)
+    if template.status == "RETIRED":
+        recommended_action = "clone"
+    elif template.status == "ACTIVE" and is_bound:
+        recommended_action = "clone_or_promote"
+    elif template.status == "ACTIVE":
+        recommended_action = "modify_in_place"
+    else:
+        recommended_action = "modify_or_activate"
+
+    return DeviceBomTemplateUsageRead(
+        template_id=template.id,
+        device_type=template.device_type,
+        version=template.version,
+        status=template.status,
+        is_active=template.is_active,
+        bound_device_count=bound_device_count,
+        is_bound=is_bound,
+        can_modify=can_modify,
+        recommended_action=recommended_action,
+    )
 
 
 def get_device_bom_template_or_404(

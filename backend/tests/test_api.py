@@ -293,6 +293,27 @@ def test_device_bom_template_versions_can_be_activated():
     assert next(row for row in device_templates if row["version"] == "1.0")["is_active"] is False
 
 
+def test_device_bom_template_usage_reports_mutable_active_template():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=True,
+    )
+
+    usage = client.get(f"/api/device-bom-templates/{device_type}/usage?version=1.0")
+    assert usage.status_code == 200
+    payload = usage.json()
+    assert payload["device_type"] == device_type
+    assert payload["version"] == "1.0"
+    assert payload["status"] == "ACTIVE"
+    assert payload["bound_device_count"] == 0
+    assert payload["is_bound"] is False
+    assert payload["can_modify"] is True
+    assert payload["recommended_action"] == "modify_in_place"
+
+
 def test_device_bom_template_can_be_cloned_with_all_items():
     device_type = unique_id("DT")
     ensure_device_bom_template(
@@ -591,6 +612,44 @@ def test_active_bound_bom_template_cannot_be_modified():
     assert add_item.json()["detail"] == (
         "Active BOM template already used by devices cannot be modified; use clone or promote"
     )
+
+
+def test_device_bom_template_usage_reports_bound_active_template():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=True,
+    )
+
+    session = start_work_session(role="PRODUCTION_OPERATOR")
+    device_serial_number = unique_id("DEV")
+    create_device = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
+    )
+    assert create_device.status_code == 200
+
+    item = create_qc_passed_item(session, item_type="CONTROL_PCB")
+    installed = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": session["work_session_id"],
+        },
+    )
+    assert installed.status_code == 200
+
+    usage = client.get(f"/api/device-bom-templates/{device_type}/usage?version=1.0")
+    assert usage.status_code == 200
+    payload = usage.json()
+    assert payload["status"] == "ACTIVE"
+    assert payload["bound_device_count"] == 1
+    assert payload["is_bound"] is True
+    assert payload["can_modify"] is False
+    assert payload["recommended_action"] == "clone_or_promote"
 
 
 def test_device_bom_audit_events_are_recorded():

@@ -431,6 +431,12 @@ curl -X POST http://localhost:8000/api/device-bom-templates/ZSS/promote \
   }'
 ```
 
+Odczyt użycia i mutowalności konkretnej wersji BOM:
+
+```bash
+curl "http://localhost:8000/api/device-bom-templates/ZSS/usage?version=3.0"
+```
+
 Wycofanie wersji BOM:
 
 ```bash
@@ -480,6 +486,7 @@ Reguły assembly:
 - nową wersję BOM można utworzyć przez klonowanie istniejącej wersji wraz z kompletem pozycji i opcjonalną natychmiastową aktywacją
 - aktywną wersję BOM można też promować do nowej rewizji jednym endpointem, który klonuje pozycje, aktywuje nową wersję i wycofuje starą
 - aktywna wersja BOM, która została już użyta przez urządzenia w montażu, dostaje soft-lock i nie może być dalej rozszerzana; zmiany powinny iść przez `clone` albo `promote`
+- endpoint `usage` zwraca także `recommended_action`, np. `modify_in_place`, `modify_or_activate`, `clone` albo `clone_or_promote`
 
 ## 7. Final test
 

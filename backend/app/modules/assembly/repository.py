@@ -194,3 +194,12 @@ def has_bom_template_bindings(db: Session, template_id: str) -> bool:
         .first()
         is not None
     )
+
+
+def count_bound_devices_for_template(db: Session, template_id: str) -> int:
+    return (
+        db.query(AssemblyLink.parent_device_serial_number)
+        .filter(AssemblyLink.bom_template_id == template_id)
+        .distinct()
+        .count()
+    )

@@ -17,6 +17,7 @@ from app.schemas import (
     DeviceBomTemplateCreate,
     DeviceBomTemplateRetireRequest,
     DeviceBomTemplateRead,
+    DeviceBomTemplateUsageRead,
     DeviceCreate,
     DeviceRead,
 )
@@ -50,6 +51,18 @@ def create_device_bom_template(
 @router.get("/device-bom-templates", response_model=list[DeviceBomTemplateRead])
 def list_device_bom_templates(db: Session = Depends(get_db)):
     return service.list_device_bom_templates(db)
+
+
+@router.get(
+    "/device-bom-templates/{device_type}/usage",
+    response_model=DeviceBomTemplateUsageRead,
+)
+def get_device_bom_template_usage(
+    device_type: str,
+    version: str | None = None,
+    db: Session = Depends(get_db),
+):
+    return service.get_device_bom_template_usage(db, device_type, version)
 
 
 @router.post(
