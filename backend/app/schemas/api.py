@@ -49,6 +49,8 @@ class DeviceBomTemplateCreate(BaseModel):
     name: str
     version: str = Field(default="1.0", pattern=r"^\d+(?:\.\d+)*$")
     is_active: bool = True
+    effective_from: datetime | None = None
+    effective_to: datetime | None = None
 
 
 class DeviceBomTemplateRead(DeviceBomTemplateCreate):
@@ -70,6 +72,9 @@ class DeviceBomTemplateUsageRead(BaseModel):
     status: str
     is_active: bool
     is_approved: bool
+    effective_from: datetime | None = None
+    effective_to: datetime | None = None
+    is_effective_now: bool
     bound_device_count: int
     is_bound: bool
     can_modify: bool
@@ -84,6 +89,9 @@ class DeviceBomTemplateReadinessRead(BaseModel):
     status: str
     is_active: bool
     is_approved: bool
+    effective_from: datetime | None = None
+    effective_to: datetime | None = None
+    is_effective_now: bool
     item_count: int
     required_item_count: int
     has_any_items: bool
@@ -151,6 +159,8 @@ class DeviceBomTemplateCloneRequest(BaseModel):
     target_version: str = Field(pattern=r"^\d+(?:\.\d+)*$")
     name: str | None = None
     activate: bool = False
+    effective_from: datetime | None = None
+    effective_to: datetime | None = None
 
 
 class DeviceBomTemplatePromoteRequest(BaseModel):
@@ -158,6 +168,8 @@ class DeviceBomTemplatePromoteRequest(BaseModel):
     target_version: str = Field(pattern=r"^\d+(?:\.\d+)*$")
     name: str | None = None
     retire_reason: str | None = None
+    effective_from: datetime | None = None
+    effective_to: datetime | None = None
 
 
 class DeviceBomItemCreate(BaseModel):

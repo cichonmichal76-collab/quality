@@ -28,6 +28,8 @@ NCR powstaje przy wyniku NOK albo ręcznym zgłoszeniu niezgodności. Krytyczna 
 
 Montaż urządzenia odbywa się przez skanowanie komponentów. W obecnym MVP backend sprawdza aktywną sesję pracy, status komponentu, zgodność typu z aktywnym BOM, zgodność `part_number`, `revision`, `drawing_number` i `drawing_revision` z regułami BOM, limit ilości z BOM i to, czy część nie jest już użyta w innym urządzeniu. Jeśli dla `device_type` istnieją już wersje BOM, ale żadna nie jest aktywna, nowy montaż jest blokowany do czasu aktywacji kolejnej wersji. Operacyjnie nową wersję można przygotować przez klonowanie poprzedniej rewizji BOM razem z pozycjami, bez ręcznego przepisywania komponentów, albo przez promocję aktywnej wersji do nowej rewizji w jednym kroku. Aktywny BOM użyty już przez urządzenia dostaje soft-lock na dalsze rozszerzanie i od tego momentu zmiany powinny przechodzić przez nową wersję. Dla wersji nadal mutowalnych backend pozwala już nie tylko dodawać, ale też aktualizować i usuwać pozycje BOM. Dodatkowy odczyt `bindings` pokazuje, które urządzenia są już związane z wersją BOM, odczyt `coverage` pokazuje kompletność tych urządzeń względem BOM, odczyt `diff` pozwala porównać dwie wersje BOM przed aktywacją albo promocją, a odczyt `readiness` i sama aktywacja pilnują, żeby nowa wersja miała co najmniej jedną wymaganą pozycję. Wersja BOM może też przejść jawny release workflow z `approved_by`, `approved_at` i `release_note`, dzięki czemu wejście BOM do produkcji ma ślad zatwierdzenia. Endpoint assembly zapisuje relację device → component, scan event i audit trail.
 
+Dodatkowo aktywny lookup BOM uwzględnia teraz pola `effective_from` i `effective_to`. W praktyce oznacza to, że BOM może być przygotowany wcześniej albo wygaszony w czasie, ale do nowego montażu trafi dopiero wtedy, gdy jest jednocześnie `ACTIVE` i obowiązuje w bieżącym oknie czasu.
+
 ## Digital device tree
 
 Po montażu system pokazuje drzewo urządzenia z konkretnymi numerami części i podzespołów. Historia urządzenia powinna pozwalać zejść do historii każdego komponentu.
@@ -41,6 +43,8 @@ Gotowe urządzenie musi przejść final test. Wynik PASS dopuszcza do wysyłki. 
 Status READY_FOR_SHIPMENT jest możliwy tylko wtedy, gdy urządzenie ma wymagane komponenty, nie ma komponentów nadmiarowych ani nieoczekiwanych względem BOM, komponenty mają pozytywne QC, final test jest PASS i nie ma blokujących NCR.
 
 W obecnym MVP wymagane komponenty są odczytywane z aktywnego BOM zapisanego w tabelach `device_bom_templates` i `device_bom_items`. Backend porównuje ilości wymagane z faktycznie zainstalowanymi `AssemblyLink`, a bazowa migracja dostarcza minimalny BOM dla `ZSS`, wymagający `CONTROL_PCB`. Część walidacji BOM dzieje się już podczas assembly scan, a pierwszy poprawny montaż przypina urządzenie do konkretnej wersji BOM zapisanej na `AssemblyLink`. Wersja BOM ma jawny status lifecycle `ACTIVE`, `INACTIVE` albo `RETIRED`, a wersja `RETIRED` jest traktowana jako niemodyfikowalna. Shipment pozostaje końcową bramką kompletności i korzysta z tej samej wersji, jeśli urządzenie zostało już do niej przypięte; dla nowych, jeszcze nieprzypiętych urządzeń brak aktywnej wersji BOM blokuje przejście dalej.
+
+Jeśli dla nowego urządzenia istnieje tylko aktywna, ale jeszcze nieobowiązująca albo już wygasła wersja BOM, shipment traktuje to tak samo jak brak aktywnego skutecznego BOM i blokuje `READY_FOR_SHIPMENT` do czasu wejścia właściwej wersji w życie.
 
 ## Mobile offline commissioning
 

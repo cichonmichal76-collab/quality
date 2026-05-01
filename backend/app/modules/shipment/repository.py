@@ -1,5 +1,7 @@
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from app.database import utc_now
 from app.models import AssemblyLink, Device, DeviceBomItem, DeviceBomTemplate, Nonconformity
 
 
@@ -39,12 +41,21 @@ def get_active_bom_template_by_device_type(
     device_type: str,
     variant_code: str = "DEFAULT",
 ) -> DeviceBomTemplate | None:
+    now = utc_now()
     return (
         db.query(DeviceBomTemplate)
         .filter(
             DeviceBomTemplate.device_type == device_type,
             DeviceBomTemplate.variant_code == variant_code,
             DeviceBomTemplate.status == "ACTIVE",
+            or_(
+                DeviceBomTemplate.effective_from.is_(None),
+                DeviceBomTemplate.effective_from <= now,
+            ),
+            or_(
+                DeviceBomTemplate.effective_to.is_(None),
+                DeviceBomTemplate.effective_to >= now,
+            ),
         )
         .first()
     )

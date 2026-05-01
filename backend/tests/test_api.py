@@ -102,6 +102,8 @@ def ensure_device_bom_template(
     version: str = "1.0",
     is_active: bool = True,
     variant_code: str = "DEFAULT",
+    effective_from: str | None = None,
+    effective_to: str | None = None,
     required_part_number: str | None = None,
     required_revision: str | None = None,
     required_drawing_number: str | None = None,
@@ -115,6 +117,8 @@ def ensure_device_bom_template(
             "name": f"{device_type} Default BOM",
             "version": version,
             "is_active": is_active,
+            "effective_from": effective_from,
+            "effective_to": effective_to,
         },
     )
     assert template_response.status_code in {200, 409}
@@ -630,6 +634,86 @@ def test_variant_device_falls_back_to_default_bom_when_specific_variant_is_missi
         version="1.0",
         is_active=True,
         variant_code="DEFAULT",
+    )
+
+    device_serial_number = unique_id("DEV")
+    device_response = client.post(
+        "/api/devices",
+        json={
+            "device_serial_number": device_serial_number,
+            "device_type": device_type,
+            "variant_code": "PREMIUM",
+        },
+    )
+    assert device_response.status_code == 200
+
+    production_session = start_work_session(role="PRODUCTION_OPERATOR")
+    item = create_qc_passed_item(production_session, item_type="CONTROL_PCB")
+    install = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": production_session["work_session_id"],
+        },
+    )
+    assert install.status_code == 200
+
+    bindings = client.get(
+        f"/api/device-bom-templates/{device_type}/bindings?version=1.0&variant_code=DEFAULT"
+    )
+    assert bindings.status_code == 200
+    rows = {row["device_serial_number"]: row for row in bindings.json()}
+    assert rows[device_serial_number]["device_variant_code"] == "PREMIUM"
+    assert rows[device_serial_number]["bom_variant_code"] == "DEFAULT"
+
+
+def test_future_effective_bom_reports_not_effective_yet():
+    device_type = unique_id("DT")
+    effective_from = (utc_now() + timedelta(days=1)).isoformat()
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=True,
+        variant_code="DEFAULT",
+        effective_from=effective_from,
+    )
+
+    usage = client.get(
+        f"/api/device-bom-templates/{device_type}/usage?version=1.0&variant_code=DEFAULT"
+    )
+    assert usage.status_code == 200
+    usage_payload = usage.json()
+    assert usage_payload["is_effective_now"] is False
+    assert usage_payload["effective_from"] is not None
+    assert usage_payload["effective_to"] is None
+
+    readiness = client.get(
+        f"/api/device-bom-templates/{device_type}/readiness?version=1.0&variant_code=DEFAULT"
+    )
+    assert readiness.status_code == 200
+    readiness_payload = readiness.json()
+    assert readiness_payload["is_effective_now"] is False
+    assert readiness_payload["can_activate"] is True
+
+
+def test_variant_device_falls_back_to_default_bom_when_specific_variant_is_not_effective_yet():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=True,
+        variant_code="DEFAULT",
+    )
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="FAN_MODULE",
+        version="1.0",
+        is_active=True,
+        variant_code="PREMIUM",
+        effective_from=(utc_now() + timedelta(days=1)).isoformat(),
     )
 
     device_serial_number = unique_id("DEV")
@@ -2159,7 +2243,38 @@ def test_assembly_scan_blocks_when_device_type_has_no_active_bom():
         },
     )
     assert blocked.status_code == 400
-    assert blocked.json()["detail"] == "No active BOM template available for device type"
+    assert blocked.json()["detail"] == "No active effective BOM template available for device type"
+
+
+def test_assembly_scan_blocks_when_only_active_bom_is_not_effective_yet():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=True,
+        effective_from=(utc_now() + timedelta(days=1)).isoformat(),
+    )
+
+    session = start_work_session(role="PRODUCTION_OPERATOR")
+    device_serial_number = unique_id("DEV")
+    create_device = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
+    )
+    assert create_device.status_code == 200
+
+    item = create_qc_passed_item(session, item_type="CONTROL_PCB")
+    blocked = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": session["work_session_id"],
+        },
+    )
+    assert blocked.status_code == 400
+    assert blocked.json()["detail"] == "No active effective BOM template available for device type"
 
 
 def test_expired_work_session_is_timed_out_and_blocked():
@@ -2553,7 +2668,46 @@ def test_shipment_blocks_when_device_type_has_no_active_bom():
         json={"production_status": "READY_FOR_SHIPMENT"},
     )
     assert blocked.status_code == 400
-    assert blocked.json()["detail"] == "READY_FOR_SHIPMENT requires an active BOM template"
+    assert blocked.json()["detail"] == "READY_FOR_SHIPMENT requires an active effective BOM template"
+
+
+def test_shipment_blocks_when_only_active_bom_is_not_effective_yet():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=True,
+        effective_from=(utc_now() + timedelta(days=1)).isoformat(),
+    )
+
+    device_serial_number = unique_id("DEV")
+    device_response = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
+    )
+    assert device_response.status_code == 200
+
+    final_test_session = start_work_session(role="FINAL_TEST_OPERATOR")
+    final_test = client.post(
+        "/api/final-tests",
+        json={
+            "test_run_id": unique_id("FT"),
+            "device_serial_number": device_serial_number,
+            "result": "PASS",
+            "firmware_version": "1.2.4",
+            "bootloader_version": "0.9.8",
+            "work_session_id": final_test_session["work_session_id"],
+        },
+    )
+    assert final_test.status_code == 200
+
+    blocked = client.patch(
+        f"/api/devices/{device_serial_number}/status",
+        json={"production_status": "READY_FOR_SHIPMENT"},
+    )
+    assert blocked.status_code == 400
+    assert blocked.json()["detail"] == "READY_FOR_SHIPMENT requires an active effective BOM template"
 
 
 def test_shipment_uses_bound_bom_even_after_template_retirement():

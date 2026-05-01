@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
@@ -62,6 +63,47 @@ def _ensure_target_version_progresses(source_version: str, target_version: str) 
         )
 
 
+def _validate_effective_window(
+    effective_from: datetime | None,
+    effective_to: datetime | None,
+) -> None:
+    if effective_from and effective_to and effective_to < effective_from:
+        raise HTTPException(
+            status_code=400,
+            detail="BOM template effective_to must be greater than or equal to effective_from",
+        )
+
+
+def _is_bom_template_effective_now(
+    template: DeviceBomTemplate,
+    reference_time: datetime | None = None,
+) -> bool:
+    now = reference_time or utc_now()
+    if template.effective_from and template.effective_from > now:
+        return False
+    if template.effective_to and template.effective_to < now:
+        return False
+    return True
+
+
+def _resolve_effective_window_for_versioned_copy(
+    source_template: DeviceBomTemplate,
+    payload: DeviceBomTemplateCloneRequest | DeviceBomTemplatePromoteRequest,
+) -> tuple[datetime | None, datetime | None]:
+    effective_from = (
+        payload.effective_from
+        if "effective_from" in payload.model_fields_set
+        else source_template.effective_from
+    )
+    effective_to = (
+        payload.effective_to
+        if "effective_to" in payload.model_fields_set
+        else source_template.effective_to
+    )
+    _validate_effective_window(effective_from, effective_to)
+    return effective_from, effective_to
+
+
 def create_device(db: Session, payload: DeviceCreate) -> Device:
     if repository.get_device_by_serial_number(db, payload.device_serial_number):
         raise HTTPException(status_code=409, detail="Device already exists")
@@ -95,6 +137,7 @@ def list_components(db: Session, device_serial_number: str) -> list[DeviceCompon
 
 
 def create_device_bom_template(db: Session, payload: DeviceBomTemplateCreate) -> DeviceBomTemplate:
+    _validate_effective_window(payload.effective_from, payload.effective_to)
     if repository.get_bom_template_by_device_type_and_version(
         db,
         payload.device_type,
@@ -129,7 +172,7 @@ def create_device_bom_template(db: Session, payload: DeviceBomTemplateCreate) ->
         result=template.status,
         message=f"Created BOM template {template.device_type} v{template.version}",
         payload={
-            **payload.model_dump(),
+            **payload.model_dump(mode="json"),
             "status": template.status,
         },
     )
@@ -187,6 +230,7 @@ def get_device_bom_template_usage(
     bound_device_count = repository.count_bound_devices_for_template(db, template.id)
     is_bound = bound_device_count > 0
     can_modify = template.status != "RETIRED" and not (template.status == "ACTIVE" and is_bound)
+    is_effective_now = _is_bom_template_effective_now(template)
     if template.status == "RETIRED":
         recommended_action = "clone"
     elif template.status == "ACTIVE" and is_bound:
@@ -204,6 +248,9 @@ def get_device_bom_template_usage(
         status=template.status,
         is_active=template.is_active,
         is_approved=template.approved_at is not None,
+        effective_from=template.effective_from,
+        effective_to=template.effective_to,
+        is_effective_now=is_effective_now,
         bound_device_count=bound_device_count,
         is_bound=is_bound,
         can_modify=can_modify,
@@ -218,11 +265,15 @@ def _evaluate_bom_template_readiness(
     items = repository.list_bom_items_for_template(db, template.id)
     item_count = len(items)
     required_item_count = sum(1 for item in items if item.is_required)
+    now = utc_now()
+    is_effective_now = _is_bom_template_effective_now(template, now)
     blocking_reasons: list[str] = []
     if item_count == 0:
         blocking_reasons.append("BOM template has no items")
     if required_item_count == 0:
         blocking_reasons.append("BOM template has no required items")
+    if template.effective_to and template.effective_to < now:
+        blocking_reasons.append("BOM template effectivity window already ended")
     return DeviceBomTemplateReadinessRead(
         template_id=template.id,
         device_type=template.device_type,
@@ -231,6 +282,9 @@ def _evaluate_bom_template_readiness(
         status=template.status,
         is_active=template.is_active,
         is_approved=template.approved_at is not None,
+        effective_from=template.effective_from,
+        effective_to=template.effective_to,
+        is_effective_now=is_effective_now,
         item_count=item_count,
         required_item_count=required_item_count,
         has_any_items=item_count > 0,
@@ -666,6 +720,10 @@ def clone_device_bom_template(
         variant_code,
     )
     _ensure_target_version_progresses(payload.source_version, payload.target_version)
+    effective_from, effective_to = _resolve_effective_window_for_versioned_copy(
+        source_template,
+        payload,
+    )
     if repository.get_bom_template_by_device_type_and_version(
         db,
         device_type,
@@ -679,12 +737,15 @@ def clone_device_bom_template(
     source_items = repository.list_bom_items_for_template(db, source_template.id)
     if payload.activate:
         candidate_readiness = _evaluate_bom_template_readiness(db, source_template)
-        if not candidate_readiness.can_activate:
+        blocking_reasons = list(candidate_readiness.blocking_reasons)
+        if effective_to and effective_to < utc_now():
+            blocking_reasons.append("BOM template effectivity window already ended")
+        if blocking_reasons:
             raise HTTPException(
                 status_code=400,
                 detail=(
                     "Cloned BOM template would not be ready for activation: "
-                    + "; ".join(candidate_readiness.blocking_reasons)
+                    + "; ".join(blocking_reasons)
                 ),
             )
 
@@ -709,6 +770,8 @@ def clone_device_bom_template(
         approved_by=None,
         approved_at=None,
         release_note=None,
+        effective_from=effective_from,
+        effective_to=effective_to,
     )
     db.add(cloned_template)
     db.flush()
@@ -742,6 +805,16 @@ def clone_device_bom_template(
             "is_active": cloned_template.is_active,
             "status": cloned_template.status,
             "created_from_version": source_template.version,
+            "effective_from": (
+                cloned_template.effective_from.isoformat()
+                if cloned_template.effective_from
+                else None
+            ),
+            "effective_to": (
+                cloned_template.effective_to.isoformat()
+                if cloned_template.effective_to
+                else None
+            ),
         },
     )
     record_audit_event(
@@ -764,6 +837,16 @@ def clone_device_bom_template(
             "target_version": cloned_template.version,
             "copied_item_count": len(source_items),
             "status": cloned_template.status,
+            "effective_from": (
+                cloned_template.effective_from.isoformat()
+                if cloned_template.effective_from
+                else None
+            ),
+            "effective_to": (
+                cloned_template.effective_to.isoformat()
+                if cloned_template.effective_to
+                else None
+            ),
         },
     )
     for source_item in source_items:
@@ -865,6 +948,8 @@ def promote_device_bom_template(
             target_version=payload.target_version,
             name=payload.name,
             activate=True,
+            effective_from=payload.effective_from,
+            effective_to=payload.effective_to,
         ),
         variant_code,
     )
@@ -1107,7 +1192,10 @@ def _resolve_bom_template_for_device(db: Session, device: Device) -> DeviceBomTe
             "DEFAULT",
         )
     ):
-        raise HTTPException(status_code=400, detail="No active BOM template available for device type")
+        raise HTTPException(
+            status_code=400,
+            detail="No active effective BOM template available for device type",
+        )
     return None
 
 

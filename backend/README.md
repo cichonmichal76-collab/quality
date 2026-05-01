@@ -125,6 +125,8 @@ Backend wspiera też klonowanie wersji BOM do nowej rewizji wraz z pozycjami, z 
 Backend udostępnia też odczyt `usage` dla BOM, który pokazuje liczbę powiązanych urządzeń, mutowalność wersji i rekomendowaną kolejną akcję, odczyt `bindings` z konkretną listą urządzeń przypiętych do wersji, odczyt `coverage` z kompletnością tych urządzeń względem BOM, odczyt `diff`, który porównuje dwie wersje BOM i rozbija zmiany na `added`, `removed`, `modified` i `unchanged_count`, oraz odczyt `readiness`, który pokazuje, czy wersja może być bezpiecznie aktywowana. Lookup BOM wspiera teraz `variant_code` z fallbackiem do `DEFAULT`. Shipment gate został też utwardzony tak, żeby blokować nie tylko braki, ale również nadmiarowe i nieoczekiwane komponenty. Na poziomie bazy BOM ma już też twardą unikalność pozycji per `template_id + component_type` oraz indeksy pod najczęstsze lookupy.
 W wersjach nadal mutowalnych można już nie tylko dodawać, ale też aktualizować i usuwać pozycje BOM.
 
+Aktywny lookup BOM uwzględnia teraz również okno obowiązywania wersji przez pola `effective_from` i `effective_to`. Dla nowych montaży i shipmentu bez już przypiętej wersji oznacza to, że backend wybiera tylko BOM jednocześnie `ACTIVE` i skuteczny czasowo.
+
 ## Najważniejsze endpointy
 
 - `GET /health`

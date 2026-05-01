@@ -79,6 +79,21 @@ Niedozwolone są warianty tekstowe typu `v1`, `1.0-beta` albo `rev2`.
 
 Przy `clone` i `promote` backend wymaga też, żeby `target_version` był semantycznie większy od `source_version`. Końcowe zera są normalizowane, więc `1.0` i `1.0.0` są traktowane jako ta sama wersja.
 
+## Okna obowiązywania BOM
+
+Wersja BOM może mieć opcjonalne pola:
+
+- `effective_from`
+- `effective_to`
+
+Lookup aktywnego BOM dla assembly i shipment bierze teraz pod uwagę nie tylko `status == ACTIVE`, ale też bieżące okno obowiązywania. Jeśli wersja jest aktywna, ale jeszcze nie weszła w życie albo już wygasła, nie zostanie użyta do nowego montażu ani do shipmentu urządzenia, które nie ma jeszcze przypiętego własnego `bom_template_id`.
+
+Endpointy `usage` i `readiness` zwracają dodatkowo:
+
+- `effective_from`
+- `effective_to`
+- `is_effective_now`
+
 ## 1. Bootstrap danych podstawowych
 
 Utworzenie operatora:

@@ -72,7 +72,7 @@ def _ensure_required_components_installed(db: Session, device: Device) -> None:
     ):
         raise HTTPException(
             status_code=400,
-            detail="READY_FOR_SHIPMENT requires an active BOM template",
+            detail="READY_FOR_SHIPMENT requires an active effective BOM template",
         )
     if not bom_template:
         return

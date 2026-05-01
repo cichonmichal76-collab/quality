@@ -62,6 +62,8 @@ class DeviceBomTemplate(Base):
     approved_by: Mapped[str | None] = mapped_column(String, nullable=True)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     release_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    effective_from: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    effective_to: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
 

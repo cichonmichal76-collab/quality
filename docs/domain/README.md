@@ -213,7 +213,7 @@ Najważniejsze reguły:
 
 Najbliższe punkty rozszerzenia BOM:
 - dalsze scope’y ponad `variant_code`, np. `market_code`, `station_type` albo profil urządzenia
-- okna obowiązywania, np. `effective_from` i `effective_to`, jeśli jedna wersja BOM ma działać tylko w określonym zakresie czasu albo partii
+- okna obowiązywania `effective_from` i `effective_to` są już zaimplementowane dla wersji BOM; kolejnym krokiem może być rozszerzenie ich o zakres partii albo numer zlecenia
 - grupy zamienników, jeśli jeden wymagany slot ma akceptować kilka alternatywnych `component_type` lub `part_number`
 - kontrola zatwierdzenia wersji, np. `approved_by`, `approved_at`, `release_note`, jeśli BOM ma wejść w formalny workflow release
 - pozycje `DeviceBomItem` w wersjach roboczych mogą być już nie tylko dodawane, ale też aktualizowane i usuwane w ramach tej samej polityki mutowalności
