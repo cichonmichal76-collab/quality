@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
@@ -13,6 +13,7 @@ from app.schemas import (
     DeviceComponentQualityRead,
     DeviceComponentQualityQueueRead,
     DeviceComponentQualityStatusSummaryRead,
+    DeviceComponentStalenessSummaryRead,
     DeviceComponentTypeSummaryRead,
     DeviceShipmentActionSummaryRead,
     DeviceBomComplianceRead,
@@ -71,6 +72,16 @@ VALID_COMPONENT_QUALITY_RECOMMENDED_ACTIONS = {
     RESOLVE_COMPONENT_NCR_ACTION,
     RUN_COMPONENT_QC_OR_REWORK_ACTION,
     NO_COMPONENT_ACTION,
+}
+STALE_BUCKET_LT_24H = "LT_24H"
+STALE_BUCKET_D1_TO_D3 = "D1_TO_D3"
+STALE_BUCKET_D3_TO_D7 = "D3_TO_D7"
+STALE_BUCKET_GT_7D = "GT_7D"
+VALID_COMPONENT_QUALITY_STALE_BUCKETS = {
+    STALE_BUCKET_LT_24H,
+    STALE_BUCKET_D1_TO_D3,
+    STALE_BUCKET_D3_TO_D7,
+    STALE_BUCKET_GT_7D,
 }
 
 
@@ -450,6 +461,45 @@ def _build_component_quality_production_status_summary(
     ]
 
 
+def _component_quality_stale_bucket(
+    updated_at: datetime,
+    *,
+    reference_time: datetime,
+) -> str:
+    age = reference_time - updated_at
+    if age < timedelta(days=1):
+        return STALE_BUCKET_LT_24H
+    if age < timedelta(days=3):
+        return STALE_BUCKET_D1_TO_D3
+    if age < timedelta(days=7):
+        return STALE_BUCKET_D3_TO_D7
+    return STALE_BUCKET_GT_7D
+
+
+def _build_component_quality_staleness_summary(
+    quality_rows: list[DeviceComponentQualityRead],
+    *,
+    reference_time: datetime,
+) -> list[DeviceComponentStalenessSummaryRead]:
+    summary: dict[str, int] = {}
+    for row in quality_rows:
+        bucket = _component_quality_stale_bucket(
+            row.device_updated_at,
+            reference_time=reference_time,
+        )
+        summary[bucket] = summary.get(bucket, 0) + 1
+    return [
+        DeviceComponentStalenessSummaryRead(
+            stale_bucket=stale_bucket,
+            device_count=device_count,
+        )
+        for stale_bucket, device_count in sorted(
+            summary.items(),
+            key=lambda item: (-item[1], item[0]),
+        )
+    ]
+
+
 def _build_component_quality_variant_code_summary(
     quality_rows: list[DeviceComponentQualityRead],
 ) -> list[DeviceVariantCodeSummaryRead]:
@@ -577,6 +627,7 @@ def list_device_component_quality(
     component_type: str | None = None,
     quality_status: str | None = None,
     primary_quality_status: str | None = None,
+    stale_bucket: str | None = None,
     recommended_action: str | None = None,
     created_after: datetime | None = None,
     created_before: datetime | None = None,
@@ -588,6 +639,7 @@ def list_device_component_quality(
     offset: int = 0,
     limit: int = 100,
 ) -> DeviceComponentQualityQueueRead:
+    reference_time = utc_now()
     if offset < 0:
         raise HTTPException(status_code=400, detail="offset must be >= 0")
     if limit < 1:
@@ -613,6 +665,11 @@ def list_device_component_quality(
         raise HTTPException(
             status_code=400,
             detail="Unsupported primary_quality_status filter",
+        )
+    if stale_bucket and stale_bucket not in VALID_COMPONENT_QUALITY_STALE_BUCKETS:
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported stale_bucket filter",
         )
     if (
         recommended_action
@@ -659,6 +716,16 @@ def list_device_component_quality(
         quality_rows = [
             row for row in quality_rows if row.primary_quality_status == primary_quality_status
         ]
+    if stale_bucket:
+        quality_rows = [
+            row
+            for row in quality_rows
+            if _component_quality_stale_bucket(
+                row.device_updated_at,
+                reference_time=reference_time,
+            )
+            == stale_bucket
+        ]
     if recommended_action:
         quality_rows = [row for row in quality_rows if row.recommended_action == recommended_action]
     quality_rows = _sort_component_quality_rows(
@@ -689,6 +756,7 @@ def list_device_component_quality(
             "component_type": component_type,
             "quality_status": quality_status,
             "primary_quality_status": primary_quality_status,
+            "stale_bucket": stale_bucket,
             "recommended_action": recommended_action,
             "created_after": created_after.isoformat() if created_after else None,
             "created_before": created_before.isoformat() if created_before else None,
@@ -707,6 +775,10 @@ def list_device_component_quality(
         ),
         primary_quality_status_summary=_build_primary_component_quality_status_summary(
             quality_rows
+        ),
+        staleness_summary=_build_component_quality_staleness_summary(
+            quality_rows,
+            reference_time=reference_time,
         ),
         component_type_summary=_build_component_type_summary(
             quality_rows,

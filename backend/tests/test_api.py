@@ -3828,9 +3828,9 @@ def test_component_quality_queue_supports_summary_and_filters():
             ncr_device: utc_now() - timedelta(days=1),
         }
         updated_at_by_device = {
-            passing_device: utc_now() - timedelta(hours=3),
-            qc_gap_device: utc_now() - timedelta(hours=2),
-            ncr_device: utc_now() - timedelta(hours=1),
+            passing_device: utc_now() - timedelta(days=8),
+            qc_gap_device: utc_now() - timedelta(days=2),
+            ncr_device: utc_now() - timedelta(hours=12),
         }
         for serial_number, production_status in status_by_device.items():
             device = (
@@ -3963,6 +3963,13 @@ def test_component_quality_queue_supports_summary_and_filters():
     assert primary_status_summary["PASS"] == 1
     assert primary_status_summary["QC_NOT_PASSED"] == 1
     assert primary_status_summary["CRITICAL_NCR_OPEN"] == 1
+    staleness_summary = {
+        entry["stale_bucket"]: entry["device_count"]
+        for entry in payload["staleness_summary"]
+    }
+    assert staleness_summary["GT_7D"] == 1
+    assert staleness_summary["D1_TO_D3"] == 1
+    assert staleness_summary["LT_24H"] == 1
     component_type_summary = {
         entry["component_type"]: (entry["component_count"], entry["device_count"])
         for entry in payload["component_type_summary"]
@@ -4002,6 +4009,17 @@ def test_component_quality_queue_supports_summary_and_filters():
     assert ready_only_payload["filters"]["production_status"] == "READY_FOR_SHIPMENT"
     assert [row["device_serial_number"] for row in ready_only_payload["devices"]] == [
         ncr_device
+    ]
+
+    stale_only = client.get(
+        f"/api/component-quality?device_type={queue_device_type}&stale_bucket=GT_7D"
+    )
+    assert stale_only.status_code == 200
+    stale_payload = stale_only.json()
+    assert stale_payload["total_devices"] == 1
+    assert stale_payload["filters"]["stale_bucket"] == "GT_7D"
+    assert [row["device_serial_number"] for row in stale_payload["devices"]] == [
+        passing_device
     ]
 
     created_after_only = client.get(
@@ -4195,6 +4213,12 @@ def test_component_quality_queue_rejects_unsupported_primary_quality_status():
     response = client.get("/api/component-quality?primary_quality_status=UNSUPPORTED")
     assert response.status_code == 400
     assert response.json()["detail"] == "Unsupported primary_quality_status filter"
+
+
+def test_component_quality_queue_rejects_unsupported_stale_bucket():
+    response = client.get("/api/component-quality?stale_bucket=UNSUPPORTED")
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Unsupported stale_bucket filter"
 
 
 def test_component_quality_queue_rejects_invalid_update_window():

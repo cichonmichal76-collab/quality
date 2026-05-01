@@ -312,6 +312,11 @@ class DeviceComponentPrimaryQualityStatusSummaryRead(BaseModel):
     device_count: int
 
 
+class DeviceComponentStalenessSummaryRead(BaseModel):
+    stale_bucket: str
+    device_count: int
+
+
 class DeviceComponentTypeSummaryRead(BaseModel):
     component_type: str
     component_count: int
@@ -331,6 +336,7 @@ class DeviceComponentQualityQueueRead(BaseModel):
     variant_code_summary: list[DeviceVariantCodeSummaryRead]
     production_status_summary: list[DeviceShipmentProductionStatusSummaryRead]
     primary_quality_status_summary: list[DeviceComponentPrimaryQualityStatusSummaryRead]
+    staleness_summary: list[DeviceComponentStalenessSummaryRead]
     component_type_summary: list[DeviceComponentTypeSummaryRead]
     recommended_action_summary: list[DeviceShipmentActionSummaryRead]
     devices: list[DeviceComponentQualityRead]
