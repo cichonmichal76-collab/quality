@@ -212,6 +212,12 @@ export function App() {
   const [loadState, setLoadState] = useState<LoadState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [refreshVersion, setRefreshVersion] = useState(0);
+  const activePath =
+    activeView === "shipment" ? "/shipment-readiness" : "/component-quality";
+  const activeRequestFilters =
+    activeView === "shipment"
+      ? shipmentRequestFilters
+      : componentRequestFilters;
 
   const clearActiveViewData = (view: DashboardMode) => {
     if (view === "shipment") {
@@ -254,13 +260,11 @@ export function App() {
 
     const controller = new AbortController();
     let isCurrentRequest = true;
-    const path =
-      activeView === "shipment" ? "/shipment-readiness" : "/component-quality";
     const params =
       activeView === "shipment"
-        ? shipmentQueryParams(shipmentRequestFilters)
-        : componentQueryParams(componentRequestFilters);
-    const url = joinApiUrl(apiBaseUrl.trim(), path) + buildQuery(params);
+        ? shipmentQueryParams(activeRequestFilters as ShipmentFilters)
+        : componentQueryParams(activeRequestFilters as ComponentFilters);
+    const url = joinApiUrl(apiBaseUrl.trim(), activePath) + buildQuery(params);
 
     setLoadState("loading");
     setErrorMessage(null);
@@ -297,9 +301,9 @@ export function App() {
     };
   }, [
     activeView,
+    activePath,
+    activeRequestFilters,
     apiBaseUrl,
-    shipmentRequestFilters,
-    componentRequestFilters,
     refreshVersion,
   ]);
 

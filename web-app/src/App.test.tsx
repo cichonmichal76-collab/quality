@@ -730,6 +730,97 @@ describe("App", () => {
     expect(screen.queryByText("Oczekuje na zastosowanie")).not.toBeInTheDocument();
   });
 
+  it("does not refetch component view when hidden shipment debounce settles", async () => {
+    vi.useFakeTimers();
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(createJsonResponse(shipmentPayload))
+      .mockResolvedValue(createJsonResponse(componentPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText("SHIP-001")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    fireEvent.change(screen.getByPlaceholderText("np. ZSS-VENT"), {
+      target: { value: "DEMO-OPS" },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Komponenty" }));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText("COMP-001")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      vi.advanceTimersByTime(300);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not refetch shipment view when hidden component debounce settles", async () => {
+    vi.useFakeTimers();
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(createJsonResponse(shipmentPayload))
+      .mockResolvedValueOnce(createJsonResponse(componentPayload))
+      .mockResolvedValue(createJsonResponse(shipmentPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText("SHIP-001")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Komponenty" }));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText("COMP-001")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    fireEvent.change(screen.getByPlaceholderText("np. CONTROL_PCB"), {
+      target: { value: "FAN_MODULE" },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    fireEvent.click(screen.getByRole("button", { name: /Wysy/i }));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText("SHIP-001")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+
+    await act(async () => {
+      vi.advanceTimersByTime(300);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
   it("applies shipment filters and keeps blocked and ready toggles exclusive", async () => {
     const fetchMock = vi
       .fn()
