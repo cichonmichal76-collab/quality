@@ -129,8 +129,8 @@ Aktywny lookup BOM uwzględnia teraz również okno obowiązywania wersji przez 
 
 Pozycje BOM mogą być też łączone w `substitution_group`. Taka grupa pozwala zdefiniować jeden logiczny slot montażowy akceptujący kilka alternatywnych `component_type`, a assembly, coverage i shipment liczą wtedy spełnienie wymogu na poziomie całej grupy zamiast pojedynczej pozycji.
 
-Do diagnostyki jakości zamontowanych części dochodzi teraz też `GET /api/devices/{serial_number}/component-quality`, które zwraca per komponent snapshot `component_qc_passed`, otwarte krytyczne NCR i prosty status `PASS`, `QC_NOT_PASSED` albo `CRITICAL_NCR_OPEN`.
-Na poziomie operacyjnym doszło też `GET /api/component-quality`, które zbiera taki sam widok dla wielu urządzeń, wspiera filtry `device_type`, `variant_code`, `production_status`, `component_type`, `quality_status`, `only_blocking`, paginację przez `offset` i `limit`, summary per status jakości i per typ komponentu oraz sortowanie `sort_by` / `sort_desc`, domyślnie ustawiające urządzenia z największą liczbą blokujących komponentów na górze.
+Do diagnostyki jakości zamontowanych części dochodzi teraz też `GET /api/devices/{serial_number}/component-quality`, które zwraca per komponent snapshot `component_qc_passed`, otwarte krytyczne NCR i prosty status `PASS`, `QC_NOT_PASSED` albo `CRITICAL_NCR_OPEN`, a na poziomie całego urządzenia także `primary_quality_status` i `recommended_action`.
+Na poziomie operacyjnym doszło też `GET /api/component-quality`, które zbiera taki sam widok dla wielu urządzeń, wspiera filtry `device_type`, `variant_code`, `production_status`, `component_type`, `quality_status`, `recommended_action`, `only_blocking`, paginację przez `offset` i `limit`, summary per status jakości, per typ komponentu i per rekomendowaną akcję oraz sortowanie `sort_by` / `sort_desc`, domyślnie ustawiające urządzenia z największą liczbą blokujących komponentów na górze.
 
 Wersje BOM mają też teraz jawne lineage przez `source_template_id` i `replaced_by_template_id`. Dzięki temu można odczytać, z której wersji powstała dana rewizja i czym została później zastąpiona.
 

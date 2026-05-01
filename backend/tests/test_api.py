@@ -3765,6 +3765,8 @@ def test_component_quality_endpoint_reports_pass_qc_gap_and_component_ncr():
     assert payload["total_installed_components"] == 3
     assert payload["passing_components"] == 1
     assert payload["blocked_components"] == 2
+    assert payload["primary_quality_status"] == "CRITICAL_NCR_OPEN"
+    assert payload["recommended_action"] == "RESOLVE_COMPONENT_NCR"
 
     quality_by_type = {row["component_type"]: row for row in payload["components"]}
     assert quality_by_type["CONTROL_PCB"]["quality_status"] == "PASS"
@@ -3888,6 +3890,18 @@ def test_component_quality_queue_supports_summary_and_filters():
         payload["devices"][0]["device_serial_number"],
         payload["devices"][1]["device_serial_number"],
     } == {qc_gap_device, ncr_device}
+    device_rows = {row["device_serial_number"]: row for row in payload["devices"]}
+    assert device_rows[passing_device]["primary_quality_status"] == "PASS"
+    assert device_rows[passing_device]["recommended_action"] == "NO_ACTION"
+    assert device_rows[qc_gap_device]["primary_quality_status"] == "QC_NOT_PASSED"
+    assert (
+        device_rows[qc_gap_device]["recommended_action"]
+        == "RUN_COMPONENT_QC_OR_REWORK"
+    )
+    assert device_rows[ncr_device]["primary_quality_status"] == "CRITICAL_NCR_OPEN"
+    assert (
+        device_rows[ncr_device]["recommended_action"] == "RESOLVE_COMPONENT_NCR"
+    )
 
     status_summary = {
         entry["quality_status"]: (entry["component_count"], entry["device_count"])
@@ -3903,6 +3917,13 @@ def test_component_quality_queue_supports_summary_and_filters():
     assert component_type_summary["CONTROL_PCB"] == (1, 1)
     assert component_type_summary["FAN_MODULE"] == (1, 1)
     assert component_type_summary["IO_MODULE"] == (1, 1)
+    recommended_action_summary = {
+        entry["recommended_action"]: entry["device_count"]
+        for entry in payload["recommended_action_summary"]
+    }
+    assert recommended_action_summary["NO_ACTION"] == 1
+    assert recommended_action_summary["RUN_COMPONENT_QC_OR_REWORK"] == 1
+    assert recommended_action_summary["RESOLVE_COMPONENT_NCR"] == 1
 
     blocked_only = client.get(
         f"/api/component-quality?device_type={queue_device_type}&only_blocking=true"
@@ -3931,6 +3952,17 @@ def test_component_quality_queue_supports_summary_and_filters():
         {"component_type": "FAN_MODULE", "component_count": 1, "device_count": 1}
     ]
 
+    ncr_action_only = client.get(
+        f"/api/component-quality?device_type={queue_device_type}&recommended_action=RESOLVE_COMPONENT_NCR"
+    )
+    assert ncr_action_only.status_code == 200
+    ncr_action_payload = ncr_action_only.json()
+    assert ncr_action_payload["total_devices"] == 1
+    assert ncr_action_payload["filters"]["recommended_action"] == "RESOLVE_COMPONENT_NCR"
+    assert [row["device_serial_number"] for row in ncr_action_payload["devices"]] == [
+        ncr_device
+    ]
+
     serial_sorted = client.get(
         f"/api/component-quality?device_type={queue_device_type}&sort_by=device_serial_number"
     )
@@ -3944,6 +3976,15 @@ def test_component_quality_queue_rejects_unsupported_sort_by():
     response = client.get("/api/component-quality?sort_by=unsupported")
     assert response.status_code == 400
     assert response.json()["detail"] == "Unsupported component quality sort_by value"
+
+
+def test_component_quality_queue_rejects_unsupported_recommended_action():
+    response = client.get("/api/component-quality?recommended_action=UNSUPPORTED")
+    assert response.status_code == 400
+    assert (
+        response.json()["detail"]
+        == "Unsupported component quality recommended_action filter"
+    )
 
 
 def test_audit_events_can_filter_shipment_gate_by_event_type_and_result():

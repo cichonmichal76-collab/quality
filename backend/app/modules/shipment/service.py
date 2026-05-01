@@ -56,6 +56,14 @@ MAX_QUEUE_LIMIT = 500
 MAX_SHIPMENT_GATE_HISTORY_LIMIT = 200
 VALID_LATEST_GATE_RESULTS = {"PASS", "BLOCKED", "NONE"}
 VALID_COMPONENT_QUALITY_STATUSES = {"PASS", "QC_NOT_PASSED", "CRITICAL_NCR_OPEN"}
+RESOLVE_COMPONENT_NCR_ACTION = "RESOLVE_COMPONENT_NCR"
+RUN_COMPONENT_QC_OR_REWORK_ACTION = "RUN_COMPONENT_QC_OR_REWORK"
+NO_COMPONENT_ACTION = "NO_ACTION"
+VALID_COMPONENT_QUALITY_RECOMMENDED_ACTIONS = {
+    RESOLVE_COMPONENT_NCR_ACTION,
+    RUN_COMPONENT_QC_OR_REWORK_ACTION,
+    NO_COMPONENT_ACTION,
+}
 
 
 def get_device_or_404(db: Session, serial_number: str) -> Device:
@@ -330,6 +338,24 @@ def _build_installed_component_quality_rows(
     return component_rows
 
 
+def _primary_component_quality_status(
+    component_rows: list[DeviceInstalledComponentQualityRead],
+) -> str:
+    if any(row.quality_status == "CRITICAL_NCR_OPEN" for row in component_rows):
+        return "CRITICAL_NCR_OPEN"
+    if any(row.quality_status == "QC_NOT_PASSED" for row in component_rows):
+        return "QC_NOT_PASSED"
+    return "PASS"
+
+
+def _recommended_action_for_component_quality_status(primary_quality_status: str) -> str:
+    if primary_quality_status == "CRITICAL_NCR_OPEN":
+        return RESOLVE_COMPONENT_NCR_ACTION
+    if primary_quality_status == "QC_NOT_PASSED":
+        return RUN_COMPONENT_QC_OR_REWORK_ACTION
+    return NO_COMPONENT_ACTION
+
+
 def get_device_component_quality(
     db: Session,
     serial_number: str,
@@ -337,6 +363,7 @@ def get_device_component_quality(
     device = get_device_or_404(db, serial_number)
     component_rows = _build_installed_component_quality_rows(db, device)
     blocked_components = sum(1 for row in component_rows if row.blocks_shipment)
+    primary_quality_status = _primary_component_quality_status(component_rows)
     return DeviceComponentQualityRead(
         device_serial_number=device.device_serial_number,
         device_type=device.device_type,
@@ -345,6 +372,8 @@ def get_device_component_quality(
         total_installed_components=len(component_rows),
         passing_components=len(component_rows) - blocked_components,
         blocked_components=blocked_components,
+        primary_quality_status=primary_quality_status,
+        recommended_action=_recommended_action_for_component_quality_status(primary_quality_status),
         components=component_rows,
     )
 
@@ -401,6 +430,24 @@ def _build_component_type_summary(
     ]
 
 
+def _build_component_quality_recommended_action_summary(
+    quality_rows: list[DeviceComponentQualityRead],
+) -> list[DeviceShipmentActionSummaryRead]:
+    summary: dict[str, int] = {}
+    for row in quality_rows:
+        summary[row.recommended_action] = summary.get(row.recommended_action, 0) + 1
+    return [
+        DeviceShipmentActionSummaryRead(
+            recommended_action=recommended_action,
+            device_count=device_count,
+        )
+        for recommended_action, device_count in sorted(
+            summary.items(),
+            key=lambda item: (-item[1], item[0]),
+        )
+    ]
+
+
 def _sort_component_quality_rows(
     quality_rows: list[DeviceComponentQualityRead],
     *,
@@ -439,6 +486,7 @@ def list_device_component_quality(
     production_status: str | None = None,
     component_type: str | None = None,
     quality_status: str | None = None,
+    recommended_action: str | None = None,
     only_blocking: bool = False,
     sort_by: str = "blocked_components",
     sort_desc: bool | None = None,
@@ -453,6 +501,14 @@ def list_device_component_quality(
         raise HTTPException(status_code=400, detail=f"limit must be <= {MAX_QUEUE_LIMIT}")
     if quality_status and quality_status not in VALID_COMPONENT_QUALITY_STATUSES:
         raise HTTPException(status_code=400, detail="Unsupported quality_status filter")
+    if (
+        recommended_action
+        and recommended_action not in VALID_COMPONENT_QUALITY_RECOMMENDED_ACTIONS
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported component quality recommended_action filter",
+        )
 
     devices = repository.list_devices_for_shipment(
         db,
@@ -478,6 +534,8 @@ def list_device_component_quality(
             for row in quality_rows
             if any(component.quality_status == quality_status for component in row.components)
         ]
+    if recommended_action:
+        quality_rows = [row for row in quality_rows if row.recommended_action == recommended_action]
     quality_rows = _sort_component_quality_rows(
         quality_rows,
         sort_by=sort_by,
@@ -505,6 +563,7 @@ def list_device_component_quality(
             "production_status": production_status,
             "component_type": component_type,
             "quality_status": quality_status,
+            "recommended_action": recommended_action,
             "only_blocking": only_blocking,
             "sort_by": sort_by,
             "sort_desc": sort_desc,
@@ -515,6 +574,9 @@ def list_device_component_quality(
         component_type_summary=_build_component_type_summary(
             quality_rows,
             component_type_filter=component_type,
+        ),
+        recommended_action_summary=_build_component_quality_recommended_action_summary(
+            quality_rows
         ),
         devices=paged_rows,
     )

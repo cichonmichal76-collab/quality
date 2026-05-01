@@ -289,6 +289,8 @@ class DeviceComponentQualityRead(BaseModel):
     total_installed_components: int
     passing_components: int
     blocked_components: int
+    primary_quality_status: str
+    recommended_action: str
     components: list[DeviceInstalledComponentQualityRead]
 
 
@@ -315,6 +317,7 @@ class DeviceComponentQualityQueueRead(BaseModel):
     filters: dict[str, str | bool | int | None]
     quality_status_summary: list[DeviceComponentQualityStatusSummaryRead]
     component_type_summary: list[DeviceComponentTypeSummaryRead]
+    recommended_action_summary: list[DeviceShipmentActionSummaryRead]
     devices: list[DeviceComponentQualityRead]
 
 
