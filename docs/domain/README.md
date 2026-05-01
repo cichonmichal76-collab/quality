@@ -207,6 +207,13 @@ Najważniejsze reguły:
 - stan gotowości konkretnej wersji BOM jest dostępny przez odczyt `readiness`, który blokuje aktywację pustych albo wyłącznie opcjonalnych wersji
 - porównanie dwóch wersji BOM jest dostępne przez odczyt `diff`, który rozbija zmiany na pozycje dodane, usunięte i zmodyfikowane
 - shipment gate wymaga już nie tylko obecności komponentów wymaganych, ale też braku komponentów nieoczekiwanych i nadmiarowych względem BOM
+- baza wymusza już unikalność `component_type` w obrębie jednego template BOM, co stabilizuje dalsze rozszerzenia modelu
+
+Najbliższe punkty rozszerzenia BOM:
+- wariantowanie przez dodatkowy scope, np. `variant_code`, `market_code`, `station_type` albo profil urządzenia
+- okna obowiązywania, np. `effective_from` i `effective_to`, jeśli jedna wersja BOM ma działać tylko w określonym zakresie czasu albo partii
+- grupy zamienników, jeśli jeden wymagany slot ma akceptować kilka alternatywnych `component_type` lub `part_number`
+- kontrola zatwierdzenia wersji, np. `approved_by`, `approved_at`, `release_note`, jeśli BOM ma wejść w formalny workflow release
 - pozycje `DeviceBomItem` w wersjach roboczych mogą być już nie tylko dodawane, ale też aktualizowane i usuwane w ramach tej samej polityki mutowalności
 
 Stan implementacji:

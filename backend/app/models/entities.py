@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, JSON, Numeric, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, JSON, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base, utc_now
@@ -42,6 +42,9 @@ class DeviceComponent(Base):
 
 class DeviceBomTemplate(Base):
     __tablename__ = "device_bom_templates"
+    __table_args__ = (
+        Index("ix_device_bom_templates_device_type_status", "device_type", "status"),
+    )
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=uuid_str)
     device_type: Mapped[str] = mapped_column(String, index=True)
@@ -54,9 +57,20 @@ class DeviceBomTemplate(Base):
 
 class DeviceBomItem(Base):
     __tablename__ = "device_bom_items"
+    __table_args__ = (
+        UniqueConstraint(
+            "template_id",
+            "component_type",
+            name="ux_device_bom_items_template_component_type",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=uuid_str)
-    template_id: Mapped[str] = mapped_column(String, ForeignKey("device_bom_templates.id"))
+    template_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("device_bom_templates.id"),
+        index=True,
+    )
     component_type: Mapped[str] = mapped_column(String)
     required_part_number: Mapped[str | None] = mapped_column(String, nullable=True)
     required_revision: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -305,6 +319,7 @@ class AssemblyLink(Base):
         String,
         ForeignKey("device_bom_templates.id"),
         nullable=True,
+        index=True,
     )
     bom_version: Mapped[str | None] = mapped_column(String, nullable=True)
     status: Mapped[str] = mapped_column(String, default="INSTALLED")
