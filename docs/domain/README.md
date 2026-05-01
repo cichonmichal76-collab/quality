@@ -186,11 +186,14 @@ Najważniejsze reguły:
 - jeśli aktywny BOM istnieje dla `device_type`, komponent musi być dozwolony przez ten BOM
 - jeśli pozycja BOM wymaga konkretnego `part_number`, zeskanowany item musi mieć dokładnie tę wartość
 - jeśli pozycja BOM wymaga konkretnej `revision`, zeskanowany item musi mieć dokładnie tę rewizję
+- jeśli pozycja BOM wymaga konkretnego `drawing_number`, zeskanowany item musi mieć dokładnie ten numer rysunku
+- jeśli pozycja BOM wymaga konkretnej `drawing_revision`, zeskanowany item musi mieć dokładnie tę rewizję rysunku
 - jeśli BOM ogranicza ilość danego komponentu, assembly blokuje przekroczenie limitu już na etapie skanu
 - komponent nie może zostać zainstalowany drugi raz, jeśli jest już aktywny w innym urządzeniu
 - assembly produkuje zarówno relację montażową, jak i ślad skanu
 - definicje BOM dla `device_type` są utrzymywane w `DeviceBomTemplate` i `DeviceBomItem`
 - pozycja `DeviceBomItem` może dodatkowo zawęzić dopuszczalny `part_number` i `revision`
+- pozycja `DeviceBomItem` może też zawęzić dopuszczalny `drawing_number` i `drawing_revision`
 
 Stan implementacji:
 

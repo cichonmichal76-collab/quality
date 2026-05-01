@@ -177,6 +177,16 @@ def _validate_component_against_bom(
             status_code=400,
             detail="Scanned item revision does not match device BOM",
         )
+    if bom_item.required_drawing_number and item.drawing_number != bom_item.required_drawing_number:
+        raise HTTPException(
+            status_code=400,
+            detail="Scanned item drawing number does not match device BOM",
+        )
+    if bom_item.required_drawing_revision and item.drawing_revision != bom_item.required_drawing_revision:
+        raise HTTPException(
+            status_code=400,
+            detail="Scanned item drawing revision does not match device BOM",
+        )
     return bom_template, bom_item
 
 

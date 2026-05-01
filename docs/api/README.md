@@ -338,6 +338,8 @@ curl -X POST http://localhost:8000/api/device-bom-templates/ZSS/items \
     "component_type": "CONTROL_PCB",
     "required_part_number": "PCB-CTRL-01",
     "required_revision": "A",
+    "required_drawing_number": "DWG-CTRL-100",
+    "required_drawing_revision": "02",
     "quantity_required": 1,
     "is_required": true
   }'
@@ -404,6 +406,8 @@ Reguły assembly:
 - jeśli dla `device_type` istnieje aktywny BOM, `component_type` musi być dozwolony przez ten BOM
 - jeśli BOM definiuje `required_part_number`, zeskanowany item musi mieć dokładnie ten `part_number`
 - jeśli BOM definiuje `required_revision`, zeskanowany item musi mieć dokładnie tę `revision`
+- jeśli BOM definiuje `required_drawing_number`, zeskanowany item musi mieć dokładnie ten `drawing_number`
+- jeśli BOM definiuje `required_drawing_revision`, zeskanowany item musi mieć dokładnie tę `drawing_revision`
 - jeśli aktywny BOM ogranicza ilość danego komponentu, assembly blokuje przekroczenie limitu już podczas skanu
 - komponent nie może być zainstalowany drugi raz, jeśli już ma aktywne `INSTALLED`
 - assembly zapisuje zarówno relację montażową, jak i ślad skanu oraz audytu
