@@ -127,3 +127,60 @@ def test_dev_dashboard_demo_uses_database_url_from_environment(tmp_path):
     )
     assert f"DATABASE_URL={database_url}" in bootstrap.stdout
     assert database_path.exists()
+
+
+def test_dev_dashboard_demo_can_be_rerun_for_same_device_type(tmp_path):
+    repo_dir = Path(__file__).resolve().parents[2]
+    database_path = tmp_path / "dashboard-demo-rerun.db"
+    database_url = f"sqlite:///{database_path.as_posix()}"
+    environment = os.environ.copy()
+    device_type = "DEMO-BOOTSTRAP-RERUN"
+
+    first_run = subprocess.run(
+        [
+            sys.executable,
+            "scripts/dev_dashboard_demo.py",
+            "--database-url",
+            database_url,
+            "--device-type",
+            device_type,
+            "--tag",
+            "RERUN",
+            "--no-server",
+        ],
+        cwd=repo_dir,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert first_run.returncode == 0, (
+        "First dashboard bootstrap run failed.\n"
+        f"stdout:\n{first_run.stdout}\n"
+        f"stderr:\n{first_run.stderr}"
+    )
+
+    second_run = subprocess.run(
+        [
+            sys.executable,
+            "scripts/dev_dashboard_demo.py",
+            "--database-url",
+            database_url,
+            "--device-type",
+            device_type,
+            "--tag",
+            "RERUN",
+            "--no-server",
+        ],
+        cwd=repo_dir,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert second_run.returncode == 0, (
+        "Second dashboard bootstrap run failed.\n"
+        f"stdout:\n{second_run.stdout}\n"
+        f"stderr:\n{second_run.stderr}"
+    )
+    assert "Demo dashboardu przygotowane. Backend nie został uruchomiony." in second_run.stdout

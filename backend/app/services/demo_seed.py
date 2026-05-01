@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.db import SessionLocal, utc_now
 from app.main import app
-from app.models import AssemblyLink, Device, DeviceBomTemplate
+from app.models import AssemblyLink, Device, DeviceBomItem, DeviceBomTemplate
 
 DEFAULT_DEVICE_TYPE = "DEMO-OPS"
 DEFAULT_BOM_VERSION = "1.0"
@@ -49,6 +49,16 @@ class BomTemplateRef:
     version: str
 
 
+SCENARIO_SERIAL_PREFIXES = {
+    "ready_device_serial_number": "READY-",
+    "assembly_gap_device_serial_number": "ASM-",
+    "final_test_gap_device_serial_number": "TEST-",
+    "component_qc_gap_device_serial_number": "CQ-",
+    "component_ncr_device_serial_number": "CN-",
+    "device_ncr_device_serial_number": "DN-",
+}
+
+
 def unique_id(prefix: str, tag: str) -> str:
     return f"{prefix}-{tag}-{uuid4().hex[:6]}"
 
@@ -61,6 +71,43 @@ def ensure_ok(response: Response, context: str) -> dict:
             payload = response.text
         raise RuntimeError(f"{context} failed with {response.status_code}: {payload}")
     return response.json()
+
+
+def try_get_existing_seed_result(device_type: str) -> SeedResult | None:
+    with SessionLocal() as db:
+        serial_numbers = [
+            row[0]
+            for row in db.query(Device.device_serial_number)
+            .filter(Device.device_type == device_type)
+            .all()
+        ]
+
+    if not serial_numbers:
+        return None
+
+    scenario_serials: dict[str, str] = {}
+    for field_name, prefix in SCENARIO_SERIAL_PREFIXES.items():
+        matches = sorted(
+            serial_number
+            for serial_number in serial_numbers
+            if serial_number.startswith(prefix)
+        )
+        if len(matches) != 1:
+            return None
+        scenario_serials[field_name] = matches[0]
+
+    matched_serials = set(scenario_serials.values())
+    if len(serial_numbers) != len(matched_serials):
+        return None
+
+    return SeedResult(
+        device_type=device_type,
+        bom_version=DEFAULT_BOM_VERSION,
+        shipment_queue_url=f"/api/shipment-readiness?device_type={device_type}",
+        component_quality_url=f"/api/component-quality?device_type={device_type}",
+        verified=False,
+        **scenario_serials,
+    )
 
 
 def start_work_session(
@@ -132,6 +179,11 @@ def ensure_active_bom_template(
     device_type: str,
     version: str,
 ) -> BomTemplateRef:
+    bom_items = (
+        {"component_type": "CONTROL_PCB", "quantity_required": 1, "is_required": True},
+        {"component_type": "FAN_MODULE", "quantity_required": 1, "is_required": False},
+        {"component_type": "IO_MODULE", "quantity_required": 1, "is_required": False},
+    )
     create_response = client.post(
         "/api/device-bom-templates",
         json={
@@ -148,22 +200,6 @@ def ensure_active_bom_template(
             f"{create_response.status_code}: {create_response.text}"
         )
 
-    bom_items = (
-        {"component_type": "CONTROL_PCB", "quantity_required": 1, "is_required": True},
-        {"component_type": "FAN_MODULE", "quantity_required": 1, "is_required": False},
-        {"component_type": "IO_MODULE", "quantity_required": 1, "is_required": False},
-    )
-    for bom_item in bom_items:
-        item_response = client.post(
-            f"/api/device-bom-templates/{device_type}/items?version={version}&variant_code=DEFAULT",
-            json=bom_item,
-        )
-        if item_response.status_code not in {200, 409}:
-            raise RuntimeError(
-                "create device BOM item failed with "
-                f"{item_response.status_code}: {item_response.text}"
-            )
-
     with SessionLocal() as db:
         template = (
             db.query(DeviceBomTemplate)
@@ -178,6 +214,41 @@ def ensure_active_bom_template(
             raise RuntimeError("device BOM template was not created")
         is_active = template.is_active
         template_id = template.id
+        existing_items = {
+            item.component_type: item
+            for item in db.query(DeviceBomItem)
+            .filter(DeviceBomItem.template_id == template_id)
+            .all()
+        }
+
+    for bom_item in bom_items:
+        existing_item = existing_items.get(bom_item["component_type"])
+        if existing_item is not None:
+            if (
+                existing_item.quantity_required != bom_item["quantity_required"]
+                or existing_item.is_required != bom_item["is_required"]
+            ):
+                raise RuntimeError(
+                    "existing demo BOM item does not match expected seed shape for "
+                    f"{device_type} {version}: {bom_item['component_type']}"
+                )
+            continue
+
+        if is_active:
+            raise RuntimeError(
+                "existing active demo BOM template is missing required seed item for "
+                f"{device_type} {version}: {bom_item['component_type']}"
+            )
+
+        item_response = client.post(
+            f"/api/device-bom-templates/{device_type}/items?version={version}&variant_code=DEFAULT",
+            json=bom_item,
+        )
+        if item_response.status_code not in {200, 409}:
+            raise RuntimeError(
+                "create device BOM item failed with "
+                f"{item_response.status_code}: {item_response.text}"
+            )
 
     if not is_active:
         ensure_ok(
@@ -458,6 +529,13 @@ def seed_operations_dashboard_demo(
     verify: bool = False,
 ) -> SeedResult:
     client = TestClient(app)
+    existing_result = try_get_existing_seed_result(device_type)
+    if existing_result is not None:
+        if verify:
+            verify_dashboard_seed(client, device_type=device_type)
+            existing_result.verified = True
+        return existing_result
+
     template_ref = ensure_active_bom_template(
         client,
         device_type=device_type,
