@@ -298,6 +298,7 @@ class DeviceComponentQualityRead(BaseModel):
     passing_components: int
     blocked_components: int
     primary_quality_status: str
+    primary_blocking_component_type: str | None = None
     recommended_action: str
     components: list[DeviceInstalledComponentQualityRead]
 
@@ -324,6 +325,11 @@ class DeviceComponentTypeSummaryRead(BaseModel):
     device_count: int
 
 
+class DeviceComponentPrimaryBlockingTypeSummaryRead(BaseModel):
+    component_type: str
+    device_count: int
+
+
 class DeviceComponentQualityQueueRead(BaseModel):
     total_devices: int
     devices_with_issues: int
@@ -339,6 +345,7 @@ class DeviceComponentQualityQueueRead(BaseModel):
     primary_quality_status_summary: list[DeviceComponentPrimaryQualityStatusSummaryRead]
     staleness_summary: list[DeviceComponentStalenessSummaryRead]
     component_type_summary: list[DeviceComponentTypeSummaryRead]
+    primary_blocking_component_type_summary: list[DeviceComponentPrimaryBlockingTypeSummaryRead]
     recommended_action_summary: list[DeviceShipmentActionSummaryRead]
     devices: list[DeviceComponentQualityRead]
 

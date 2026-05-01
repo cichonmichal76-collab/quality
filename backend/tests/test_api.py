@@ -3766,6 +3766,7 @@ def test_component_quality_endpoint_reports_pass_qc_gap_and_component_ncr():
     assert payload["passing_components"] == 1
     assert payload["blocked_components"] == 2
     assert payload["primary_quality_status"] == "CRITICAL_NCR_OPEN"
+    assert payload["primary_blocking_component_type"] == "IO_MODULE"
     assert payload["recommended_action"] == "RESOLVE_COMPONENT_NCR"
     assert payload["stale_bucket"] == "LT_24H"
 
@@ -3924,17 +3925,20 @@ def test_component_quality_queue_supports_summary_and_filters():
     } == {qc_gap_device, ncr_device}
     device_rows = {row["device_serial_number"]: row for row in payload["devices"]}
     assert device_rows[passing_device]["primary_quality_status"] == "PASS"
+    assert device_rows[passing_device]["primary_blocking_component_type"] is None
     assert device_rows[passing_device]["recommended_action"] == "NO_ACTION"
     assert device_rows[passing_device]["device_created_at"] is not None
     assert device_rows[passing_device]["device_updated_at"] is not None
     assert device_rows[passing_device]["stale_bucket"] == "GT_7D"
     assert device_rows[qc_gap_device]["primary_quality_status"] == "QC_NOT_PASSED"
+    assert device_rows[qc_gap_device]["primary_blocking_component_type"] == "FAN_MODULE"
     assert (
         device_rows[qc_gap_device]["recommended_action"]
         == "RUN_COMPONENT_QC_OR_REWORK"
     )
     assert device_rows[qc_gap_device]["stale_bucket"] == "D1_TO_D3"
     assert device_rows[ncr_device]["primary_quality_status"] == "CRITICAL_NCR_OPEN"
+    assert device_rows[ncr_device]["primary_blocking_component_type"] == "IO_MODULE"
     assert (
         device_rows[ncr_device]["recommended_action"] == "RESOLVE_COMPONENT_NCR"
     )
@@ -3981,6 +3985,12 @@ def test_component_quality_queue_supports_summary_and_filters():
     assert component_type_summary["CONTROL_PCB"] == (1, 1)
     assert component_type_summary["FAN_MODULE"] == (1, 1)
     assert component_type_summary["IO_MODULE"] == (1, 1)
+    primary_blocking_component_type_summary = {
+        entry["component_type"]: entry["device_count"]
+        for entry in payload["primary_blocking_component_type_summary"]
+    }
+    assert primary_blocking_component_type_summary["FAN_MODULE"] == 1
+    assert primary_blocking_component_type_summary["IO_MODULE"] == 1
     recommended_action_summary = {
         entry["recommended_action"]: entry["device_count"]
         for entry in payload["recommended_action_summary"]
@@ -4124,6 +4134,20 @@ def test_component_quality_queue_supports_summary_and_filters():
     assert primary_qc_gap_payload["filters"]["primary_quality_status"] == "QC_NOT_PASSED"
     assert [row["device_serial_number"] for row in primary_qc_gap_payload["devices"]] == [
         qc_gap_device
+    ]
+
+    primary_blocking_type_only = client.get(
+        f"/api/component-quality?device_type={queue_device_type}&primary_blocking_component_type=IO_MODULE"
+    )
+    assert primary_blocking_type_only.status_code == 200
+    primary_blocking_type_payload = primary_blocking_type_only.json()
+    assert primary_blocking_type_payload["total_devices"] == 1
+    assert (
+        primary_blocking_type_payload["filters"]["primary_blocking_component_type"]
+        == "IO_MODULE"
+    )
+    assert [row["device_serial_number"] for row in primary_blocking_type_payload["devices"]] == [
+        ncr_device
     ]
 
     fan_only = client.get(

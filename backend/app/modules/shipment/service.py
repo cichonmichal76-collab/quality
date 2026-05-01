@@ -9,6 +9,7 @@ from app.models import AuditEvent, Device
 from app.modules.assembly.service import get_device_bom_compliance
 from app.modules.shipment import repository, rules
 from app.schemas import (
+    DeviceComponentPrimaryBlockingTypeSummaryRead,
     DeviceComponentPrimaryQualityStatusSummaryRead,
     DeviceComponentQualityRead,
     DeviceComponentQualityQueueRead,
@@ -376,6 +377,25 @@ def _recommended_action_for_component_quality_status(primary_quality_status: str
     return NO_COMPONENT_ACTION
 
 
+def _primary_blocking_component_type(
+    component_rows: list[DeviceInstalledComponentQualityRead],
+) -> str | None:
+    primary_quality_status = _primary_component_quality_status(component_rows)
+    if primary_quality_status == "PASS":
+        return None
+    blocking_rows = sorted(
+        (
+            row
+            for row in component_rows
+            if row.quality_status == primary_quality_status
+        ),
+        key=lambda row: (row.component_type, row.component_serial_number),
+    )
+    if not blocking_rows:
+        return None
+    return blocking_rows[0].component_type
+
+
 def get_device_component_quality(
     db: Session,
     serial_number: str,
@@ -397,6 +417,7 @@ def _build_device_component_quality_read(
     component_rows = _build_installed_component_quality_rows(db, device)
     blocked_components = sum(1 for row in component_rows if row.blocks_shipment)
     primary_quality_status = _primary_component_quality_status(component_rows)
+    primary_blocking_component_type = _primary_blocking_component_type(component_rows)
     return DeviceComponentQualityRead(
         device_serial_number=device.device_serial_number,
         device_type=device.device_type,
@@ -412,6 +433,7 @@ def _build_device_component_quality_read(
         passing_components=len(component_rows) - blocked_components,
         blocked_components=blocked_components,
         primary_quality_status=primary_quality_status,
+        primary_blocking_component_type=primary_blocking_component_type,
         recommended_action=_recommended_action_for_component_quality_status(primary_quality_status),
         components=component_rows,
     )
@@ -568,6 +590,28 @@ def _build_component_type_summary(
     ]
 
 
+def _build_primary_blocking_component_type_summary(
+    quality_rows: list[DeviceComponentQualityRead],
+) -> list[DeviceComponentPrimaryBlockingTypeSummaryRead]:
+    summary: dict[str, int] = {}
+    for row in quality_rows:
+        if row.primary_blocking_component_type is None:
+            continue
+        summary[row.primary_blocking_component_type] = (
+            summary.get(row.primary_blocking_component_type, 0) + 1
+        )
+    return [
+        DeviceComponentPrimaryBlockingTypeSummaryRead(
+            component_type=component_type,
+            device_count=device_count,
+        )
+        for component_type, device_count in sorted(
+            summary.items(),
+            key=lambda item: (-item[1], item[0]),
+        )
+    ]
+
+
 def _build_component_quality_recommended_action_summary(
     quality_rows: list[DeviceComponentQualityRead],
 ) -> list[DeviceShipmentActionSummaryRead]:
@@ -665,6 +709,7 @@ def list_device_component_quality(
     component_type: str | None = None,
     quality_status: str | None = None,
     primary_quality_status: str | None = None,
+    primary_blocking_component_type: str | None = None,
     stale_bucket: str | None = None,
     recommended_action: str | None = None,
     created_after: datetime | None = None,
@@ -761,6 +806,12 @@ def list_device_component_quality(
         quality_rows = [
             row for row in quality_rows if row.primary_quality_status == primary_quality_status
         ]
+    if primary_blocking_component_type:
+        quality_rows = [
+            row
+            for row in quality_rows
+            if row.primary_blocking_component_type == primary_blocking_component_type
+        ]
     if stale_bucket:
         quality_rows = [
             row
@@ -797,6 +848,7 @@ def list_device_component_quality(
             "component_type": component_type,
             "quality_status": quality_status,
             "primary_quality_status": primary_quality_status,
+            "primary_blocking_component_type": primary_blocking_component_type,
             "stale_bucket": stale_bucket,
             "recommended_action": recommended_action,
             "created_after": created_after.isoformat() if created_after else None,
@@ -823,6 +875,9 @@ def list_device_component_quality(
         component_type_summary=_build_component_type_summary(
             quality_rows,
             component_type_filter=component_type,
+        ),
+        primary_blocking_component_type_summary=_build_primary_blocking_component_type_summary(
+            quality_rows
         ),
         recommended_action_summary=_build_component_quality_recommended_action_summary(
             quality_rows
