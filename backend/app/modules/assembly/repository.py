@@ -1,3 +1,6 @@
+from datetime import datetime
+
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -203,3 +206,42 @@ def count_bound_devices_for_template(db: Session, template_id: str) -> int:
         .distinct()
         .count()
     )
+
+
+def list_bound_devices_for_template(
+    db: Session,
+    template_id: str,
+) -> list[tuple[str, str, str, str, int, datetime]]:
+    return [
+        (
+            row.device_serial_number,
+            row.device_type,
+            row.production_status,
+            row.bom_version,
+            row.installed_component_count,
+            row.first_bound_at,
+        )
+        for row in (
+            db.query(
+                Device.device_serial_number.label("device_serial_number"),
+                Device.device_type.label("device_type"),
+                Device.production_status.label("production_status"),
+                AssemblyLink.bom_version.label("bom_version"),
+                func.count(AssemblyLink.id).label("installed_component_count"),
+                func.min(AssemblyLink.installed_at).label("first_bound_at"),
+            )
+            .join(
+                AssemblyLink,
+                AssemblyLink.parent_device_serial_number == Device.device_serial_number,
+            )
+            .filter(AssemblyLink.bom_template_id == template_id)
+            .group_by(
+                Device.device_serial_number,
+                Device.device_type,
+                Device.production_status,
+                AssemblyLink.bom_version,
+            )
+            .order_by(func.min(AssemblyLink.installed_at).asc(), Device.device_serial_number.asc())
+            .all()
+        )
+    ]

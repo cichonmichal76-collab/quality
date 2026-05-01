@@ -82,6 +82,15 @@ class DeviceBomTemplateReadinessRead(BaseModel):
     blocking_reasons: list[str]
 
 
+class DeviceBomTemplateBindingRead(BaseModel):
+    device_serial_number: str
+    device_type: str
+    production_status: str
+    bom_version: str
+    installed_component_count: int
+    first_bound_at: datetime
+
+
 class DeviceBomTemplateActivateRequest(BaseModel):
     version: str = Field(pattern=r"^\d+(?:\.\d+)*$")
 

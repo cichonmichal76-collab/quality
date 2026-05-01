@@ -19,6 +19,7 @@ from app.modules.assembly import repository
 from app.schemas import (
     AssemblyScanRequest,
     ComponentCreate,
+    DeviceBomTemplateBindingRead,
     DeviceBomItemDiffRead,
     DeviceBomTemplateActivateRequest,
     DeviceBomTemplateCloneRequest,
@@ -231,6 +232,32 @@ def get_device_bom_template_readiness(
 ) -> DeviceBomTemplateReadinessRead:
     template = get_device_bom_template_or_404(db, device_type, version)
     return _evaluate_bom_template_readiness(db, template)
+
+
+def list_device_bom_template_bindings(
+    db: Session,
+    device_type: str,
+    version: str | None = None,
+) -> list[DeviceBomTemplateBindingRead]:
+    template = get_device_bom_template_or_404(db, device_type, version)
+    return [
+        DeviceBomTemplateBindingRead(
+            device_serial_number=device_serial_number,
+            device_type=bound_device_type,
+            production_status=production_status,
+            bom_version=bom_version,
+            installed_component_count=installed_component_count,
+            first_bound_at=first_bound_at,
+        )
+        for (
+            device_serial_number,
+            bound_device_type,
+            production_status,
+            bom_version,
+            installed_component_count,
+            first_bound_at,
+        ) in repository.list_bound_devices_for_template(db, template.id)
+    ]
 
 
 def _ensure_bom_template_can_be_activated(

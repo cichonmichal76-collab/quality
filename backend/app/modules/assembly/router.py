@@ -9,6 +9,7 @@ from app.schemas import (
     AssemblyScanRequest,
     ComponentCreate,
     ComponentRead,
+    DeviceBomTemplateBindingRead,
     DeviceBomTemplateDiffRead,
     DeviceBomTemplateActivateRequest,
     DeviceBomTemplateCloneRequest,
@@ -78,6 +79,18 @@ def get_device_bom_template_readiness(
     db: Session = Depends(get_db),
 ):
     return service.get_device_bom_template_readiness(db, device_type, version)
+
+
+@router.get(
+    "/device-bom-templates/{device_type}/bindings",
+    response_model=list[DeviceBomTemplateBindingRead],
+)
+def list_device_bom_template_bindings(
+    device_type: str,
+    version: str | None = None,
+    db: Session = Depends(get_db),
+):
+    return service.list_device_bom_template_bindings(db, device_type, version)
 
 
 @router.get(

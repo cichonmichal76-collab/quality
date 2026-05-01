@@ -373,6 +373,86 @@ def test_device_bom_template_activation_requires_required_items():
     )
 
 
+def test_device_bom_template_bindings_list_bound_devices():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=True,
+    )
+    extra_item = client.post(
+        f"/api/device-bom-templates/{device_type}/items?version=1.0",
+        json={
+            "component_type": "FAN_MODULE",
+            "quantity_required": 1,
+            "is_required": False,
+        },
+    )
+    assert extra_item.status_code == 200
+
+    first_device_serial_number = unique_id("DEV")
+    second_device_serial_number = unique_id("DEV")
+    first_device = client.post(
+        "/api/devices",
+        json={"device_serial_number": first_device_serial_number, "device_type": device_type},
+    )
+    assert first_device.status_code == 200
+    second_device = client.post(
+        "/api/devices",
+        json={"device_serial_number": second_device_serial_number, "device_type": device_type},
+    )
+    assert second_device.status_code == 200
+
+    production_session = start_work_session(role="PRODUCTION_OPERATOR")
+    first_control_item = create_qc_passed_item(production_session, item_type="CONTROL_PCB")
+    first_fan_item = create_qc_passed_item(production_session, item_type="FAN_MODULE")
+    second_control_item = create_qc_passed_item(production_session, item_type="CONTROL_PCB")
+
+    first_install = client.post(
+        f"/api/devices/{first_device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": first_control_item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": production_session["work_session_id"],
+        },
+    )
+    assert first_install.status_code == 200
+
+    second_install = client.post(
+        f"/api/devices/{first_device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": first_fan_item["barcode_value"],
+            "component_type": "FAN_MODULE",
+            "work_session_id": production_session["work_session_id"],
+        },
+    )
+    assert second_install.status_code == 200
+
+    third_install = client.post(
+        f"/api/devices/{second_device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": second_control_item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": production_session["work_session_id"],
+        },
+    )
+    assert third_install.status_code == 200
+
+    bindings = client.get(f"/api/device-bom-templates/{device_type}/bindings?version=1.0")
+    assert bindings.status_code == 200
+    payload = bindings.json()
+    assert len(payload) == 2
+
+    rows = {row["device_serial_number"]: row for row in payload}
+    assert rows[first_device_serial_number]["device_type"] == device_type
+    assert rows[first_device_serial_number]["bom_version"] == "1.0"
+    assert rows[first_device_serial_number]["installed_component_count"] == 2
+    assert rows[first_device_serial_number]["production_status"] == "CREATED"
+    assert rows[first_device_serial_number]["first_bound_at"] is not None
+    assert rows[second_device_serial_number]["installed_component_count"] == 1
+
+
 def test_device_bom_template_diff_reports_added_removed_modified_and_unchanged_items():
     device_type = unique_id("DT")
     ensure_device_bom_template(
