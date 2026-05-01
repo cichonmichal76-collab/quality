@@ -32,6 +32,8 @@ Dodatkowo aktywny lookup BOM uwzględnia teraz pola `effective_from` i `effectiv
 
 Pozycje BOM mogą być też spinane przez `substitution_group`. Dzięki temu jeden slot montażowy może akceptować kilka alternatywnych `component_type`, a system liczy ilość wymaganą na poziomie całej grupy zamiast każdej pozycji osobno.
 
+Dodatkowo wersje BOM mają teraz jawny lineage: wiadomo, z jakiej wersji powstała nowa rewizja i jaka wersja zastąpiła poprzednią. To upraszcza analizę zmian bez ręcznego składania historii z samych auditów.
+
 ## Digital device tree
 
 Po montażu system pokazuje drzewo urządzenia z konkretnymi numerami części i podzespołów. Historia urządzenia powinna pozwalać zejść do historii każdego komponentu.

@@ -12,6 +12,7 @@ from app.schemas import (
     DeviceBomTemplateBindingRead,
     DeviceBomTemplateCoverageRead,
     DeviceBomTemplateDiffRead,
+    DeviceBomTemplateLineageRead,
     DeviceBomTemplateActivateRequest,
     DeviceBomTemplateApproveRequest,
     DeviceBomTemplateCloneRequest,
@@ -58,6 +59,19 @@ def create_device_bom_template(
 @router.get("/device-bom-templates", response_model=list[DeviceBomTemplateRead])
 def list_device_bom_templates(db: Session = Depends(get_db)):
     return service.list_device_bom_templates(db)
+
+
+@router.get(
+    "/device-bom-templates/{device_type}/lineage",
+    response_model=DeviceBomTemplateLineageRead,
+)
+def get_device_bom_template_lineage(
+    device_type: str,
+    version: str | None = None,
+    variant_code: str = "DEFAULT",
+    db: Session = Depends(get_db),
+):
+    return service.get_device_bom_template_lineage(db, device_type, version, variant_code)
 
 
 @router.get(

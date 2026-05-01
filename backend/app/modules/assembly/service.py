@@ -28,6 +28,8 @@ from app.schemas import (
     DeviceBomTemplateActivateRequest,
     DeviceBomTemplateApproveRequest,
     DeviceBomTemplateCloneRequest,
+    DeviceBomTemplateLineageNodeRead,
+    DeviceBomTemplateLineageRead,
     DeviceBomItemSnapshotRead,
     DeviceBomTemplatePromoteRequest,
     DeviceBomTemplateReleaseRequest,
@@ -219,6 +221,72 @@ def create_device_bom_template(db: Session, payload: DeviceBomTemplateCreate) ->
 
 def list_device_bom_templates(db: Session) -> list[DeviceBomTemplate]:
     return repository.list_bom_templates(db)
+
+
+def _to_bom_lineage_node(template: DeviceBomTemplate) -> DeviceBomTemplateLineageNodeRead:
+    return DeviceBomTemplateLineageNodeRead(
+        template_id=template.id,
+        device_type=template.device_type,
+        variant_code=template.variant_code,
+        version=template.version,
+        status=template.status,
+        is_active=template.is_active,
+        source_template_id=template.source_template_id,
+        replaced_by_template_id=template.replaced_by_template_id,
+        approved_at=template.approved_at,
+        effective_from=template.effective_from,
+        effective_to=template.effective_to,
+    )
+
+
+def get_device_bom_template_lineage(
+    db: Session,
+    device_type: str,
+    version: str | None = None,
+    variant_code: str = "DEFAULT",
+) -> DeviceBomTemplateLineageRead:
+    focus_template = get_device_bom_template_or_404(db, device_type, version, variant_code)
+    all_templates = repository.list_bom_templates_for_device_type_and_variant(
+        db,
+        focus_template.device_type,
+        focus_template.variant_code,
+    )
+    by_id = {template.id: template for template in all_templates}
+
+    ancestors: list[DeviceBomTemplateLineageNodeRead] = []
+    ancestor_id = focus_template.source_template_id
+    while ancestor_id:
+        ancestor = by_id.get(ancestor_id)
+        if ancestor is None:
+            break
+        ancestors.append(_to_bom_lineage_node(ancestor))
+        ancestor_id = ancestor.source_template_id
+
+    descendants: list[DeviceBomTemplateLineageNodeRead] = []
+    queue = [template for template in all_templates if template.source_template_id == focus_template.id]
+    seen_template_ids = {focus_template.id}
+    while queue:
+        current = queue.pop(0)
+        if current.id in seen_template_ids:
+            continue
+        seen_template_ids.add(current.id)
+        descendants.append(_to_bom_lineage_node(current))
+        queue.extend(
+            template for template in all_templates if template.source_template_id == current.id
+        )
+
+    replacement = None
+    if focus_template.replaced_by_template_id:
+        replacement_template = by_id.get(focus_template.replaced_by_template_id)
+        if replacement_template is not None:
+            replacement = _to_bom_lineage_node(replacement_template)
+
+    return DeviceBomTemplateLineageRead(
+        focus=_to_bom_lineage_node(focus_template),
+        ancestors=ancestors,
+        descendants=descendants,
+        replacement=replacement,
+    )
 
 
 def get_device_bom_template_usage(
@@ -764,6 +832,8 @@ def clone_device_bom_template(
         version=payload.target_version,
         is_active=payload.activate,
         status="ACTIVE" if payload.activate else "INACTIVE",
+        source_template_id=source_template.id,
+        replaced_by_template_id=None,
         approved_by=None,
         approved_at=None,
         release_note=None,
@@ -961,6 +1031,7 @@ def promote_device_bom_template(
     )
     refreshed_source.is_active = False
     refreshed_source.status = "RETIRED"
+    refreshed_source.replaced_by_template_id = cloned_template.id
     retire_reason = payload.retire_reason or f"Promoted to version {cloned_template.version}"
     record_audit_event(
         db,

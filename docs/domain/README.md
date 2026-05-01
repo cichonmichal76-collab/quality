@@ -198,6 +198,7 @@ Najważniejsze reguły:
 - pozycja `DeviceBomItem` może też zawęzić dopuszczalny `drawing_number` i `drawing_revision`
 - pozycja `DeviceBomItem` może też należeć do `substitution_group`, która opisuje jeden logiczny slot akceptujący kilka alternatywnych typów komponentów
 - wersja `DeviceBomTemplate` ma jawny status lifecycle: `ACTIVE`, `INACTIVE` albo `RETIRED`
+- wersja `DeviceBomTemplate` ma też lineage przez `source_template_id` i `replaced_by_template_id`
 - wersja `RETIRED` jest niemodyfikowalna i może być używana dalej tylko przez urządzenia już wcześniej przypięte do tej wersji
 - nowa wersja `DeviceBomTemplate` może powstać przez klonowanie istniejącej wersji razem z kompletem pozycji BOM
 - aktywna wersja `DeviceBomTemplate` może zostać promowana do nowej rewizji jako operacja biznesowa łącząca klonowanie, aktywację i wycofanie poprzedniej wersji

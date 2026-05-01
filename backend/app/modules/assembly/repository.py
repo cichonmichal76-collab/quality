@@ -96,6 +96,10 @@ def get_bom_template_by_device_type_and_version(
     )
 
 
+def get_bom_template_by_id(db: Session, template_id: str) -> DeviceBomTemplate | None:
+    return db.query(DeviceBomTemplate).filter(DeviceBomTemplate.id == template_id).first()
+
+
 def get_active_bom_template_by_device_type(
     db: Session,
     device_type: str,
@@ -125,6 +129,22 @@ def list_bom_templates(db: Session) -> list[DeviceBomTemplate]:
     return (
         db.query(DeviceBomTemplate)
         .order_by(DeviceBomTemplate.device_type.asc(), DeviceBomTemplate.created_at.desc())
+        .all()
+    )
+
+
+def list_bom_templates_for_device_type_and_variant(
+    db: Session,
+    device_type: str,
+    variant_code: str = "DEFAULT",
+) -> list[DeviceBomTemplate]:
+    return (
+        db.query(DeviceBomTemplate)
+        .filter(
+            DeviceBomTemplate.device_type == device_type,
+            DeviceBomTemplate.variant_code == variant_code,
+        )
+        .order_by(DeviceBomTemplate.created_at.asc())
         .all()
     )
 
@@ -159,8 +179,10 @@ def set_active_bom_template(
     for active_template in previously_active:
         active_template.is_active = False
         active_template.status = "INACTIVE"
+        active_template.replaced_by_template_id = template.id
     template.is_active = True
     template.status = "ACTIVE"
+    template.replaced_by_template_id = None
     return previously_active
 
 

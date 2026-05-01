@@ -1134,6 +1134,14 @@ def test_device_bom_template_can_be_cloned_with_all_items():
     assert cloned_rows["FAN_MODULE"]["required_drawing_revision"] == "03"
     assert cloned_rows["FAN_MODULE"]["quantity_required"] == 2
 
+    lineage = client.get(f"/api/device-bom-templates/{device_type}/lineage?version=1.1")
+    assert lineage.status_code == 200
+    lineage_payload = lineage.json()
+    assert lineage_payload["focus"]["version"] == "1.1"
+    assert lineage_payload["focus"]["source_template_id"] is not None
+    assert [row["version"] for row in lineage_payload["ancestors"]] == ["1.0"]
+    assert lineage_payload["replacement"] is None
+
 
 def test_device_bom_template_clone_requires_greater_target_version():
     device_type = unique_id("DT")
@@ -1234,6 +1242,19 @@ def test_active_bom_template_can_be_promoted_in_one_operation():
     assert set(promoted_rows) == {"CONTROL_PCB", "FAN_MODULE"}
     assert promoted_rows["CONTROL_PCB"]["required_part_number"] == "PCB-CTRL-001"
     assert promoted_rows["FAN_MODULE"]["quantity_required"] == 2
+
+    retired_lineage = client.get(f"/api/device-bom-templates/{device_type}/lineage?version=1.0")
+    assert retired_lineage.status_code == 200
+    retired_payload = retired_lineage.json()
+    assert retired_payload["focus"]["replaced_by_template_id"] is not None
+    assert retired_payload["replacement"] is not None
+    assert retired_payload["replacement"]["version"] == "2.0"
+
+    promoted_lineage = client.get(f"/api/device-bom-templates/{device_type}/lineage?version=2.0")
+    assert promoted_lineage.status_code == 200
+    promoted_payload = promoted_lineage.json()
+    assert promoted_payload["focus"]["source_template_id"] == retired_payload["focus"]["template_id"]
+    assert [row["version"] for row in promoted_payload["ancestors"]] == ["1.0"]
 
 
 def test_bom_template_promotion_requires_greater_target_version():

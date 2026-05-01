@@ -56,12 +56,35 @@ class DeviceBomTemplateCreate(BaseModel):
 class DeviceBomTemplateRead(DeviceBomTemplateCreate):
     id: str
     status: str
+    source_template_id: str | None = None
+    replaced_by_template_id: str | None = None
     approved_by: str | None = None
     approved_at: datetime | None = None
     release_note: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class DeviceBomTemplateLineageNodeRead(BaseModel):
+    template_id: str
+    device_type: str
+    variant_code: str
+    version: str
+    status: str
+    is_active: bool
+    source_template_id: str | None = None
+    replaced_by_template_id: str | None = None
+    approved_at: datetime | None = None
+    effective_from: datetime | None = None
+    effective_to: datetime | None = None
+
+
+class DeviceBomTemplateLineageRead(BaseModel):
+    focus: DeviceBomTemplateLineageNodeRead
+    ancestors: list[DeviceBomTemplateLineageNodeRead]
+    descendants: list[DeviceBomTemplateLineageNodeRead]
+    replacement: DeviceBomTemplateLineageNodeRead | None = None
 
 
 class DeviceBomTemplateUsageRead(BaseModel):

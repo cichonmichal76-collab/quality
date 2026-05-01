@@ -103,6 +103,19 @@ Pozycja BOM może mieć opcjonalne pole `substitution_group`. Wszystkie pozycje 
 - `shipment` uznaje wymóg za spełniony, jeśli grupa ma wymaganą łączną ilość, nawet gdy użyto tylko jednego z wariantów
 - pozycje w tej samej grupie muszą mieć zgodne `quantity_required` i `is_required`
 
+## Lineage wersji BOM
+
+Każda wersja BOM może wskazywać:
+
+- `source_template_id`
+- `replaced_by_template_id`
+
+Nowy odczyt:
+
+- `GET /api/device-bom-templates/{device_type}/lineage?version=...&variant_code=...`
+
+zwraca `focus`, `ancestors`, `descendants` i `replacement`, więc można bezpośrednio zobaczyć historię klonowania i zastępowania wersji.
+
 ## 1. Bootstrap danych podstawowych
 
 Utworzenie operatora:
