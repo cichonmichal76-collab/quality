@@ -5,10 +5,23 @@ from sqlalchemy.orm import Session
 
 from app.core.audit import record_audit_event
 from app.database import utc_now
-from app.models import AssemblyLink, Device, DeviceComponent, ScanEvent
+from app.models import (
+    AssemblyLink,
+    Device,
+    DeviceBomItem,
+    DeviceBomTemplate,
+    DeviceComponent,
+    ScanEvent,
+)
 from app.modules.auth_rfid.service import PRODUCTION_SESSION_ROLES, require_active_work_session
 from app.modules.assembly import repository
-from app.schemas import AssemblyScanRequest, ComponentCreate, DeviceCreate
+from app.schemas import (
+    AssemblyScanRequest,
+    ComponentCreate,
+    DeviceBomItemCreate,
+    DeviceBomTemplateCreate,
+    DeviceCreate,
+)
 
 
 def get_device_or_404(db: Session, device_serial_number: str):
@@ -48,6 +61,47 @@ def add_component(db: Session, device_serial_number: str, payload: ComponentCrea
 def list_components(db: Session, device_serial_number: str) -> list[DeviceComponent]:
     get_device_or_404(db, device_serial_number)
     return repository.list_device_components(db, device_serial_number)
+
+
+def create_device_bom_template(db: Session, payload: DeviceBomTemplateCreate) -> DeviceBomTemplate:
+    if repository.get_bom_template_by_device_type(db, payload.device_type):
+        raise HTTPException(status_code=409, detail="BOM template already exists for device type")
+    template = DeviceBomTemplate(**payload.model_dump())
+    db.add(template)
+    db.commit()
+    db.refresh(template)
+    return template
+
+
+def list_device_bom_templates(db: Session) -> list[DeviceBomTemplate]:
+    return repository.list_bom_templates(db)
+
+
+def get_device_bom_template_or_404(db: Session, device_type: str) -> DeviceBomTemplate:
+    template = repository.get_bom_template_by_device_type(db, device_type)
+    if not template:
+        raise HTTPException(status_code=404, detail="BOM template not found")
+    return template
+
+
+def add_device_bom_item(
+    db: Session,
+    device_type: str,
+    payload: DeviceBomItemCreate,
+) -> DeviceBomItem:
+    template = get_device_bom_template_or_404(db, device_type)
+    if repository.get_bom_item(db, template.id, payload.component_type):
+        raise HTTPException(status_code=409, detail="BOM item already exists for component type")
+    item = DeviceBomItem(template_id=template.id, **payload.model_dump())
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+def list_device_bom_items(db: Session, device_type: str) -> list[DeviceBomItem]:
+    template = get_device_bom_template_or_404(db, device_type)
+    return repository.list_bom_items_for_template(db, template.id)
 
 
 def scan_component_for_assembly(

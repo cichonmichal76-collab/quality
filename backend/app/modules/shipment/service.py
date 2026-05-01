@@ -42,16 +42,33 @@ def update_device_status(db: Session, serial_number: str, payload: DeviceStatusU
 
 
 def _ensure_required_components_installed(db: Session, device: Device) -> None:
-    required_component_types = rules.get_required_component_types(device.device_type)
-    if not required_component_types:
+    bom_template = repository.get_active_bom_template_by_device_type(db, device.device_type)
+    if not bom_template:
+        return
+    required_bom_items = repository.list_required_bom_items_for_template(db, bom_template.id)
+    if not required_bom_items:
         return
 
     installed_links = repository.list_installed_assembly_links_for_device(
         db,
         device.device_serial_number,
     )
-    installed_component_types = {link.component_type for link in installed_links}
-    missing_component_types = sorted(required_component_types - installed_component_types)
+    installed_component_counts: dict[str, int] = {}
+    for link in installed_links:
+        installed_component_counts[link.component_type] = (
+            installed_component_counts.get(link.component_type, 0) + 1
+        )
+
+    missing_component_types: list[str] = []
+    for bom_item in required_bom_items:
+        installed_count = installed_component_counts.get(bom_item.component_type, 0)
+        if installed_count < bom_item.quantity_required:
+            if bom_item.quantity_required == 1:
+                missing_component_types.append(bom_item.component_type)
+            else:
+                missing_component_types.append(
+                    f"{bom_item.component_type} x{bom_item.quantity_required}"
+                )
     if missing_component_types:
         missing_components = ", ".join(missing_component_types)
         raise HTTPException(

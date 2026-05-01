@@ -1,6 +1,13 @@
 from sqlalchemy.orm import Session
 
-from app.models import AssemblyLink, Device, DeviceComponent, ProductionItem
+from app.models import (
+    AssemblyLink,
+    Device,
+    DeviceBomItem,
+    DeviceBomTemplate,
+    DeviceComponent,
+    ProductionItem,
+)
 
 
 def get_device_by_serial_number(db: Session, device_serial_number: str) -> Device | None:
@@ -41,4 +48,40 @@ def list_device_components(db: Session, device_serial_number: str) -> list[Devic
         .filter(DeviceComponent.device_serial_number == device_serial_number)
         .order_by(DeviceComponent.installed_at.desc())
         .all()
+    )
+
+
+def get_bom_template_by_device_type(db: Session, device_type: str) -> DeviceBomTemplate | None:
+    return (
+        db.query(DeviceBomTemplate)
+        .filter(DeviceBomTemplate.device_type == device_type)
+        .first()
+    )
+
+
+def list_bom_templates(db: Session) -> list[DeviceBomTemplate]:
+    return db.query(DeviceBomTemplate).order_by(DeviceBomTemplate.device_type.asc()).all()
+
+
+def list_bom_items_for_template(db: Session, template_id: str) -> list[DeviceBomItem]:
+    return (
+        db.query(DeviceBomItem)
+        .filter(DeviceBomItem.template_id == template_id)
+        .order_by(DeviceBomItem.component_type.asc())
+        .all()
+    )
+
+
+def get_bom_item(
+    db: Session,
+    template_id: str,
+    component_type: str,
+) -> DeviceBomItem | None:
+    return (
+        db.query(DeviceBomItem)
+        .filter(
+            DeviceBomItem.template_id == template_id,
+            DeviceBomItem.component_type == component_type,
+        )
+        .first()
     )

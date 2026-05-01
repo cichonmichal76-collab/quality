@@ -172,6 +172,8 @@ Cel:
 Główne encje:
 
 - `Device`
+- `DeviceBomTemplate`
+- `DeviceBomItem`
 - `AssemblyLink`
 - `ProductionItem`
 - `ScanEvent`
@@ -182,11 +184,12 @@ Najważniejsze reguły:
 - komponent ze złym statusem nie może być zamontowany
 - komponent nie może zostać zainstalowany drugi raz, jeśli jest już aktywny w innym urządzeniu
 - assembly produkuje zarówno relację montażową, jak i ślad skanu
+- definicje BOM dla `device_type` są utrzymywane w `DeviceBomTemplate` i `DeviceBomItem`
 
 Stan implementacji:
 
 - zaimplementowane w module `assembly`
-- moduł `assembly` obsługuje też device CRUD i proste endpointy komponentów
+- moduł `assembly` obsługuje też device CRUD, proste endpointy komponentów i API do zarządzania BOM
 
 ### 5. Final test
 
@@ -229,12 +232,13 @@ Główne encje:
 Aktualnie zaimplementowana reguła:
 
 - `READY_FOR_SHIPMENT` wymaga statusu `FINAL_TEST_PASSED`
-- dla `ZSS` wymagany jest zainstalowany komponent `CONTROL_PCB` zapisany przez `AssemblyLink`
+- wymagane komponenty są odczytywane z aktywnego BOM w tabelach `device_bom_templates` i `device_bom_items`
+- brakujący komponent jest raportowany w błędzie wraz z ilością, jeśli `quantity_required > 1`
 - otwarta krytyczna NCR blokuje shipment
 
 Stan implementacji:
 
-- minimalna bramka z prostym, statycznym BOM per `device_type` jest zaimplementowana w module `shipment`
+- minimalna bramka z BOM utrzymywanym w bazie per `device_type` jest zaimplementowana w module `shipment`
 
 ### 7. Service i commissioning
 

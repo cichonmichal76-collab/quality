@@ -120,7 +120,7 @@ Aktualne moduły:
 - `files`
 - `nonconformities`
 
-Zaobserwowane domeny backendu działają już przez routery i serwisy modułowe. Moduł `assembly` obsługuje dodatkowo device CRUD i proste endpointy komponentów.
+Zaobserwowane domeny backendu działają już przez routery i serwisy modułowe. Moduł `assembly` obsługuje dodatkowo device CRUD, proste endpointy komponentów i aktywne szablony BOM per `device_type`.
 
 ## Najważniejsze endpointy
 
@@ -138,6 +138,8 @@ Zaobserwowane domeny backendu działają już przez routery i serwisy modułowe.
 - `POST /api/qc-runs`
 - `POST /api/final-tests`
 - `POST /api/devices`
+- `POST /api/device-bom-templates`
+- `POST /api/device-bom-templates/{device_type}/items`
 - `GET /api/devices`
 - `GET /api/devices/{serial_number}`
 - `PATCH /api/devices/{serial_number}/status`

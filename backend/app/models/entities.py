@@ -1,7 +1,9 @@
 import uuid
 from datetime import datetime
+
 from sqlalchemy import Boolean, DateTime, ForeignKey, JSON, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
+
 from app.database import Base, utc_now
 
 
@@ -36,6 +38,28 @@ class DeviceComponent(Base):
     installed_by: Mapped[str | None] = mapped_column(String, nullable=True)
     installed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     status: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
+class DeviceBomTemplate(Base):
+    __tablename__ = "device_bom_templates"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=uuid_str)
+    device_type: Mapped[str] = mapped_column(String, unique=True, index=True)
+    name: Mapped[str] = mapped_column(String)
+    version: Mapped[str] = mapped_column(String, default="1.0")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class DeviceBomItem(Base):
+    __tablename__ = "device_bom_items"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=uuid_str)
+    template_id: Mapped[str] = mapped_column(String, ForeignKey("device_bom_templates.id"))
+    component_type: Mapped[str] = mapped_column(String)
+    quantity_required: Mapped[int] = mapped_column(default=1)
+    is_required: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
 
 class QcChecklist(Base):

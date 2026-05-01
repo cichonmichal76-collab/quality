@@ -9,6 +9,10 @@ from app.schemas import (
     AssemblyScanRequest,
     ComponentCreate,
     ComponentRead,
+    DeviceBomItemCreate,
+    DeviceBomItemRead,
+    DeviceBomTemplateCreate,
+    DeviceBomTemplateRead,
     DeviceCreate,
     DeviceRead,
 )
@@ -29,6 +33,39 @@ def list_devices(db: Session = Depends(get_db)):
 @router.get("/devices/{device_serial_number}", response_model=DeviceRead)
 def get_device(device_serial_number: str, db: Session = Depends(get_db)):
     return service.get_device_or_404(db, device_serial_number)
+
+
+@router.post("/device-bom-templates", response_model=DeviceBomTemplateRead)
+def create_device_bom_template(
+    payload: DeviceBomTemplateCreate,
+    db: Session = Depends(get_db),
+):
+    return service.create_device_bom_template(db, payload)
+
+
+@router.get("/device-bom-templates", response_model=list[DeviceBomTemplateRead])
+def list_device_bom_templates(db: Session = Depends(get_db)):
+    return service.list_device_bom_templates(db)
+
+
+@router.post(
+    "/device-bom-templates/{device_type}/items",
+    response_model=DeviceBomItemRead,
+)
+def add_device_bom_item(
+    device_type: str,
+    payload: DeviceBomItemCreate,
+    db: Session = Depends(get_db),
+):
+    return service.add_device_bom_item(db, device_type, payload)
+
+
+@router.get(
+    "/device-bom-templates/{device_type}/items",
+    response_model=list[DeviceBomItemRead],
+)
+def list_device_bom_items(device_type: str, db: Session = Depends(get_db)):
+    return service.list_device_bom_items(db, device_type)
 
 
 @router.post("/devices/{device_serial_number}/components", response_model=ComponentRead)

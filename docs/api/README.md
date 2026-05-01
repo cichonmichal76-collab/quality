@@ -316,6 +316,31 @@ curl -X POST http://localhost:8000/api/devices \
   }'
 ```
 
+Zdefiniowanie aktywnego BOM dla typu urządzenia:
+
+```bash
+curl -X POST http://localhost:8000/api/device-bom-templates \
+  -H "Content-Type: application/json" \
+  -d '{
+    "device_type": "ZSS",
+    "name": "ZSS Default BOM",
+    "version": "1.0",
+    "is_active": true
+  }'
+```
+
+Dodanie wymaganego komponentu do BOM:
+
+```bash
+curl -X POST http://localhost:8000/api/device-bom-templates/ZSS/items \
+  -H "Content-Type: application/json" \
+  -d '{
+    "component_type": "CONTROL_PCB",
+    "quantity_required": 1,
+    "is_required": true
+  }'
+```
+
 Instalacja komponentu do urządzenia:
 
 ```bash
@@ -340,6 +365,7 @@ Reguły assembly:
 - status itemu nie może być `QC_FAILED`, `SCRAPPED` ani `REWORK_REQUIRED`
 - komponent nie może być zainstalowany drugi raz, jeśli już ma aktywne `INSTALLED`
 - assembly zapisuje zarówno relację montażową, jak i ślad skanu oraz audytu
+- zgodność z BOM nie jest jeszcze sprawdzana w samym endpointcie assembly; aktywny BOM jest dziś egzekwowany przez shipment gate
 
 ## 7. Final test
 
@@ -379,7 +405,8 @@ curl -X PATCH http://localhost:8000/api/devices/ZSS-000123/status \
 Shipment gate w aktualnym MVP:
 
 - `READY_FOR_SHIPMENT` wymaga `FINAL_TEST_PASSED`
-- dla `ZSS` wymagany jest zainstalowany przez `AssemblyLink` komponent `CONTROL_PCB`
+- wymagane komponenty są odczytywane z aktywnego `device_bom_template` dla `device_type`
+- brakujący komponent jest zwracany w treści błędu, np. `CONTROL_PCB` albo `FAN_MODULE x2`
 - otwarta krytyczna NCR blokuje shipment
 
 ## 8. Audit trail
@@ -462,5 +489,5 @@ Końcowe statusy itemu:
 
 - mamy praktyczny przewodnik API, ale nie ma jeszcze sformalizowanego procesu wersjonowania kontraktu
 - główne zaimplementowane endpointy działają już przez moduły domenowe backendu
-- walidacja shipment jest nadal węższa niż pełny target z PRD, ale obejmuje już minimalny BOM per `device_type`
+- walidacja shipment jest nadal węższa niż pełny target z PRD, ale korzysta już z aktywnego BOM w bazie per `device_type`
 - web i Android nie używają jeszcze generowanego klienta API

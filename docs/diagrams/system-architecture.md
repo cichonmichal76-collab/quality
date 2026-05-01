@@ -85,6 +85,6 @@ graph TD
 
 - backend jest dziś operacyjnym rdzeniem produktu
 - `auth_rfid`, `traceability`, `qc`, `assembly`, `final_test`, `shipment`, `service`, `files` i `nonconformities` są już aktywnymi modułami backendu
-- moduł `assembly` obejmuje dziś także device CRUD i proste endpointy komponentów
+- moduł `assembly` obejmuje dziś także device CRUD, proste endpointy komponentów i aktywne szablony BOM
 - final-test-runner jest najbardziej realnym klientem poza backendem
 - mobile i web są widoczne w repo, ale nie są jeszcze pełnymi aplikacjami produktowymi

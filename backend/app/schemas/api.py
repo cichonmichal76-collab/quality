@@ -42,6 +42,34 @@ class ComponentRead(ComponentCreate):
     model_config = {"from_attributes": True}
 
 
+class DeviceBomTemplateCreate(BaseModel):
+    device_type: str
+    name: str
+    version: str = "1.0"
+    is_active: bool = True
+
+
+class DeviceBomTemplateRead(DeviceBomTemplateCreate):
+    id: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class DeviceBomItemCreate(BaseModel):
+    component_type: str
+    quantity_required: int = Field(default=1, ge=1)
+    is_required: bool = True
+
+
+class DeviceBomItemRead(DeviceBomItemCreate):
+    id: str
+    template_id: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class QcChecklistCreate(BaseModel):
     checklist_code: str
     name: str

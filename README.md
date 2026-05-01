@@ -62,6 +62,7 @@ Backend ewoluuje w kierunku modularnego monolitu z modułami domenowymi takimi j
 - `nonconformities`
 
 Zaobserwowane domeny backendu działają już przez moduły. `assembly` obsługuje także device CRUD i proste endpointy komponentów.
+Ten sam moduł utrzymuje też aktywne szablony BOM per `device_type`, a `shipment` wykorzystuje je do walidacji `READY_FOR_SHIPMENT`.
 
 ## Szybki start
 

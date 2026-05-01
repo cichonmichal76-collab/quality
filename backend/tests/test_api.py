@@ -84,6 +84,33 @@ def create_qc_passed_item(session: dict, item_type: str = "PCB") -> dict:
     return {"item_serial_number": item_serial_number, "barcode_value": barcode_value}
 
 
+def ensure_device_bom_template(
+    device_type: str,
+    component_type: str = "CONTROL_PCB",
+    quantity_required: int = 1,
+) -> None:
+    template_response = client.post(
+        "/api/device-bom-templates",
+        json={
+            "device_type": device_type,
+            "name": f"{device_type} Default BOM",
+            "version": "1.0",
+            "is_active": True,
+        },
+    )
+    assert template_response.status_code in {200, 409}
+
+    item_response = client.post(
+        f"/api/device-bom-templates/{device_type}/items",
+        json={
+            "component_type": component_type,
+            "quantity_required": quantity_required,
+            "is_required": True,
+        },
+    )
+    assert item_response.status_code in {200, 409}
+
+
 def test_health():
     response = client.get("/health")
     assert response.status_code == 200
@@ -142,6 +169,55 @@ def test_manual_device_components_can_be_added_and_listed():
     assert listed.status_code == 200
     assert len(listed.json()) == 1
     assert listed.json()[0]["component_part_number"] == "FAN-120"
+
+
+def test_device_bom_template_can_be_created_and_listed():
+    device_type = unique_id("DT")
+
+    created = client.post(
+        "/api/device-bom-templates",
+        json={
+            "device_type": device_type,
+            "name": "Custom Device BOM",
+            "version": "2.0",
+            "is_active": True,
+        },
+    )
+    assert created.status_code == 200
+    template = created.json()
+    assert template["device_type"] == device_type
+    assert template["version"] == "2.0"
+
+    bom_item = client.post(
+        f"/api/device-bom-templates/{device_type}/items",
+        json={
+            "component_type": "SENSOR_MODULE",
+            "quantity_required": 2,
+            "is_required": True,
+        },
+    )
+    assert bom_item.status_code == 200
+    assert bom_item.json()["component_type"] == "SENSOR_MODULE"
+    assert bom_item.json()["quantity_required"] == 2
+
+    listed_templates = client.get("/api/device-bom-templates")
+    assert listed_templates.status_code == 200
+    assert any(row["device_type"] == device_type for row in listed_templates.json())
+
+    listed_items = client.get(f"/api/device-bom-templates/{device_type}/items")
+    assert listed_items.status_code == 200
+    assert len(listed_items.json()) == 1
+    assert listed_items.json()[0]["component_type"] == "SENSOR_MODULE"
+
+    invalid_item = client.post(
+        f"/api/device-bom-templates/{device_type}/items",
+        json={
+            "component_type": "INVALID_MODULE",
+            "quantity_required": 0,
+            "is_required": True,
+        },
+    )
+    assert invalid_item.status_code == 422
 
 
 def test_rfid_work_session_lifecycle_and_audit_events():
@@ -558,6 +634,7 @@ def test_expired_work_session_is_timed_out_and_blocked():
 
 
 def test_final_test_pass_sets_status_and_audit_context():
+    ensure_device_bom_template("ZSS")
     device_serial_number = unique_id("ZSS")
     device_response = client.post(
         "/api/devices",
@@ -607,6 +684,7 @@ def test_final_test_pass_sets_status_and_audit_context():
 
 
 def test_shipment_is_blocked_when_required_component_is_missing():
+    ensure_device_bom_template("ZSS")
     device_serial_number = unique_id("ZSS")
     device_response = client.post(
         "/api/devices",
@@ -637,6 +715,75 @@ def test_shipment_is_blocked_when_required_component_is_missing():
     assert response.json()["detail"] == (
         "READY_FOR_SHIPMENT requires installed components: CONTROL_PCB"
     )
+
+
+def test_shipment_reads_bom_requirements_from_database():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="FAN_MODULE",
+        quantity_required=2,
+    )
+    device_serial_number = unique_id("DEV")
+    device_response = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
+    )
+    assert device_response.status_code == 200
+
+    production_session = start_work_session(role="PRODUCTION_OPERATOR")
+    first_item = create_qc_passed_item(production_session, item_type="FAN_MODULE")
+    second_item = create_qc_passed_item(production_session, item_type="FAN_MODULE")
+
+    first_install = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": first_item["barcode_value"],
+            "component_type": "FAN_MODULE",
+            "work_session_id": production_session["work_session_id"],
+        },
+    )
+    assert first_install.status_code == 200
+
+    final_test_session = start_work_session(role="FINAL_TEST_OPERATOR")
+    final_test = client.post(
+        "/api/final-tests",
+        json={
+            "test_run_id": unique_id("FT"),
+            "device_serial_number": device_serial_number,
+            "result": "PASS",
+            "firmware_version": "1.2.4",
+            "bootloader_version": "0.9.8",
+            "work_session_id": final_test_session["work_session_id"],
+        },
+    )
+    assert final_test.status_code == 200
+
+    blocked = client.patch(
+        f"/api/devices/{device_serial_number}/status",
+        json={"production_status": "READY_FOR_SHIPMENT"},
+    )
+    assert blocked.status_code == 400
+    assert blocked.json()["detail"] == (
+        "READY_FOR_SHIPMENT requires installed components: FAN_MODULE x2"
+    )
+
+    second_install = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": second_item["barcode_value"],
+            "component_type": "FAN_MODULE",
+            "work_session_id": production_session["work_session_id"],
+        },
+    )
+    assert second_install.status_code == 200
+
+    ready = client.patch(
+        f"/api/devices/{device_serial_number}/status",
+        json={"production_status": "READY_FOR_SHIPMENT"},
+    )
+    assert ready.status_code == 200
+    assert ready.json()["production_status"] == "READY_FOR_SHIPMENT"
 
 
 def test_final_test_fail_sets_device_status_and_creates_ncr():

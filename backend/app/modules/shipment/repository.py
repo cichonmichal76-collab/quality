@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 
-from app.models import AssemblyLink, Device, Nonconformity
+from app.models import AssemblyLink, Device, DeviceBomItem, DeviceBomTemplate, Nonconformity
 
 
 def get_device_by_serial_number(db: Session, device_serial_number: str) -> Device | None:
@@ -29,6 +29,31 @@ def list_installed_assembly_links_for_device(
         .filter(
             AssemblyLink.parent_device_serial_number == device_serial_number,
             AssemblyLink.status == "INSTALLED",
+        )
+        .all()
+    )
+
+
+def get_active_bom_template_by_device_type(
+    db: Session,
+    device_type: str,
+) -> DeviceBomTemplate | None:
+    return (
+        db.query(DeviceBomTemplate)
+        .filter(
+            DeviceBomTemplate.device_type == device_type,
+            DeviceBomTemplate.is_active.is_(True),
+        )
+        .first()
+    )
+
+
+def list_required_bom_items_for_template(db: Session, template_id: str) -> list[DeviceBomItem]:
+    return (
+        db.query(DeviceBomItem)
+        .filter(
+            DeviceBomItem.template_id == template_id,
+            DeviceBomItem.is_required.is_(True),
         )
         .all()
     )
