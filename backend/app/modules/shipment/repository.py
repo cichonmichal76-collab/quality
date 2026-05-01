@@ -9,6 +9,21 @@ def get_device_by_serial_number(db: Session, device_serial_number: str) -> Devic
     return db.query(Device).filter(Device.device_serial_number == device_serial_number).first()
 
 
+def list_devices_for_shipment(
+    db: Session,
+    *,
+    device_type: str | None = None,
+    variant_code: str | None = None,
+    limit: int = 100,
+) -> list[Device]:
+    query = db.query(Device)
+    if device_type:
+        query = query.filter(Device.device_type == device_type)
+    if variant_code:
+        query = query.filter(Device.variant_code == variant_code)
+    return query.order_by(Device.created_at.desc()).limit(limit).all()
+
+
 def has_critical_open_ncr(db: Session, device_serial_number: str) -> bool:
     return (
         db.query(Nonconformity)

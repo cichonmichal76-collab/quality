@@ -9,6 +9,7 @@ from app.modules.shipment import repository, rules
 from app.schemas import (
     DeviceBomComplianceRead,
     DeviceShipmentBlockingCheckRead,
+    DeviceShipmentQueueRead,
     DeviceShipmentReadinessRead,
     DeviceStatusUpdate,
 )
@@ -177,3 +178,50 @@ def get_device_shipment_readiness(
 ) -> DeviceShipmentReadinessRead:
     device = get_device_or_404(db, serial_number)
     return _build_device_shipment_readiness(db, device)
+
+
+def list_device_shipment_readiness(
+    db: Session,
+    *,
+    device_type: str | None = None,
+    variant_code: str | None = None,
+    only_blocked: bool = False,
+    only_ready: bool = False,
+    limit: int = 100,
+) -> DeviceShipmentQueueRead:
+    if only_blocked and only_ready:
+        raise HTTPException(
+            status_code=400,
+            detail="only_blocked and only_ready cannot both be true",
+        )
+    devices = repository.list_devices_for_shipment(
+        db,
+        device_type=device_type,
+        variant_code=variant_code,
+        limit=limit,
+    )
+    readiness_rows = [_build_device_shipment_readiness(db, device) for device in devices]
+
+    if only_blocked:
+        readiness_rows = [
+            row for row in readiness_rows if not row.can_transition_to_ready_for_shipment
+        ]
+    if only_ready:
+        readiness_rows = [row for row in readiness_rows if row.can_transition_to_ready_for_shipment]
+
+    ready_count = sum(1 for row in readiness_rows if row.can_transition_to_ready_for_shipment)
+    blocked_count = len(readiness_rows) - ready_count
+
+    return DeviceShipmentQueueRead(
+        total_devices=len(readiness_rows),
+        ready_count=ready_count,
+        blocked_count=blocked_count,
+        filters={
+            "device_type": device_type,
+            "variant_code": variant_code,
+            "only_blocked": only_blocked,
+            "only_ready": only_ready,
+            "limit": limit,
+        },
+        devices=readiness_rows,
+    )

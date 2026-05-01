@@ -250,6 +250,14 @@ class DeviceShipmentReadinessRead(BaseModel):
     blocking_checks: list[DeviceShipmentBlockingCheckRead]
 
 
+class DeviceShipmentQueueRead(BaseModel):
+    total_devices: int
+    ready_count: int
+    blocked_count: int
+    filters: dict[str, str | bool | int | None]
+    devices: list[DeviceShipmentReadinessRead]
+
+
 class DeviceBomTemplateActivateRequest(BaseModel):
     version: str = Field(pattern=r"^\d+(?:\.\d+)*$")
 

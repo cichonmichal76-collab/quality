@@ -164,6 +164,7 @@ Wersje BOM mają też teraz jawne lineage przez `source_template_id` i `replaced
 - `PATCH /api/device-bom-templates/{device_type}/items/{component_type}`
 - `DELETE /api/device-bom-templates/{device_type}/items/{component_type}`
 - `GET /api/devices`
+- `GET /api/shipment-readiness`
 - `GET /api/devices/{serial_number}`
 - `GET /api/devices/{serial_number}/bom-resolution`
 - `GET /api/devices/{serial_number}/bom-compliance`
