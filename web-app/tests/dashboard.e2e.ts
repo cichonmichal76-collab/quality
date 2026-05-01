@@ -140,3 +140,46 @@ test("dashboard restores active tab and filters after reload", async ({
   await expect(page.getByText(/2-2 z 2/)).toBeVisible();
   await expect(componentTable.getByText(/CN-E2E-/)).toBeVisible();
 });
+
+test("dashboard clears saved state back to defaults", async ({ page }) => {
+  await page.goto("/");
+
+  await expect(page.getByText("API OK")).toBeVisible();
+
+  await page.getByRole("button", { name: "Komponenty" }).click();
+  const componentTextFields = page.locator(".filters-card input");
+  const componentLimitField = page.locator('.filters-card input[type="number"]');
+
+  await componentTextFields.first().fill("DEMO-E2E");
+  await componentLimitField.fill("1");
+  await page.locator(".pagination-bar .primary-button").click();
+
+  await expect(page.getByText(/2-2 z 2/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Komponenty" })).toHaveClass(
+    /is-active/,
+  );
+
+  const apiControls = page.getByRole("region", { name: /API/i });
+  await apiControls
+    .getByRole("button", { name: "Wyczyść zapisany stan" })
+    .click();
+
+  const shipmentTextFields = page.locator(".filters-card input");
+  const shipmentLimitField = page.locator('.filters-card input[type="number"]');
+  await expect(page.getByRole("button", { name: "Wysyłka" })).toHaveClass(
+    /is-active/,
+  );
+  await expect(page.getByRole("button", { name: "Komponenty" })).not.toHaveClass(
+    /is-active/,
+  );
+  await expect(shipmentTextFields.first()).toHaveValue("");
+  await expect(shipmentLimitField).toHaveValue("100");
+
+  await page.reload();
+
+  await expect(page.getByRole("button", { name: "Wysyłka" })).toHaveClass(
+    /is-active/,
+  );
+  await expect(shipmentTextFields.first()).toHaveValue("");
+  await expect(shipmentLimitField).toHaveValue("100");
+});
