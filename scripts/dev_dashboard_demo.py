@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import subprocess
 import sys
@@ -94,6 +95,23 @@ def run_command(command: list[str], *, env: dict[str, str]) -> None:
     subprocess.run(command, cwd=BACKEND_DIR, env=env, check=True)
 
 
+def run_json_command(command: list[str], *, env: dict[str, str]) -> dict[str, object]:
+    print(f">>> {' '.join(command)}", flush=True)
+    completed = subprocess.run(
+        command,
+        cwd=BACKEND_DIR,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    if completed.stdout:
+        print(completed.stdout, end="", flush=True)
+    if completed.stderr:
+        print(completed.stderr, end="", file=sys.stderr, flush=True)
+    return json.loads(completed.stdout)
+
+
 def build_env(args: argparse.Namespace) -> dict[str, str]:
     env = os.environ.copy()
     env["DATABASE_URL"] = args.database_url
@@ -116,9 +134,38 @@ def resolve_sqlite_database_path(database_url: str) -> Path | None:
     return (BACKEND_DIR / path).resolve()
 
 
+def print_dataset_summary(seed_result: dict[str, object]) -> None:
+    print(f"DEMO_DEVICE_TYPE={seed_result['device_type']}", flush=True)
+    print(f"DEMO_DATA_VERIFIED={seed_result['verified']}", flush=True)
+    print(f"SHIPMENT_QUEUE_PATH={seed_result['shipment_queue_url']}", flush=True)
+    print(
+        f"COMPONENT_QUALITY_QUEUE_PATH={seed_result['component_quality_url']}",
+        flush=True,
+    )
+
+
+def print_server_summary(
+    *,
+    host: str,
+    port: int,
+    seed_result: dict[str, object] | None,
+) -> None:
+    base_url = f"http://{host}:{port}"
+    print(f"API_BASE_URL={base_url}", flush=True)
+    print(f"OPENAPI_URL={base_url}/docs", flush=True)
+    if seed_result is not None:
+        print(f"SHIPMENT_QUEUE_URL={base_url}{seed_result['shipment_queue_url']}", flush=True)
+        print(
+            "COMPONENT_QUALITY_QUEUE_URL="
+            f"{base_url}{seed_result['component_quality_url']}",
+            flush=True,
+        )
+
+
 def main() -> int:
     args = parse_args()
     env = build_env(args)
+    seed_result: dict[str, object] | None = None
 
     try:
         if not args.skip_migrate:
@@ -133,7 +180,7 @@ def main() -> int:
                 args.device_type,
                 "--verify-only",
             ]
-            run_command(verify_command, env=env)
+            seed_result = run_json_command(verify_command, env=env)
         elif not args.skip_seed:
             seed_command = [
                 sys.executable,
@@ -146,7 +193,10 @@ def main() -> int:
             ]
             if not args.skip_verify:
                 seed_command.append("--verify")
-            run_command(seed_command, env=env)
+            seed_result = run_json_command(seed_command, env=env)
+
+        if seed_result is not None:
+            print_dataset_summary(seed_result)
 
         if args.no_server:
             if args.verify_only:
@@ -159,6 +209,7 @@ def main() -> int:
                 print(f"DATABASE_PATH={database_path}", flush=True)
             return 0
 
+        print_server_summary(host=args.host, port=args.port, seed_result=seed_result)
         server_command = [
             sys.executable,
             "-m",

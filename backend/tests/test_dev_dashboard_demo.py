@@ -46,6 +46,13 @@ def test_dev_dashboard_demo_bootstraps_local_dashboard(tmp_path):
         f"stderr:\n{bootstrap.stderr}"
     )
     assert "Demo dashboardu przygotowane." in bootstrap.stdout
+    assert f"DEMO_DEVICE_TYPE={device_type}" in bootstrap.stdout
+    assert "DEMO_DATA_VERIFIED=True" in bootstrap.stdout
+    assert f"SHIPMENT_QUEUE_PATH=/api/shipment-readiness?device_type={device_type}" in bootstrap.stdout
+    assert (
+        f"COMPONENT_QUALITY_QUEUE_PATH=/api/component-quality?device_type={device_type}"
+        in bootstrap.stdout
+    )
     assert f"DATABASE_URL={database_url}" in bootstrap.stdout
     assert f"DATABASE_PATH={database_path.resolve()}" in bootstrap.stdout
     assert database_path.exists()
@@ -126,6 +133,8 @@ def test_dev_dashboard_demo_uses_database_url_from_environment(tmp_path):
         f"stdout:\n{bootstrap.stdout}\n"
         f"stderr:\n{bootstrap.stderr}"
     )
+    assert "DEMO_DEVICE_TYPE=DEMO-BOOTSTRAP-ENV" in bootstrap.stdout
+    assert "DEMO_DATA_VERIFIED=True" in bootstrap.stdout
     assert f"DATABASE_URL={database_url}" in bootstrap.stdout
     assert f"DATABASE_PATH={database_path.resolve()}" in bootstrap.stdout
     assert database_path.exists()
@@ -186,6 +195,7 @@ def test_dev_dashboard_demo_can_be_rerun_for_same_device_type(tmp_path):
         f"stderr:\n{second_run.stderr}"
     )
     assert "Demo dashboardu przygotowane." in second_run.stdout
+    assert f"DEMO_DEVICE_TYPE={device_type}" in second_run.stdout
 
 
 def test_dev_dashboard_demo_can_verify_existing_dataset_without_reseeding(tmp_path):
@@ -242,6 +252,13 @@ def test_dev_dashboard_demo_can_verify_existing_dataset_without_reseeding(tmp_pa
         f"stderr:\n{verify_run.stderr}"
     )
     assert "Demo dashboardu zweryfikowane." in verify_run.stdout
+    assert f"DEMO_DEVICE_TYPE={device_type}" in verify_run.stdout
+    assert "DEMO_DATA_VERIFIED=True" in verify_run.stdout
+    assert f"SHIPMENT_QUEUE_PATH=/api/shipment-readiness?device_type={device_type}" in verify_run.stdout
+    assert (
+        f"COMPONENT_QUALITY_QUEUE_PATH=/api/component-quality?device_type={device_type}"
+        in verify_run.stdout
+    )
     assert f"DATABASE_URL={database_url}" in verify_run.stdout
     assert f"DATABASE_PATH={database_path.resolve()}" in verify_run.stdout
 

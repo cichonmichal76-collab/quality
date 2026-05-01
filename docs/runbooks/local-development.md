@@ -104,6 +104,9 @@ zestaw nie istnieje albo nie spełnia oczekiwanego kontraktu dashboardu.
 
 Po zakończeniu skrypt wypisuje teraz nie tylko `DATABASE_URL`, ale też
 `DATABASE_PATH`, czyli rzeczywistą lokalną ścieżkę pliku SQLite użytego przez backend.
+Wypisuje też `DEMO_DEVICE_TYPE`, `DEMO_DATA_VERIFIED` oraz gotowe
+`SHIPMENT_QUEUE_PATH` i `COMPONENT_QUALITY_QUEUE_PATH`, które można od razu wkleić do
+lokalnych testów albo ręcznego sprawdzenia API.
 
 Po przygotowaniu backendu możesz uruchomić panel:
 
