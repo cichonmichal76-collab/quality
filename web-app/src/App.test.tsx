@@ -336,6 +336,24 @@ describe("App", () => {
     );
   });
 
+  it("clears stale shipment data when api base becomes empty", async () => {
+    const fetchMock = vi.fn(async () => createJsonResponse(shipmentPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("SHIP-001")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByDisplayValue("/api"), {
+      target: { value: "" },
+    });
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Podaj bazowy adres API.");
+    expect(screen.queryByText("SHIP-001")).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("applies shipment filters and keeps blocked and ready toggles exclusive", async () => {
     const fetchMock = vi
       .fn()
@@ -457,6 +475,32 @@ describe("App", () => {
     const emptyApiAlert = await screen.findByRole("alert");
     expect(emptyApiAlert).toHaveTextContent("Podaj bazowy adres API.");
     expect(blockedFetch).not.toHaveBeenCalled();
+  });
+
+  it("clears stale component data when refresh ends with API error", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(createJsonResponse(shipmentPayload))
+      .mockResolvedValueOnce(createJsonResponse(componentPayload))
+      .mockResolvedValueOnce(
+        createErrorResponse(503, "Service Unavailable", "component queue offline"),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("SHIP-001")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Komponenty" }));
+    expect(await screen.findByText("COMP-001")).toBeInTheDocument();
+
+    const apiControls = screen.getByRole("region", { name: /API/i });
+    fireEvent.click(within(apiControls).getByRole("button"));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("API 503 Service Unavailable: component queue offline");
+    expect(screen.queryByText("COMP-001")).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it("restores default shipment filters after reset", async () => {

@@ -175,12 +175,22 @@ export function App() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [refreshVersion, setRefreshVersion] = useState(0);
 
+  const clearActiveViewData = (view: DashboardMode) => {
+    if (view === "shipment") {
+      setShipmentData(null);
+      return;
+    }
+
+    setComponentData(null);
+  };
+
   useEffect(() => {
     localStorage.setItem(API_STORAGE_KEY, apiBaseUrl);
   }, [apiBaseUrl]);
 
   useEffect(() => {
     if (!apiBaseUrl.trim()) {
+      clearActiveViewData(activeView);
       setLoadState("error");
       setErrorMessage("Podaj bazowy adres API.");
       return;
@@ -215,6 +225,7 @@ export function App() {
           return;
         }
 
+        clearActiveViewData(activeView);
         setLoadState("error");
         setErrorMessage(error instanceof Error ? error.message : String(error));
       });
