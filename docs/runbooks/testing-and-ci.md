@@ -105,7 +105,7 @@ Obecnie CI egzekwuje twardo:
 - `ruff` i `mypy` dla backendu
 - `ruff` i `mypy` dla runnera
 - testy backendu na domyślnym środowisku
-- osobny przebieg backendu na PostgreSQL z migracjami Alembic, bootstrapem danych demo dashboardu oraz smoke testem filtrów i paginacji na zmigrowanej bazie
+- osobny przebieg backendu na PostgreSQL z migracjami Alembic, podwójnym bootstrapem danych demo dashboardu oraz smoke testem filtrów i paginacji na zmigrowanej bazie
 - testy i build web-app
 - smoke test Playwright dla web-app na odpalonym lokalnie API
 

@@ -35,6 +35,9 @@ Skrypt jest addytywny: nie czyści bazy, tylko dopisuje nowy zestaw danych demo.
 Domyślnie używa `device_type=DEMO-OPS` i wypisuje na końcu numery seryjne oraz
 gotowe URL-e filtrów do obu kolejek.
 
+Ponowne uruchomienie dla tego samego `device_type` i kompletnego datasetu demo
+wykona bezpieczny no-op, więc bootstrap można powtarzać bez dokładania duplikatów.
+
 Jeśli chcesz od razu sprawdzić, czy po seedzie kolejki zwracają oczekiwany
 zestaw scenariuszy, użyj trybu weryfikacji:
 

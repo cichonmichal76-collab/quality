@@ -60,6 +60,8 @@ jobs:
           pip install -e .[dev]
       - name: Bootstrap dashboard demo data on PostgreSQL
         run: python ../scripts/dev_dashboard_demo.py --device-type DEMO-CI --tag CI --no-server
+      - name: Re-run dashboard bootstrap on PostgreSQL
+        run: python ../scripts/dev_dashboard_demo.py --device-type DEMO-CI --tag CI --no-server
       - name: Smoke bootstrapped dashboard dataset on PostgreSQL
         env:
           SERVICE_TRACE_BOOTSTRAP_SMOKE: "1"
