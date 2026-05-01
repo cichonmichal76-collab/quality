@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 
-from app.models import Device, Nonconformity
+from app.models import AssemblyLink, Device, Nonconformity
 
 
 def get_device_by_serial_number(db: Session, device_serial_number: str) -> Device | None:
@@ -17,4 +17,18 @@ def has_critical_open_ncr(db: Session, device_serial_number: str) -> bool:
         )
         .first()
         is not None
+    )
+
+
+def list_installed_assembly_links_for_device(
+    db: Session,
+    device_serial_number: str,
+) -> list[AssemblyLink]:
+    return (
+        db.query(AssemblyLink)
+        .filter(
+            AssemblyLink.parent_device_serial_number == device_serial_number,
+            AssemblyLink.status == "INSTALLED",
+        )
+        .all()
     )

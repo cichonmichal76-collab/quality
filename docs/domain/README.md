@@ -229,11 +229,12 @@ Główne encje:
 Aktualnie zaimplementowana reguła:
 
 - `READY_FOR_SHIPMENT` wymaga statusu `FINAL_TEST_PASSED`
+- dla `ZSS` wymagany jest zainstalowany komponent `CONTROL_PCB` zapisany przez `AssemblyLink`
 - otwarta krytyczna NCR blokuje shipment
 
 Stan implementacji:
 
-- minimalna bramka jest zaimplementowana w module `shipment`
+- minimalna bramka z prostym, statycznym BOM per `device_type` jest zaimplementowana w module `shipment`
 
 ### 7. Service i commissioning
 

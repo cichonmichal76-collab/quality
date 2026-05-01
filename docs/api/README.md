@@ -379,6 +379,7 @@ curl -X PATCH http://localhost:8000/api/devices/ZSS-000123/status \
 Shipment gate w aktualnym MVP:
 
 - `READY_FOR_SHIPMENT` wymaga `FINAL_TEST_PASSED`
+- dla `ZSS` wymagany jest zainstalowany przez `AssemblyLink` komponent `CONTROL_PCB`
 - otwarta krytyczna NCR blokuje shipment
 
 ## 8. Audit trail
@@ -461,5 +462,5 @@ Końcowe statusy itemu:
 
 - mamy praktyczny przewodnik API, ale nie ma jeszcze sformalizowanego procesu wersjonowania kontraktu
 - główne zaimplementowane endpointy działają już przez moduły domenowe backendu
-- walidacja shipment jest węższa niż pełny target z PRD
+- walidacja shipment jest nadal węższa niż pełny target z PRD, ale obejmuje już minimalny BOM per `device_type`
 - web i Android nie używają jeszcze generowanego klienta API

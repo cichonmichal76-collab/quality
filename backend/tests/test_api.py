@@ -58,6 +58,32 @@ def start_work_session(role: str = "PRODUCTION_OPERATOR", include_machine: bool 
     return session
 
 
+def create_qc_passed_item(session: dict, item_type: str = "PCB") -> dict:
+    item_serial_number = unique_id("ITEM")
+    barcode_value = unique_id("BC")
+
+    created = client.post(
+        "/api/production-items",
+        json={
+            "item_serial_number": item_serial_number,
+            "barcode_value": barcode_value,
+            "item_type": item_type,
+            "work_session_id": session["work_session_id"],
+            "workstation_id": session["workstation_id"],
+        },
+    )
+    assert created.status_code == 200
+
+    for status in ("PRODUCED", "QC_IN_PROGRESS", "QC_PASSED"):
+        updated = client.patch(
+            f"/api/production-items/{item_serial_number}/status",
+            json={"current_status": status},
+        )
+        assert updated.status_code == 200
+
+    return {"item_serial_number": item_serial_number, "barcode_value": barcode_value}
+
+
 def test_health():
     response = client.get("/health")
     assert response.status_code == 200
@@ -452,8 +478,6 @@ def test_qc_run_pass_updates_item_status():
 
 def test_assembly_scan_installs_component_and_blocks_duplicate_use():
     session = start_work_session(role="PRODUCTION_OPERATOR")
-    item_serial_number = unique_id("ITEM")
-    barcode_value = unique_id("BC")
     device_serial_number = unique_id("ZSS")
 
     create_device = client.post(
@@ -462,35 +486,9 @@ def test_assembly_scan_installs_component_and_blocks_duplicate_use():
     )
     assert create_device.status_code == 200
 
-    create_item = client.post(
-        "/api/production-items",
-        json={
-            "item_serial_number": item_serial_number,
-            "barcode_value": barcode_value,
-            "item_type": "PCB",
-            "work_session_id": session["work_session_id"],
-            "workstation_id": session["workstation_id"],
-        },
-    )
-    assert create_item.status_code == 200
-
-    produced = client.patch(
-        f"/api/production-items/{item_serial_number}/status",
-        json={"current_status": "PRODUCED"},
-    )
-    assert produced.status_code == 200
-
-    qc_in_progress = client.patch(
-        f"/api/production-items/{item_serial_number}/status",
-        json={"current_status": "QC_IN_PROGRESS"},
-    )
-    assert qc_in_progress.status_code == 200
-
-    qc_passed = client.patch(
-        f"/api/production-items/{item_serial_number}/status",
-        json={"current_status": "QC_PASSED"},
-    )
-    assert qc_passed.status_code == 200
+    item = create_qc_passed_item(session)
+    item_serial_number = item["item_serial_number"]
+    barcode_value = item["barcode_value"]
 
     install = client.post(
         f"/api/devices/{device_serial_number}/assembly/scan-component",
@@ -567,6 +565,18 @@ def test_final_test_pass_sets_status_and_audit_context():
     )
     assert device_response.status_code == 200
 
+    production_session = start_work_session(role="PRODUCTION_OPERATOR")
+    item = create_qc_passed_item(production_session)
+    install = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": production_session["work_session_id"],
+        },
+    )
+    assert install.status_code == 200
+
     session = start_work_session(role="FINAL_TEST_OPERATOR")
     test_run_id = unique_id("FT")
     final_test_response = client.post(
@@ -594,6 +604,39 @@ def test_final_test_pass_sets_status_and_audit_context():
     assert audit.status_code == 200
     assert audit.json()[0]["work_session_id"] == session["work_session_id"]
     assert audit.json()[0]["result"] == "PASS"
+
+
+def test_shipment_is_blocked_when_required_component_is_missing():
+    device_serial_number = unique_id("ZSS")
+    device_response = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": "ZSS"},
+    )
+    assert device_response.status_code == 200
+
+    session = start_work_session(role="FINAL_TEST_OPERATOR")
+    test_run_id = unique_id("FT")
+    final_test_response = client.post(
+        "/api/final-tests",
+        json={
+            "test_run_id": test_run_id,
+            "device_serial_number": device_serial_number,
+            "result": "PASS",
+            "firmware_version": "1.2.4",
+            "bootloader_version": "0.9.8",
+            "work_session_id": session["work_session_id"],
+        },
+    )
+    assert final_test_response.status_code == 200
+
+    response = client.patch(
+        f"/api/devices/{device_serial_number}/status",
+        json={"production_status": "READY_FOR_SHIPMENT"},
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == (
+        "READY_FOR_SHIPMENT requires installed components: CONTROL_PCB"
+    )
 
 
 def test_final_test_fail_sets_device_status_and_creates_ncr():

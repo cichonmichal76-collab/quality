@@ -40,6 +40,8 @@ Gotowe urządzenie musi przejść final test. Wynik PASS dopuszcza do wysyłki. 
 
 Status READY_FOR_SHIPMENT jest możliwy tylko wtedy, gdy urządzenie ma wymagane komponenty, komponenty mają pozytywne QC, final test jest PASS i nie ma blokujących NCR.
 
+W obecnym MVP wymagane komponenty są sprawdzane przez minimalny, statyczny BOM per `device_type`. Dla `ZSS` backend wymaga dziś co najmniej zainstalowanego `CONTROL_PCB` zapisanego przez `AssemblyLink`.
+
 ## Mobile offline commissioning
 
 Aplikacja mobilna serwisanta pracuje offline. Lokalnie zapisuje kroki uruchomienia, zdjęcia, komentarze, snapshoty MCU i logi. Po odzyskaniu internetu wysyła paczkę na serwer.
