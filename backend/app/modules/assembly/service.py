@@ -23,6 +23,7 @@ from app.schemas import (
     ComponentCreate,
     DeviceBomComponentCoverageRead,
     DeviceBomTemplateBindingRead,
+    DeviceBomTemplateCatalogEntryRead,
     DeviceBomTemplateCoverageRead,
     DeviceBomItemDiffRead,
     DeviceBomTemplateActivateRequest,
@@ -185,6 +186,105 @@ def list_device_bom_templates(db: Session) -> list[DeviceBomTemplate]:
     return repository.list_bom_templates(db)
 
 
+def _get_bom_template_recommended_action(template: DeviceBomTemplate) -> str:
+    if template.status == "RETIRED":
+        return "clone"
+    if template.status == "ACTIVE":
+        return "clone_or_promote"
+    if template.status == "APPROVED":
+        return "activate_or_modify"
+    return "modify_or_approve"
+
+
+def _get_bom_template_activation_status_blockers(template: DeviceBomTemplate) -> list[str]:
+    if template.status == "ACTIVE":
+        return ["BOM template is already active"]
+    if template.status == "RETIRED":
+        return ["Retired BOM template cannot be activated"]
+    return []
+
+
+def _get_bom_template_release_status_blockers(template: DeviceBomTemplate) -> list[str]:
+    if template.status == "ACTIVE":
+        return ["Active BOM template is already released"]
+    if template.status == "RETIRED":
+        return ["Retired BOM template cannot be released"]
+    return []
+
+
+def _build_device_bom_template_catalog_entry(
+    db: Session,
+    template: DeviceBomTemplate,
+) -> DeviceBomTemplateCatalogEntryRead:
+    bound_device_count = repository.count_bound_devices_for_template(db, template.id)
+    is_bound = bound_device_count > 0
+    can_modify = template.status in {"INACTIVE", "APPROVED"}
+    recommended_action = _get_bom_template_recommended_action(template)
+    item_count, required_item_count, is_effective_now, release_blocking_reasons = (
+        _evaluate_bom_template_requirements(
+            db,
+            template,
+            require_approval=False,
+        )
+    )
+    activation_readiness = _evaluate_bom_template_readiness(db, template)
+    activation_blocking_reasons = list(activation_readiness.blocking_reasons)
+
+    activation_status_blockers = _get_bom_template_activation_status_blockers(template)
+    if activation_status_blockers:
+        activation_blocking_reasons = activation_status_blockers
+
+    release_status_blockers = _get_bom_template_release_status_blockers(template)
+    if release_status_blockers:
+        release_blocking_reasons = release_status_blockers
+    elif template.status == "APPROVED":
+        release_blocking_reasons = list(activation_blocking_reasons)
+
+    return DeviceBomTemplateCatalogEntryRead(
+        template_id=template.id,
+        device_type=template.device_type,
+        variant_code=template.variant_code,
+        version=template.version,
+        status=template.status,
+        is_active=template.is_active,
+        is_approved=template.approved_at is not None,
+        approved_by=template.approved_by,
+        approved_at=template.approved_at,
+        release_note=template.release_note,
+        effective_from=template.effective_from,
+        effective_to=template.effective_to,
+        is_effective_now=is_effective_now,
+        created_at=template.created_at,
+        item_count=item_count,
+        required_item_count=required_item_count,
+        has_any_items=item_count > 0,
+        bound_device_count=bound_device_count,
+        is_bound=is_bound,
+        can_modify=can_modify,
+        can_activate=not activation_blocking_reasons,
+        can_release=not release_blocking_reasons,
+        recommended_action=recommended_action,
+        activation_blocking_reasons=activation_blocking_reasons,
+        release_blocking_reasons=release_blocking_reasons,
+    )
+
+
+def list_device_bom_template_catalog(
+    db: Session,
+    device_type: str,
+    variant_code: str = "DEFAULT",
+) -> list[DeviceBomTemplateCatalogEntryRead]:
+    templates = repository.list_bom_templates_for_device_type_and_variant(
+        db,
+        device_type,
+        variant_code,
+    )
+    return [
+        _build_device_bom_template_catalog_entry(db, template)
+        for template in templates
+    ]
+
+
 def _to_bom_lineage_node(template: DeviceBomTemplate) -> DeviceBomTemplateLineageNodeRead:
     return DeviceBomTemplateLineageNodeRead(
         template_id=template.id,
@@ -262,14 +362,7 @@ def get_device_bom_template_usage(
     is_bound = bound_device_count > 0
     can_modify = template.status in {"INACTIVE", "APPROVED"}
     is_effective_now = _is_bom_template_effective_now(template)
-    if template.status == "RETIRED":
-        recommended_action = "clone"
-    elif template.status == "ACTIVE":
-        recommended_action = "clone_or_promote"
-    elif template.status == "APPROVED":
-        recommended_action = "activate_or_modify"
-    else:
-        recommended_action = "modify_or_approve"
+    recommended_action = _get_bom_template_recommended_action(template)
 
     return DeviceBomTemplateUsageRead(
         template_id=template.id,

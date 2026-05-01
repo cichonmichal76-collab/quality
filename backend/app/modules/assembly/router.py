@@ -10,6 +10,7 @@ from app.schemas import (
     ComponentCreate,
     ComponentRead,
     DeviceBomTemplateBindingRead,
+    DeviceBomTemplateCatalogEntryRead,
     DeviceBomTemplateCoverageRead,
     DeviceBomTemplateDiffRead,
     DeviceBomTemplateLineageRead,
@@ -60,6 +61,18 @@ def create_device_bom_template(
 @router.get("/device-bom-templates", response_model=list[DeviceBomTemplateRead])
 def list_device_bom_templates(db: Session = Depends(get_db)):
     return service.list_device_bom_templates(db)
+
+
+@router.get(
+    "/device-bom-templates/{device_type}/catalog",
+    response_model=list[DeviceBomTemplateCatalogEntryRead],
+)
+def list_device_bom_template_catalog(
+    device_type: str,
+    variant_code: str = "DEFAULT",
+    db: Session = Depends(get_db),
+):
+    return service.list_device_bom_template_catalog(db, device_type, variant_code)
 
 
 @router.get(

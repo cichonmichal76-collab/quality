@@ -205,6 +205,7 @@ Najważniejsze reguły:
 - wersje BOM używają numerycznego formatu rozdzielanego kropkami, a `target_version` w `clone` i `promote` musi być semantycznie większy od `source_version`
 - aktywna wersja `DeviceBomTemplate`, która została już przypięta do urządzeń przez `AssemblyLink`, dostaje soft-lock i nie może być dalej rozszerzana o nowe pozycje
 - stan użycia konkretnej wersji BOM jest dostępny przez dedykowany odczyt `usage`, który zwraca też rekomendowaną dalszą akcję dla operatora lub klienta API
+- zbiorczy stan wszystkich wersji dla danego `device_type` i `variant_code` jest dostępny przez odczyt `catalog`, który pokazuje gotowość do aktywacji i release oraz blokady lifecycle bez potrzeby składania kilku osobnych endpointów
 - konkretne urządzenia związane z wersją BOM są dostępne przez odczyt `bindings`, co pozwala ocenić wpływ zmian na już rozpoczętą produkcję
 - kompletność tych urządzeń względem BOM jest dostępna przez odczyt `coverage`, który pokazuje braki i status per komponent
 - wersja BOM może mieć też jawne metadane release: `approved_by`, `approved_at` i `release_note`

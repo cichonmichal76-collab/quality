@@ -1882,6 +1882,128 @@ def test_device_bom_template_usage_reports_bound_active_template():
     assert payload["recommended_action"] == "clone_or_promote"
 
 
+def test_device_bom_template_catalog_summarizes_lifecycle_versions():
+    device_type = unique_id("DT")
+
+    empty_draft = client.post(
+        "/api/device-bom-templates",
+        json={
+            "device_type": device_type,
+            "variant_code": "DEFAULT",
+            "name": "Empty draft",
+            "version": "0.9",
+            "is_active": False,
+        },
+    )
+    assert empty_draft.status_code == 200
+
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=False,
+        variant_code="DEFAULT",
+    )
+    approved = client.post(
+        f"/api/device-bom-templates/{device_type}/approve?variant_code=DEFAULT",
+        json={"version": "1.0", "approved_by": "QA-LEAD"},
+    )
+    assert approved.status_code == 200
+
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="2.0",
+        is_active=True,
+        variant_code="DEFAULT",
+    )
+
+    session = start_work_session(role="PRODUCTION_OPERATOR")
+    device_serial_number = unique_id("DEV")
+    create_device = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
+    )
+    assert create_device.status_code == 200
+
+    item = create_qc_passed_item(session, item_type="CONTROL_PCB")
+    installed = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": session["work_session_id"],
+        },
+    )
+    assert installed.status_code == 200
+    assert installed.json()["bom_version"] == "2.0"
+
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="3.0",
+        is_active=False,
+        variant_code="DEFAULT",
+    )
+    retired = client.post(
+        f"/api/device-bom-templates/{device_type}/retire?variant_code=DEFAULT",
+        json={"version": "3.0", "reason": "Obsolete draft"},
+    )
+    assert retired.status_code == 200
+
+    catalog = client.get(
+        f"/api/device-bom-templates/{device_type}/catalog?variant_code=DEFAULT"
+    )
+    assert catalog.status_code == 200
+    versions = {row["version"]: row for row in catalog.json()}
+
+    empty_row = versions["0.9"]
+    assert empty_row["status"] == "INACTIVE"
+    assert empty_row["has_any_items"] is False
+    assert empty_row["can_modify"] is True
+    assert empty_row["can_activate"] is False
+    assert empty_row["can_release"] is False
+    assert empty_row["recommended_action"] == "modify_or_approve"
+    assert "BOM template has no items" in empty_row["activation_blocking_reasons"]
+    assert "BOM template is not approved" in empty_row["activation_blocking_reasons"]
+    assert "BOM template has no items" in empty_row["release_blocking_reasons"]
+
+    approved_row = versions["1.0"]
+    assert approved_row["status"] == "APPROVED"
+    assert approved_row["is_approved"] is True
+    assert approved_row["can_modify"] is True
+    assert approved_row["can_activate"] is True
+    assert approved_row["can_release"] is True
+    assert approved_row["recommended_action"] == "activate_or_modify"
+    assert approved_row["bound_device_count"] == 0
+    assert approved_row["activation_blocking_reasons"] == []
+    assert approved_row["release_blocking_reasons"] == []
+
+    active_row = versions["2.0"]
+    assert active_row["status"] == "ACTIVE"
+    assert active_row["is_bound"] is True
+    assert active_row["bound_device_count"] == 1
+    assert active_row["can_modify"] is False
+    assert active_row["can_activate"] is False
+    assert active_row["can_release"] is False
+    assert active_row["recommended_action"] == "clone_or_promote"
+    assert active_row["activation_blocking_reasons"] == ["BOM template is already active"]
+    assert active_row["release_blocking_reasons"] == ["Active BOM template is already released"]
+
+    retired_row = versions["3.0"]
+    assert retired_row["status"] == "RETIRED"
+    assert retired_row["can_modify"] is False
+    assert retired_row["can_activate"] is False
+    assert retired_row["can_release"] is False
+    assert retired_row["recommended_action"] == "clone"
+    assert retired_row["activation_blocking_reasons"] == [
+        "Retired BOM template cannot be activated"
+    ]
+    assert retired_row["release_blocking_reasons"] == [
+        "Retired BOM template cannot be released"
+    ]
+
+
 def test_device_bom_audit_events_are_recorded():
     device_type = unique_id("DT")
     ensure_device_bom_template(

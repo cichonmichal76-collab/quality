@@ -104,6 +104,34 @@ class DeviceBomTemplateUsageRead(BaseModel):
     recommended_action: str
 
 
+class DeviceBomTemplateCatalogEntryRead(BaseModel):
+    template_id: str
+    device_type: str
+    variant_code: str
+    version: str
+    status: str
+    is_active: bool
+    is_approved: bool
+    approved_by: str | None = None
+    approved_at: datetime | None = None
+    release_note: str | None = None
+    effective_from: datetime | None = None
+    effective_to: datetime | None = None
+    is_effective_now: bool
+    created_at: datetime
+    item_count: int
+    required_item_count: int
+    has_any_items: bool
+    bound_device_count: int
+    is_bound: bool
+    can_modify: bool
+    can_activate: bool
+    can_release: bool
+    recommended_action: str
+    activation_blocking_reasons: list[str]
+    release_blocking_reasons: list[str]
+
+
 class DeviceBomTemplateReadinessRead(BaseModel):
     template_id: str
     device_type: str
