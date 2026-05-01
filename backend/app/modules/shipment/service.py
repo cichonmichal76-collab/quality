@@ -9,6 +9,7 @@ from app.modules.shipment import repository, rules
 from app.schemas import (
     DeviceBomComplianceRead,
     DeviceShipmentBlockingCheckRead,
+    DeviceShipmentBlockingSummaryRead,
     DeviceShipmentQueueRead,
     DeviceShipmentReadinessRead,
     DeviceStatusUpdate,
@@ -180,11 +181,34 @@ def get_device_shipment_readiness(
     return _build_device_shipment_readiness(db, device)
 
 
+def _build_blocking_summary(
+    readiness_rows: list[DeviceShipmentReadinessRead],
+) -> list[DeviceShipmentBlockingSummaryRead]:
+    summary: dict[str, DeviceShipmentBlockingSummaryRead] = {}
+    for row in readiness_rows:
+        seen_codes: set[str] = set()
+        for check in row.blocking_checks:
+            if not check.is_blocking or check.code in seen_codes:
+                continue
+            seen_codes.add(check.code)
+            existing = summary.get(check.code)
+            if existing:
+                existing.device_count += 1
+            else:
+                summary[check.code] = DeviceShipmentBlockingSummaryRead(
+                    code=check.code,
+                    message=check.message,
+                    device_count=1,
+                )
+    return sorted(summary.values(), key=lambda item: (item.device_count * -1, item.code))
+
+
 def list_device_shipment_readiness(
     db: Session,
     *,
     device_type: str | None = None,
     variant_code: str | None = None,
+    blocking_code: str | None = None,
     only_blocked: bool = False,
     only_ready: bool = False,
     limit: int = 100,
@@ -193,6 +217,11 @@ def list_device_shipment_readiness(
         raise HTTPException(
             status_code=400,
             detail="only_blocked and only_ready cannot both be true",
+        )
+    if blocking_code and only_ready:
+        raise HTTPException(
+            status_code=400,
+            detail="blocking_code cannot be combined with only_ready",
         )
     devices = repository.list_devices_for_shipment(
         db,
@@ -208,6 +237,12 @@ def list_device_shipment_readiness(
         ]
     if only_ready:
         readiness_rows = [row for row in readiness_rows if row.can_transition_to_ready_for_shipment]
+    if blocking_code:
+        readiness_rows = [
+            row
+            for row in readiness_rows
+            if any(check.code == blocking_code for check in row.blocking_checks)
+        ]
 
     ready_count = sum(1 for row in readiness_rows if row.can_transition_to_ready_for_shipment)
     blocked_count = len(readiness_rows) - ready_count
@@ -219,9 +254,11 @@ def list_device_shipment_readiness(
         filters={
             "device_type": device_type,
             "variant_code": variant_code,
+            "blocking_code": blocking_code,
             "only_blocked": only_blocked,
             "only_ready": only_ready,
             "limit": limit,
         },
+        blocking_summary=_build_blocking_summary(readiness_rows),
         devices=readiness_rows,
     )

@@ -539,7 +539,7 @@ curl "http://localhost:8000/api/devices/ZSS-000123/shipment-readiness"
 Widok kolejkowy shipmentu z filtrami:
 
 ```bash
-curl "http://localhost:8000/api/shipment-readiness?device_type=ZSS&only_blocked=true&limit=50"
+curl "http://localhost:8000/api/shipment-readiness?device_type=ZSS&only_blocked=true&blocking_code=CRITICAL_OPEN_NCR&limit=50"
 ```
 
 Zatwierdzenie wersji BOM z metadanymi release:
@@ -655,7 +655,7 @@ Reguły assembly:
 - endpoint `bom-resolution` pokazuje dla konkretnego urządzenia, czy backend używa BOM przypiętego po montażu, aktywnego BOM wariantowego, fallbacku `DEFAULT`, czy też nie ma dziś aktywnej skutecznej wersji do użycia
 - endpoint `bom-compliance` pokazuje dla konkretnego urządzenia końcową zgodność z rozwiązaną wersją BOM, w tym `missing_required_components`, `over_installed_components`, `unexpected_component_types`, `passes_bom_gate` i `component_coverage`
 - endpoint `shipment-readiness` zwraca pełny werdykt bramki wysyłkowej, w tym `final_test_passed`, `has_critical_open_ncr`, `critical_open_ncr_ids`, zagnieżdżone `bom_compliance`, `can_transition_to_ready_for_shipment`, uporządkowaną listę `blocking_reasons` oraz `blocking_checks` z kodami maszynowymi
-- endpoint kolejkowy `GET /api/shipment-readiness` zwraca listę urządzeń wraz z tym samym kontraktem gotowości, plus liczniki `ready_count` i `blocked_count`; wspiera filtry `device_type`, `variant_code`, `only_blocked`, `only_ready` i `limit`
+- endpoint kolejkowy `GET /api/shipment-readiness` zwraca listę urządzeń wraz z tym samym kontraktem gotowości, plus liczniki `ready_count` i `blocked_count` oraz agregację `blocking_summary`; wspiera filtry `device_type`, `variant_code`, `blocking_code`, `only_blocked`, `only_ready` i `limit`
 - endpoint `catalog` zbiera wszystkie wersje BOM dla danego `device_type` i `variant_code` oraz pokazuje dla każdej z nich `can_activate`, `can_release`, liczbę pozycji, liczbę powiązanych urządzeń, blokady lifecycle i `recommended_action`
 - endpoint `bindings` zwraca konkretne urządzenia przypięte do wersji BOM wraz z `installed_component_count` i czasem pierwszego związania
 - endpoint `coverage` zwraca dla tych urządzeń kompletność względem BOM, w tym `missing_required_components`, `over_installed_components` i status per komponent; urządzenie z komponentem `OVER_INSTALLED` nie jest już traktowane jako kompletne

@@ -12,6 +12,7 @@ router = APIRouter(tags=["shipment"])
 def list_device_shipment_readiness(
     device_type: str | None = None,
     variant_code: str | None = None,
+    blocking_code: str | None = None,
     only_blocked: bool = False,
     only_ready: bool = False,
     limit: int = 100,
@@ -21,6 +22,7 @@ def list_device_shipment_readiness(
         db,
         device_type=device_type,
         variant_code=variant_code,
+        blocking_code=blocking_code,
         only_blocked=only_blocked,
         only_ready=only_ready,
         limit=limit,

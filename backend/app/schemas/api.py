@@ -236,6 +236,12 @@ class DeviceShipmentBlockingCheckRead(BaseModel):
     details: list[str] = []
 
 
+class DeviceShipmentBlockingSummaryRead(BaseModel):
+    code: str
+    message: str | None = None
+    device_count: int
+
+
 class DeviceShipmentReadinessRead(BaseModel):
     device_serial_number: str
     device_type: str
@@ -255,6 +261,7 @@ class DeviceShipmentQueueRead(BaseModel):
     ready_count: int
     blocked_count: int
     filters: dict[str, str | bool | int | None]
+    blocking_summary: list[DeviceShipmentBlockingSummaryRead]
     devices: list[DeviceShipmentReadinessRead]
 
 
