@@ -242,6 +242,11 @@ class DeviceShipmentBlockingSummaryRead(BaseModel):
     device_count: int
 
 
+class DeviceShipmentActionSummaryRead(BaseModel):
+    recommended_action: str
+    device_count: int
+
+
 class DeviceShipmentReadinessRead(BaseModel):
     device_serial_number: str
     device_type: str
@@ -264,6 +269,7 @@ class DeviceShipmentQueueRead(BaseModel):
     blocked_count: int
     filters: dict[str, str | bool | int | None]
     blocking_summary: list[DeviceShipmentBlockingSummaryRead]
+    recommended_action_summary: list[DeviceShipmentActionSummaryRead]
     devices: list[DeviceShipmentReadinessRead]
 
 

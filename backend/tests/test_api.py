@@ -3614,6 +3614,11 @@ def test_shipment_readiness_queue_lists_ready_and_blocked_devices():
     blocking_summary = {entry["code"]: entry for entry in payload["blocking_summary"]}
     assert blocking_summary["FINAL_TEST_NOT_PASSED"]["device_count"] == 1
     assert blocking_summary["BOM_REQUIRED_COMPONENTS_MISSING"]["device_count"] == 1
+    action_summary = {
+        entry["recommended_action"]: entry for entry in payload["recommended_action_summary"]
+    }
+    assert action_summary["MARK_READY_FOR_SHIPMENT"]["device_count"] == 1
+    assert action_summary["COMPLETE_ASSEMBLY"]["device_count"] == 1
 
     devices = {row["device_serial_number"]: row for row in payload["devices"]}
     assert devices[ready_device_serial_number]["can_transition_to_ready_for_shipment"] is True
@@ -3806,6 +3811,9 @@ def test_shipment_readiness_queue_can_filter_by_recommended_action():
     assert payload["ready_count"] == 0
     assert payload["blocked_count"] == 1
     assert payload["filters"]["recommended_action"] == "COMPLETE_ASSEMBLY"
+    assert payload["recommended_action_summary"] == [
+        {"recommended_action": "COMPLETE_ASSEMBLY", "device_count": 1}
+    ]
     assert [row["device_serial_number"] for row in payload["devices"]] == [assembly_serial_number]
     assert payload["devices"][0]["recommended_action"] == "COMPLETE_ASSEMBLY"
 

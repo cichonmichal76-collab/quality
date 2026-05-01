@@ -7,6 +7,7 @@ from app.models import Device
 from app.modules.assembly.service import get_device_bom_compliance
 from app.modules.shipment import repository, rules
 from app.schemas import (
+    DeviceShipmentActionSummaryRead,
     DeviceBomComplianceRead,
     DeviceShipmentBlockingCheckRead,
     DeviceShipmentBlockingSummaryRead,
@@ -245,6 +246,24 @@ def _build_blocking_summary(
     return sorted(summary.values(), key=lambda item: (item.device_count * -1, item.code))
 
 
+def _build_recommended_action_summary(
+    readiness_rows: list[DeviceShipmentReadinessRead],
+) -> list[DeviceShipmentActionSummaryRead]:
+    summary: dict[str, int] = {}
+    for row in readiness_rows:
+        summary[row.recommended_action] = summary.get(row.recommended_action, 0) + 1
+    return [
+        DeviceShipmentActionSummaryRead(
+            recommended_action=recommended_action,
+            device_count=device_count,
+        )
+        for recommended_action, device_count in sorted(
+            summary.items(),
+            key=lambda item: (-item[1], item[0]),
+        )
+    ]
+
+
 def list_device_shipment_readiness(
     db: Session,
     *,
@@ -318,5 +337,6 @@ def list_device_shipment_readiness(
             "limit": limit,
         },
         blocking_summary=_build_blocking_summary(readiness_rows),
+        recommended_action_summary=_build_recommended_action_summary(readiness_rows),
         devices=readiness_rows,
     )
