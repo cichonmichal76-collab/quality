@@ -184,6 +184,8 @@ class DeviceBomTemplateCloneRequest(BaseModel):
     target_version: str = Field(pattern=r"^\d+(?:\.\d+)*$")
     name: str | None = None
     activate: bool = False
+    approved_by: str | None = None
+    release_note: str | None = None
     effective_from: datetime | None = None
     effective_to: datetime | None = None
 
@@ -193,6 +195,8 @@ class DeviceBomTemplatePromoteRequest(BaseModel):
     target_version: str = Field(pattern=r"^\d+(?:\.\d+)*$")
     name: str | None = None
     retire_reason: str | None = None
+    approved_by: str | None = None
+    release_note: str | None = None
     effective_from: datetime | None = None
     effective_to: datetime | None = None
 

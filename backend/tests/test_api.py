@@ -109,6 +109,7 @@ def ensure_device_bom_template(
     required_revision: str | None = None,
     required_drawing_number: str | None = None,
     required_drawing_revision: str | None = None,
+    approved_by: str = "PYTEST-APPROVER",
 ) -> None:
     template_response = client.post(
         "/api/device-bom-templates",
@@ -117,7 +118,7 @@ def ensure_device_bom_template(
             "variant_code": variant_code,
             "name": f"{device_type} Default BOM",
             "version": version,
-            "is_active": is_active,
+            "is_active": False,
             "effective_from": effective_from,
             "effective_to": effective_to,
         },
@@ -138,6 +139,17 @@ def ensure_device_bom_template(
         },
     )
     assert item_response.status_code in {200, 409}
+
+    if is_active and template_response.status_code == 200:
+        release_response = client.post(
+            f"/api/device-bom-templates/{device_type}/release?variant_code={variant_code}",
+            json={
+                "version": version,
+                "approved_by": approved_by,
+                "release_note": "Pytest auto release",
+            },
+        )
+        assert release_response.status_code == 200
 
 
 def test_health():
@@ -210,16 +222,18 @@ def test_device_bom_template_can_be_created_and_listed():
             "device_type": device_type,
             "name": "Custom Device BOM",
             "version": "2.0",
-            "is_active": True,
+            "is_active": False,
         },
     )
     assert created.status_code == 200
     template = created.json()
     assert template["device_type"] == device_type
     assert template["version"] == "2.0"
+    assert template["status"] == "INACTIVE"
+    assert template["is_active"] is False
 
     bom_item = client.post(
-        f"/api/device-bom-templates/{device_type}/items",
+        f"/api/device-bom-templates/{device_type}/items?version=2.0",
         json={
             "component_type": "SENSOR_MODULE",
             "quantity_required": 2,
@@ -233,11 +247,6 @@ def test_device_bom_template_can_be_created_and_listed():
     listed_templates = client.get("/api/device-bom-templates")
     assert listed_templates.status_code == 200
     assert any(row["device_type"] == device_type for row in listed_templates.json())
-
-    listed_items = client.get(f"/api/device-bom-templates/{device_type}/items")
-    assert listed_items.status_code == 200
-    assert len(listed_items.json()) == 1
-    assert listed_items.json()[0]["component_type"] == "SENSOR_MODULE"
 
     versioned_items = client.get(f"/api/device-bom-templates/{device_type}/items?version=2.0")
     assert versioned_items.status_code == 200
@@ -262,7 +271,7 @@ def test_device_bom_template_rejects_invalid_version_format():
             "device_type": device_type,
             "name": "Invalid Version BOM",
             "version": "v1-beta",
-            "is_active": True,
+            "is_active": False,
         },
     )
     assert created.status_code == 422
@@ -282,6 +291,11 @@ def test_device_bom_template_versions_can_be_activated():
         version="2.0",
         is_active=False,
     )
+    approved = client.post(
+        f"/api/device-bom-templates/{device_type}/approve",
+        json={"version": "2.0", "approved_by": "PYTEST-QA"},
+    )
+    assert approved.status_code == 200
 
     activated = client.post(
         f"/api/device-bom-templates/{device_type}/activate",
@@ -346,6 +360,7 @@ def test_device_bom_template_readiness_reports_empty_template_as_blocked():
     assert payload["blocking_reasons"] == [
         "BOM template has no items",
         "BOM template has no required items",
+        "BOM template is not approved",
     ]
 
 
@@ -371,6 +386,11 @@ def test_device_bom_template_activation_requires_required_items():
         },
     )
     assert added.status_code == 200
+    approved = client.post(
+        f"/api/device-bom-templates/{device_type}/approve",
+        json={"version": "1.0", "approved_by": "PYTEST-QA"},
+    )
+    assert approved.status_code == 200
 
     activate = client.post(
         f"/api/device-bom-templates/{device_type}/activate",
@@ -1045,6 +1065,7 @@ def test_clone_with_activation_requires_ready_bom_template():
             "source_version": "1.0",
             "target_version": "2.0",
             "activate": True,
+            "approved_by": "PYTEST-QA",
         },
     )
     assert cloned.status_code == 400
@@ -1179,12 +1200,15 @@ def test_cloned_bom_template_can_be_activated_immediately():
             "source_version": "1.0",
             "target_version": "2.0",
             "activate": True,
+            "approved_by": "PYTEST-QA",
+            "release_note": "Clone activation for pytest",
         },
     )
     assert cloned.status_code == 200
     assert cloned.json()["version"] == "2.0"
     assert cloned.json()["status"] == "ACTIVE"
     assert cloned.json()["is_active"] is True
+    assert cloned.json()["approved_by"] == "PYTEST-QA"
 
     templates = client.get("/api/device-bom-templates")
     assert templates.status_code == 200
@@ -1220,6 +1244,7 @@ def test_active_bom_template_can_be_promoted_in_one_operation():
             "target_version": "2.0",
             "name": "Promoted BOM",
             "retire_reason": "Production release update",
+            "approved_by": "PYTEST-QA",
         },
     )
     assert promoted.status_code == 200
@@ -1271,6 +1296,7 @@ def test_bom_template_promotion_requires_greater_target_version():
         json={
             "source_version": "2.0",
             "target_version": "1.9",
+            "approved_by": "PYTEST-QA",
         },
     )
     assert promoted.status_code == 400
@@ -1490,6 +1516,11 @@ def test_device_bom_audit_events_are_recorded():
         version="2.0",
         is_active=False,
     )
+    approved = client.post(
+        f"/api/device-bom-templates/{device_type}/approve",
+        json={"version": "2.0", "approved_by": "PYTEST-QA"},
+    )
+    assert approved.status_code == 200
 
     activated = client.post(
         f"/api/device-bom-templates/{device_type}/activate",
@@ -1648,6 +1679,7 @@ def test_device_bom_promotion_audit_event_is_recorded():
             "source_version": "1.0",
             "target_version": "2.0",
             "retire_reason": "Release cutover",
+            "approved_by": "PYTEST-QA",
         },
     )
     assert promoted.status_code == 200
@@ -2999,6 +3031,12 @@ def test_device_keeps_bound_bom_version_after_new_version_activation():
     )
     assert first_install.status_code == 200
     assert first_install.json()["bom_version"] == "1.0"
+
+    approved = client.post(
+        f"/api/device-bom-templates/{device_type}/approve",
+        json={"version": "2.0", "approved_by": "PYTEST-QA"},
+    )
+    assert approved.status_code == 200
 
     activate_new_version = client.post(
         f"/api/device-bom-templates/{device_type}/activate",

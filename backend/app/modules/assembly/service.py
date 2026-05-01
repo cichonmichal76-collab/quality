@@ -141,6 +141,11 @@ def list_components(db: Session, device_serial_number: str) -> list[DeviceCompon
 
 def create_device_bom_template(db: Session, payload: DeviceBomTemplateCreate) -> DeviceBomTemplate:
     _validate_effective_window(payload.effective_from, payload.effective_to)
+    if payload.is_active:
+        raise HTTPException(
+            status_code=400,
+            detail="BOM template cannot be created active; create it inactive, add items, then release it",
+        )
     if repository.get_bom_template_by_device_type_and_version(
         db,
         payload.device_type,
@@ -151,19 +156,10 @@ def create_device_bom_template(db: Session, payload: DeviceBomTemplateCreate) ->
             status_code=409,
             detail="BOM template version already exists for device type",
         )
-    deactivated_templates: list[DeviceBomTemplate] = []
-    if payload.is_active:
-        deactivated_templates = repository.list_active_bom_templates_for_device_type(
-            db,
-            payload.device_type,
-            payload.variant_code,
-        )
-        for active_template in deactivated_templates:
-            active_template.is_active = False
-            active_template.status = "INACTIVE"
     template = DeviceBomTemplate(
-        **payload.model_dump(),
-        status="ACTIVE" if payload.is_active else "INACTIVE",
+        **payload.model_dump(exclude={"is_active"}),
+        status="INACTIVE",
+        is_active=False,
     )
     db.add(template)
     db.flush()
@@ -179,41 +175,6 @@ def create_device_bom_template(db: Session, payload: DeviceBomTemplateCreate) ->
             "status": template.status,
         },
     )
-    for deactivated_template in deactivated_templates:
-        record_audit_event(
-            db,
-            event_type="DEVICE_BOM_TEMPLATE_DEACTIVATED",
-            entity_type="DEVICE_BOM_TEMPLATE",
-            entity_id=deactivated_template.id,
-            result="INACTIVE",
-            message=(
-                f"Deactivated BOM template {deactivated_template.device_type} "
-                f"v{deactivated_template.version}"
-            ),
-            payload={
-                "device_type": deactivated_template.device_type,
-                "variant_code": deactivated_template.variant_code,
-                "version": deactivated_template.version,
-                "replaced_by_template_id": template.id,
-                "replaced_by_variant_code": template.variant_code,
-                "replaced_by_version": template.version,
-            },
-        )
-    if template.is_active:
-        record_audit_event(
-            db,
-            event_type="DEVICE_BOM_TEMPLATE_ACTIVATED",
-            entity_type="DEVICE_BOM_TEMPLATE",
-            entity_id=template.id,
-            result=template.status,
-            message=f"Activated BOM template {template.device_type} v{template.version}",
-            payload={
-                "device_type": template.device_type,
-                "variant_code": template.variant_code,
-                "version": template.version,
-                "status": template.status,
-            },
-        )
     db.commit()
     db.refresh(template)
     return template
@@ -343,6 +304,8 @@ def _evaluate_bom_template_readiness(
         blocking_reasons.append("BOM template has no required items")
     if template.effective_to and template.effective_to < now:
         blocking_reasons.append("BOM template effectivity window already ended")
+    if template.approved_at is None:
+        blocking_reasons.append("BOM template is not approved")
     return DeviceBomTemplateReadinessRead(
         template_id=template.id,
         device_type=template.device_type,
@@ -801,8 +764,18 @@ def clone_device_bom_template(
         )
     source_items = repository.list_bom_items_for_template(db, source_template.id)
     if payload.activate:
+        if payload.approved_by is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Cloned BOM template requires approved_by when activate=true",
+            )
         candidate_readiness = _evaluate_bom_template_readiness(db, source_template)
         blocking_reasons = list(candidate_readiness.blocking_reasons)
+        blocking_reasons = [
+            reason
+            for reason in blocking_reasons
+            if reason != "BOM template is not approved"
+        ]
         if effective_to and effective_to < utc_now():
             blocking_reasons.append("BOM template effectivity window already ended")
         if blocking_reasons:
@@ -834,9 +807,9 @@ def clone_device_bom_template(
         status="ACTIVE" if payload.activate else "INACTIVE",
         source_template_id=source_template.id,
         replaced_by_template_id=None,
-        approved_by=None,
-        approved_at=None,
-        release_note=None,
+        approved_by=payload.approved_by if payload.activate else None,
+        approved_at=utc_now() if payload.activate and payload.approved_by else None,
+        release_note=payload.release_note if payload.activate else None,
         effective_from=effective_from,
         effective_to=effective_to,
     )
@@ -917,6 +890,30 @@ def clone_device_bom_template(
             ),
         },
     )
+    if cloned_template.approved_at is not None:
+        record_audit_event(
+            db,
+            event_type="DEVICE_BOM_TEMPLATE_APPROVED",
+            entity_type="DEVICE_BOM_TEMPLATE",
+            entity_id=cloned_template.id,
+            result=cloned_template.status,
+            message=(
+                f"Approved cloned BOM template {cloned_template.device_type} "
+                f"v{cloned_template.version}"
+            ),
+            payload={
+                "device_type": cloned_template.device_type,
+                "variant_code": cloned_template.variant_code,
+                "version": cloned_template.version,
+                "approved_by": cloned_template.approved_by,
+                "approved_at": (
+                    cloned_template.approved_at.isoformat()
+                    if cloned_template.approved_at
+                    else None
+                ),
+                "release_note": cloned_template.release_note,
+            },
+        )
     for source_item in source_items:
         audit_item = repository.get_bom_item(db, cloned_template.id, source_item.component_type)
         if not audit_item:
@@ -1017,6 +1014,8 @@ def promote_device_bom_template(
             target_version=payload.target_version,
             name=payload.name,
             activate=True,
+            approved_by=payload.approved_by,
+            release_note=payload.release_note,
             effective_from=payload.effective_from,
             effective_to=payload.effective_to,
         ),

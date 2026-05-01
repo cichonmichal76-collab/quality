@@ -366,7 +366,7 @@ curl -X POST http://localhost:8000/api/devices \
   }'
 ```
 
-Zdefiniowanie aktywnego BOM dla typu urządzenia:
+Utworzenie roboczej wersji BOM dla typu urządzenia:
 
 ```bash
 curl -X POST http://localhost:8000/api/device-bom-templates \
@@ -376,9 +376,11 @@ curl -X POST http://localhost:8000/api/device-bom-templates \
     "variant_code": "DEFAULT",
     "name": "ZSS Default BOM",
     "version": "1.0",
-    "is_active": true
+    "is_active": false
   }'
 ```
+
+Nowa wersja BOM zawsze startuje jako nieaktywna. Żeby weszła do produkcji, trzeba najpierw dodać pozycje, a potem przejść przez `approve` + `activate` albo od razu przez `release`.
 
 Dodanie wymaganego komponentu do BOM:
 
@@ -422,6 +424,18 @@ curl -X POST "http://localhost:8000/api/device-bom-templates/ZSS/items?version=2
   }'
 ```
 
+Zatwierdzenie wybranej wersji BOM przed aktywacją:
+
+```bash
+curl -X POST "http://localhost:8000/api/device-bom-templates/ZSS/approve?variant_code=DEFAULT" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "version": "2.0",
+    "approved_by": "QA-LEAD",
+    "release_note": "Reviewed before activation"
+  }'
+```
+
 Aktywacja wybranej wersji BOM:
 
 ```bash
@@ -453,7 +467,9 @@ curl -X POST "http://localhost:8000/api/device-bom-templates/ZSS/clone?variant_c
   -d '{
     "source_version": "1.0",
     "target_version": "2.0",
-    "activate": true
+    "activate": true,
+    "approved_by": "QA-LEAD",
+    "release_note": "Immediate activation of cloned BOM"
   }'
 ```
 
@@ -466,6 +482,8 @@ curl -X POST "http://localhost:8000/api/device-bom-templates/ZSS/promote?variant
     "source_version": "2.0",
     "target_version": "3.0",
     "name": "ZSS Default BOM",
+    "approved_by": "QA-LEAD",
+    "release_note": "Approved during promotion",
     "retire_reason": "Production release update"
   }'
 ```
@@ -596,7 +614,9 @@ Reguły assembly:
 - endpoint `bindings` zwraca konkretne urządzenia przypięte do wersji BOM wraz z `installed_component_count` i czasem pierwszego związania
 - endpoint `coverage` zwraca dla tych urządzeń kompletność względem BOM, w tym `missing_required_components` i status per komponent
 - endpointy `approve` i `release` pozwalają zapisać metadane zatwierdzenia BOM i użyć ich jako jawnej ścieżki wejścia wersji do produkcji
-- endpoint `readiness` zwraca, czy dana wersja ma zdefiniowane pozycje i co najmniej jedną pozycję wymaganą przed aktywacją
+- `POST /api/device-bom-templates` nie pozwala już tworzyć BOM od razu jako aktywnego; prawidłowy flow to create inactive -> add items -> approve/activate albo release
+- endpoint `readiness` zwraca, czy dana wersja ma zdefiniowane pozycje, co najmniej jedną pozycję wymaganą i approval przed aktywacją
+- `clone` z `activate=true` oraz `promote` wymagają teraz `approved_by`, bo aktywują nową wersję BOM w tym samym kroku
 - endpoint `diff` zwraca różnice między dwiema wersjami BOM jako `added`, `removed`, `modified` i `unchanged_count`
 - `READY_FOR_SHIPMENT` jest blokowany nie tylko przy brakujących komponentach, ale też przy nadmiarowych i nieoczekiwanych komponentach względem aktywnego albo przypiętego BOM
 - pozycje BOM można edytować i usuwać tylko wtedy, gdy wersja BOM jest jeszcze legalnie modyfikowalna
