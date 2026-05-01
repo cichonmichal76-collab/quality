@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
@@ -576,6 +578,8 @@ def list_device_component_quality(
     quality_status: str | None = None,
     primary_quality_status: str | None = None,
     recommended_action: str | None = None,
+    updated_after: datetime | None = None,
+    updated_before: datetime | None = None,
     only_blocking: bool = False,
     sort_by: str = "blocked_components",
     sort_desc: bool | None = None,
@@ -588,6 +592,11 @@ def list_device_component_quality(
         raise HTTPException(status_code=400, detail="limit must be >= 1")
     if limit > MAX_QUEUE_LIMIT:
         raise HTTPException(status_code=400, detail=f"limit must be <= {MAX_QUEUE_LIMIT}")
+    if updated_after and updated_before and updated_after > updated_before:
+        raise HTTPException(
+            status_code=400,
+            detail="updated_after must be <= updated_before",
+        )
     if quality_status and quality_status not in VALID_COMPONENT_QUALITY_STATUSES:
         raise HTTPException(status_code=400, detail="Unsupported quality_status filter")
     if (
@@ -617,6 +626,10 @@ def list_device_component_quality(
 
     if production_status:
         quality_rows = [row for row in quality_rows if row.production_status == production_status]
+    if updated_after:
+        quality_rows = [row for row in quality_rows if row.device_updated_at >= updated_after]
+    if updated_before:
+        quality_rows = [row for row in quality_rows if row.device_updated_at <= updated_before]
     if component_type:
         quality_rows = [
             row
@@ -666,6 +679,8 @@ def list_device_component_quality(
             "quality_status": quality_status,
             "primary_quality_status": primary_quality_status,
             "recommended_action": recommended_action,
+            "updated_after": updated_after.isoformat() if updated_after else None,
+            "updated_before": updated_before.isoformat() if updated_before else None,
             "only_blocking": only_blocking,
             "sort_by": sort_by,
             "sort_desc": sort_desc,

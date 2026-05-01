@@ -4004,6 +4004,43 @@ def test_component_quality_queue_supports_summary_and_filters():
         ncr_device
     ]
 
+    updated_after_only = client.get(
+        "/api/component-quality",
+        params={
+            "device_type": queue_device_type,
+            "updated_after": updated_at_by_device[qc_gap_device].isoformat(),
+        },
+    )
+    assert updated_after_only.status_code == 200
+    updated_after_payload = updated_after_only.json()
+    assert updated_after_payload["total_devices"] == 2
+    assert updated_after_payload["filters"]["updated_after"] == updated_at_by_device[
+        qc_gap_device
+    ].isoformat()
+    assert [row["device_serial_number"] for row in updated_after_payload["devices"]] == [
+        ncr_device,
+        qc_gap_device,
+    ]
+
+    updated_before_only = client.get(
+        "/api/component-quality",
+        params={
+            "device_type": queue_device_type,
+            "updated_before": updated_at_by_device[qc_gap_device].isoformat(),
+            "sort_by": "updated_at",
+        },
+    )
+    assert updated_before_only.status_code == 200
+    updated_before_payload = updated_before_only.json()
+    assert updated_before_payload["total_devices"] == 2
+    assert updated_before_payload["filters"]["updated_before"] == updated_at_by_device[
+        qc_gap_device
+    ].isoformat()
+    assert [row["device_serial_number"] for row in updated_before_payload["devices"]] == [
+        passing_device,
+        qc_gap_device,
+    ]
+
     service_variant_only = client.get(
         f"/api/component-quality?device_type={queue_device_type}&variant_code=SERVICE"
     )
@@ -4120,6 +4157,18 @@ def test_component_quality_queue_rejects_unsupported_primary_quality_status():
     response = client.get("/api/component-quality?primary_quality_status=UNSUPPORTED")
     assert response.status_code == 400
     assert response.json()["detail"] == "Unsupported primary_quality_status filter"
+
+
+def test_component_quality_queue_rejects_invalid_update_window():
+    response = client.get(
+        "/api/component-quality",
+        params={
+            "updated_after": "2026-05-01T12:00:00+00:00",
+            "updated_before": "2026-05-01T11:00:00+00:00",
+        },
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "updated_after must be <= updated_before"
 
 
 def test_audit_events_can_filter_shipment_gate_by_event_type_and_result():

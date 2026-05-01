@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -25,6 +27,8 @@ def list_device_component_quality(
     quality_status: str | None = None,
     primary_quality_status: str | None = None,
     recommended_action: str | None = None,
+    updated_after: datetime | None = None,
+    updated_before: datetime | None = None,
     only_blocking: bool = False,
     sort_by: str = "blocked_components",
     sort_desc: bool | None = None,
@@ -41,6 +45,8 @@ def list_device_component_quality(
         quality_status=quality_status,
         primary_quality_status=primary_quality_status,
         recommended_action=recommended_action,
+        updated_after=updated_after,
+        updated_before=updated_before,
         only_blocking=only_blocking,
         sort_by=sort_by,
         sort_desc=sort_desc,
