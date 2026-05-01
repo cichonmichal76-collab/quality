@@ -4162,6 +4162,20 @@ def test_component_quality_queue_supports_summary_and_filters():
         ncr_device
     ]
 
+    primary_blocking_serial_only = client.get(
+        f"/api/component-quality?device_type={queue_device_type}&primary_blocking_component_serial_number={ncr_component_serial}"
+    )
+    assert primary_blocking_serial_only.status_code == 200
+    primary_blocking_serial_payload = primary_blocking_serial_only.json()
+    assert primary_blocking_serial_payload["total_devices"] == 1
+    assert (
+        primary_blocking_serial_payload["filters"]["primary_blocking_component_serial_number"]
+        == ncr_component_serial
+    )
+    assert [row["device_serial_number"] for row in primary_blocking_serial_payload["devices"]] == [
+        ncr_device
+    ]
+
     fan_only = client.get(
         f"/api/component-quality?device_type={queue_device_type}&component_type=FAN_MODULE"
     )

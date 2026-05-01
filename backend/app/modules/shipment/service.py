@@ -727,6 +727,7 @@ def list_device_component_quality(
     quality_status: str | None = None,
     primary_quality_status: str | None = None,
     primary_blocking_component_type: str | None = None,
+    primary_blocking_component_serial_number: str | None = None,
     stale_bucket: str | None = None,
     recommended_action: str | None = None,
     created_after: datetime | None = None,
@@ -829,6 +830,13 @@ def list_device_component_quality(
             for row in quality_rows
             if row.primary_blocking_component_type == primary_blocking_component_type
         ]
+    if primary_blocking_component_serial_number:
+        quality_rows = [
+            row
+            for row in quality_rows
+            if row.primary_blocking_component_serial_number
+            == primary_blocking_component_serial_number
+        ]
     if stale_bucket:
         quality_rows = [
             row
@@ -866,6 +874,7 @@ def list_device_component_quality(
             "quality_status": quality_status,
             "primary_quality_status": primary_quality_status,
             "primary_blocking_component_type": primary_blocking_component_type,
+            "primary_blocking_component_serial_number": primary_blocking_component_serial_number,
             "stale_bucket": stale_bucket,
             "recommended_action": recommended_action,
             "created_after": created_after.isoformat() if created_after else None,
