@@ -157,7 +157,14 @@ export function buildQuery(params: Record<string, QueryValue>): string {
       continue;
     }
 
-    if (typeof value === "string" && value.trim() === "") {
+    if (typeof value === "string") {
+      const normalizedValue = value.trim();
+
+      if (normalizedValue === "") {
+        continue;
+      }
+
+      search.set(key, normalizedValue);
       continue;
     }
 
@@ -169,7 +176,7 @@ export function buildQuery(params: Record<string, QueryValue>): string {
 }
 
 export function joinApiUrl(apiBaseUrl: string, path: string): string {
-  const base = apiBaseUrl.replace(/\/+$/, "");
+  const base = apiBaseUrl.trim().replace(/\/+$/, "");
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
   return `${base}${normalizedPath}`;
 }

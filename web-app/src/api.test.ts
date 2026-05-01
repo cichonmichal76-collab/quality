@@ -3,10 +3,10 @@ import { describe, expect, it } from "vitest";
 import { buildQuery, joinApiUrl, optionalBoolean } from "./api";
 
 describe("buildQuery", () => {
-  it("pomija puste wartości i serializuje booleany", () => {
+  it("przycina tekstowe filtry, pomija puste wartości i serializuje booleany", () => {
     expect(
       buildQuery({
-        device_type: "ZSS-VENT",
+        device_type: "  ZSS-VENT  ",
         variant_code: "",
         only_blocked: true,
         latest_gate_result: null,
@@ -24,6 +24,12 @@ describe("joinApiUrl", () => {
   it("łączy bazowy adres API bez podwójnych slashy", () => {
     expect(joinApiUrl("http://localhost:8000/api/", "/shipment-readiness")).toBe(
       "http://localhost:8000/api/shipment-readiness",
+    );
+  });
+
+  it("przycina przypadkowe spacje w bazowym adresie API", () => {
+    expect(joinApiUrl("  http://localhost:8000/api/  ", "component-quality")).toBe(
+      "http://localhost:8000/api/component-quality",
     );
   });
 

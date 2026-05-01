@@ -462,7 +462,7 @@ describe("App", () => {
     expect(await screen.findByText("SHIP-001")).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Typ urządzenia"), {
-      target: { value: "DEMO-OPS" },
+      target: { value: "  DEMO-OPS  " },
     });
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     expect(fetchMock).toHaveBeenLastCalledWith(
