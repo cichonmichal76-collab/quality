@@ -2967,6 +2967,89 @@ def test_assembly_scan_installs_component_and_blocks_duplicate_use():
     assert duplicate.json()["detail"] == "Component already installed in another device"
 
 
+def test_assembly_scan_requires_component_qc_passed():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(device_type, component_type="CONTROL_PCB")
+    session = start_work_session(role="PRODUCTION_OPERATOR")
+    device_serial_number = unique_id("DEV")
+
+    create_device = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
+    )
+    assert create_device.status_code == 200
+
+    item_serial_number = unique_id("ITEM")
+    barcode_value = unique_id("BC")
+    created = client.post(
+        "/api/production-items",
+        json={
+            "item_serial_number": item_serial_number,
+            "barcode_value": barcode_value,
+            "item_type": "CONTROL_PCB",
+            "work_session_id": session["work_session_id"],
+            "created_by_operator_id": session["operator_id"],
+            "workstation_id": session["workstation_id"],
+        },
+    )
+    assert created.status_code == 200
+
+    produced = client.patch(
+        f"/api/production-items/{item_serial_number}/status",
+        json={"current_status": "PRODUCED"},
+    )
+    assert produced.status_code == 200
+
+    blocked = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": barcode_value,
+            "component_type": "CONTROL_PCB",
+            "work_session_id": session["work_session_id"],
+        },
+    )
+    assert blocked.status_code == 400
+    assert blocked.json()["detail"] == "Component must be QC_PASSED before assembly"
+
+
+def test_assembly_scan_blocks_component_with_open_critical_ncr():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(device_type, component_type="CONTROL_PCB")
+    session = start_work_session(role="PRODUCTION_OPERATOR")
+    device_serial_number = unique_id("DEV")
+
+    create_device = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
+    )
+    assert create_device.status_code == 200
+
+    item = create_qc_passed_item(session, item_type="CONTROL_PCB")
+    ncr = client.post(
+        "/api/nonconformities",
+        json={
+            "ncr_id": unique_id("NCR"),
+            "component_serial_number": item["item_serial_number"],
+            "process_stage": "QC",
+            "description": "Critical component issue",
+            "severity": "CRITICAL",
+            "detected_by": "pytest",
+        },
+    )
+    assert ncr.status_code == 200
+
+    blocked = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": session["work_session_id"],
+        },
+    )
+    assert blocked.status_code == 400
+    assert blocked.json()["detail"] == "Component has open critical NCR and cannot be assembled"
+
+
 def test_assembly_scan_blocks_component_type_not_in_active_bom():
     device_type = unique_id("DT")
     ensure_device_bom_template(device_type=device_type, component_type="CONTROL_PCB")
@@ -3445,6 +3528,139 @@ def test_shipment_is_blocked_when_required_component_is_missing():
     assert shipment_gate_event["payload"]["recommended_action"] == "COMPLETE_ASSEMBLY"
     assert shipment_gate_event["payload"]["blocking_codes"] == ["BOM_REQUIRED_COMPONENTS_MISSING"]
     assert shipment_gate_event["payload"]["missing_required_components"] == ["CONTROL_PCB"]
+
+
+def test_shipment_is_blocked_when_installed_component_has_open_critical_ncr():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(device_type, component_type="CONTROL_PCB")
+    device_serial_number = unique_id("DEV")
+    device_response = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
+    )
+    assert device_response.status_code == 200
+
+    production_session = start_work_session(role="PRODUCTION_OPERATOR")
+    item = create_qc_passed_item(production_session, item_type="CONTROL_PCB")
+    install = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": production_session["work_session_id"],
+        },
+    )
+    assert install.status_code == 200
+
+    final_test_session = start_work_session(role="FINAL_TEST_OPERATOR")
+    final_test = client.post(
+        "/api/final-tests",
+        json={
+            "test_run_id": unique_id("FT"),
+            "device_serial_number": device_serial_number,
+            "result": "PASS",
+            "firmware_version": "1.2.4",
+            "bootloader_version": "0.9.8",
+            "work_session_id": final_test_session["work_session_id"],
+        },
+    )
+    assert final_test.status_code == 200
+
+    component_ncr = client.post(
+        "/api/nonconformities",
+        json={
+            "ncr_id": unique_id("NCR"),
+            "component_serial_number": item["item_serial_number"],
+            "process_stage": "SERVICE",
+            "description": "Critical component blocker",
+            "severity": "CRITICAL",
+            "detected_by": "pytest",
+        },
+    )
+    assert component_ncr.status_code == 200
+
+    blocked = client.patch(
+        f"/api/devices/{device_serial_number}/status",
+        json={"production_status": "READY_FOR_SHIPMENT"},
+    )
+    assert blocked.status_code == 400
+    assert blocked.json()["detail"] == "Open critical NCR on installed components blocks shipment"
+
+    readiness = client.get(f"/api/devices/{device_serial_number}/shipment-readiness")
+    assert readiness.status_code == 200
+    payload = readiness.json()
+    assert payload["primary_blocking_code"] == "COMPONENT_CRITICAL_OPEN_NCR"
+    assert payload["recommended_action"] == "RESOLVE_COMPONENT_QUALITY"
+    assert any(
+        check["code"] == "COMPONENT_CRITICAL_OPEN_NCR"
+        and component_ncr.json()["ncr_id"] in check["details"]
+        for check in payload["blocking_checks"]
+    )
+
+
+def test_shipment_is_blocked_when_installed_component_lacks_qc_passed_flag():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(device_type, component_type="CONTROL_PCB")
+    device_serial_number = unique_id("DEV")
+    device_response = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
+    )
+    assert device_response.status_code == 200
+
+    production_session = start_work_session(role="PRODUCTION_OPERATOR")
+    item = create_qc_passed_item(production_session, item_type="CONTROL_PCB")
+    install = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": production_session["work_session_id"],
+        },
+    )
+    assert install.status_code == 200
+
+    with SessionLocal() as db:
+        link = (
+            db.query(AssemblyLink)
+            .filter(AssemblyLink.child_barcode_value == item["barcode_value"])
+            .first()
+        )
+        assert link is not None
+        link.component_qc_passed = False
+        db.commit()
+
+    final_test_session = start_work_session(role="FINAL_TEST_OPERATOR")
+    final_test = client.post(
+        "/api/final-tests",
+        json={
+            "test_run_id": unique_id("FT"),
+            "device_serial_number": device_serial_number,
+            "result": "PASS",
+            "firmware_version": "1.2.4",
+            "bootloader_version": "0.9.8",
+            "work_session_id": final_test_session["work_session_id"],
+        },
+    )
+    assert final_test.status_code == 200
+
+    blocked = client.patch(
+        f"/api/devices/{device_serial_number}/status",
+        json={"production_status": "READY_FOR_SHIPMENT"},
+    )
+    assert blocked.status_code == 400
+    assert blocked.json()["detail"] == "READY_FOR_SHIPMENT requires installed components with QC_PASSED"
+
+    readiness = client.get(f"/api/devices/{device_serial_number}/shipment-readiness")
+    assert readiness.status_code == 200
+    payload = readiness.json()
+    assert payload["primary_blocking_code"] == "COMPONENT_QC_NOT_PASSED"
+    assert payload["recommended_action"] == "RESOLVE_COMPONENT_QUALITY"
+    assert any(
+        check["code"] == "COMPONENT_QC_NOT_PASSED"
+        and f"{item['item_serial_number']} (CONTROL_PCB)" in check["details"]
+        for check in payload["blocking_checks"]
+    )
 
 
 def test_audit_events_can_filter_shipment_gate_by_event_type_and_result():

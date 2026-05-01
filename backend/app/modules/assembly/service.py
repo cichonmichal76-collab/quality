@@ -1837,18 +1837,26 @@ def scan_component_for_assembly(
     item = repository.get_production_item_by_barcode(db, payload.child_barcode_value)
     if not item:
         raise HTTPException(status_code=404, detail="Component barcode not found")
-    if item.current_status in {"QC_FAILED", "SCRAPPED", "REWORK_REQUIRED"}:
-        raise HTTPException(status_code=400, detail="Component status blocks assembly")
+    existing = repository.get_active_assembly_link_by_barcode(db, payload.child_barcode_value)
+    if existing:
+        raise HTTPException(status_code=409, detail="Component already installed in another device")
+    if item.current_status != "QC_PASSED":
+        raise HTTPException(status_code=400, detail="Component must be QC_PASSED before assembly")
+    critical_component_ncr_ids = repository.list_critical_open_ncr_ids_for_component(
+        db,
+        item.item_serial_number,
+    )
+    if critical_component_ncr_ids:
+        raise HTTPException(
+            status_code=400,
+            detail="Component has open critical NCR and cannot be assembled",
+        )
     bom_template, bom_item = _validate_component_against_bom(
         db,
         device,
         item,
         payload.component_type,
     )
-
-    existing = repository.get_active_assembly_link_by_barcode(db, payload.child_barcode_value)
-    if existing:
-        raise HTTPException(status_code=409, detail="Component already installed in another device")
     if bom_item is not None:
         assert bom_template is not None
         installed_links = repository.list_installed_assembly_links_for_device(
@@ -1905,6 +1913,7 @@ def scan_component_for_assembly(
         scan_event_id=scan_event_id,
         bom_template_id=bom_template.id if bom_template else None,
         bom_version=bom_template.version if bom_template else None,
+        component_qc_passed=True,
     )
     item.current_status = "INSTALLED"
     db.add(event)
@@ -1923,6 +1932,8 @@ def scan_component_for_assembly(
             **payload.model_dump(exclude_none=True),
             "bom_template_id": bom_template.id if bom_template else None,
             "bom_version": bom_template.version if bom_template else None,
+            "component_qc_passed": True,
+            "component_critical_open_ncr_ids": [],
         },
     )
     db.commit()

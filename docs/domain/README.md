@@ -181,7 +181,8 @@ Główne encje:
 Najważniejsze reguły:
 
 - komponent musi istnieć, zanim zostanie zainstalowany
-- komponent ze złym statusem nie może być zamontowany
+- komponent musi mieć status dokładnie `QC_PASSED`
+- komponent z otwartą krytyczną NCR nie może zostać zamontowany
 - typ zeskanowanego itemu musi zgadzać się z deklarowanym `component_type`
 - jeśli aktywny BOM istnieje dla `device_type`, komponent musi być dozwolony przez ten BOM
 - jeśli dla `device_type` istnieją już wersje BOM, ale żadna nie jest aktywna, nowy montaż urządzenia bez przypiętej wersji BOM jest blokowany
@@ -192,6 +193,7 @@ Najważniejsze reguły:
 - jeśli BOM ogranicza ilość danego komponentu, assembly blokuje przekroczenie limitu już na etapie skanu
 - komponent nie może zostać zainstalowany drugi raz, jeśli jest już aktywny w innym urządzeniu
 - assembly produkuje zarówno relację montażową, jak i ślad skanu
+- `AssemblyLink` przechowuje też snapshot `component_qc_passed`, żeby shipment mógł sprawdzić jakość zainstalowanych komponentów po zmianie statusu itemu na `INSTALLED`
 - definicje BOM dla `device_type` są utrzymywane w `DeviceBomTemplate` i `DeviceBomItem`
 - definicje BOM są dziś scope’owane nie tylko per `device_type`, ale też per `variant_code`, z fallbackiem urządzeń do wariantu `DEFAULT`
 - pozycja `DeviceBomItem` może dodatkowo zawęzić dopuszczalny `part_number` i `revision`
@@ -207,7 +209,7 @@ Najważniejsze reguły:
 - stan użycia konkretnej wersji BOM jest dostępny przez dedykowany odczyt `usage`, który zwraca też rekomendowaną dalszą akcję dla operatora lub klienta API
 - odczyt `bom-resolution` pokazuje dla konkretnego urządzenia źródło aktualnie rozwiązanego BOM: przypiętą wersję, aktywny BOM wariantowy, fallback `DEFAULT` albo brak aktywnej skutecznej konfiguracji
 - odczyt `bom-compliance` pokazuje dla konkretnego urządzenia, czy końcowo przechodzi ono bramkę BOM, z rozbiciem na `missing_required_components`, `over_installed_components`, `unexpected_component_types` i pokrycie per komponent
-- odczyt `shipment-readiness` składa dla konkretnego urządzenia pełny werdykt wysyłkowy z `FINAL_TEST_PASSED`, BOM i krytycznych NCR, a dodatkowo zwraca `blocking_checks` i `critical_open_ncr_ids`, dzięki czemu klient nie musi odtwarzać tej logiki po swojej stronie
+- odczyt `shipment-readiness` składa dla konkretnego urządzenia pełny werdykt wysyłkowy z `FINAL_TEST_PASSED`, BOM, krytycznych NCR urządzenia i krytycznych NCR zainstalowanych komponentów, a dodatkowo zwraca `blocking_checks` i `critical_open_ncr_ids`, dzięki czemu klient nie musi odtwarzać tej logiki po swojej stronie
 - widok kolejkowy `shipment-readiness` pozwala pobrać zbiorczo urządzenia gotowe i zablokowane do wysyłki, a także ich agregację per `blocking_code`, `primary_blocking_code` i `recommended_action`; wspiera też sortowanie oraz paginację przez `offset` i `limit`, więc dashboard może ustawić najbardziej pilne sztuki na górze bez gubienia pełnych liczników i summary
 - sama decyzja o wejściu w `READY_FOR_SHIPMENT` ma już osobny ślad audytowy `SHIPMENT_GATE_PASSED` albo `SHIPMENT_GATE_BLOCKED`, niezależny od zwykłego `DEVICE_STATUS_UPDATED`
 - odczyt `/api/audit-events` pozwala teraz dodatkowo filtrować ten ślad po `event_type` i `result`, więc warstwa kliencka może pobrać same decyzje shipmentowe bez własnego filtrowania
@@ -287,6 +289,8 @@ Aktualnie zaimplementowana reguła:
 - brakujący komponent jest raportowany w błędzie wraz z ilością, jeśli `quantity_required > 1`
 - komponent nadmiarowy względem BOM również blokuje shipment i jest raportowany jako `OVER_INSTALLED`
 - otwarta krytyczna NCR blokuje shipment
+- zainstalowany komponent bez snapshotu `component_qc_passed=True` blokuje shipment
+- otwarta krytyczna NCR zainstalowanego komponentu również blokuje shipment
 - jeśli urządzenie nie jest jeszcze przypięte do BOM, a dla jego `device_type` nie ma aktywnej wersji, shipment jest blokowany
 
 Stan implementacji:
@@ -556,6 +560,7 @@ Kluczowe pola:
 - `scan_event_id`
 - `bom_template_id`
 - `bom_version`
+- `component_qc_passed`
 - `status`
 
 ### `AuditEvent`

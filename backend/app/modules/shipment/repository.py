@@ -2,7 +2,14 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.database import utc_now
-from app.models import AuditEvent, AssemblyLink, Device, DeviceBomItem, DeviceBomTemplate, Nonconformity
+from app.models import (
+    AuditEvent,
+    AssemblyLink,
+    Device,
+    DeviceBomItem,
+    DeviceBomTemplate,
+    Nonconformity,
+)
 
 
 def get_device_by_serial_number(db: Session, device_serial_number: str) -> Device | None:
@@ -69,6 +76,30 @@ def list_installed_assembly_links_for_device(
         )
         .all()
     )
+
+
+def list_component_critical_open_ncr_ids_for_device(
+    db: Session,
+    device_serial_number: str,
+) -> list[str]:
+    return [
+        row.ncr_id
+        for row in (
+            db.query(Nonconformity.ncr_id)
+            .join(
+                AssemblyLink,
+                AssemblyLink.child_item_serial_number == Nonconformity.component_serial_number,
+            )
+            .filter(
+                AssemblyLink.parent_device_serial_number == device_serial_number,
+                AssemblyLink.status == "INSTALLED",
+                Nonconformity.severity == "CRITICAL",
+                Nonconformity.status != "CLOSED",
+            )
+            .order_by(Nonconformity.detected_at.asc(), Nonconformity.ncr_id.asc())
+            .all()
+        )
+    ]
 
 
 def get_active_bom_template_by_device_type(

@@ -645,8 +645,9 @@ curl http://localhost:8000/api/devices/ZSS-000123/assembly-tree
 Reguły assembly:
 
 - barcode komponentu musi istnieć
-- status itemu nie może być `QC_FAILED`, `SCRAPPED` ani `REWORK_REQUIRED`
+- status itemu musi być dokładnie `QC_PASSED`
 - typ zeskanowanego itemu musi zgadzać się z `component_type`
+- komponent z otwartą krytyczną NCR nie może wejść do montażu
 - jeśli dla `device_type` istnieje aktywny BOM, `component_type` musi być dozwolony przez ten BOM
 - lookup BOM wspiera `variant_code`; backend najpierw szuka aktywnego BOM dla wariantu urządzenia, a potem może spaść do wariantu `DEFAULT`
 - jeśli dla `device_type` istnieją już wersje BOM, ale żadna nie jest aktywna, nowy assembly scan jest blokowany do czasu aktywacji kolejnej wersji
@@ -657,6 +658,7 @@ Reguły assembly:
 - jeśli aktywny BOM ogranicza ilość danego komponentu, assembly blokuje przekroczenie limitu już podczas skanu
 - komponent nie może być zainstalowany drugi raz, jeśli już ma aktywne `INSTALLED`
 - assembly zapisuje zarówno relację montażową, jak i ślad skanu oraz audytu
+- `AssemblyLink` przechowuje też snapshot `component_qc_passed`, używany później przez shipment gate
 - pierwszy poprawny skan dla urządzenia przypina je do konkretnego `bom_template_id` i `bom_version`; kolejne skany używają już tej samej wersji BOM
 - wersja BOM może mieć jawny `status`: `INACTIVE`, `APPROVED`, `ACTIVE` albo `RETIRED`
 - wersja `RETIRED` jest niemodyfikowalna; nie można dodawać do niej nowych pozycji BOM
@@ -667,6 +669,7 @@ Reguły assembly:
 - endpoint `bom-resolution` pokazuje dla konkretnego urządzenia, czy backend używa BOM przypiętego po montażu, aktywnego BOM wariantowego, fallbacku `DEFAULT`, czy też nie ma dziś aktywnej skutecznej wersji do użycia
 - endpoint `bom-compliance` pokazuje dla konkretnego urządzenia końcową zgodność z rozwiązaną wersją BOM, w tym `missing_required_components`, `over_installed_components`, `unexpected_component_types`, `passes_bom_gate` i `component_coverage`
 - endpoint `shipment-readiness` zwraca pełny werdykt bramki wysyłkowej, w tym `final_test_passed`, `has_critical_open_ncr`, `critical_open_ncr_ids`, `device_created_at`, `device_updated_at`, zagnieżdżone `bom_compliance`, `can_transition_to_ready_for_shipment`, `primary_blocking_code`, `primary_blocking_message`, `recommended_action`, uporządkowaną listę `blocking_reasons` oraz `blocking_checks` z kodami maszynowymi
+- `blocking_checks` mogą dziś zwracać także `COMPONENT_QC_NOT_PASSED` i `COMPONENT_CRITICAL_OPEN_NCR`, a ich domyślna akcja naprawcza to `RESOLVE_COMPONENT_QUALITY`
 - endpoint `shipment-readiness` zwraca też `latest_shipment_gate_decision`, czyli ostatnią zapisaną decyzję `SHIPMENT_GATE_PASSED` albo `SHIPMENT_GATE_BLOCKED` dla urządzenia, jeśli taka już istnieje
 - endpoint `shipment-gate-history` zwraca historię audytową prób wejścia urządzenia w `READY_FOR_SHIPMENT`, z filtrem `result=PASS|BLOCKED` oraz paginacją `limit` / `offset`
 - endpoint kolejkowy `GET /api/shipment-readiness` zwraca listę urządzeń wraz z tym samym kontraktem gotowości, plus liczniki `ready_count` i `blocked_count`, metadane strony `returned_count`, `offset`, `limit`, `has_more`, `next_offset` oraz agregacje `blocking_summary`, `primary_blocking_summary`, `recommended_action_summary`, `latest_shipment_gate_result_summary` i `production_status_summary`; wspiera filtry `device_type`, `variant_code`, `production_status`, `blocking_code`, `primary_blocking_code`, `recommended_action`, `latest_gate_result`, `only_blocked`, `only_ready`, `sort_by`, `sort_desc`, `offset` i `limit`
@@ -730,6 +733,8 @@ Shipment gate w aktualnym MVP:
 - jeśli pozycja BOM wymaga konkretnego `part_number` albo `revision`, ta zgodność jest sprawdzana już podczas assembly
 - brakujący komponent jest zwracany w treści błędu, np. `CONTROL_PCB` albo `FAN_MODULE x2`
 - otwarta krytyczna NCR blokuje shipment
+- zainstalowany komponent bez zapisanego `component_qc_passed` blokuje shipment
+- otwarta krytyczna NCR zainstalowanego komponentu również blokuje shipment
 - shipment pozostaje końcową walidacją kompletności, nawet jeśli assembly wcześniej odrzuci niedozwolony skan
 - jeśli urządzenie zostało już przypięte do konkretnego `bom_version` podczas assembly, shipment używa tej samej wersji zamiast aktualnie aktywnej
 - jeśli urządzenie nie jest jeszcze przypięte do BOM, a dla jego `device_type` nie ma aktywnej wersji, shipment jest blokowany do czasu aktywacji nowego BOM

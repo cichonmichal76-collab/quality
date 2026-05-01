@@ -337,6 +337,7 @@ class AssemblyLink(Base):
         index=True,
     )
     bom_version: Mapped[str | None] = mapped_column(String, nullable=True)
+    component_qc_passed: Mapped[bool] = mapped_column(Boolean, default=True)
     status: Mapped[str] = mapped_column(String, default="INSTALLED")
 
 

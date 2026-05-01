@@ -10,6 +10,7 @@ from app.models import (
     DeviceBomItem,
     DeviceBomTemplate,
     DeviceComponent,
+    Nonconformity,
     ProductionItem,
 )
 
@@ -24,6 +25,25 @@ def list_devices(db: Session) -> list[Device]:
 
 def get_production_item_by_barcode(db: Session, barcode_value: str) -> ProductionItem | None:
     return db.query(ProductionItem).filter(ProductionItem.barcode_value == barcode_value).first()
+
+
+def list_critical_open_ncr_ids_for_component(
+    db: Session,
+    component_serial_number: str,
+) -> list[str]:
+    return [
+        row.ncr_id
+        for row in (
+            db.query(Nonconformity.ncr_id)
+            .filter(
+                Nonconformity.component_serial_number == component_serial_number,
+                Nonconformity.severity == "CRITICAL",
+                Nonconformity.status != "CLOSED",
+            )
+            .order_by(Nonconformity.detected_at.asc())
+            .all()
+        )
+    ]
 
 
 def get_active_assembly_link_by_barcode(db: Session, barcode_value: str) -> AssemblyLink | None:

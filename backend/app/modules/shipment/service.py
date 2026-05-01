@@ -22,14 +22,21 @@ from app.schemas import (
 READY_FOR_SHIPMENT_REQUIRES_FINAL_TEST = "READY_FOR_SHIPMENT requires FINAL_TEST_PASSED"
 READY_FOR_SHIPMENT_REQUIRES_ACTIVE_BOM = "READY_FOR_SHIPMENT requires an active effective BOM template"
 READY_FOR_SHIPMENT_BLOCKED_BY_NCR = "Open critical NCR blocks shipment"
+READY_FOR_SHIPMENT_REQUIRES_COMPONENT_QC = "READY_FOR_SHIPMENT requires installed components with QC_PASSED"
+READY_FOR_SHIPMENT_BLOCKED_BY_COMPONENT_NCR = (
+    "Open critical NCR on installed components blocks shipment"
+)
 FINAL_TEST_NOT_PASSED_CODE = "FINAL_TEST_NOT_PASSED"
 BOM_TEMPLATE_NOT_EFFECTIVE_CODE = "BOM_TEMPLATE_NOT_EFFECTIVE"
 BOM_REQUIRED_COMPONENTS_MISSING_CODE = "BOM_REQUIRED_COMPONENTS_MISSING"
 BOM_OVER_INSTALLED_COMPONENTS_CODE = "BOM_OVER_INSTALLED_COMPONENTS"
 BOM_UNEXPECTED_COMPONENTS_CODE = "BOM_UNEXPECTED_COMPONENTS"
 CRITICAL_OPEN_NCR_CODE = "CRITICAL_OPEN_NCR"
+COMPONENT_QC_NOT_PASSED_CODE = "COMPONENT_QC_NOT_PASSED"
+COMPONENT_CRITICAL_OPEN_NCR_CODE = "COMPONENT_CRITICAL_OPEN_NCR"
 MARK_READY_FOR_SHIPMENT_ACTION = "MARK_READY_FOR_SHIPMENT"
 RESOLVE_CRITICAL_NCR_ACTION = "RESOLVE_CRITICAL_NCR"
+RESOLVE_COMPONENT_QUALITY_ACTION = "RESOLVE_COMPONENT_QUALITY"
 ACTIVATE_OR_CONFIGURE_BOM_ACTION = "ACTIVATE_OR_CONFIGURE_BOM"
 FIX_ASSEMBLY_MISMATCH_ACTION = "FIX_ASSEMBLY_MISMATCH"
 COMPLETE_ASSEMBLY_ACTION = "COMPLETE_ASSEMBLY"
@@ -53,6 +60,22 @@ def _build_shipment_gate_audit_payload(
     *,
     requested_status: str,
 ) -> dict:
+    component_qc_blocking_details = next(
+        (
+            check.details
+            for check in readiness.blocking_checks
+            if check.code == COMPONENT_QC_NOT_PASSED_CODE
+        ),
+        [],
+    )
+    component_ncr_blocking_details = next(
+        (
+            check.details
+            for check in readiness.blocking_checks
+            if check.code == COMPONENT_CRITICAL_OPEN_NCR_CODE
+        ),
+        [],
+    )
     return {
         "requested_status": requested_status,
         "current_status_before": device.production_status,
@@ -69,6 +92,8 @@ def _build_shipment_gate_audit_payload(
         "missing_required_components": readiness.bom_compliance.missing_required_components,
         "over_installed_components": readiness.bom_compliance.over_installed_components,
         "unexpected_component_types": readiness.bom_compliance.unexpected_component_types,
+        "component_qc_blocking_details": component_qc_blocking_details,
+        "component_critical_open_ncr_ids": component_ncr_blocking_details,
     }
 
 
@@ -209,11 +234,13 @@ def _pick_primary_blocking_code(
 def _blocking_priority_value(code: str | None) -> int:
     priority = {
         CRITICAL_OPEN_NCR_CODE: 0,
-        BOM_TEMPLATE_NOT_EFFECTIVE_CODE: 1,
-        BOM_OVER_INSTALLED_COMPONENTS_CODE: 2,
-        BOM_UNEXPECTED_COMPONENTS_CODE: 2,
-        BOM_REQUIRED_COMPONENTS_MISSING_CODE: 3,
-        FINAL_TEST_NOT_PASSED_CODE: 4,
+        COMPONENT_CRITICAL_OPEN_NCR_CODE: 1,
+        COMPONENT_QC_NOT_PASSED_CODE: 2,
+        BOM_TEMPLATE_NOT_EFFECTIVE_CODE: 3,
+        BOM_OVER_INSTALLED_COMPONENTS_CODE: 4,
+        BOM_UNEXPECTED_COMPONENTS_CODE: 4,
+        BOM_REQUIRED_COMPONENTS_MISSING_CODE: 5,
+        FINAL_TEST_NOT_PASSED_CODE: 6,
     }
     if code is None:
         return 99
@@ -237,6 +264,8 @@ def _recommended_action_for_primary_blocking_code(primary_blocking_code: str | N
         return MARK_READY_FOR_SHIPMENT_ACTION
     if primary_blocking_code == CRITICAL_OPEN_NCR_CODE:
         return RESOLVE_CRITICAL_NCR_ACTION
+    if primary_blocking_code in {COMPONENT_QC_NOT_PASSED_CODE, COMPONENT_CRITICAL_OPEN_NCR_CODE}:
+        return RESOLVE_COMPONENT_QUALITY_ACTION
     if primary_blocking_code == BOM_TEMPLATE_NOT_EFFECTIVE_CODE:
         return ACTIVATE_OR_CONFIGURE_BOM_ACTION
     if primary_blocking_code in {BOM_OVER_INSTALLED_COMPONENTS_CODE, BOM_UNEXPECTED_COMPONENTS_CODE}:
@@ -253,6 +282,16 @@ def _build_device_shipment_readiness(db: Session, device: Device) -> DeviceShipm
     critical_open_ncr_ids = repository.list_critical_open_ncr_ids(db, device.device_serial_number)
     has_critical_open_ncr = bool(critical_open_ncr_ids)
     bom_compliance = get_device_bom_compliance(db, device.device_serial_number)
+    installed_links = repository.list_installed_assembly_links_for_device(db, device.device_serial_number)
+    component_qc_blocking_details = sorted(
+        f"{link.child_item_serial_number} ({link.component_type})"
+        for link in installed_links
+        if not link.component_qc_passed
+    )
+    component_critical_open_ncr_ids = repository.list_component_critical_open_ncr_ids_for_device(
+        db,
+        device.device_serial_number,
+    )
     latest_shipment_gate_event = repository.get_latest_shipment_gate_audit_event_for_device(
         db,
         device.device_serial_number,
@@ -274,6 +313,28 @@ def _build_device_shipment_readiness(db: Session, device: Device) -> DeviceShipm
     if bom_blocking_reason:
         blocking_reasons.append(bom_blocking_reason)
     blocking_checks.extend(_build_bom_shipment_blocking_checks(bom_compliance))
+
+    if component_qc_blocking_details:
+        blocking_reasons.append(READY_FOR_SHIPMENT_REQUIRES_COMPONENT_QC)
+        blocking_checks.append(
+            DeviceShipmentBlockingCheckRead(
+                code=COMPONENT_QC_NOT_PASSED_CODE,
+                is_blocking=True,
+                message=READY_FOR_SHIPMENT_REQUIRES_COMPONENT_QC,
+                details=component_qc_blocking_details,
+            )
+        )
+
+    if component_critical_open_ncr_ids:
+        blocking_reasons.append(READY_FOR_SHIPMENT_BLOCKED_BY_COMPONENT_NCR)
+        blocking_checks.append(
+            DeviceShipmentBlockingCheckRead(
+                code=COMPONENT_CRITICAL_OPEN_NCR_CODE,
+                is_blocking=True,
+                message=READY_FOR_SHIPMENT_BLOCKED_BY_COMPONENT_NCR,
+                details=component_critical_open_ncr_ids,
+            )
+        )
 
     if has_critical_open_ncr:
         blocking_reasons.append(READY_FOR_SHIPMENT_BLOCKED_BY_NCR)
