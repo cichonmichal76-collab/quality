@@ -162,6 +162,18 @@ def print_server_summary(
         )
 
 
+def build_no_server_message(args: argparse.Namespace) -> str:
+    if args.verify_only:
+        return "Demo dashboardu zweryfikowane. Backend nie został uruchomiony."
+    if args.skip_migrate and args.skip_seed:
+        return "Pominięto migracje i seed danych demo. Backend nie został uruchomiony."
+    if args.skip_seed:
+        return "Migracje wykonane. Seed danych demo pominięty. Backend nie został uruchomiony."
+    if args.skip_migrate:
+        return "Dane demo przygotowane bez migracji. Backend nie został uruchomiony."
+    return "Demo dashboardu przygotowane. Backend nie został uruchomiony."
+
+
 def main() -> int:
     args = parse_args()
     env = build_env(args)
@@ -199,10 +211,7 @@ def main() -> int:
             print_dataset_summary(seed_result)
 
         if args.no_server:
-            if args.verify_only:
-                print("Demo dashboardu zweryfikowane. Backend nie został uruchomiony.", flush=True)
-            else:
-                print("Demo dashboardu przygotowane. Backend nie został uruchomiony.", flush=True)
+            print(build_no_server_message(args), flush=True)
             print(f"DATABASE_URL={args.database_url}", flush=True)
             database_path = resolve_sqlite_database_path(args.database_url)
             if database_path is not None:

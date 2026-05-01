@@ -93,14 +93,16 @@ Przydatne warianty:
 
 ```bash
 py scripts/dev_dashboard_demo.py --no-server
+py scripts/dev_dashboard_demo.py --skip-seed --no-server
+py scripts/dev_dashboard_demo.py --skip-migrate --skip-seed --no-server
 py scripts/dev_dashboard_demo.py --device-type DEMO-QA --tag QA --reload
 py scripts/dev_dashboard_demo.py --database-url sqlite:///./servicetrace_dashboard_demo_alt.db --no-server
 py scripts/dev_dashboard_demo.py --device-type DEMO-LOCAL --verify-only --no-server
 ```
 
-Ostatnia komenda nie dosiewa danych. Służy do szybkiego sanity checku istniejącego
-kompletnego datasetu demo dla podanego `device_type` i kończy się błędem, jeśli taki
-zestaw nie istnieje albo nie spełnia oczekiwanego kontraktu dashboardu.
+`--skip-seed --no-server` uruchamia tylko migracje.
+`--skip-migrate --skip-seed --no-server` robi jawny no-op i pozwala tylko sprawdzić konfigurację ścieżek i środowiska.
+Ostatnia komenda nie dosiewa danych. Służy do szybkiego sanity checku istniejącego kompletnego datasetu demo dla podanego `device_type` i kończy się błędem, jeśli taki zestaw nie istnieje albo nie spełnia oczekiwanego kontraktu dashboardu.
 
 Po zakończeniu skrypt wypisuje teraz nie tylko `DATABASE_URL`, ale też
 `DATABASE_PATH`, czyli rzeczywistą lokalną ścieżkę pliku SQLite użytego przez backend.

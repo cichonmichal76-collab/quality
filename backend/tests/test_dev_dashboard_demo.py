@@ -263,6 +263,77 @@ def test_dev_dashboard_demo_can_verify_existing_dataset_without_reseeding(tmp_pa
     assert f"DATABASE_PATH={database_path.resolve()}" in verify_run.stdout
 
 
+def test_dev_dashboard_demo_reports_migration_only_mode(tmp_path):
+    repo_dir = Path(__file__).resolve().parents[2]
+    database_path = tmp_path / "dashboard-demo-migration-only.db"
+    database_url = f"sqlite:///{database_path.as_posix()}"
+
+    migration_only_run = subprocess.run(
+        [
+            sys.executable,
+            "scripts/dev_dashboard_demo.py",
+            "--database-url",
+            database_url,
+            "--device-type",
+            "DEMO-BOOTSTRAP-MIGRATION-ONLY",
+            "--skip-seed",
+            "--no-server",
+        ],
+        cwd=repo_dir,
+        env=os.environ.copy(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert migration_only_run.returncode == 0, (
+        "Dashboard bootstrap migration-only mode failed.\n"
+        f"stdout:\n{migration_only_run.stdout}\n"
+        f"stderr:\n{migration_only_run.stderr}"
+    )
+    assert (
+        "Migracje wykonane. Seed danych demo pominięty. Backend nie został uruchomiony."
+        in migration_only_run.stdout
+    )
+    assert f"DATABASE_URL={database_url}" in migration_only_run.stdout
+    assert f"DATABASE_PATH={database_path.resolve()}" in migration_only_run.stdout
+
+
+def test_dev_dashboard_demo_reports_noop_mode(tmp_path):
+    repo_dir = Path(__file__).resolve().parents[2]
+    database_path = tmp_path / "dashboard-demo-noop.db"
+    database_url = f"sqlite:///{database_path.as_posix()}"
+
+    noop_run = subprocess.run(
+        [
+            sys.executable,
+            "scripts/dev_dashboard_demo.py",
+            "--database-url",
+            database_url,
+            "--device-type",
+            "DEMO-BOOTSTRAP-NOOP",
+            "--skip-migrate",
+            "--skip-seed",
+            "--no-server",
+        ],
+        cwd=repo_dir,
+        env=os.environ.copy(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert noop_run.returncode == 0, (
+        "Dashboard bootstrap noop mode failed.\n"
+        f"stdout:\n{noop_run.stdout}\n"
+        f"stderr:\n{noop_run.stderr}"
+    )
+    assert (
+        "Pominięto migracje i seed danych demo. Backend nie został uruchomiony."
+        in noop_run.stdout
+    )
+    assert f"DATABASE_URL={database_url}" in noop_run.stdout
+    assert f"DATABASE_PATH={database_path.resolve()}" in noop_run.stdout
+
+
 def test_dev_dashboard_demo_rejects_verify_only_with_skip_seed(tmp_path):
     repo_dir = Path(__file__).resolve().parents[2]
     database_path = tmp_path / "dashboard-demo-invalid-skip-seed.db"
