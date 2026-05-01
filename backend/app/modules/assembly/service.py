@@ -19,12 +19,15 @@ from app.modules.assembly import repository
 from app.schemas import (
     AssemblyScanRequest,
     ComponentCreate,
+    DeviceBomItemDiffRead,
     DeviceBomTemplateActivateRequest,
     DeviceBomTemplateCloneRequest,
+    DeviceBomItemSnapshotRead,
     DeviceBomTemplatePromoteRequest,
     DeviceBomItemCreate,
     DeviceBomItemUpdate,
     DeviceBomTemplateCreate,
+    DeviceBomTemplateDiffRead,
     DeviceBomTemplateRetireRequest,
     DeviceBomTemplateUsageRead,
     DeviceCreate,
@@ -191,6 +194,75 @@ def get_device_bom_template_usage(
         is_bound=is_bound,
         can_modify=can_modify,
         recommended_action=recommended_action,
+    )
+
+
+def _snapshot_bom_item(item: DeviceBomItem) -> DeviceBomItemSnapshotRead:
+    return DeviceBomItemSnapshotRead(
+        component_type=item.component_type,
+        required_part_number=item.required_part_number,
+        required_revision=item.required_revision,
+        required_drawing_number=item.required_drawing_number,
+        required_drawing_revision=item.required_drawing_revision,
+        quantity_required=item.quantity_required,
+        is_required=item.is_required,
+    )
+
+
+def get_device_bom_template_diff(
+    db: Session,
+    device_type: str,
+    source_version: str,
+    target_version: str,
+) -> DeviceBomTemplateDiffRead:
+    source_template = get_device_bom_template_or_404(db, device_type, source_version)
+    target_template = get_device_bom_template_or_404(db, device_type, target_version)
+
+    source_items = {
+        item.component_type: _snapshot_bom_item(item)
+        for item in repository.list_bom_items_for_template(db, source_template.id)
+    }
+    target_items = {
+        item.component_type: _snapshot_bom_item(item)
+        for item in repository.list_bom_items_for_template(db, target_template.id)
+    }
+
+    added: list[DeviceBomItemSnapshotRead] = []
+    removed: list[DeviceBomItemSnapshotRead] = []
+    modified: list[DeviceBomItemDiffRead] = []
+    unchanged_count = 0
+
+    for component_type in sorted(set(source_items) | set(target_items)):
+        source_item = source_items.get(component_type)
+        target_item = target_items.get(component_type)
+        if source_item is None and target_item is not None:
+            added.append(target_item)
+            continue
+        if source_item is not None and target_item is None:
+            removed.append(source_item)
+            continue
+        if source_item is None or target_item is None:
+            continue
+        if source_item.model_dump() == target_item.model_dump():
+            unchanged_count += 1
+            continue
+        modified.append(
+            DeviceBomItemDiffRead(
+                component_type=component_type,
+                change_type="MODIFIED",
+                source=source_item,
+                target=target_item,
+            )
+        )
+
+    return DeviceBomTemplateDiffRead(
+        device_type=device_type,
+        source_version=source_template.version,
+        target_version=target_template.version,
+        added=added,
+        removed=removed,
+        modified=modified,
+        unchanged_count=unchanged_count,
     )
 
 

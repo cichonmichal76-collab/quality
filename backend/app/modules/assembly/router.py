@@ -9,6 +9,7 @@ from app.schemas import (
     AssemblyScanRequest,
     ComponentCreate,
     ComponentRead,
+    DeviceBomTemplateDiffRead,
     DeviceBomTemplateActivateRequest,
     DeviceBomTemplateCloneRequest,
     DeviceBomTemplatePromoteRequest,
@@ -64,6 +65,19 @@ def get_device_bom_template_usage(
     db: Session = Depends(get_db),
 ):
     return service.get_device_bom_template_usage(db, device_type, version)
+
+
+@router.get(
+    "/device-bom-templates/{device_type}/diff",
+    response_model=DeviceBomTemplateDiffRead,
+)
+def get_device_bom_template_diff(
+    device_type: str,
+    source_version: str,
+    target_version: str,
+    db: Session = Depends(get_db),
+):
+    return service.get_device_bom_template_diff(db, device_type, source_version, target_version)
 
 
 @router.post(

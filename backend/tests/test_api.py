@@ -314,6 +314,98 @@ def test_device_bom_template_usage_reports_mutable_active_template():
     assert payload["recommended_action"] == "modify_in_place"
 
 
+def test_device_bom_template_diff_reports_added_removed_modified_and_unchanged_items():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=True,
+        required_part_number="PCB-CTRL-001",
+        required_revision="A",
+    )
+    source_extra = client.post(
+        f"/api/device-bom-templates/{device_type}/items?version=1.0",
+        json={
+            "component_type": "SENSOR_MODULE",
+            "quantity_required": 1,
+            "is_required": True,
+        },
+    )
+    assert source_extra.status_code == 200
+    unchanged_item = client.post(
+        f"/api/device-bom-templates/{device_type}/items?version=1.0",
+        json={
+            "component_type": "FAN_MODULE",
+            "quantity_required": 1,
+            "is_required": False,
+        },
+    )
+    assert unchanged_item.status_code == 200
+
+    cloned = client.post(
+        f"/api/device-bom-templates/{device_type}/clone",
+        json={
+            "source_version": "1.0",
+            "target_version": "2.0",
+            "activate": False,
+        },
+    )
+    assert cloned.status_code == 200
+
+    updated = client.patch(
+        f"/api/device-bom-templates/{device_type}/items/CONTROL_PCB?version=2.0",
+        json={
+            "required_revision": "B",
+            "quantity_required": 2,
+        },
+    )
+    assert updated.status_code == 200
+
+    removed = client.delete(
+        f"/api/device-bom-templates/{device_type}/items/SENSOR_MODULE?version=2.0",
+    )
+    assert removed.status_code == 200
+
+    added = client.post(
+        f"/api/device-bom-templates/{device_type}/items?version=2.0",
+        json={
+            "component_type": "POWER_SUPPLY",
+            "required_drawing_number": "DWG-PSU-001",
+            "required_drawing_revision": "02",
+            "quantity_required": 1,
+            "is_required": True,
+        },
+    )
+    assert added.status_code == 200
+
+    diff = client.get(
+        f"/api/device-bom-templates/{device_type}/diff"
+        "?source_version=1.0&target_version=2.0"
+    )
+    assert diff.status_code == 200
+    payload = diff.json()
+    assert payload["device_type"] == device_type
+    assert payload["source_version"] == "1.0"
+    assert payload["target_version"] == "2.0"
+    assert payload["unchanged_count"] == 1
+
+    added_rows = {row["component_type"]: row for row in payload["added"]}
+    assert set(added_rows) == {"POWER_SUPPLY"}
+    assert added_rows["POWER_SUPPLY"]["required_drawing_number"] == "DWG-PSU-001"
+
+    removed_rows = {row["component_type"]: row for row in payload["removed"]}
+    assert set(removed_rows) == {"SENSOR_MODULE"}
+
+    modified_rows = {row["component_type"]: row for row in payload["modified"]}
+    assert set(modified_rows) == {"CONTROL_PCB"}
+    assert modified_rows["CONTROL_PCB"]["change_type"] == "MODIFIED"
+    assert modified_rows["CONTROL_PCB"]["source"]["required_revision"] == "A"
+    assert modified_rows["CONTROL_PCB"]["target"]["required_revision"] == "B"
+    assert modified_rows["CONTROL_PCB"]["source"]["quantity_required"] == 1
+    assert modified_rows["CONTROL_PCB"]["target"]["quantity_required"] == 2
+
+
 def test_mutable_bom_item_can_be_updated_and_deleted():
     device_type = unique_id("DT")
     ensure_device_bom_template(

@@ -119,6 +119,33 @@ class DeviceBomItemRead(DeviceBomItemCreate):
     model_config = {"from_attributes": True}
 
 
+class DeviceBomItemSnapshotRead(BaseModel):
+    component_type: str
+    required_part_number: str | None = None
+    required_revision: str | None = None
+    required_drawing_number: str | None = None
+    required_drawing_revision: str | None = None
+    quantity_required: int
+    is_required: bool
+
+
+class DeviceBomItemDiffRead(BaseModel):
+    component_type: str
+    change_type: str
+    source: DeviceBomItemSnapshotRead | None = None
+    target: DeviceBomItemSnapshotRead | None = None
+
+
+class DeviceBomTemplateDiffRead(BaseModel):
+    device_type: str
+    source_version: str
+    target_version: str
+    added: list[DeviceBomItemSnapshotRead]
+    removed: list[DeviceBomItemSnapshotRead]
+    modified: list[DeviceBomItemDiffRead]
+    unchanged_count: int
+
+
 class QcChecklistCreate(BaseModel):
     checklist_code: str
     name: str

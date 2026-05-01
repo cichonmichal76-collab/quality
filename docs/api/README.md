@@ -437,6 +437,12 @@ Odczyt użycia i mutowalności konkretnej wersji BOM:
 curl "http://localhost:8000/api/device-bom-templates/ZSS/usage?version=3.0"
 ```
 
+Porównanie dwóch wersji BOM:
+
+```bash
+curl "http://localhost:8000/api/device-bom-templates/ZSS/diff?source_version=2.0&target_version=3.0"
+```
+
 Edycja pozycji BOM w wersji roboczej:
 
 ```bash
@@ -505,6 +511,7 @@ Reguły assembly:
 - aktywną wersję BOM można też promować do nowej rewizji jednym endpointem, który klonuje pozycje, aktywuje nową wersję i wycofuje starą
 - aktywna wersja BOM, która została już użyta przez urządzenia w montażu, dostaje soft-lock i nie może być dalej rozszerzana; zmiany powinny iść przez `clone` albo `promote`
 - endpoint `usage` zwraca także `recommended_action`, np. `modify_in_place`, `modify_or_activate`, `clone` albo `clone_or_promote`
+- endpoint `diff` zwraca różnice między dwiema wersjami BOM jako `added`, `removed`, `modified` i `unchanged_count`
 - pozycje BOM można edytować i usuwać tylko wtedy, gdy wersja BOM jest jeszcze legalnie modyfikowalna
 
 ## 7. Final test
