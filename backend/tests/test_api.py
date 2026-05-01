@@ -357,6 +357,76 @@ def test_cloned_bom_template_can_be_activated_immediately():
     assert next(row for row in device_templates if row["version"] == "1.0")["status"] == "INACTIVE"
 
 
+def test_active_bom_template_can_be_promoted_in_one_operation():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=True,
+        required_part_number="PCB-CTRL-001",
+    )
+    extra_item = client.post(
+        f"/api/device-bom-templates/{device_type}/items?version=1.0",
+        json={
+            "component_type": "FAN_MODULE",
+            "quantity_required": 2,
+            "is_required": True,
+        },
+    )
+    assert extra_item.status_code == 200
+
+    promoted = client.post(
+        f"/api/device-bom-templates/{device_type}/promote",
+        json={
+            "source_version": "1.0",
+            "target_version": "2.0",
+            "name": "Promoted BOM",
+            "retire_reason": "Production release update",
+        },
+    )
+    assert promoted.status_code == 200
+    assert promoted.json()["version"] == "2.0"
+    assert promoted.json()["status"] == "ACTIVE"
+    assert promoted.json()["is_active"] is True
+    assert promoted.json()["name"] == "Promoted BOM"
+
+    templates = client.get("/api/device-bom-templates")
+    assert templates.status_code == 200
+    device_templates = [row for row in templates.json() if row["device_type"] == device_type]
+    assert len(device_templates) == 2
+    assert next(row for row in device_templates if row["version"] == "1.0")["status"] == "RETIRED"
+    assert next(row for row in device_templates if row["version"] == "1.0")["is_active"] is False
+    assert next(row for row in device_templates if row["version"] == "2.0")["status"] == "ACTIVE"
+
+    promoted_items = client.get(f"/api/device-bom-templates/{device_type}/items?version=2.0")
+    assert promoted_items.status_code == 200
+    promoted_rows = {row["component_type"]: row for row in promoted_items.json()}
+    assert set(promoted_rows) == {"CONTROL_PCB", "FAN_MODULE"}
+    assert promoted_rows["CONTROL_PCB"]["required_part_number"] == "PCB-CTRL-001"
+    assert promoted_rows["FAN_MODULE"]["quantity_required"] == 2
+
+
+def test_only_active_bom_template_can_be_promoted():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=False,
+    )
+
+    promoted = client.post(
+        f"/api/device-bom-templates/{device_type}/promote",
+        json={
+            "source_version": "1.0",
+            "target_version": "2.0",
+        },
+    )
+    assert promoted.status_code == 400
+    assert promoted.json()["detail"] == "Only active BOM template can be promoted"
+
+
 def test_device_bom_template_can_be_retired_and_cannot_be_reactivated():
     device_type = unique_id("DT")
     ensure_device_bom_template(
@@ -538,6 +608,51 @@ def test_device_bom_clone_audit_event_is_recorded():
     )
     assert clone_event["result"] == "INACTIVE"
     assert clone_event["payload"]["copied_item_count"] == 1
+
+
+def test_device_bom_promotion_audit_event_is_recorded():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=True,
+    )
+
+    promoted = client.post(
+        f"/api/device-bom-templates/{device_type}/promote",
+        json={
+            "source_version": "1.0",
+            "target_version": "2.0",
+            "retire_reason": "Release cutover",
+        },
+    )
+    assert promoted.status_code == 200
+
+    template_audit = client.get("/api/audit-events?entity_type=DEVICE_BOM_TEMPLATE")
+    assert template_audit.status_code == 200
+    promote_event = next(
+        row
+        for row in template_audit.json()
+        if row["event_type"] == "DEVICE_BOM_TEMPLATE_PROMOTED"
+        and row["payload"]
+        and row["payload"].get("device_type") == device_type
+        and row["payload"].get("source_version") == "1.0"
+        and row["payload"].get("target_version") == "2.0"
+    )
+    assert promote_event["result"] == "ACTIVE"
+    assert promote_event["payload"]["retire_reason"] == "Release cutover"
+
+    retire_event = next(
+        row
+        for row in template_audit.json()
+        if row["event_type"] == "DEVICE_BOM_TEMPLATE_RETIRED"
+        and row["payload"]
+        and row["payload"].get("device_type") == device_type
+        and row["payload"].get("version") == "1.0"
+        and row["payload"].get("replaced_by_version") == "2.0"
+    )
+    assert retire_event["payload"]["reason"] == "Release cutover"
 
 
 def test_device_bom_item_can_store_part_number_and_revision_rules():

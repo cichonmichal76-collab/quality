@@ -26,7 +26,7 @@ NCR powstaje przy wyniku NOK albo ręcznym zgłoszeniu niezgodności. Krytyczna 
 
 ## Assembly by scan
 
-Montaż urządzenia odbywa się przez skanowanie komponentów. W obecnym MVP backend sprawdza aktywną sesję pracy, status komponentu, zgodność typu z aktywnym BOM, zgodność `part_number`, `revision`, `drawing_number` i `drawing_revision` z regułami BOM, limit ilości z BOM i to, czy część nie jest już użyta w innym urządzeniu. Jeśli dla `device_type` istnieją już wersje BOM, ale żadna nie jest aktywna, nowy montaż jest blokowany do czasu aktywacji kolejnej wersji. Operacyjnie nową wersję można przygotować przez klonowanie poprzedniej rewizji BOM razem z pozycjami, bez ręcznego przepisywania komponentów. Endpoint assembly zapisuje relację device → component, scan event i audit trail.
+Montaż urządzenia odbywa się przez skanowanie komponentów. W obecnym MVP backend sprawdza aktywną sesję pracy, status komponentu, zgodność typu z aktywnym BOM, zgodność `part_number`, `revision`, `drawing_number` i `drawing_revision` z regułami BOM, limit ilości z BOM i to, czy część nie jest już użyta w innym urządzeniu. Jeśli dla `device_type` istnieją już wersje BOM, ale żadna nie jest aktywna, nowy montaż jest blokowany do czasu aktywacji kolejnej wersji. Operacyjnie nową wersję można przygotować przez klonowanie poprzedniej rewizji BOM razem z pozycjami, bez ręcznego przepisywania komponentów, albo przez promocję aktywnej wersji do nowej rewizji w jednym kroku. Endpoint assembly zapisuje relację device → component, scan event i audit trail.
 
 ## Digital device tree
 
@@ -60,7 +60,7 @@ Moduł AR dla serwisanta identyfikuje część lub pozwala ją wskazać z hotspo
 
 ## Audit trail
 
-Każda istotna operacja zapisuje kto, kiedy, gdzie, co zrobił, na jakim obiekcie, z jakim wynikiem. Audit trail jest wymagany dla jakości, serwisu i analizy błędów. Obejmuje to także lifecycle BOM: utworzenie wersji, klonowanie wersji, dodanie pozycji, aktywację, dezaktywację i wycofanie wersji BOM.
+Każda istotna operacja zapisuje kto, kiedy, gdzie, co zrobił, na jakim obiekcie, z jakim wynikiem. Audit trail jest wymagany dla jakości, serwisu i analizy błędów. Obejmuje to także lifecycle BOM: utworzenie wersji, klonowanie wersji, promocję aktywnej wersji, dodanie pozycji, aktywację, dezaktywację i wycofanie wersji BOM.
 
 ## Versioning
 

@@ -73,6 +73,13 @@ class DeviceBomTemplateCloneRequest(BaseModel):
     activate: bool = False
 
 
+class DeviceBomTemplatePromoteRequest(BaseModel):
+    source_version: str
+    target_version: str
+    name: str | None = None
+    retire_reason: str | None = None
+
+
 class DeviceBomItemCreate(BaseModel):
     component_type: str
     required_part_number: str | None = None

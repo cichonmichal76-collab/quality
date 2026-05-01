@@ -405,6 +405,19 @@ curl -X POST http://localhost:8000/api/device-bom-templates/ZSS/clone \
   }'
 ```
 
+Promocja aktywnej wersji BOM do nowej rewizji w jednym kroku:
+
+```bash
+curl -X POST http://localhost:8000/api/device-bom-templates/ZSS/promote \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source_version": "2.0",
+    "target_version": "3.0",
+    "name": "ZSS Default BOM",
+    "retire_reason": "Production release update"
+  }'
+```
+
 Wycofanie wersji BOM:
 
 ```bash
@@ -452,6 +465,7 @@ Reguły assembly:
 - wersja BOM może mieć jawny `status`: `ACTIVE`, `INACTIVE` albo `RETIRED`
 - wersja `RETIRED` jest niemodyfikowalna; nie można dodawać do niej nowych pozycji BOM
 - nową wersję BOM można utworzyć przez klonowanie istniejącej wersji wraz z kompletem pozycji i opcjonalną natychmiastową aktywacją
+- aktywną wersję BOM można też promować do nowej rewizji jednym endpointem, który klonuje pozycje, aktywuje nową wersję i wycofuje starą
 
 ## 7. Final test
 
@@ -514,6 +528,7 @@ Audit obejmuje także lifecycle BOM:
 - `DEVICE_BOM_TEMPLATE_DEACTIVATED`
 - `DEVICE_BOM_TEMPLATE_RETIRED`
 - `DEVICE_BOM_TEMPLATE_CLONED`
+- `DEVICE_BOM_TEMPLATE_PROMOTED`
 - `DEVICE_BOM_ITEM_ADDED`
 
 Filtrowanie po work session:

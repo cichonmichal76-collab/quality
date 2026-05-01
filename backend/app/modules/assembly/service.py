@@ -21,6 +21,7 @@ from app.schemas import (
     ComponentCreate,
     DeviceBomTemplateActivateRequest,
     DeviceBomTemplateCloneRequest,
+    DeviceBomTemplatePromoteRequest,
     DeviceBomItemCreate,
     DeviceBomTemplateCreate,
     DeviceBomTemplateRetireRequest,
@@ -389,6 +390,74 @@ def clone_device_bom_template(
             },
         )
 
+    db.commit()
+    db.refresh(cloned_template)
+    return cloned_template
+
+
+def promote_device_bom_template(
+    db: Session,
+    device_type: str,
+    payload: DeviceBomTemplatePromoteRequest,
+) -> DeviceBomTemplate:
+    source_template = get_device_bom_template_or_404(db, device_type, payload.source_version)
+    if source_template.status != "ACTIVE":
+        raise HTTPException(status_code=400, detail="Only active BOM template can be promoted")
+
+    cloned_template = clone_device_bom_template(
+        db,
+        device_type,
+        DeviceBomTemplateCloneRequest(
+            source_version=payload.source_version,
+            target_version=payload.target_version,
+            name=payload.name,
+            activate=True,
+        ),
+    )
+
+    refreshed_source = get_device_bom_template_or_404(db, device_type, payload.source_version)
+    refreshed_source.is_active = False
+    refreshed_source.status = "RETIRED"
+    retire_reason = payload.retire_reason or f"Promoted to version {cloned_template.version}"
+    record_audit_event(
+        db,
+        event_type="DEVICE_BOM_TEMPLATE_RETIRED",
+        entity_type="DEVICE_BOM_TEMPLATE",
+        entity_id=refreshed_source.id,
+        result=refreshed_source.status,
+        message=(
+            f"Retired BOM template {refreshed_source.device_type} "
+            f"v{refreshed_source.version} after promotion"
+        ),
+        payload={
+            "device_type": refreshed_source.device_type,
+            "version": refreshed_source.version,
+            "status": refreshed_source.status,
+            "reason": retire_reason,
+            "replaced_by_template_id": cloned_template.id,
+            "replaced_by_version": cloned_template.version,
+        },
+    )
+    record_audit_event(
+        db,
+        event_type="DEVICE_BOM_TEMPLATE_PROMOTED",
+        entity_type="DEVICE_BOM_TEMPLATE",
+        entity_id=cloned_template.id,
+        result=cloned_template.status,
+        message=(
+            f"Promoted BOM template {source_template.device_type} "
+            f"from v{source_template.version} to v{cloned_template.version}"
+        ),
+        payload={
+            "device_type": cloned_template.device_type,
+            "source_template_id": refreshed_source.id,
+            "source_version": refreshed_source.version,
+            "target_template_id": cloned_template.id,
+            "target_version": cloned_template.version,
+            "retire_reason": retire_reason,
+            "status": cloned_template.status,
+        },
+    )
     db.commit()
     db.refresh(cloned_template)
     return cloned_template

@@ -198,6 +198,7 @@ Najważniejsze reguły:
 - wersja `DeviceBomTemplate` ma jawny status lifecycle: `ACTIVE`, `INACTIVE` albo `RETIRED`
 - wersja `RETIRED` jest niemodyfikowalna i może być używana dalej tylko przez urządzenia już wcześniej przypięte do tej wersji
 - nowa wersja `DeviceBomTemplate` może powstać przez klonowanie istniejącej wersji razem z kompletem pozycji BOM
+- aktywna wersja `DeviceBomTemplate` może zostać promowana do nowej rewizji jako operacja biznesowa łącząca klonowanie, aktywację i wycofanie poprzedniej wersji
 
 Stan implementacji:
 
@@ -526,6 +527,7 @@ Zdarzenie audytowe obejmujące także administracyjny lifecycle BOM:
 
 - utworzenie wersji BOM
 - klonowanie wersji BOM
+- promocję aktywnej wersji BOM do nowej rewizji
 - dodanie pozycji BOM
 - aktywację wersji BOM
 - dezaktywację poprzednio aktywnej wersji BOM

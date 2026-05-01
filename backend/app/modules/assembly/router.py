@@ -11,6 +11,7 @@ from app.schemas import (
     ComponentRead,
     DeviceBomTemplateActivateRequest,
     DeviceBomTemplateCloneRequest,
+    DeviceBomTemplatePromoteRequest,
     DeviceBomItemCreate,
     DeviceBomItemRead,
     DeviceBomTemplateCreate,
@@ -85,6 +86,18 @@ def clone_device_bom_template(
     db: Session = Depends(get_db),
 ):
     return service.clone_device_bom_template(db, device_type, payload)
+
+
+@router.post(
+    "/device-bom-templates/{device_type}/promote",
+    response_model=DeviceBomTemplateRead,
+)
+def promote_device_bom_template(
+    device_type: str,
+    payload: DeviceBomTemplatePromoteRequest,
+    db: Session = Depends(get_db),
+):
+    return service.promote_device_bom_template(db, device_type, payload)
 
 
 @router.post(
