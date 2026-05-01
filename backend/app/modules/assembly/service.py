@@ -24,9 +24,11 @@ from app.schemas import (
     DeviceBomTemplateCoverageRead,
     DeviceBomItemDiffRead,
     DeviceBomTemplateActivateRequest,
+    DeviceBomTemplateApproveRequest,
     DeviceBomTemplateCloneRequest,
     DeviceBomItemSnapshotRead,
     DeviceBomTemplatePromoteRequest,
+    DeviceBomTemplateReleaseRequest,
     DeviceBomItemCreate,
     DeviceBomItemUpdate,
     DeviceBomTemplateCreate,
@@ -201,6 +203,7 @@ def get_device_bom_template_usage(
         version=template.version,
         status=template.status,
         is_active=template.is_active,
+        is_approved=template.approved_at is not None,
         bound_device_count=bound_device_count,
         is_bound=is_bound,
         can_modify=can_modify,
@@ -227,6 +230,7 @@ def _evaluate_bom_template_readiness(
         version=template.version,
         status=template.status,
         is_active=template.is_active,
+        is_approved=template.approved_at is not None,
         item_count=item_count,
         required_item_count=required_item_count,
         has_any_items=item_count > 0,
@@ -383,6 +387,85 @@ def _ensure_bom_template_can_be_activated(
             + "; ".join(readiness.blocking_reasons)
         ),
     )
+
+
+def approve_device_bom_template(
+    db: Session,
+    device_type: str,
+    payload: DeviceBomTemplateApproveRequest,
+    variant_code: str = "DEFAULT",
+) -> DeviceBomTemplate:
+    template = get_device_bom_template_or_404(db, device_type, payload.version, variant_code)
+    if template.status == "RETIRED":
+        raise HTTPException(status_code=400, detail="Retired BOM template cannot be approved")
+    template.approved_by = payload.approved_by
+    template.approved_at = utc_now()
+    template.release_note = payload.release_note
+    record_audit_event(
+        db,
+        event_type="DEVICE_BOM_TEMPLATE_APPROVED",
+        entity_type="DEVICE_BOM_TEMPLATE",
+        entity_id=template.id,
+        result=template.status,
+        message=f"Approved BOM template {template.device_type} v{template.version}",
+        payload={
+            "device_type": template.device_type,
+            "variant_code": template.variant_code,
+            "version": template.version,
+            "approved_by": template.approved_by,
+            "approved_at": template.approved_at.isoformat() if template.approved_at else None,
+            "release_note": template.release_note,
+        },
+    )
+    db.commit()
+    db.refresh(template)
+    return template
+
+
+def release_device_bom_template(
+    db: Session,
+    device_type: str,
+    payload: DeviceBomTemplateReleaseRequest,
+    variant_code: str = "DEFAULT",
+) -> DeviceBomTemplate:
+    template = approve_device_bom_template(
+        db,
+        device_type,
+        DeviceBomTemplateApproveRequest(
+            version=payload.version,
+            approved_by=payload.approved_by,
+            release_note=payload.release_note,
+        ),
+        variant_code,
+    )
+    if not template.is_active:
+        template = activate_device_bom_template(
+            db,
+            device_type,
+            DeviceBomTemplateActivateRequest(version=payload.version),
+            variant_code,
+        )
+    record_audit_event(
+        db,
+        event_type="DEVICE_BOM_TEMPLATE_RELEASED",
+        entity_type="DEVICE_BOM_TEMPLATE",
+        entity_id=template.id,
+        result=template.status,
+        message=f"Released BOM template {template.device_type} v{template.version}",
+        payload={
+            "device_type": template.device_type,
+            "variant_code": template.variant_code,
+            "version": template.version,
+            "approved_by": template.approved_by,
+            "approved_at": template.approved_at.isoformat() if template.approved_at else None,
+            "release_note": template.release_note,
+            "status": template.status,
+            "is_active": template.is_active,
+        },
+    )
+    db.commit()
+    db.refresh(template)
+    return template
 
 
 def _snapshot_bom_item(item: DeviceBomItem) -> DeviceBomItemSnapshotRead:
@@ -623,6 +706,9 @@ def clone_device_bom_template(
         version=payload.target_version,
         is_active=payload.activate,
         status="ACTIVE" if payload.activate else "INACTIVE",
+        approved_by=None,
+        approved_at=None,
+        release_note=None,
     )
     db.add(cloned_template)
     db.flush()

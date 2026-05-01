@@ -664,6 +664,71 @@ def test_variant_device_falls_back_to_default_bom_when_specific_variant_is_missi
     assert rows[device_serial_number]["bom_variant_code"] == "DEFAULT"
 
 
+def test_device_bom_template_can_be_approved_with_release_metadata():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=False,
+        variant_code="DEFAULT",
+    )
+
+    approved = client.post(
+        f"/api/device-bom-templates/{device_type}/approve?variant_code=DEFAULT",
+        json={
+            "version": "1.0",
+            "approved_by": "QA-LEAD",
+            "release_note": "Checked for pilot release",
+        },
+    )
+    assert approved.status_code == 200
+    payload = approved.json()
+    assert payload["approved_by"] == "QA-LEAD"
+    assert payload["approved_at"] is not None
+    assert payload["release_note"] == "Checked for pilot release"
+    assert payload["is_active"] is False
+
+    usage = client.get(
+        f"/api/device-bom-templates/{device_type}/usage?version=1.0&variant_code=DEFAULT"
+    )
+    assert usage.status_code == 200
+    assert usage.json()["is_approved"] is True
+
+
+def test_device_bom_template_can_be_released_and_activated():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=False,
+        variant_code="DEFAULT",
+    )
+
+    released = client.post(
+        f"/api/device-bom-templates/{device_type}/release?variant_code=DEFAULT",
+        json={
+            "version": "1.0",
+            "approved_by": "ENG-MFG",
+            "release_note": "Approved for release line A",
+        },
+    )
+    assert released.status_code == 200
+    payload = released.json()
+    assert payload["is_active"] is True
+    assert payload["status"] == "ACTIVE"
+    assert payload["approved_by"] == "ENG-MFG"
+    assert payload["approved_at"] is not None
+    assert payload["release_note"] == "Approved for release line A"
+
+    readiness = client.get(
+        f"/api/device-bom-templates/{device_type}/readiness?version=1.0&variant_code=DEFAULT"
+    )
+    assert readiness.status_code == 200
+    assert readiness.json()["is_approved"] is True
+
+
 def test_device_bom_template_diff_reports_added_removed_modified_and_unchanged_items():
     device_type = unique_id("DT")
     ensure_device_bom_template(

@@ -59,6 +59,9 @@ class DeviceBomTemplate(Base):
     version: Mapped[str] = mapped_column(String, default="1.0")
     status: Mapped[str] = mapped_column(String, default="ACTIVE")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    approved_by: Mapped[str | None] = mapped_column(String, nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    release_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
 

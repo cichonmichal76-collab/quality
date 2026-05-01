@@ -457,6 +457,30 @@ Odczyt kompletności powiązanych urządzeń względem wersji BOM:
 curl "http://localhost:8000/api/device-bom-templates/ZSS/coverage?version=3.0&variant_code=DEFAULT"
 ```
 
+Zatwierdzenie wersji BOM z metadanymi release:
+
+```bash
+curl -X POST "http://localhost:8000/api/device-bom-templates/ZSS/approve?variant_code=DEFAULT" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "version": "3.0",
+    "approved_by": "QA-LEAD",
+    "release_note": "Checked for pilot release"
+  }'
+```
+
+Release wersji BOM, czyli approval plus aktywacja w jednym kroku:
+
+```bash
+curl -X POST "http://localhost:8000/api/device-bom-templates/ZSS/release?variant_code=DEFAULT" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "version": "3.0",
+    "approved_by": "ENG-MFG",
+    "release_note": "Approved for release line A"
+  }'
+```
+
 Porównanie dwóch wersji BOM:
 
 ```bash
@@ -534,6 +558,7 @@ Reguły assembly:
 - endpoint `usage` zwraca także `recommended_action`, np. `modify_in_place`, `modify_or_activate`, `clone` albo `clone_or_promote`
 - endpoint `bindings` zwraca konkretne urządzenia przypięte do wersji BOM wraz z `installed_component_count` i czasem pierwszego związania
 - endpoint `coverage` zwraca dla tych urządzeń kompletność względem BOM, w tym `missing_required_components` i status per komponent
+- endpointy `approve` i `release` pozwalają zapisać metadane zatwierdzenia BOM i użyć ich jako jawnej ścieżki wejścia wersji do produkcji
 - endpoint `readiness` zwraca, czy dana wersja ma zdefiniowane pozycje i co najmniej jedną pozycję wymaganą przed aktywacją
 - endpoint `diff` zwraca różnice między dwiema wersjami BOM jako `added`, `removed`, `modified` i `unchanged_count`
 - `READY_FOR_SHIPMENT` jest blokowany nie tylko przy brakujących komponentach, ale też przy nadmiarowych i nieoczekiwanych komponentach względem aktywnego albo przypiętego BOM

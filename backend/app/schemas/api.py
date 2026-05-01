@@ -54,6 +54,9 @@ class DeviceBomTemplateCreate(BaseModel):
 class DeviceBomTemplateRead(DeviceBomTemplateCreate):
     id: str
     status: str
+    approved_by: str | None = None
+    approved_at: datetime | None = None
+    release_note: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -66,6 +69,7 @@ class DeviceBomTemplateUsageRead(BaseModel):
     version: str
     status: str
     is_active: bool
+    is_approved: bool
     bound_device_count: int
     is_bound: bool
     can_modify: bool
@@ -79,6 +83,7 @@ class DeviceBomTemplateReadinessRead(BaseModel):
     version: str
     status: str
     is_active: bool
+    is_approved: bool
     item_count: int
     required_item_count: int
     has_any_items: bool
@@ -122,6 +127,18 @@ class DeviceBomTemplateCoverageRead(BaseModel):
 
 class DeviceBomTemplateActivateRequest(BaseModel):
     version: str = Field(pattern=r"^\d+(?:\.\d+)*$")
+
+
+class DeviceBomTemplateApproveRequest(BaseModel):
+    version: str = Field(pattern=r"^\d+(?:\.\d+)*$")
+    approved_by: str
+    release_note: str | None = None
+
+
+class DeviceBomTemplateReleaseRequest(BaseModel):
+    version: str = Field(pattern=r"^\d+(?:\.\d+)*$")
+    approved_by: str
+    release_note: str | None = None
 
 
 class DeviceBomTemplateRetireRequest(BaseModel):

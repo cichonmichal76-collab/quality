@@ -13,8 +13,10 @@ from app.schemas import (
     DeviceBomTemplateCoverageRead,
     DeviceBomTemplateDiffRead,
     DeviceBomTemplateActivateRequest,
+    DeviceBomTemplateApproveRequest,
     DeviceBomTemplateCloneRequest,
     DeviceBomTemplatePromoteRequest,
+    DeviceBomTemplateReleaseRequest,
     DeviceBomItemCreate,
     DeviceBomItemUpdate,
     DeviceBomItemRead,
@@ -141,6 +143,32 @@ def activate_device_bom_template(
     db: Session = Depends(get_db),
 ):
     return service.activate_device_bom_template(db, device_type, payload, variant_code)
+
+
+@router.post(
+    "/device-bom-templates/{device_type}/approve",
+    response_model=DeviceBomTemplateRead,
+)
+def approve_device_bom_template(
+    device_type: str,
+    payload: DeviceBomTemplateApproveRequest,
+    variant_code: str = "DEFAULT",
+    db: Session = Depends(get_db),
+):
+    return service.approve_device_bom_template(db, device_type, payload, variant_code)
+
+
+@router.post(
+    "/device-bom-templates/{device_type}/release",
+    response_model=DeviceBomTemplateRead,
+)
+def release_device_bom_template(
+    device_type: str,
+    payload: DeviceBomTemplateReleaseRequest,
+    variant_code: str = "DEFAULT",
+    db: Session = Depends(get_db),
+):
+    return service.release_device_bom_template(db, device_type, payload, variant_code)
 
 
 @router.post(
