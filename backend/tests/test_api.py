@@ -3880,6 +3880,100 @@ def test_shipment_readiness_queue_can_filter_by_primary_blocking_code():
     assert payload["devices"][0]["primary_blocking_code"] == "FINAL_TEST_NOT_PASSED"
 
 
+def test_shipment_readiness_queue_can_sort_by_priority():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(device_type, component_type="CONTROL_PCB")
+
+    assembly_serial_number = unique_id("DEV")
+    ncr_serial_number = unique_id("DEV")
+    ready_serial_number = unique_id("DEV")
+
+    for serial_number in [assembly_serial_number, ncr_serial_number, ready_serial_number]:
+        created = client.post(
+            "/api/devices",
+            json={"device_serial_number": serial_number, "device_type": device_type},
+        )
+        assert created.status_code == 200
+
+    production_session = start_work_session(role="PRODUCTION_OPERATOR")
+    ncr_item = create_qc_passed_item(production_session, item_type="CONTROL_PCB")
+    ready_item = create_qc_passed_item(production_session, item_type="CONTROL_PCB")
+
+    ncr_install = client.post(
+        f"/api/devices/{ncr_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": ncr_item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": production_session["work_session_id"],
+        },
+    )
+    assert ncr_install.status_code == 200
+
+    ready_install = client.post(
+        f"/api/devices/{ready_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": ready_item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": production_session["work_session_id"],
+        },
+    )
+    assert ready_install.status_code == 200
+
+    final_test_session = start_work_session(role="FINAL_TEST_OPERATOR")
+    ncr_final_test = client.post(
+        "/api/final-tests",
+        json={
+            "test_run_id": unique_id("FT"),
+            "device_serial_number": ncr_serial_number,
+            "result": "PASS",
+            "firmware_version": "1.2.4",
+            "bootloader_version": "0.9.8",
+            "work_session_id": final_test_session["work_session_id"],
+        },
+    )
+    assert ncr_final_test.status_code == 200
+
+    ready_final_test = client.post(
+        "/api/final-tests",
+        json={
+            "test_run_id": unique_id("FT"),
+            "device_serial_number": ready_serial_number,
+            "result": "PASS",
+            "firmware_version": "1.2.4",
+            "bootloader_version": "0.9.8",
+            "work_session_id": final_test_session["work_session_id"],
+        },
+    )
+    assert ready_final_test.status_code == 200
+
+    ncr = client.post(
+        "/api/nonconformities",
+        json={
+            "ncr_id": unique_id("NCR"),
+            "device_serial_number": ncr_serial_number,
+            "process_stage": "FINAL_TEST",
+            "description": "Critical blocker",
+            "severity": "CRITICAL",
+            "detected_by": "pytest",
+        },
+    )
+    assert ncr.status_code == 200
+
+    queue = client.get(f"/api/shipment-readiness?device_type={device_type}&sort_by=priority")
+    assert queue.status_code == 200
+    payload = queue.json()
+    assert payload["filters"]["sort_by"] == "priority"
+    assert payload["filters"]["sort_desc"] is None
+    assert [row["device_serial_number"] for row in payload["devices"]] == [
+        ncr_serial_number,
+        assembly_serial_number,
+        ready_serial_number,
+    ]
+    assert payload["devices"][0]["primary_blocking_code"] == "CRITICAL_OPEN_NCR"
+    assert payload["devices"][1]["primary_blocking_code"] == "BOM_REQUIRED_COMPONENTS_MISSING"
+    assert payload["devices"][2]["primary_blocking_code"] is None
+
+
 def test_shipment_readiness_queue_rejects_conflicting_filters():
     response = client.get("/api/shipment-readiness?only_blocked=true&only_ready=true")
     assert response.status_code == 400
@@ -3898,6 +3992,12 @@ def test_shipment_readiness_queue_rejects_primary_blocking_code_with_only_ready(
     )
     assert response.status_code == 400
     assert response.json()["detail"] == "primary_blocking_code cannot be combined with only_ready"
+
+
+def test_shipment_readiness_queue_rejects_unsupported_sort_by():
+    response = client.get("/api/shipment-readiness?sort_by=unsupported")
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Unsupported sort_by value"
 
 
 def test_shipment_readiness_queue_rejects_incompatible_recommended_action_filters():

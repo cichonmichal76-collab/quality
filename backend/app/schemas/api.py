@@ -252,6 +252,8 @@ class DeviceShipmentReadinessRead(BaseModel):
     device_type: str
     device_variant_code: str
     production_status: str
+    device_created_at: datetime
+    device_updated_at: datetime
     final_test_passed: bool
     has_critical_open_ncr: bool
     critical_open_ncr_ids: list[str]

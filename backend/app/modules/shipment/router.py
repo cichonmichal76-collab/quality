@@ -17,6 +17,8 @@ def list_device_shipment_readiness(
     recommended_action: str | None = None,
     only_blocked: bool = False,
     only_ready: bool = False,
+    sort_by: str = "created_at",
+    sort_desc: bool | None = None,
     limit: int = 100,
     db: Session = Depends(get_db),
 ):
@@ -29,6 +31,8 @@ def list_device_shipment_readiness(
         recommended_action=recommended_action,
         only_blocked=only_blocked,
         only_ready=only_ready,
+        sort_by=sort_by,
+        sort_desc=sort_desc,
         limit=limit,
     )
 

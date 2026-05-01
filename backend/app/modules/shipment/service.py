@@ -31,6 +31,7 @@ ACTIVATE_OR_CONFIGURE_BOM_ACTION = "ACTIVATE_OR_CONFIGURE_BOM"
 FIX_ASSEMBLY_MISMATCH_ACTION = "FIX_ASSEMBLY_MISMATCH"
 COMPLETE_ASSEMBLY_ACTION = "COMPLETE_ASSEMBLY"
 RUN_FINAL_TEST_ACTION = "RUN_FINAL_TEST"
+VALID_QUEUE_SORT_FIELDS = {"created_at", "device_serial_number", "priority", "recommended_action"}
 
 
 def get_device_or_404(db: Session, serial_number: str) -> Device:
@@ -134,6 +135,13 @@ def _build_bom_shipment_blocking_checks(
 def _pick_primary_blocking_code(
     blocking_checks: list[DeviceShipmentBlockingCheckRead],
 ) -> str | None:
+    blocking_codes = [check.code for check in blocking_checks if check.is_blocking]
+    if not blocking_codes:
+        return None
+    return min(blocking_codes, key=lambda code: (_blocking_priority_value(code), code))
+
+
+def _blocking_priority_value(code: str | None) -> int:
     priority = {
         CRITICAL_OPEN_NCR_CODE: 0,
         BOM_TEMPLATE_NOT_EFFECTIVE_CODE: 1,
@@ -142,10 +150,9 @@ def _pick_primary_blocking_code(
         BOM_REQUIRED_COMPONENTS_MISSING_CODE: 3,
         FINAL_TEST_NOT_PASSED_CODE: 4,
     }
-    blocking_codes = [check.code for check in blocking_checks if check.is_blocking]
-    if not blocking_codes:
-        return None
-    return min(blocking_codes, key=lambda code: (priority.get(code, 99), code))
+    if code is None:
+        return 99
+    return priority.get(code, 99)
 
 
 def _primary_blocking_message(
@@ -216,6 +223,8 @@ def _build_device_shipment_readiness(db: Session, device: Device) -> DeviceShipm
         device_type=device.device_type,
         device_variant_code=device.variant_code,
         production_status=device.production_status,
+        device_created_at=device.created_at,
+        device_updated_at=device.updated_at,
         final_test_passed=final_test_passed,
         has_critical_open_ncr=has_critical_open_ncr,
         critical_open_ncr_ids=critical_open_ncr_ids,
@@ -296,6 +305,46 @@ def _build_recommended_action_summary(
     ]
 
 
+def _sort_shipment_readiness_rows(
+    readiness_rows: list[DeviceShipmentReadinessRead],
+    *,
+    sort_by: str,
+    sort_desc: bool | None,
+) -> list[DeviceShipmentReadinessRead]:
+    if sort_by not in VALID_QUEUE_SORT_FIELDS:
+        raise HTTPException(status_code=400, detail="Unsupported sort_by value")
+
+    effective_sort_desc = sort_desc if sort_desc is not None else sort_by == "created_at"
+
+    if sort_by == "created_at":
+        return sorted(
+            readiness_rows,
+            key=lambda row: (row.device_created_at, row.device_serial_number),
+            reverse=effective_sort_desc,
+        )
+    if sort_by == "device_serial_number":
+        return sorted(
+            readiness_rows,
+            key=lambda row: row.device_serial_number,
+            reverse=effective_sort_desc,
+        )
+    if sort_by == "recommended_action":
+        return sorted(
+            readiness_rows,
+            key=lambda row: (row.recommended_action, row.device_serial_number),
+            reverse=effective_sort_desc,
+        )
+    return sorted(
+        readiness_rows,
+        key=lambda row: (
+            _blocking_priority_value(row.primary_blocking_code),
+            row.device_created_at,
+            row.device_serial_number,
+        ),
+        reverse=effective_sort_desc,
+    )
+
+
 def list_device_shipment_readiness(
     db: Session,
     *,
@@ -306,6 +355,8 @@ def list_device_shipment_readiness(
     recommended_action: str | None = None,
     only_blocked: bool = False,
     only_ready: bool = False,
+    sort_by: str = "created_at",
+    sort_desc: bool | None = None,
     limit: int = 100,
 ) -> DeviceShipmentQueueRead:
     if only_blocked and only_ready:
@@ -361,6 +412,11 @@ def list_device_shipment_readiness(
         readiness_rows = [
             row for row in readiness_rows if row.recommended_action == recommended_action
         ]
+    readiness_rows = _sort_shipment_readiness_rows(
+        readiness_rows,
+        sort_by=sort_by,
+        sort_desc=sort_desc,
+    )
 
     ready_count = sum(1 for row in readiness_rows if row.can_transition_to_ready_for_shipment)
     blocked_count = len(readiness_rows) - ready_count
@@ -377,6 +433,8 @@ def list_device_shipment_readiness(
             "recommended_action": recommended_action,
             "only_blocked": only_blocked,
             "only_ready": only_ready,
+            "sort_by": sort_by,
+            "sort_desc": sort_desc,
             "limit": limit,
         },
         blocking_summary=_build_blocking_summary(readiness_rows),
