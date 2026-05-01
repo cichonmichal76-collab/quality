@@ -4282,6 +4282,17 @@ def test_component_quality_queue_supports_summary_and_filters():
         [qc_gap_component_serial, ncr_component_serial]
     )
 
+    gate_sorted = client.get(
+        f"/api/component-quality?device_type={queue_device_type}&sort_by=passes_component_quality_gate"
+    )
+    assert gate_sorted.status_code == 200
+    gate_sorted_rows = gate_sorted.json()["devices"]
+    assert gate_sorted_rows[0]["passes_component_quality_gate"] is True
+    assert [row["passes_component_quality_gate"] for row in gate_sorted_rows[1:]] == [
+        False,
+        False,
+    ]
+
     created_sorted = client.get(
         f"/api/component-quality?device_type={queue_device_type}&sort_by=created_at"
     )

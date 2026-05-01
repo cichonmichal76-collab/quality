@@ -59,6 +59,7 @@ VALID_COMPONENT_QUALITY_SORT_FIELDS = {
     "updated_at",
     "device_serial_number",
     "blocked_components",
+    "passes_component_quality_gate",
     "production_status",
     "primary_blocking_component_type",
     "primary_blocking_component_serial_number",
@@ -694,6 +695,15 @@ def _sort_component_quality_rows(
         return sorted(
             quality_rows,
             key=lambda row: (row.production_status, row.device_serial_number),
+            reverse=effective_sort_desc,
+        )
+    if sort_by == "passes_component_quality_gate":
+        return sorted(
+            quality_rows,
+            key=lambda row: (
+                not row.passes_component_quality_gate,
+                row.device_serial_number,
+            ),
             reverse=effective_sort_desc,
         )
     if sort_by == "primary_blocking_component_type":
