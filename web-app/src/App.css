@@ -469,6 +469,34 @@ td span {
   font-weight: 800;
 }
 
+.table-row-selected td {
+  background: rgb(34 107 95 / 6%);
+}
+
+.row-link {
+  border: 0;
+  background: transparent;
+  color: var(--accent-strong);
+  padding: 0;
+  font: inherit;
+  font-family: "Cascadia Mono", "Consolas", monospace;
+  font-weight: 800;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: rgb(23 79 71 / 28%);
+  text-underline-offset: 0.18em;
+}
+
+.row-link.is-selected {
+  color: var(--accent);
+}
+
+.row-link:focus-visible {
+  outline: 2px solid rgb(34 107 95 / 40%);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
 .pill {
   display: inline-flex;
   align-items: center;
@@ -512,6 +540,167 @@ td span {
   padding: 7px 10px;
   font-size: 0.78rem;
   font-weight: 900;
+}
+
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  border: 0;
+  background: rgb(23 32 27 / 34%);
+  padding: 0;
+}
+
+.details-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 21;
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  width: min(560px, 100vw);
+  height: 100vh;
+  overflow-y: auto;
+  border-left: 1px solid rgb(23 32 27 / 12%);
+  background: linear-gradient(180deg, #fffaf0 0%, #f7f1e6 100%);
+  box-shadow: -20px 0 60px rgb(23 32 27 / 18%);
+  padding: 22px 20px 28px;
+}
+
+.details-drawer-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.details-drawer-header h2 {
+  margin: 0;
+  font-family: "Bahnschrift", "Aptos", sans-serif;
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.details-subtitle {
+  margin: 8px 0 0;
+  color: var(--muted);
+}
+
+.details-content {
+  display: grid;
+  gap: 16px;
+}
+
+.details-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.detail-card,
+.detail-key-card,
+.detail-inline-card,
+.detail-component-card,
+.detail-history-card,
+.details-section {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgb(255 255 255 / 88%);
+  box-shadow: 0 12px 30px rgb(38 31 22 / 7%);
+}
+
+.detail-card,
+.detail-key-card {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+}
+
+.detail-card span,
+.detail-key-card span {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.detail-card strong,
+.detail-key-card strong {
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+.details-section {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.details-section h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.details-key-grid,
+.detail-inline-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.details-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.detail-inline-card,
+.detail-component-card,
+.detail-history-card {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+}
+
+.detail-inline-card p,
+.detail-history-card p,
+.detail-component-card strong,
+.detail-component-card span,
+.detail-history-card span {
+  margin: 0;
+}
+
+.detail-inline-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.detail-component-list,
+.detail-history-list {
+  display: grid;
+  gap: 12px;
+}
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag-list.is-compact {
+  gap: 6px;
+}
+
+.tag-chip {
+  border-radius: 999px;
+  background: rgb(34 107 95 / 10%);
+  color: var(--accent-strong);
+  padding: 5px 10px;
+  font-size: 0.8rem;
+  font-weight: 700;
 }
 
 .empty-state {
@@ -566,7 +755,10 @@ td span {
   .hero,
   .filters-grid,
   .metrics-grid,
-  .summary-grid {
+   .summary-grid,
+   .details-grid,
+   .details-key-grid,
+   .detail-inline-grid {
     grid-template-columns: 1fr 1fr;
   }
 
@@ -584,7 +776,10 @@ td span {
   .hero,
   .filters-grid,
   .metrics-grid,
-  .summary-grid {
+   .summary-grid,
+   .details-grid,
+   .details-key-grid,
+   .detail-inline-grid {
     grid-template-columns: 1fr;
   }
 
@@ -612,6 +807,15 @@ td span {
 
   .pagination-bar {
     align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .details-drawer {
+    width: 100vw;
+    padding: 18px 16px 24px;
+  }
+
+  .details-drawer-header {
     flex-direction: column;
   }
 

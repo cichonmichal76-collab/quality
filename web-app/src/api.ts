@@ -33,13 +33,43 @@ export interface DeviceShipmentLatestDecision {
   created_at: string;
 }
 
+export interface DeviceBomComponentCoverage {
+  component_type: string;
+  substitution_group: string | null;
+  allowed_component_types: string[] | null;
+  required_quantity: number;
+  installed_quantity: number;
+  is_required: boolean;
+  status: string;
+}
+
 export interface DeviceBomCompliance {
+  device_serial_number?: string;
+  device_type?: string;
+  device_variant_code?: string;
+  production_status?: string;
+  resolution_source?: string;
+  resolved_template_id?: string | null;
+  resolved_variant_code?: string | null;
+  resolved_version?: string | null;
+  resolved_status?: string | null;
+  resolved_is_active?: boolean;
+  resolved_is_effective_now?: boolean;
+  is_bom_resolved?: boolean;
   passes_bom_gate: boolean;
   installed_component_count: number;
   missing_required_components: string[];
   over_installed_components: string[];
   unexpected_component_types: string[];
+  component_coverage?: DeviceBomComponentCoverage[];
   blocking_reason: string | null;
+}
+
+export interface DeviceShipmentBlockingCheck {
+  code: string;
+  is_blocking: boolean;
+  message: string | null;
+  details: string[];
 }
 
 export interface DeviceShipmentReadiness {
@@ -59,6 +89,7 @@ export interface DeviceShipmentReadiness {
   primary_blocking_message: string | null;
   recommended_action: string;
   blocking_reasons: string[];
+  blocking_checks?: DeviceShipmentBlockingCheck[];
 }
 
 export interface DeviceShipmentQueue {
@@ -106,6 +137,22 @@ export interface DeviceComponentTypeSummary {
   device_count: number;
 }
 
+export interface DeviceInstalledComponentQuality {
+  component_serial_number: string;
+  component_type: string;
+  child_barcode_value: string;
+  installed_at: string;
+  installed_by: string | null;
+  workstation_id: string | null;
+  bom_template_id: string | null;
+  bom_version: string | null;
+  component_qc_passed: boolean;
+  has_critical_open_ncr: boolean;
+  critical_open_ncr_ids: string[];
+  blocks_shipment: boolean;
+  quality_status: string;
+}
+
 export interface DeviceComponentQuality {
   device_serial_number: string;
   device_type: string;
@@ -122,6 +169,22 @@ export interface DeviceComponentQuality {
   primary_blocking_component_type: string | null;
   primary_blocking_component_serial_number: string | null;
   recommended_action: string;
+  components?: DeviceInstalledComponentQuality[];
+}
+
+export interface AuditEvent {
+  id: string;
+  event_type: string;
+  entity_type: string;
+  entity_id: string;
+  work_session_id: string | null;
+  operator_id: string | null;
+  workstation_id: string | null;
+  machine_id: string | null;
+  result: string | null;
+  message: string | null;
+  payload: Record<string, unknown> | null;
+  created_at: string;
 }
 
 export interface DeviceComponentQualityQueue {

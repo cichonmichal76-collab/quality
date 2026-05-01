@@ -8,6 +8,7 @@ import {
   optionalBoolean,
 } from "./api";
 import type {
+  AuditEvent,
   DashboardMode,
   DeviceComponentQuality,
   DeviceComponentQualityQueue,
@@ -129,6 +130,18 @@ interface ComponentFilters {
   offset: number;
 }
 
+interface DeviceSelection {
+  serialNumber: string;
+  deviceType: string;
+  variantCode: string;
+}
+
+interface DeviceDetailsPayload {
+  shipment: DeviceShipmentReadiness;
+  component: DeviceComponentQuality;
+  shipmentGateHistory: AuditEvent[];
+}
+
 const SHIPMENT_TEXT_FILTER_KEYS: Array<keyof ShipmentFilters> = [
   "device_type",
   "variant_code",
@@ -211,6 +224,17 @@ export function App() {
     useState<DeviceComponentQualityQueue | null>(null);
   const [loadState, setLoadState] = useState<LoadState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [selectedDevice, setSelectedDevice] = useState<DeviceSelection | null>(
+    null,
+  );
+  const [deviceDetails, setDeviceDetails] = useState<DeviceDetailsPayload | null>(
+    null,
+  );
+  const [deviceDetailsState, setDeviceDetailsState] =
+    useState<LoadState>("idle");
+  const [deviceDetailsError, setDeviceDetailsError] = useState<string | null>(
+    null,
+  );
   const [refreshVersion, setRefreshVersion] = useState(0);
   const activePath =
     activeView === "shipment" ? "/shipment-readiness" : "/component-quality";
@@ -218,6 +242,7 @@ export function App() {
     activeView === "shipment"
       ? shipmentRequestFilters
       : componentRequestFilters;
+  const selectedDeviceSerial = selectedDevice?.serialNumber ?? null;
 
   const clearActiveViewData = (view: DashboardMode) => {
     if (view === "shipment") {
@@ -226,6 +251,18 @@ export function App() {
     }
 
     setComponentData(null);
+  };
+
+  const selectDevice = (device: {
+    device_serial_number: string;
+    device_type: string;
+    device_variant_code: string;
+  }) => {
+    setSelectedDevice({
+      serialNumber: device.device_serial_number,
+      deviceType: device.device_type,
+      variantCode: device.device_variant_code,
+    });
   };
 
   useEffect(() => {
@@ -307,6 +344,77 @@ export function App() {
     refreshVersion,
   ]);
 
+  useEffect(() => {
+    if (!selectedDeviceSerial) {
+      setDeviceDetails(null);
+      setDeviceDetailsState("idle");
+      setDeviceDetailsError(null);
+      return;
+    }
+
+    if (!apiBaseUrl.trim()) {
+      setDeviceDetails(null);
+      setDeviceDetailsState("error");
+      setDeviceDetailsError("Podaj bazowy adres API.");
+      return;
+    }
+
+    const controller = new AbortController();
+    let isCurrentRequest = true;
+    const encodedSerial = encodeURIComponent(selectedDeviceSerial);
+    const shipmentUrl = joinApiUrl(
+      apiBaseUrl.trim(),
+      `/devices/${encodedSerial}/shipment-readiness`,
+    );
+    const componentUrl = joinApiUrl(
+      apiBaseUrl.trim(),
+      `/devices/${encodedSerial}/component-quality`,
+    );
+    const historyUrl =
+      joinApiUrl(
+        apiBaseUrl.trim(),
+        `/devices/${encodedSerial}/shipment-gate-history`,
+      ) + buildQuery({ limit: 10 });
+
+    setDeviceDetails(null);
+    setDeviceDetailsState("loading");
+    setDeviceDetailsError(null);
+
+    Promise.all([
+      fetchJson<DeviceShipmentReadiness>(shipmentUrl, controller.signal),
+      fetchJson<DeviceComponentQuality>(componentUrl, controller.signal),
+      fetchJson<AuditEvent[]>(historyUrl, controller.signal),
+    ])
+      .then(([shipment, component, shipmentGateHistory]) => {
+        if (!isCurrentRequest) {
+          return;
+        }
+
+        setDeviceDetails({
+          shipment,
+          component,
+          shipmentGateHistory,
+        });
+        setDeviceDetailsState("loaded");
+      })
+      .catch((error: unknown) => {
+        if (!isCurrentRequest || isAbortError(error)) {
+          return;
+        }
+
+        setDeviceDetails(null);
+        setDeviceDetailsState("error");
+        setDeviceDetailsError(
+          error instanceof Error ? error.message : String(error),
+        );
+      });
+
+    return () => {
+      isCurrentRequest = false;
+      controller.abort();
+    };
+  }, [apiBaseUrl, refreshVersion, selectedDeviceSerial]);
+
   const updateShipmentFilter = <Key extends keyof ShipmentFilters>(
     key: Key,
     value: ShipmentFilters[Key],
@@ -360,6 +468,10 @@ export function App() {
     setActiveView("shipment");
     setShipmentFilters(DEFAULT_SHIPMENT_FILTERS);
     setComponentFilters(DEFAULT_COMPONENT_FILTERS);
+    setSelectedDevice(null);
+    setDeviceDetails(null);
+    setDeviceDetailsState("idle");
+    setDeviceDetailsError(null);
   };
 
   const flushActiveRequestFilters = () => {
@@ -460,6 +572,8 @@ export function App() {
               isLoading={loadState === "loading"}
               onPageChange={(offset) => updateShipmentFilter("offset", offset)}
               fallbackLimit={shipmentFilters.limit}
+              onSelectDevice={selectDevice}
+              selectedDeviceSerial={selectedDeviceSerial}
             />
           </>
         ) : (
@@ -476,9 +590,21 @@ export function App() {
               isLoading={loadState === "loading"}
               onPageChange={(offset) => updateComponentFilter("offset", offset)}
               fallbackLimit={componentFilters.limit}
+              onSelectDevice={selectDevice}
+              selectedDeviceSerial={selectedDeviceSerial}
             />
           </>
         )}
+
+        {selectedDevice ? (
+          <DeviceDetailsDrawer
+            device={selectedDevice}
+            details={deviceDetails}
+            loadState={deviceDetailsState}
+            errorMessage={deviceDetailsError}
+            onClose={() => setSelectedDevice(null)}
+          />
+        ) : null}
       </section>
     </main>
   );
@@ -720,11 +846,15 @@ function ShipmentDashboard({
   isLoading,
   onPageChange,
   fallbackLimit,
+  onSelectDevice,
+  selectedDeviceSerial,
 }: {
   data: DeviceShipmentQueue | null;
   isLoading: boolean;
   onPageChange: (offset: number) => void;
   fallbackLimit: number;
+  onSelectDevice: (device: DeviceShipmentReadiness) => void;
+  selectedDeviceSerial: string | null;
 }) {
   const readyCount = data?.ready_count ?? 0;
   const blockedCount = data?.blocked_count ?? 0;
@@ -777,7 +907,12 @@ function ShipmentDashboard({
         />
       </div>
 
-      <ShipmentTable devices={data?.devices ?? []} isLoading={isLoading} />
+      <ShipmentTable
+        devices={data?.devices ?? []}
+        isLoading={isLoading}
+        onSelectDevice={onSelectDevice}
+        selectedDeviceSerial={selectedDeviceSerial}
+      />
       <PaginationBar
         label="kolejki wysyłki"
         total={totalDevices}
@@ -808,11 +943,15 @@ function ComponentDashboard({
   isLoading,
   onPageChange,
   fallbackLimit,
+  onSelectDevice,
+  selectedDeviceSerial,
 }: {
   data: DeviceComponentQualityQueue | null;
   isLoading: boolean;
   onPageChange: (offset: number) => void;
   fallbackLimit: number;
+  onSelectDevice: (device: DeviceComponentQuality) => void;
+  selectedDeviceSerial: string | null;
 }) {
   const totalDevices = data?.total_devices ?? 0;
   const devicesWithIssues = data?.devices_with_issues ?? 0;
@@ -867,7 +1006,12 @@ function ComponentDashboard({
         />
       </div>
 
-      <ComponentTable devices={data?.devices ?? []} isLoading={isLoading} />
+      <ComponentTable
+        devices={data?.devices ?? []}
+        isLoading={isLoading}
+        onSelectDevice={onSelectDevice}
+        selectedDeviceSerial={selectedDeviceSerial}
+      />
       <PaginationBar
         label="kolejki komponentów"
         total={totalDevices}
@@ -959,9 +1103,13 @@ function PaginationBar({
 function ShipmentTable({
   devices,
   isLoading,
+  onSelectDevice,
+  selectedDeviceSerial,
 }: {
   devices: DeviceShipmentReadiness[];
   isLoading: boolean;
+  onSelectDevice: (device: DeviceShipmentReadiness) => void;
+  selectedDeviceSerial: string | null;
 }) {
   if (devices.length === 0) {
     return <EmptyTable isLoading={isLoading} label="Brak urządzeń w kolejce." />;
@@ -992,9 +1140,25 @@ function ShipmentTable({
             </tr>
           </thead>
           <tbody>
-            {devices.map((device) => (
-              <tr key={device.device_serial_number}>
-                <td className="serial-cell">{device.device_serial_number}</td>
+            {devices.map((device) => {
+              const isSelected =
+                selectedDeviceSerial === device.device_serial_number;
+
+              return (
+              <tr
+                key={device.device_serial_number}
+                className={isSelected ? "table-row-selected" : undefined}
+              >
+                <td className="serial-cell">
+                  <button
+                    className={`row-link ${isSelected ? "is-selected" : ""}`}
+                    type="button"
+                    onClick={() => onSelectDevice(device)}
+                    aria-pressed={isSelected}
+                  >
+                    {device.device_serial_number}
+                  </button>
+                </td>
                 <td>
                   <strong>{device.device_type}</strong>
                   <span>{device.device_variant_code}</span>
@@ -1040,7 +1204,7 @@ function ShipmentTable({
                 </td>
                 <td>{formatDateTime(device.device_updated_at)}</td>
               </tr>
-            ))}
+            )})}
           </tbody>
         </table>
       </div>
@@ -1051,9 +1215,13 @@ function ShipmentTable({
 function ComponentTable({
   devices,
   isLoading,
+  onSelectDevice,
+  selectedDeviceSerial,
 }: {
   devices: DeviceComponentQuality[];
   isLoading: boolean;
+  onSelectDevice: (device: DeviceComponentQuality) => void;
+  selectedDeviceSerial: string | null;
 }) {
   if (devices.length === 0) {
     return (
@@ -1090,9 +1258,25 @@ function ComponentTable({
             </tr>
           </thead>
           <tbody>
-            {devices.map((device) => (
-              <tr key={device.device_serial_number}>
-                <td className="serial-cell">{device.device_serial_number}</td>
+            {devices.map((device) => {
+              const isSelected =
+                selectedDeviceSerial === device.device_serial_number;
+
+              return (
+              <tr
+                key={device.device_serial_number}
+                className={isSelected ? "table-row-selected" : undefined}
+              >
+                <td className="serial-cell">
+                  <button
+                    className={`row-link ${isSelected ? "is-selected" : ""}`}
+                    type="button"
+                    onClick={() => onSelectDevice(device)}
+                    aria-pressed={isSelected}
+                  >
+                    {device.device_serial_number}
+                  </button>
+                </td>
                 <td>
                   <strong>{device.device_type}</strong>
                   <span>{device.device_variant_code}</span>
@@ -1136,11 +1320,436 @@ function ComponentTable({
                 </td>
                 <td>{formatDateTime(device.device_updated_at)}</td>
               </tr>
-            ))}
+            )})}
           </tbody>
         </table>
       </div>
     </section>
+  );
+}
+
+function DeviceDetailsDrawer({
+  device,
+  details,
+  loadState,
+  errorMessage,
+  onClose,
+}: {
+  device: DeviceSelection;
+  details: DeviceDetailsPayload | null;
+  loadState: LoadState;
+  errorMessage: string | null;
+  onClose: () => void;
+}) {
+  const shipment = details?.shipment ?? null;
+  const component = details?.component ?? null;
+  const bomCoverage = shipment?.bom_compliance.component_coverage ?? [];
+  const componentRows = component?.components ?? [];
+  const historyRows = details?.shipmentGateHistory ?? [];
+
+  return (
+    <>
+      <button
+        className="drawer-backdrop"
+        type="button"
+        aria-label="Zamknij szczegóły urządzenia"
+        onClick={onClose}
+      />
+      <aside
+        className="details-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="device-details-title"
+      >
+        <div className="details-drawer-header">
+          <div>
+            <p className="eyebrow">Szczegóły urządzenia</p>
+            <h2 id="device-details-title">{device.serialNumber}</h2>
+            <p className="details-subtitle">
+              {device.deviceType} · {device.variantCode}
+            </p>
+          </div>
+          <button className="ghost-button" type="button" onClick={onClose}>
+            Zamknij
+          </button>
+        </div>
+
+        {loadState === "loading" ? (
+          <section className="details-section">
+            <strong>Ładowanie szczegółów urządzenia...</strong>
+            <span className="empty-copy">
+              Pobieram bramkę wysyłki, BOM, jakość komponentów i historię gate.
+            </span>
+          </section>
+        ) : errorMessage ? (
+          <section className="details-section error-banner" role="alert">
+            <strong>Nie udało się pobrać szczegółów urządzenia.</strong>
+            <span>{errorMessage}</span>
+          </section>
+        ) : shipment && component ? (
+          <div className="details-content">
+            <section className="details-grid">
+              <DetailCard
+                label="Status produkcji"
+                value={labelForCode(shipment.production_status)}
+              />
+              <DetailCard
+                label="Rekomendowana akcja"
+                value={labelForCode(shipment.recommended_action)}
+              />
+              <DetailCard
+                label="Wysyłka"
+                value={
+                  shipment.can_transition_to_ready_for_shipment
+                    ? "Gotowe"
+                    : "Blokada"
+                }
+              />
+              <DetailCard
+                label="Gate komponentów"
+                value={
+                  component.passes_component_quality_gate
+                    ? "Zaliczone"
+                    : "Blokada"
+                }
+              />
+              <DetailCard
+                label="Final test"
+                value={labelForCode(shipment.final_test_passed)}
+              />
+              <DetailCard
+                label="Świeżość danych"
+                value={labelForCode(component.stale_bucket)}
+              />
+            </section>
+
+            <DetailsSection title="Bramka wysyłki">
+              <DetailsKeyGrid
+                items={[
+                  {
+                    label: "Główna blokada",
+                    value: labelForCode(shipment.primary_blocking_code),
+                  },
+                  {
+                    label: "Komunikat",
+                    value: shipment.primary_blocking_message ?? "Bez blokady",
+                  },
+                  {
+                    label: "Krytyczne NCR urządzenia",
+                    value:
+                      shipment.critical_open_ncr_ids.length > 0
+                        ? shipment.critical_open_ncr_ids.join(", ")
+                        : "Brak",
+                  },
+                  {
+                    label: "Ostatnia decyzja gate",
+                    value: shipment.latest_shipment_gate_decision
+                      ? `${labelForCode(
+                          shipment.latest_shipment_gate_decision.result,
+                        )} · ${formatDateTime(
+                          shipment.latest_shipment_gate_decision.created_at,
+                        )}`
+                      : "Brak decyzji",
+                  },
+                ]}
+              />
+              <div className="details-stack">
+                <strong>Powody blokady</strong>
+                <TagList
+                  items={shipment.blocking_reasons}
+                  emptyLabel="Brak aktywnych powodów blokady."
+                />
+              </div>
+              <div className="details-stack">
+                <strong>Kontrole bramki</strong>
+                {shipment.blocking_checks && shipment.blocking_checks.length > 0 ? (
+                  <div className="detail-inline-grid">
+                    {shipment.blocking_checks.map((check) => (
+                      <article
+                        className="detail-inline-card"
+                        key={`${check.code}-${check.message ?? ""}`}
+                      >
+                        <div className="detail-inline-header">
+                          <CodePill value={check.code} />
+                          <BooleanPill
+                            value={check.is_blocking}
+                            trueLabel="Blokuje"
+                            falseLabel="OK"
+                          />
+                        </div>
+                        <p>{check.message ?? "Bez komunikatu."}</p>
+                        <TagList
+                          items={check.details}
+                          emptyLabel="Brak dodatkowych szczegółów."
+                          compact
+                        />
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="empty-copy">Brak zapisanych kontroli gate.</p>
+                )}
+              </div>
+            </DetailsSection>
+
+            <DetailsSection title="BOM">
+              <DetailsKeyGrid
+                items={[
+                  {
+                    label: "Przechodzi BOM",
+                    value: labelForCode(shipment.bom_compliance.passes_bom_gate),
+                  },
+                  {
+                    label: "Źródło BOM",
+                    value: labelForCode(
+                      shipment.bom_compliance.resolution_source ?? null,
+                    ),
+                  },
+                  {
+                    label: "Wersja BOM",
+                    value:
+                      shipment.bom_compliance.resolved_version ?? "Brak danych",
+                  },
+                  {
+                    label: "Status BOM",
+                    value: labelForCode(
+                      shipment.bom_compliance.resolved_status ?? null,
+                    ),
+                  },
+                ]}
+              />
+              <div className="detail-inline-grid">
+                <InlineListCard
+                  title="Brakujące komponenty BOM"
+                  items={shipment.bom_compliance.missing_required_components}
+                  emptyLabel="Brak brakujących komponentów."
+                />
+                <InlineListCard
+                  title="Nadmiarowe komponenty BOM"
+                  items={shipment.bom_compliance.over_installed_components}
+                  emptyLabel="Brak nadmiarowych komponentów."
+                />
+                <InlineListCard
+                  title="Nieoczekiwane komponenty BOM"
+                  items={shipment.bom_compliance.unexpected_component_types}
+                  emptyLabel="Brak nieoczekiwanych komponentów."
+                />
+              </div>
+              <div className="details-stack">
+                <strong>Pokrycie BOM</strong>
+                {bomCoverage.length > 0 ? (
+                  <div className="detail-inline-grid">
+                    {bomCoverage.map((coverage) => (
+                      <article
+                        className="detail-inline-card"
+                        key={`${coverage.component_type}-${coverage.status}`}
+                      >
+                        <div className="detail-inline-header">
+                          <CodePill value={coverage.component_type} />
+                          <CodePill value={coverage.status} />
+                        </div>
+                        <p>
+                          Wymagane {formatNumber(coverage.required_quantity)} ·
+                          zamontowane {formatNumber(coverage.installed_quantity)}
+                        </p>
+                        <TagList
+                          items={coverage.allowed_component_types ?? []}
+                          emptyLabel={
+                            coverage.substitution_group
+                              ? `Grupa ${coverage.substitution_group}`
+                              : coverage.is_required
+                                ? "Pozycja wymagana"
+                                : "Pozycja opcjonalna"
+                          }
+                          compact
+                        />
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="empty-copy">Brak pozycji coverage dla tego BOM.</p>
+                )}
+              </div>
+            </DetailsSection>
+
+            <DetailsSection title="Kontrola jakości komponentów">
+              <DetailsKeyGrid
+                items={[
+                  {
+                    label: "Główny status jakości",
+                    value: labelForCode(component.primary_quality_status),
+                  },
+                  {
+                    label: "Blokujący komponent",
+                    value: labelForCode(
+                      component.primary_blocking_component_type,
+                    ),
+                  },
+                  {
+                    label: "Serial blokującego komponentu",
+                    value:
+                      component.primary_blocking_component_serial_number ??
+                      "Brak serialu",
+                  },
+                  {
+                    label: "Komponenty blokujące",
+                    value: formatNumber(component.blocked_components),
+                  },
+                ]}
+              />
+              <div className="details-stack">
+                <strong>Zamontowane komponenty</strong>
+                {componentRows.length > 0 ? (
+                  <div className="detail-component-list">
+                    {componentRows.map((item) => (
+                      <article
+                        className="detail-component-card"
+                        key={item.component_serial_number}
+                      >
+                        <div className="detail-inline-header">
+                          <CodePill value={item.component_type} />
+                          <CodePill value={item.quality_status} />
+                        </div>
+                        <strong>{item.component_serial_number}</strong>
+                        <span>Barcode: {item.child_barcode_value}</span>
+                        <span>
+                          QC snapshot: {labelForCode(item.component_qc_passed)}
+                        </span>
+                        <span>
+                          Blokuje wysyłkę: {labelForCode(item.blocks_shipment)}
+                        </span>
+                        <TagList
+                          items={item.critical_open_ncr_ids}
+                          emptyLabel="Brak krytycznych NCR."
+                          compact
+                        />
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="empty-copy">
+                    Brak szczegółów zamontowanych komponentów.
+                  </p>
+                )}
+              </div>
+            </DetailsSection>
+
+            <DetailsSection title="Historia shipment gate">
+              {historyRows.length > 0 ? (
+                <div className="detail-history-list">
+                  {historyRows.map((event) => (
+                    <article className="detail-history-card" key={event.id}>
+                      <div className="detail-inline-header">
+                        <CodePill value={event.event_type} />
+                        <CodePill value={event.result} />
+                      </div>
+                      <strong>{formatDateTime(event.created_at)}</strong>
+                      <p>{event.message ?? "Bez komunikatu."}</p>
+                      <span>
+                        Żądany status:{" "}
+                        {labelForCode(
+                          typeof event.payload?.requested_status === "string"
+                            ? event.payload.requested_status
+                            : null,
+                        )}
+                      </span>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <p className="empty-copy">Brak historii shipment gate.</p>
+              )}
+            </DetailsSection>
+          </div>
+        ) : (
+          <section className="details-section">
+            <strong>Nie znaleziono danych szczegółowych.</strong>
+          </section>
+        )}
+      </aside>
+    </>
+  );
+}
+
+function DetailsSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="details-section">
+      <h3>{title}</h3>
+      {children}
+    </section>
+  );
+}
+
+function DetailsKeyGrid({
+  items,
+}: {
+  items: Array<{ label: string; value: string }>;
+}) {
+  return (
+    <div className="details-key-grid">
+      {items.map((item) => (
+        <article className="detail-key-card" key={item.label}>
+          <span>{item.label}</span>
+          <strong>{item.value}</strong>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function DetailCard({ label, value }: { label: string; value: string }) {
+  return (
+    <article className="detail-card">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </article>
+  );
+}
+
+function InlineListCard({
+  title,
+  items,
+  emptyLabel,
+}: {
+  title: string;
+  items: string[];
+  emptyLabel: string;
+}) {
+  return (
+    <article className="detail-inline-card">
+      <strong>{title}</strong>
+      <TagList items={items} emptyLabel={emptyLabel} compact />
+    </article>
+  );
+}
+
+function TagList({
+  items,
+  emptyLabel,
+  compact = false,
+}: {
+  items: string[];
+  emptyLabel: string;
+  compact?: boolean;
+}) {
+  if (items.length === 0) {
+    return <p className="empty-copy">{emptyLabel}</p>;
+  }
+
+  return (
+    <div className={`tag-list ${compact ? "is-compact" : ""}`}>
+      {items.map((item) => (
+        <span className="tag-chip" key={item}>
+          {labelForCode(item)}
+        </span>
+      ))}
+    </div>
   );
 }
 

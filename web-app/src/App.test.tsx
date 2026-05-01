@@ -9,7 +9,13 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
-import type { DeviceComponentQualityQueue, DeviceShipmentQueue } from "./api";
+import type {
+  AuditEvent,
+  DeviceComponentQuality,
+  DeviceComponentQualityQueue,
+  DeviceShipmentQueue,
+  DeviceShipmentReadiness,
+} from "./api";
 
 const API_STORAGE_KEY = "servicetrace.web.apiBaseUrl";
 const VIEW_STORAGE_KEY = "servicetrace.web.activeView";
@@ -163,6 +169,146 @@ const componentPayload: DeviceComponentQualityQueue = {
     },
   ],
 };
+
+const shipmentDetailsPayload: DeviceShipmentReadiness = {
+  ...shipmentPayload.devices[0],
+  has_critical_open_ncr: true,
+  critical_open_ncr_ids: ["NCR-DEVICE-001"],
+  bom_compliance: {
+    ...shipmentPayload.devices[0].bom_compliance,
+    device_serial_number: "SHIP-001",
+    device_type: "DEMO-OPS",
+    device_variant_code: "DEFAULT",
+    production_status: "FINAL_TEST_PASSED",
+    resolution_source: "BOUND_TEMPLATE",
+    resolved_version: "1.2",
+    resolved_status: "ACTIVE",
+    resolved_is_active: true,
+    resolved_is_effective_now: true,
+    is_bom_resolved: true,
+    component_coverage: [
+      {
+        component_type: "CONTROL_PCB",
+        substitution_group: null,
+        allowed_component_types: null,
+        required_quantity: 1,
+        installed_quantity: 1,
+        is_required: true,
+        status: "PASS",
+      },
+      {
+        component_type: "FAN_MODULE",
+        substitution_group: "AIRFLOW",
+        allowed_component_types: ["FAN_MODULE", "FAN_MODULE_V2"],
+        required_quantity: 1,
+        installed_quantity: 0,
+        is_required: true,
+        status: "MISSING",
+      },
+    ],
+    missing_required_components: ["FAN_MODULE"],
+    blocking_reason: "Brak FAN_MODULE",
+  },
+  primary_blocking_code: "BOM_REQUIRED_COMPONENTS_MISSING",
+  primary_blocking_message: "Brakuje FAN_MODULE",
+  recommended_action: "COMPLETE_ASSEMBLY",
+  blocking_reasons: ["FAN_MODULE", "Brak zamknięcia krytycznej NCR"],
+  blocking_checks: [
+    {
+      code: "BOM_REQUIRED_COMPONENTS_MISSING",
+      is_blocking: true,
+      message: "Brak wymaganego komponentu FAN_MODULE",
+      details: ["FAN_MODULE"],
+    },
+    {
+      code: "CRITICAL_OPEN_NCR",
+      is_blocking: true,
+      message: "Urządzenie ma otwartą krytyczną NCR",
+      details: ["NCR-DEVICE-001"],
+    },
+  ],
+};
+
+const shipmentComponentDetailsPayload: DeviceComponentQuality = {
+  device_serial_number: "SHIP-001",
+  device_type: "DEMO-OPS",
+  device_variant_code: "DEFAULT",
+  production_status: "FINAL_TEST_PASSED",
+  device_created_at: "2026-05-01T08:00:00Z",
+  device_updated_at: "2026-05-01T09:15:00Z",
+  stale_bucket: "D1_TO_D3",
+  total_installed_components: 2,
+  passing_components: 1,
+  blocked_components: 1,
+  passes_component_quality_gate: false,
+  primary_quality_status: "QC_NOT_PASSED",
+  primary_blocking_component_type: "FAN_MODULE",
+  primary_blocking_component_serial_number: "FAN-900",
+  recommended_action: "RUN_COMPONENT_QC_OR_REWORK",
+  components: [
+    {
+      component_serial_number: "CTRL-100",
+      component_type: "CONTROL_PCB",
+      child_barcode_value: "BC-CTRL-100",
+      installed_at: "2026-05-01T08:30:00Z",
+      installed_by: "OP-01",
+      workstation_id: "WS-01",
+      bom_template_id: "BOM-01",
+      bom_version: "1.2",
+      component_qc_passed: true,
+      has_critical_open_ncr: false,
+      critical_open_ncr_ids: [],
+      blocks_shipment: false,
+      quality_status: "PASS",
+    },
+    {
+      component_serial_number: "FAN-900",
+      component_type: "FAN_MODULE",
+      child_barcode_value: "BC-FAN-900",
+      installed_at: "2026-05-01T08:40:00Z",
+      installed_by: "OP-02",
+      workstation_id: "WS-02",
+      bom_template_id: "BOM-01",
+      bom_version: "1.2",
+      component_qc_passed: false,
+      has_critical_open_ncr: true,
+      critical_open_ncr_ids: ["NCR-COMP-001"],
+      blocks_shipment: true,
+      quality_status: "QC_NOT_PASSED",
+    },
+  ],
+};
+
+const shipmentGateHistoryPayload: AuditEvent[] = [
+  {
+    id: "AUD-1",
+    event_type: "SHIPMENT_GATE_BLOCKED",
+    entity_type: "DEVICE",
+    entity_id: "SHIP-001",
+    work_session_id: "WS-10",
+    operator_id: "OP-10",
+    workstation_id: "ST-10",
+    machine_id: null,
+    result: "BLOCKED",
+    message: "Gate zablokowany przez brak FAN_MODULE",
+    payload: { requested_status: "READY_FOR_SHIPMENT" },
+    created_at: "2026-05-01T09:20:00Z",
+  },
+  {
+    id: "AUD-2",
+    event_type: "SHIPMENT_GATE_PASSED",
+    entity_type: "DEVICE",
+    entity_id: "SHIP-001",
+    work_session_id: "WS-11",
+    operator_id: "OP-11",
+    workstation_id: "ST-11",
+    machine_id: null,
+    result: "PASS",
+    message: "Gate przeszedł po naprawie",
+    payload: { requested_status: "READY_FOR_SHIPMENT" },
+    created_at: "2026-05-01T10:00:00Z",
+  },
+];
 
 const paginatedShipmentPageOnePayload: DeviceShipmentQueue = {
   ...shipmentPayload,
@@ -381,6 +527,61 @@ describe("App", () => {
         signal: expect.any(AbortSignal),
       }),
     );
+  });
+
+  it("opens device details drawer from shipment queue and renders fetched details", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(createJsonResponse(shipmentPayload))
+      .mockResolvedValueOnce(createJsonResponse(shipmentDetailsPayload))
+      .mockResolvedValueOnce(createJsonResponse(shipmentComponentDetailsPayload))
+      .mockResolvedValueOnce(createJsonResponse(shipmentGateHistoryPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "SHIP-001" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "SHIP-001" })).toBeInTheDocument();
+    expect(await screen.findByText(/Brak.*komponenty BOM/i)).toBeInTheDocument();
+    expect(screen.getAllByText("FAN-900").length).toBeGreaterThan(0);
+    expect(
+      await screen.findByText("Gate zablokowany przez brak FAN_MODULE"),
+    ).toBeInTheDocument();
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/devices/SHIP-001/shipment-readiness",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "/api/devices/SHIP-001/component-quality",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      "/api/devices/SHIP-001/shipment-gate-history?limit=10",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Zamknij" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("loads last active view from localStorage and persists tab changes", async () => {
