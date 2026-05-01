@@ -4237,6 +4237,19 @@ def test_component_quality_queue_supports_summary_and_filters():
         "IO_MODULE",
     ]
 
+    blocker_serial_sorted = client.get(
+        f"/api/component-quality?device_type={queue_device_type}&sort_by=primary_blocking_component_serial_number"
+    )
+    assert blocker_serial_sorted.status_code == 200
+    sorted_blocker_serials = [
+        row["primary_blocking_component_serial_number"]
+        for row in blocker_serial_sorted.json()["devices"]
+    ]
+    assert sorted_blocker_serials[0] is None
+    assert sorted_blocker_serials[1:] == sorted(
+        [qc_gap_component_serial, ncr_component_serial]
+    )
+
     created_sorted = client.get(
         f"/api/component-quality?device_type={queue_device_type}&sort_by=created_at"
     )
