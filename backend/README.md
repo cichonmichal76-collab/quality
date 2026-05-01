@@ -171,6 +171,7 @@ Wersje BOM mają też teraz jawne lineage przez `source_template_id` i `replaced
 - `GET /api/devices/{serial_number}/shipment-readiness`
 - `PATCH /api/devices/{serial_number}/status`
 - `GET /api/audit-events`
+  Obsługuje filtry `entity_type`, `entity_id`, `work_session_id`, `event_type` i `result`.
 - `POST /api/service-sessions/upload`
 
 ## Kontekst traceability i work sessions

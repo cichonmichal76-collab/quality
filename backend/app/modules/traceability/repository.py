@@ -21,6 +21,8 @@ def list_audit_events(
     entity_type: str | None = None,
     entity_id: str | None = None,
     work_session_id: str | None = None,
+    event_type: str | None = None,
+    result: str | None = None,
 ) -> list[AuditEvent]:
     query = db.query(AuditEvent)
     if entity_type:
@@ -29,6 +31,10 @@ def list_audit_events(
         query = query.filter(AuditEvent.entity_id == entity_id)
     if work_session_id:
         query = query.filter(AuditEvent.work_session_id == work_session_id)
+    if event_type:
+        query = query.filter(AuditEvent.event_type == event_type)
+    if result:
+        query = query.filter(AuditEvent.result == result)
     return query.order_by(AuditEvent.created_at.desc()).all()
 
 

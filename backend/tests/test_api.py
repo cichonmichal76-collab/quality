@@ -3447,6 +3447,105 @@ def test_shipment_is_blocked_when_required_component_is_missing():
     assert shipment_gate_event["payload"]["missing_required_components"] == ["CONTROL_PCB"]
 
 
+def test_audit_events_can_filter_shipment_gate_by_event_type_and_result():
+    allowed_device_type = unique_id("DT")
+    ensure_device_bom_template(allowed_device_type, component_type="CONTROL_PCB")
+    allowed_device_serial_number = unique_id("DEV")
+    allowed_device = client.post(
+        "/api/devices",
+        json={
+            "device_serial_number": allowed_device_serial_number,
+            "device_type": allowed_device_type,
+        },
+    )
+    assert allowed_device.status_code == 200
+
+    production_session = start_work_session(role="PRODUCTION_OPERATOR")
+    item = create_qc_passed_item(production_session, item_type="CONTROL_PCB")
+    install = client.post(
+        f"/api/devices/{allowed_device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": production_session["work_session_id"],
+        },
+    )
+    assert install.status_code == 200
+
+    final_test_session = start_work_session(role="FINAL_TEST_OPERATOR")
+    allowed_final_test = client.post(
+        "/api/final-tests",
+        json={
+            "test_run_id": unique_id("FT"),
+            "device_serial_number": allowed_device_serial_number,
+            "result": "PASS",
+            "firmware_version": "1.2.4",
+            "bootloader_version": "0.9.8",
+            "work_session_id": final_test_session["work_session_id"],
+        },
+    )
+    assert allowed_final_test.status_code == 200
+
+    allowed_ready = client.patch(
+        f"/api/devices/{allowed_device_serial_number}/status",
+        json={"production_status": "READY_FOR_SHIPMENT"},
+    )
+    assert allowed_ready.status_code == 200
+
+    blocked_device_type = unique_id("DT")
+    ensure_device_bom_template(blocked_device_type, component_type="CONTROL_PCB")
+    blocked_device_serial_number = unique_id("DEV")
+    blocked_device = client.post(
+        "/api/devices",
+        json={
+            "device_serial_number": blocked_device_serial_number,
+            "device_type": blocked_device_type,
+        },
+    )
+    assert blocked_device.status_code == 200
+
+    blocked_final_test = client.post(
+        "/api/final-tests",
+        json={
+            "test_run_id": unique_id("FT"),
+            "device_serial_number": blocked_device_serial_number,
+            "result": "PASS",
+            "firmware_version": "1.2.4",
+            "bootloader_version": "0.9.8",
+            "work_session_id": final_test_session["work_session_id"],
+        },
+    )
+    assert blocked_final_test.status_code == 200
+
+    blocked_ready = client.patch(
+        f"/api/devices/{blocked_device_serial_number}/status",
+        json={"production_status": "READY_FOR_SHIPMENT"},
+    )
+    assert blocked_ready.status_code == 400
+
+    passed_events = client.get(
+        "/api/audit-events?entity_type=DEVICE&event_type=SHIPMENT_GATE_PASSED&result=PASS"
+    )
+    assert passed_events.status_code == 200
+    assert any(
+        row["entity_id"] == allowed_device_serial_number and row["event_type"] == "SHIPMENT_GATE_PASSED"
+        for row in passed_events.json()
+    )
+    assert all(row["event_type"] == "SHIPMENT_GATE_PASSED" for row in passed_events.json())
+    assert all(row["result"] == "PASS" for row in passed_events.json())
+
+    blocked_events = client.get(
+        "/api/audit-events?entity_type=DEVICE&event_type=SHIPMENT_GATE_BLOCKED&result=BLOCKED"
+    )
+    assert blocked_events.status_code == 200
+    assert any(
+        row["entity_id"] == blocked_device_serial_number and row["event_type"] == "SHIPMENT_GATE_BLOCKED"
+        for row in blocked_events.json()
+    )
+    assert all(row["event_type"] == "SHIPMENT_GATE_BLOCKED" for row in blocked_events.json())
+    assert all(row["result"] == "BLOCKED" for row in blocked_events.json())
+
+
 def test_device_shipment_readiness_reports_multiple_blockers():
     device_type = unique_id("DT")
     ensure_device_bom_template(device_type, component_type="CONTROL_PCB")

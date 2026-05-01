@@ -542,6 +542,12 @@ Widok kolejkowy shipmentu z filtrami:
 curl "http://localhost:8000/api/shipment-readiness?device_type=ZSS&only_blocked=true&primary_blocking_code=CRITICAL_OPEN_NCR&recommended_action=RESOLVE_CRITICAL_NCR&sort_by=priority&offset=0&limit=50"
 ```
 
+Filtrowanie audytu decyzji shipmentu:
+
+```bash
+curl "http://localhost:8000/api/audit-events?entity_type=DEVICE&event_type=SHIPMENT_GATE_BLOCKED&result=BLOCKED"
+```
+
 Zatwierdzenie wersji BOM z metadanymi release:
 
 ```bash
@@ -657,6 +663,7 @@ Reguły assembly:
 - endpoint `shipment-readiness` zwraca pełny werdykt bramki wysyłkowej, w tym `final_test_passed`, `has_critical_open_ncr`, `critical_open_ncr_ids`, `device_created_at`, `device_updated_at`, zagnieżdżone `bom_compliance`, `can_transition_to_ready_for_shipment`, `primary_blocking_code`, `primary_blocking_message`, `recommended_action`, uporządkowaną listę `blocking_reasons` oraz `blocking_checks` z kodami maszynowymi
 - endpoint kolejkowy `GET /api/shipment-readiness` zwraca listę urządzeń wraz z tym samym kontraktem gotowości, plus liczniki `ready_count` i `blocked_count`, metadane strony `returned_count`, `offset`, `limit`, `has_more`, `next_offset` oraz agregacje `blocking_summary`, `primary_blocking_summary` i `recommended_action_summary`; wspiera filtry `device_type`, `variant_code`, `blocking_code`, `primary_blocking_code`, `recommended_action`, `only_blocked`, `only_ready`, `sort_by`, `sort_desc`, `offset` i `limit`
 - próba ustawienia statusu `READY_FOR_SHIPMENT` zapisuje dodatkowo audit `SHIPMENT_GATE_PASSED` albo `SHIPMENT_GATE_BLOCKED`, z payloadem zawierającym snapshot decyzji shipment gate, kody blokad i rekomendowaną akcję
+- `GET /api/audit-events` wspiera teraz także filtry `event_type` i `result`, więc można odczytać np. tylko `SHIPMENT_GATE_BLOCKED` albo tylko pozytywne decyzje `PASS`
 - endpoint `catalog` zbiera wszystkie wersje BOM dla danego `device_type` i `variant_code` oraz pokazuje dla każdej z nich `can_activate`, `can_release`, liczbę pozycji, liczbę powiązanych urządzeń, blokady lifecycle i `recommended_action`
 - endpoint `bindings` zwraca konkretne urządzenia przypięte do wersji BOM wraz z `installed_component_count` i czasem pierwszego związania
 - endpoint `coverage` zwraca dla tych urządzeń kompletność względem BOM, w tym `missing_required_components`, `over_installed_components` i status per komponent; urządzenie z komponentem `OVER_INSTALLED` nie jest już traktowane jako kompletne

@@ -24,6 +24,8 @@ def list_audit_events(
     entity_type: str | None = None,
     entity_id: str | None = None,
     work_session_id: str | None = None,
+    event_type: str | None = None,
+    result: str | None = None,
     db: Session = Depends(get_db),
 ):
     return repository.list_audit_events(
@@ -31,6 +33,8 @@ def list_audit_events(
         entity_type=entity_type,
         entity_id=entity_id,
         work_session_id=work_session_id,
+        event_type=event_type,
+        result=result,
     )
 
 
