@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.core.audit import record_audit_event
 from app.database import utc_now
 from app.models import Device
+from app.modules.assembly.bom_groups import evaluate_bom_requirement_groups
 from app.modules.shipment import repository, rules
 from app.schemas import DeviceStatusUpdate
 
@@ -92,19 +93,22 @@ def _ensure_required_components_installed(db: Session, device: Device) -> None:
 
     missing_component_types: list[str] = []
     over_installed_component_types: list[str] = []
-    for bom_item in bom_items:
-        installed_count = installed_component_counts.pop(bom_item.component_type, 0)
-        if installed_count < bom_item.quantity_required:
-            if bom_item.is_required:
-                if bom_item.quantity_required == 1:
-                    missing_component_types.append(bom_item.component_type)
-                else:
-                    missing_component_types.append(
-                        f"{bom_item.component_type} x{bom_item.quantity_required}"
-                    )
-        if installed_count > bom_item.quantity_required:
+    evaluations, remaining_counts = evaluate_bom_requirement_groups(
+        bom_items,
+        installed_component_counts,
+    )
+    for evaluation in evaluations:
+        requirement = evaluation.requirement
+        if evaluation.installed_quantity < requirement.quantity_required and requirement.is_required:
+            if requirement.quantity_required == 1:
+                missing_component_types.append(requirement.display_name)
+            else:
+                missing_component_types.append(
+                    f"{requirement.display_name} x{requirement.quantity_required}"
+                )
+        if evaluation.installed_quantity > requirement.quantity_required:
             over_installed_component_types.append(
-                f"{bom_item.component_type} x{installed_count}/{bom_item.quantity_required}"
+                f"{requirement.display_name} x{evaluation.installed_quantity}/{requirement.quantity_required}"
             )
     if missing_component_types:
         missing_components = ", ".join(missing_component_types)
@@ -112,15 +116,15 @@ def _ensure_required_components_installed(db: Session, device: Device) -> None:
             status_code=400,
             detail=f"READY_FOR_SHIPMENT requires installed components: {missing_components}",
         )
-    if over_installed_component_types or installed_component_counts:
+    if over_installed_component_types or remaining_counts:
         issue_fragments: list[str] = []
         if over_installed_component_types:
             issue_fragments.append(
                 "over-installed components: " + ", ".join(over_installed_component_types)
             )
-        if installed_component_counts:
+        if remaining_counts:
             issue_fragments.append(
-                "unexpected components: " + ", ".join(sorted(installed_component_counts))
+                "unexpected components: " + ", ".join(sorted(remaining_counts))
             )
         raise HTTPException(
             status_code=400,

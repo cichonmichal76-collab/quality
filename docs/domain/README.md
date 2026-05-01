@@ -196,6 +196,7 @@ Najważniejsze reguły:
 - definicje BOM są dziś scope’owane nie tylko per `device_type`, ale też per `variant_code`, z fallbackiem urządzeń do wariantu `DEFAULT`
 - pozycja `DeviceBomItem` może dodatkowo zawęzić dopuszczalny `part_number` i `revision`
 - pozycja `DeviceBomItem` może też zawęzić dopuszczalny `drawing_number` i `drawing_revision`
+- pozycja `DeviceBomItem` może też należeć do `substitution_group`, która opisuje jeden logiczny slot akceptujący kilka alternatywnych typów komponentów
 - wersja `DeviceBomTemplate` ma jawny status lifecycle: `ACTIVE`, `INACTIVE` albo `RETIRED`
 - wersja `RETIRED` jest niemodyfikowalna i może być używana dalej tylko przez urządzenia już wcześniej przypięte do tej wersji
 - nowa wersja `DeviceBomTemplate` może powstać przez klonowanie istniejącej wersji razem z kompletem pozycji BOM
@@ -214,7 +215,7 @@ Najważniejsze reguły:
 Najbliższe punkty rozszerzenia BOM:
 - dalsze scope’y ponad `variant_code`, np. `market_code`, `station_type` albo profil urządzenia
 - okna obowiązywania `effective_from` i `effective_to` są już zaimplementowane dla wersji BOM; kolejnym krokiem może być rozszerzenie ich o zakres partii albo numer zlecenia
-- grupy zamienników, jeśli jeden wymagany slot ma akceptować kilka alternatywnych `component_type` lub `part_number`
+- grupy zamienników na poziomie `substitution_group` są już zaimplementowane dla alternatywnych `component_type`; kolejnym krokiem może być rozszerzenie tej logiki na bardziej złożone kombinacje `part_number`
 - kontrola zatwierdzenia wersji, np. `approved_by`, `approved_at`, `release_note`, jeśli BOM ma wejść w formalny workflow release
 - pozycje `DeviceBomItem` w wersjach roboczych mogą być już nie tylko dodawane, ale też aktualizowane i usuwane w ramach tej samej polityki mutowalności
 

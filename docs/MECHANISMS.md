@@ -30,6 +30,8 @@ Montaż urządzenia odbywa się przez skanowanie komponentów. W obecnym MVP bac
 
 Dodatkowo aktywny lookup BOM uwzględnia teraz pola `effective_from` i `effective_to`. W praktyce oznacza to, że BOM może być przygotowany wcześniej albo wygaszony w czasie, ale do nowego montażu trafi dopiero wtedy, gdy jest jednocześnie `ACTIVE` i obowiązuje w bieżącym oknie czasu.
 
+Pozycje BOM mogą być też spinane przez `substitution_group`. Dzięki temu jeden slot montażowy może akceptować kilka alternatywnych `component_type`, a system liczy ilość wymaganą na poziomie całej grupy zamiast każdej pozycji osobno.
+
 ## Digital device tree
 
 Po montażu system pokazuje drzewo urządzenia z konkretnymi numerami części i podzespołów. Historia urządzenia powinna pozwalać zejść do historii każdego komponentu.
@@ -45,6 +47,8 @@ Status READY_FOR_SHIPMENT jest możliwy tylko wtedy, gdy urządzenie ma wymagane
 W obecnym MVP wymagane komponenty są odczytywane z aktywnego BOM zapisanego w tabelach `device_bom_templates` i `device_bom_items`. Backend porównuje ilości wymagane z faktycznie zainstalowanymi `AssemblyLink`, a bazowa migracja dostarcza minimalny BOM dla `ZSS`, wymagający `CONTROL_PCB`. Część walidacji BOM dzieje się już podczas assembly scan, a pierwszy poprawny montaż przypina urządzenie do konkretnej wersji BOM zapisanej na `AssemblyLink`. Wersja BOM ma jawny status lifecycle `ACTIVE`, `INACTIVE` albo `RETIRED`, a wersja `RETIRED` jest traktowana jako niemodyfikowalna. Shipment pozostaje końcową bramką kompletności i korzysta z tej samej wersji, jeśli urządzenie zostało już do niej przypięte; dla nowych, jeszcze nieprzypiętych urządzeń brak aktywnej wersji BOM blokuje przejście dalej.
 
 Jeśli dla nowego urządzenia istnieje tylko aktywna, ale jeszcze nieobowiązująca albo już wygasła wersja BOM, shipment traktuje to tak samo jak brak aktywnego skutecznego BOM i blokuje `READY_FOR_SHIPMENT` do czasu wejścia właściwej wersji w życie.
+
+To samo dotyczy grup zamienników: shipment uznaje wymóg za spełniony, jeśli łączna ilość zainstalowanych komponentów z danej `substitution_group` zgadza się z BOM, nawet jeżeli fizycznie użyto tylko jednego z dopuszczonych wariantów.
 
 ## Mobile offline commissioning
 

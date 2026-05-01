@@ -94,6 +94,15 @@ Endpointy `usage` i `readiness` zwracają dodatkowo:
 - `effective_to`
 - `is_effective_now`
 
+## Grupy zamienników BOM
+
+Pozycja BOM może mieć opcjonalne pole `substitution_group`. Wszystkie pozycje z tą samą grupą tworzą jeden wspólny wymóg biznesowy:
+
+- `assembly` pozwala zainstalować dowolny dozwolony komponent z grupy
+- limit ilości jest liczony na poziomie całej grupy
+- `shipment` uznaje wymóg za spełniony, jeśli grupa ma wymaganą łączną ilość, nawet gdy użyto tylko jednego z wariantów
+- pozycje w tej samej grupie muszą mieć zgodne `quantity_required` i `is_required`
+
 ## 1. Bootstrap danych podstawowych
 
 Utworzenie operatora:

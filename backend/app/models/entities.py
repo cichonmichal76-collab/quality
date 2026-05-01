@@ -84,6 +84,7 @@ class DeviceBomItem(Base):
         index=True,
     )
     component_type: Mapped[str] = mapped_column(String)
+    substitution_group: Mapped[str | None] = mapped_column(String, nullable=True)
     required_part_number: Mapped[str | None] = mapped_column(String, nullable=True)
     required_revision: Mapped[str | None] = mapped_column(String, nullable=True)
     required_drawing_number: Mapped[str | None] = mapped_column(String, nullable=True)

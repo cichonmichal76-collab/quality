@@ -127,6 +127,8 @@ W wersjach nadal mutowalnych można już nie tylko dodawać, ale też aktualizow
 
 Aktywny lookup BOM uwzględnia teraz również okno obowiązywania wersji przez pola `effective_from` i `effective_to`. Dla nowych montaży i shipmentu bez już przypiętej wersji oznacza to, że backend wybiera tylko BOM jednocześnie `ACTIVE` i skuteczny czasowo.
 
+Pozycje BOM mogą być też łączone w `substitution_group`. Taka grupa pozwala zdefiniować jeden logiczny slot montażowy akceptujący kilka alternatywnych `component_type`, a assembly, coverage i shipment liczą wtedy spełnienie wymogu na poziomie całej grupy zamiast pojedynczej pozycji.
+
 ## Najważniejsze endpointy
 
 - `GET /health`

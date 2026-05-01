@@ -104,6 +104,7 @@ def ensure_device_bom_template(
     variant_code: str = "DEFAULT",
     effective_from: str | None = None,
     effective_to: str | None = None,
+    substitution_group: str | None = None,
     required_part_number: str | None = None,
     required_revision: str | None = None,
     required_drawing_number: str | None = None,
@@ -127,6 +128,7 @@ def ensure_device_bom_template(
         f"/api/device-bom-templates/{device_type}/items?version={version}&variant_code={variant_code}",
         json={
             "component_type": component_type,
+            "substitution_group": substitution_group,
             "required_part_number": required_part_number,
             "required_revision": required_revision,
             "required_drawing_number": required_drawing_number,
@@ -746,6 +748,115 @@ def test_variant_device_falls_back_to_default_bom_when_specific_variant_is_not_e
     rows = {row["device_serial_number"]: row for row in bindings.json()}
     assert rows[device_serial_number]["device_variant_code"] == "PREMIUM"
     assert rows[device_serial_number]["bom_variant_code"] == "DEFAULT"
+
+
+def test_substitution_group_allows_one_of_alternative_components():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB_A",
+        substitution_group="CONTROL_PCB_SLOT",
+        quantity_required=1,
+        version="1.0",
+        is_active=True,
+    )
+    alternative_item = client.post(
+        f"/api/device-bom-templates/{device_type}/items?version=1.0",
+        json={
+            "component_type": "CONTROL_PCB_B",
+            "substitution_group": "CONTROL_PCB_SLOT",
+            "quantity_required": 1,
+            "is_required": True,
+        },
+    )
+    assert alternative_item.status_code == 200
+
+    session = start_work_session(role="PRODUCTION_OPERATOR")
+    device_serial_number = unique_id("DEV")
+    created = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
+    )
+    assert created.status_code == 200
+
+    item = create_qc_passed_item(session, item_type="CONTROL_PCB_B")
+    install = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": item["barcode_value"],
+            "component_type": "CONTROL_PCB_B",
+            "work_session_id": session["work_session_id"],
+        },
+    )
+    assert install.status_code == 200
+
+    coverage = client.get(f"/api/device-bom-templates/{device_type}/coverage?version=1.0")
+    assert coverage.status_code == 200
+    row = next(entry for entry in coverage.json() if entry["device_serial_number"] == device_serial_number)
+    assert row["is_complete"] is True
+    group_row = next(
+        component
+        for component in row["component_coverage"]
+        if component["substitution_group"] == "CONTROL_PCB_SLOT"
+    )
+    assert sorted(group_row["allowed_component_types"]) == ["CONTROL_PCB_A", "CONTROL_PCB_B"]
+    assert group_row["installed_quantity"] == 1
+    assert group_row["status"] == "SATISFIED"
+
+
+def test_substitution_group_blocks_second_alternative_after_slot_is_satisfied():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB_A",
+        substitution_group="CONTROL_PCB_SLOT",
+        quantity_required=1,
+        version="1.0",
+        is_active=True,
+    )
+    alternative_item = client.post(
+        f"/api/device-bom-templates/{device_type}/items?version=1.0",
+        json={
+            "component_type": "CONTROL_PCB_B",
+            "substitution_group": "CONTROL_PCB_SLOT",
+            "quantity_required": 1,
+            "is_required": True,
+        },
+    )
+    assert alternative_item.status_code == 200
+
+    session = start_work_session(role="PRODUCTION_OPERATOR")
+    device_serial_number = unique_id("DEV")
+    created = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
+    )
+    assert created.status_code == 200
+
+    first_item = create_qc_passed_item(session, item_type="CONTROL_PCB_A")
+    first_install = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": first_item["barcode_value"],
+            "component_type": "CONTROL_PCB_A",
+            "work_session_id": session["work_session_id"],
+        },
+    )
+    assert first_install.status_code == 200
+
+    second_item = create_qc_passed_item(session, item_type="CONTROL_PCB_B")
+    blocked = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": second_item["barcode_value"],
+            "component_type": "CONTROL_PCB_B",
+            "work_session_id": session["work_session_id"],
+        },
+    )
+    assert blocked.status_code == 409
+    assert blocked.json()["detail"] == (
+        "Device BOM quantity already satisfied for substitution group CONTROL_PCB_SLOT"
+    )
 
 
 def test_device_bom_template_can_be_approved_with_release_metadata():
@@ -2456,6 +2567,68 @@ def test_shipment_reads_bom_requirements_from_database():
         },
     )
     assert second_install.status_code == 200
+
+    ready = client.patch(
+        f"/api/devices/{device_serial_number}/status",
+        json={"production_status": "READY_FOR_SHIPMENT"},
+    )
+    assert ready.status_code == 200
+    assert ready.json()["production_status"] == "READY_FOR_SHIPMENT"
+
+
+def test_shipment_accepts_substitution_group_when_one_alternative_is_installed():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB_A",
+        substitution_group="CONTROL_PCB_SLOT",
+        quantity_required=1,
+        version="1.0",
+        is_active=True,
+    )
+    alternative_item = client.post(
+        f"/api/device-bom-templates/{device_type}/items?version=1.0",
+        json={
+            "component_type": "CONTROL_PCB_B",
+            "substitution_group": "CONTROL_PCB_SLOT",
+            "quantity_required": 1,
+            "is_required": True,
+        },
+    )
+    assert alternative_item.status_code == 200
+
+    device_serial_number = unique_id("DEV")
+    device_response = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
+    )
+    assert device_response.status_code == 200
+
+    production_session = start_work_session(role="PRODUCTION_OPERATOR")
+    item = create_qc_passed_item(production_session, item_type="CONTROL_PCB_B")
+    install = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": item["barcode_value"],
+            "component_type": "CONTROL_PCB_B",
+            "work_session_id": production_session["work_session_id"],
+        },
+    )
+    assert install.status_code == 200
+
+    final_test_session = start_work_session(role="FINAL_TEST_OPERATOR")
+    final_test = client.post(
+        "/api/final-tests",
+        json={
+            "test_run_id": unique_id("FT"),
+            "device_serial_number": device_serial_number,
+            "result": "PASS",
+            "firmware_version": "1.2.4",
+            "bootloader_version": "0.9.8",
+            "work_session_id": final_test_session["work_session_id"],
+        },
+    )
+    assert final_test.status_code == 200
 
     ready = client.patch(
         f"/api/devices/{device_serial_number}/status",

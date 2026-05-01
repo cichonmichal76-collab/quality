@@ -112,6 +112,8 @@ class DeviceBomTemplateBindingRead(BaseModel):
 
 class DeviceBomComponentCoverageRead(BaseModel):
     component_type: str
+    substitution_group: str | None = None
+    allowed_component_types: list[str] | None = None
     required_quantity: int
     installed_quantity: int
     is_required: bool
@@ -174,6 +176,7 @@ class DeviceBomTemplatePromoteRequest(BaseModel):
 
 class DeviceBomItemCreate(BaseModel):
     component_type: str
+    substitution_group: str | None = None
     required_part_number: str | None = None
     required_revision: str | None = None
     required_drawing_number: str | None = None
@@ -183,6 +186,7 @@ class DeviceBomItemCreate(BaseModel):
 
 
 class DeviceBomItemUpdate(BaseModel):
+    substitution_group: str | None = None
     required_part_number: str | None = None
     required_revision: str | None = None
     required_drawing_number: str | None = None
@@ -201,6 +205,7 @@ class DeviceBomItemRead(DeviceBomItemCreate):
 
 class DeviceBomItemSnapshotRead(BaseModel):
     component_type: str
+    substitution_group: str | None = None
     required_part_number: str | None = None
     required_revision: str | None = None
     required_drawing_number: str | None = None

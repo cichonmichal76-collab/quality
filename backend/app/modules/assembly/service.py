@@ -16,6 +16,7 @@ from app.models import (
     ScanEvent,
 )
 from app.modules.auth_rfid.service import PRODUCTION_SESSION_ROLES, require_active_work_session
+from app.modules.assembly.bom_groups import build_bom_requirement_groups, evaluate_bom_requirement_groups
 from app.modules.assembly import repository
 from app.schemas import (
     AssemblyScanRequest,
@@ -364,42 +365,37 @@ def list_device_bom_template_coverage(
         missing_required_components: list[str] = []
         unexpected_component_types: list[str] = []
 
-        for bom_item in bom_items:
-            installed_quantity = installed_counts.pop(bom_item.component_type, 0)
-            if installed_quantity > bom_item.quantity_required:
-                status = "OVER_INSTALLED"
-            elif bom_item.is_required and installed_quantity < bom_item.quantity_required:
-                status = "MISSING"
-            elif bom_item.is_required:
-                status = "SATISFIED"
-            elif installed_quantity > 0:
-                status = "OPTIONAL_PRESENT"
-            else:
-                status = "OPTIONAL_MISSING"
+        evaluations, remaining_counts = evaluate_bom_requirement_groups(bom_items, installed_counts)
 
-            if bom_item.is_required and installed_quantity < bom_item.quantity_required:
-                if bom_item.quantity_required == 1:
-                    missing_required_components.append(bom_item.component_type)
+        for evaluation in evaluations:
+            requirement = evaluation.requirement
+            if requirement.is_required and evaluation.installed_quantity < requirement.quantity_required:
+                if requirement.quantity_required == 1:
+                    missing_required_components.append(requirement.display_name)
                 else:
                     missing_required_components.append(
-                        f"{bom_item.component_type} x{bom_item.quantity_required}"
+                        f"{requirement.display_name} x{requirement.quantity_required}"
                     )
 
             component_coverage.append(
                 DeviceBomComponentCoverageRead(
-                    component_type=bom_item.component_type,
-                    required_quantity=bom_item.quantity_required,
-                    installed_quantity=installed_quantity,
-                    is_required=bom_item.is_required,
-                    status=status,
+                    component_type=requirement.component_type,
+                    substitution_group=requirement.substitution_group,
+                    allowed_component_types=requirement.allowed_component_types,
+                    required_quantity=requirement.quantity_required,
+                    installed_quantity=evaluation.installed_quantity,
+                    is_required=requirement.is_required,
+                    status=evaluation.status,
                 )
             )
 
-        for unexpected_component_type, installed_quantity in sorted(installed_counts.items()):
+        for unexpected_component_type, installed_quantity in sorted(remaining_counts.items()):
             unexpected_component_types.append(unexpected_component_type)
             component_coverage.append(
                 DeviceBomComponentCoverageRead(
                     component_type=unexpected_component_type,
+                    substitution_group=None,
+                    allowed_component_types=[unexpected_component_type],
                     required_quantity=0,
                     installed_quantity=installed_quantity,
                     is_required=False,
@@ -525,6 +521,7 @@ def release_device_bom_template(
 def _snapshot_bom_item(item: DeviceBomItem) -> DeviceBomItemSnapshotRead:
     return DeviceBomItemSnapshotRead(
         component_type=item.component_type,
+        substitution_group=item.substitution_group,
         required_part_number=item.required_part_number,
         required_revision=item.required_revision,
         required_drawing_number=item.required_drawing_number,
@@ -780,6 +777,7 @@ def clone_device_bom_template(
         cloned_item = DeviceBomItem(
             template_id=cloned_template.id,
             component_type=source_item.component_type,
+            substitution_group=source_item.substitution_group,
             required_part_number=source_item.required_part_number,
             required_revision=source_item.required_revision,
             required_drawing_number=source_item.required_drawing_number,
@@ -868,6 +866,7 @@ def clone_device_bom_template(
                 "variant_code": cloned_template.variant_code,
                 "version": cloned_template.version,
                 "component_type": source_item.component_type,
+                "substitution_group": source_item.substitution_group,
                 "quantity_required": source_item.quantity_required,
                 "is_required": source_item.is_required,
                 "required_part_number": source_item.required_part_number,
@@ -1022,6 +1021,14 @@ def add_device_bom_item(
     _ensure_bom_template_is_mutable(db, template)
     if repository.get_bom_item(db, template.id, payload.component_type):
         raise HTTPException(status_code=409, detail="BOM item already exists for component type")
+    _validate_substitution_group_consistency(
+        db,
+        template.id,
+        payload.component_type,
+        payload.substitution_group,
+        payload.quantity_required,
+        payload.is_required,
+    )
     item = DeviceBomItem(template_id=template.id, **payload.model_dump())
     db.add(item)
     db.flush()
@@ -1066,6 +1073,7 @@ def update_device_bom_item(
         return item
 
     previous_state = {
+        "substitution_group": item.substitution_group,
         "required_part_number": item.required_part_number,
         "required_revision": item.required_revision,
         "required_drawing_number": item.required_drawing_number,
@@ -1075,6 +1083,14 @@ def update_device_bom_item(
     }
     for field_name, value in changes.items():
         setattr(item, field_name, value)
+    _validate_substitution_group_consistency(
+        db,
+        template.id,
+        item.component_type,
+        item.substitution_group,
+        item.quantity_required,
+        item.is_required,
+    )
 
     record_audit_event(
         db,
@@ -1093,6 +1109,7 @@ def update_device_bom_item(
             "component_type": component_type,
             "before": previous_state,
             "after": {
+                "substitution_group": item.substitution_group,
                 "required_part_number": item.required_part_number,
                 "required_revision": item.required_revision,
                 "required_drawing_number": item.required_drawing_number,
@@ -1122,6 +1139,7 @@ def delete_device_bom_item(
 
     removed_snapshot = {
         "component_type": item.component_type,
+        "substitution_group": item.substitution_group,
         "required_part_number": item.required_part_number,
         "required_revision": item.required_revision,
         "required_drawing_number": item.required_drawing_number,
@@ -1199,6 +1217,37 @@ def _resolve_bom_template_for_device(db: Session, device: Device) -> DeviceBomTe
     return None
 
 
+def _validate_substitution_group_consistency(
+    db: Session,
+    template_id: str,
+    component_type: str,
+    substitution_group: str | None,
+    quantity_required: int,
+    is_required: bool,
+) -> None:
+    if not substitution_group:
+        return
+    peer_items = [
+        item
+        for item in repository.list_bom_items_for_template(db, template_id)
+        if item.component_type != component_type and item.substitution_group == substitution_group
+    ]
+    if not peer_items:
+        return
+    reference_item = peer_items[0]
+    if (
+        reference_item.quantity_required != quantity_required
+        or reference_item.is_required != is_required
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "All BOM items in the same substitution group must share "
+                "quantity_required and is_required"
+            ),
+        )
+
+
 def _validate_component_against_bom(
     db: Session,
     device: Device,
@@ -1273,12 +1322,34 @@ def scan_component_for_assembly(
     if existing:
         raise HTTPException(status_code=409, detail="Component already installed in another device")
     if bom_item is not None:
-        installed_count = repository.count_installed_component_type_for_device(
+        assert bom_template is not None
+        installed_links = repository.list_installed_assembly_links_for_device(
             db,
             device.device_serial_number,
-            payload.component_type,
         )
-        if installed_count >= bom_item.quantity_required:
+        installed_counts: dict[str, int] = {}
+        for link in installed_links:
+            installed_counts[link.component_type] = installed_counts.get(link.component_type, 0) + 1
+        requirement = next(
+            group
+            for group in build_bom_requirement_groups(
+                repository.list_bom_items_for_template(db, bom_template.id)
+            )
+            if payload.component_type in group.allowed_component_types
+        )
+        installed_count = sum(
+            installed_counts.get(allowed_component_type, 0)
+            for allowed_component_type in requirement.allowed_component_types
+        )
+        if installed_count >= requirement.quantity_required:
+            if requirement.substitution_group:
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        "Device BOM quantity already satisfied for substitution group "
+                        f"{requirement.substitution_group}"
+                    ),
+                )
             raise HTTPException(
                 status_code=409,
                 detail="Device BOM quantity already satisfied for component type",
