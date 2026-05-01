@@ -380,6 +380,31 @@ curl -X POST http://localhost:8000/api/device-bom-templates/ZSS/activate \
   }'
 ```
 
+Klonowanie istniejącej wersji BOM do nowej rewizji:
+
+```bash
+curl -X POST http://localhost:8000/api/device-bom-templates/ZSS/clone \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source_version": "1.0",
+    "target_version": "1.1",
+    "name": "ZSS Default BOM",
+    "activate": false
+  }'
+```
+
+Klonowanie i natychmiastowa aktywacja nowej wersji:
+
+```bash
+curl -X POST http://localhost:8000/api/device-bom-templates/ZSS/clone \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source_version": "1.0",
+    "target_version": "2.0",
+    "activate": true
+  }'
+```
+
 Wycofanie wersji BOM:
 
 ```bash
@@ -426,6 +451,7 @@ Reguły assembly:
 - pierwszy poprawny skan dla urządzenia przypina je do konkretnego `bom_template_id` i `bom_version`; kolejne skany używają już tej samej wersji BOM
 - wersja BOM może mieć jawny `status`: `ACTIVE`, `INACTIVE` albo `RETIRED`
 - wersja `RETIRED` jest niemodyfikowalna; nie można dodawać do niej nowych pozycji BOM
+- nową wersję BOM można utworzyć przez klonowanie istniejącej wersji wraz z kompletem pozycji i opcjonalną natychmiastową aktywacją
 
 ## 7. Final test
 
@@ -487,6 +513,7 @@ Audit obejmuje także lifecycle BOM:
 - `DEVICE_BOM_TEMPLATE_ACTIVATED`
 - `DEVICE_BOM_TEMPLATE_DEACTIVATED`
 - `DEVICE_BOM_TEMPLATE_RETIRED`
+- `DEVICE_BOM_TEMPLATE_CLONED`
 - `DEVICE_BOM_ITEM_ADDED`
 
 Filtrowanie po work session:

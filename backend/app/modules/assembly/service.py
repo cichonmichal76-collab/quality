@@ -20,6 +20,7 @@ from app.schemas import (
     AssemblyScanRequest,
     ComponentCreate,
     DeviceBomTemplateActivateRequest,
+    DeviceBomTemplateCloneRequest,
     DeviceBomItemCreate,
     DeviceBomTemplateCreate,
     DeviceBomTemplateRetireRequest,
@@ -233,6 +234,164 @@ def retire_device_bom_template(
     db.commit()
     db.refresh(template)
     return template
+
+
+def clone_device_bom_template(
+    db: Session,
+    device_type: str,
+    payload: DeviceBomTemplateCloneRequest,
+) -> DeviceBomTemplate:
+    source_template = get_device_bom_template_or_404(db, device_type, payload.source_version)
+    if repository.get_bom_template_by_device_type_and_version(
+        db,
+        device_type,
+        payload.target_version,
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="BOM template version already exists for device type",
+        )
+
+    deactivated_templates: list[DeviceBomTemplate] = []
+    if payload.activate:
+        deactivated_templates = repository.list_active_bom_templates_for_device_type(
+            db,
+            device_type,
+        )
+        for active_template in deactivated_templates:
+            active_template.is_active = False
+            active_template.status = "INACTIVE"
+
+    cloned_template = DeviceBomTemplate(
+        device_type=device_type,
+        name=payload.name or source_template.name,
+        version=payload.target_version,
+        is_active=payload.activate,
+        status="ACTIVE" if payload.activate else "INACTIVE",
+    )
+    db.add(cloned_template)
+    db.flush()
+
+    source_items = repository.list_bom_items_for_template(db, source_template.id)
+    for source_item in source_items:
+        cloned_item = DeviceBomItem(
+            template_id=cloned_template.id,
+            component_type=source_item.component_type,
+            required_part_number=source_item.required_part_number,
+            required_revision=source_item.required_revision,
+            required_drawing_number=source_item.required_drawing_number,
+            required_drawing_revision=source_item.required_drawing_revision,
+            quantity_required=source_item.quantity_required,
+            is_required=source_item.is_required,
+        )
+        db.add(cloned_item)
+        db.flush()
+
+    record_audit_event(
+        db,
+        event_type="DEVICE_BOM_TEMPLATE_CREATED",
+        entity_type="DEVICE_BOM_TEMPLATE",
+        entity_id=cloned_template.id,
+        result=cloned_template.status,
+        message=f"Created BOM template {cloned_template.device_type} v{cloned_template.version}",
+        payload={
+            "device_type": cloned_template.device_type,
+            "name": cloned_template.name,
+            "version": cloned_template.version,
+            "is_active": cloned_template.is_active,
+            "status": cloned_template.status,
+            "created_from_version": source_template.version,
+        },
+    )
+    record_audit_event(
+        db,
+        event_type="DEVICE_BOM_TEMPLATE_CLONED",
+        entity_type="DEVICE_BOM_TEMPLATE",
+        entity_id=cloned_template.id,
+        result=cloned_template.status,
+        message=(
+            f"Cloned BOM template {source_template.device_type} "
+            f"v{source_template.version} to v{cloned_template.version}"
+        ),
+        payload={
+            "device_type": cloned_template.device_type,
+            "source_template_id": source_template.id,
+            "source_version": source_template.version,
+            "target_template_id": cloned_template.id,
+            "target_version": cloned_template.version,
+            "copied_item_count": len(source_items),
+            "status": cloned_template.status,
+        },
+    )
+    for source_item in source_items:
+        audit_item = repository.get_bom_item(db, cloned_template.id, source_item.component_type)
+        if not audit_item:
+            continue
+        record_audit_event(
+            db,
+            event_type="DEVICE_BOM_ITEM_ADDED",
+            entity_type="DEVICE_BOM_ITEM",
+            entity_id=audit_item.id,
+            result="CLONED",
+            message=(
+                f"Cloned BOM item {source_item.component_type} to "
+                f"{cloned_template.device_type} v{cloned_template.version}"
+            ),
+            payload={
+                "device_type": cloned_template.device_type,
+                "version": cloned_template.version,
+                "component_type": source_item.component_type,
+                "quantity_required": source_item.quantity_required,
+                "is_required": source_item.is_required,
+                "required_part_number": source_item.required_part_number,
+                "required_revision": source_item.required_revision,
+                "required_drawing_number": source_item.required_drawing_number,
+                "required_drawing_revision": source_item.required_drawing_revision,
+                "copied_from_version": source_template.version,
+            },
+        )
+
+    for deactivated_template in deactivated_templates:
+        record_audit_event(
+            db,
+            event_type="DEVICE_BOM_TEMPLATE_DEACTIVATED",
+            entity_type="DEVICE_BOM_TEMPLATE",
+            entity_id=deactivated_template.id,
+            result="INACTIVE",
+            message=(
+                f"Deactivated BOM template {deactivated_template.device_type} "
+                f"v{deactivated_template.version}"
+            ),
+            payload={
+                "device_type": deactivated_template.device_type,
+                "version": deactivated_template.version,
+                "status": deactivated_template.status,
+                "replaced_by_template_id": cloned_template.id,
+                "replaced_by_version": cloned_template.version,
+            },
+        )
+    if cloned_template.is_active:
+        record_audit_event(
+            db,
+            event_type="DEVICE_BOM_TEMPLATE_ACTIVATED",
+            entity_type="DEVICE_BOM_TEMPLATE",
+            entity_id=cloned_template.id,
+            result=cloned_template.status,
+            message=(
+                f"Activated BOM template {cloned_template.device_type} "
+                f"v{cloned_template.version}"
+            ),
+            payload={
+                "device_type": cloned_template.device_type,
+                "version": cloned_template.version,
+                "status": cloned_template.status,
+                "activated_from_version": source_template.version,
+            },
+        )
+
+    db.commit()
+    db.refresh(cloned_template)
+    return cloned_template
 
 
 def add_device_bom_item(

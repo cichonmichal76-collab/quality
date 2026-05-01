@@ -197,6 +197,7 @@ Najważniejsze reguły:
 - pozycja `DeviceBomItem` może też zawęzić dopuszczalny `drawing_number` i `drawing_revision`
 - wersja `DeviceBomTemplate` ma jawny status lifecycle: `ACTIVE`, `INACTIVE` albo `RETIRED`
 - wersja `RETIRED` jest niemodyfikowalna i może być używana dalej tylko przez urządzenia już wcześniej przypięte do tej wersji
+- nowa wersja `DeviceBomTemplate` może powstać przez klonowanie istniejącej wersji razem z kompletem pozycji BOM
 
 Stan implementacji:
 
@@ -524,6 +525,7 @@ Kluczowe pola:
 Zdarzenie audytowe obejmujące także administracyjny lifecycle BOM:
 
 - utworzenie wersji BOM
+- klonowanie wersji BOM
 - dodanie pozycji BOM
 - aktywację wersji BOM
 - dezaktywację poprzednio aktywnej wersji BOM

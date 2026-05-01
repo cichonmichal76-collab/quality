@@ -279,6 +279,84 @@ def test_device_bom_template_versions_can_be_activated():
     assert next(row for row in device_templates if row["version"] == "1.0")["is_active"] is False
 
 
+def test_device_bom_template_can_be_cloned_with_all_items():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=True,
+        required_part_number="PCB-CTRL-001",
+        required_revision="B",
+    )
+    extra_item = client.post(
+        f"/api/device-bom-templates/{device_type}/items?version=1.0",
+        json={
+            "component_type": "FAN_MODULE",
+            "required_drawing_number": "DWG-FAN-010",
+            "required_drawing_revision": "03",
+            "quantity_required": 2,
+            "is_required": True,
+        },
+    )
+    assert extra_item.status_code == 200
+
+    cloned = client.post(
+        f"/api/device-bom-templates/{device_type}/clone",
+        json={
+            "source_version": "1.0",
+            "target_version": "1.1",
+            "name": "Cloned BOM",
+            "activate": False,
+        },
+    )
+    assert cloned.status_code == 200
+    assert cloned.json()["version"] == "1.1"
+    assert cloned.json()["name"] == "Cloned BOM"
+    assert cloned.json()["status"] == "INACTIVE"
+    assert cloned.json()["is_active"] is False
+
+    cloned_items = client.get(f"/api/device-bom-templates/{device_type}/items?version=1.1")
+    assert cloned_items.status_code == 200
+    cloned_rows = {row["component_type"]: row for row in cloned_items.json()}
+    assert set(cloned_rows) == {"CONTROL_PCB", "FAN_MODULE"}
+    assert cloned_rows["CONTROL_PCB"]["required_part_number"] == "PCB-CTRL-001"
+    assert cloned_rows["CONTROL_PCB"]["required_revision"] == "B"
+    assert cloned_rows["FAN_MODULE"]["required_drawing_number"] == "DWG-FAN-010"
+    assert cloned_rows["FAN_MODULE"]["required_drawing_revision"] == "03"
+    assert cloned_rows["FAN_MODULE"]["quantity_required"] == 2
+
+
+def test_cloned_bom_template_can_be_activated_immediately():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=True,
+    )
+
+    cloned = client.post(
+        f"/api/device-bom-templates/{device_type}/clone",
+        json={
+            "source_version": "1.0",
+            "target_version": "2.0",
+            "activate": True,
+        },
+    )
+    assert cloned.status_code == 200
+    assert cloned.json()["version"] == "2.0"
+    assert cloned.json()["status"] == "ACTIVE"
+    assert cloned.json()["is_active"] is True
+
+    templates = client.get("/api/device-bom-templates")
+    assert templates.status_code == 200
+    device_templates = [row for row in templates.json() if row["device_type"] == device_type]
+    assert len(device_templates) == 2
+    assert next(row for row in device_templates if row["version"] == "2.0")["status"] == "ACTIVE"
+    assert next(row for row in device_templates if row["version"] == "1.0")["status"] == "INACTIVE"
+
+
 def test_device_bom_template_can_be_retired_and_cannot_be_reactivated():
     device_type = unique_id("DT")
     ensure_device_bom_template(
@@ -426,6 +504,40 @@ def test_device_bom_retire_audit_event_is_recorded():
     )
     assert retire_event["result"] == "RETIRED"
     assert retire_event["payload"]["reason"] == "Superseded BOM"
+
+
+def test_device_bom_clone_audit_event_is_recorded():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=True,
+    )
+
+    cloned = client.post(
+        f"/api/device-bom-templates/{device_type}/clone",
+        json={
+            "source_version": "1.0",
+            "target_version": "1.1",
+            "activate": False,
+        },
+    )
+    assert cloned.status_code == 200
+
+    template_audit = client.get("/api/audit-events?entity_type=DEVICE_BOM_TEMPLATE")
+    assert template_audit.status_code == 200
+    clone_event = next(
+        row
+        for row in template_audit.json()
+        if row["event_type"] == "DEVICE_BOM_TEMPLATE_CLONED"
+        and row["payload"]
+        and row["payload"].get("device_type") == device_type
+        and row["payload"].get("source_version") == "1.0"
+        and row["payload"].get("target_version") == "1.1"
+    )
+    assert clone_event["result"] == "INACTIVE"
+    assert clone_event["payload"]["copied_item_count"] == 1
 
 
 def test_device_bom_item_can_store_part_number_and_revision_rules():

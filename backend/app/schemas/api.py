@@ -66,6 +66,13 @@ class DeviceBomTemplateRetireRequest(BaseModel):
     reason: str | None = None
 
 
+class DeviceBomTemplateCloneRequest(BaseModel):
+    source_version: str
+    target_version: str
+    name: str | None = None
+    activate: bool = False
+
+
 class DeviceBomItemCreate(BaseModel):
     component_type: str
     required_part_number: str | None = None
