@@ -20,6 +20,7 @@ venv/
 node_modules/
 dist/
 coverage/
+*.tsbuildinfo
 
 # Android / Gradle
 .gradle/
@@ -35,4 +36,3 @@ build/
 backend/servicetrace_dev.db
 backend/app/storage/
 backend_storage/
-

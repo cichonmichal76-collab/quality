@@ -84,6 +84,25 @@ jobs:
       - name: Test runner
         run: pytest
 
+  web-app:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web-app/package-lock.json
+      - name: Install web dependencies
+        run: npm ci
+      - name: Test web app
+        run: npm test
+      - name: Build web app
+        run: npm run build
+
   docker-build:
     runs-on: ubuntu-latest
     steps:

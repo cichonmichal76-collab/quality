@@ -1,18 +1,46 @@
-# Web App - Production / Quality
+# Web App - ServiceTrace Operations
 
-Szkic panelu webowego dla produkcji i jakości.
+Panel webowy dla produkcji i jakości. Aktualny MVP skupia się na dwóch
+kolejkach operacyjnych:
 
-Ekrany MVP:
+- gotowość wysyłki (`GET /api/shipment-readiness`)
+- jakość zamontowanych komponentów (`GET /api/component-quality`)
 
-1. lista urządzeń
-2. utworzenie urządzenia
-3. przypisanie komponentów
-4. uruchomienie checklisty QC
-5. zapis wyników kroków
-6. utworzenie NCR
-7. historia urządzenia
+## Uruchomienie lokalne
 
-Rekomendowany stack do implementacji:
+Backend powinien działać pod `http://localhost:8000`.
 
-- React + TypeScript
-- albo prosty frontend oparty o backend / FastAPI Templates na MVP
+```bash
+npm install
+npm run dev
+```
+
+Domyślny adres API w aplikacji to `/api`. Vite proxy przekazuje ten ruch do
+backendu, więc panel działa bez dodatkowej konfiguracji CORS. Jeśli backend
+działa na innym adresie, ustaw:
+
+```bash
+$env:VITE_BACKEND_TARGET="http://localhost:8001"
+npm run dev
+```
+
+W panelu można też ręcznie zmienić pole `API base`, np. na pełny adres
+`http://localhost:8000/api`.
+
+## Dostępne widoki
+
+- `Wysyłka` - liczba urządzeń gotowych i zablokowanych, główne blokady,
+  rekomendowane akcje, ostatni wynik shipment gate oraz tabela urządzeń.
+- `Komponenty` - gate jakości komponentów, blokujące typy komponentów,
+  primary quality status, rekomendowane akcje oraz tabela urządzeń z
+  komponentami blokującymi.
+
+## Walidacja
+
+```bash
+npm test
+npm run build
+npm run lint
+```
+
+`npm run lint` wykonuje obecnie strict TypeScript check bez osobnego stosu ESLint.

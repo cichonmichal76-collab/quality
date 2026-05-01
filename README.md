@@ -26,11 +26,11 @@ Już zaimplementowane:
 - tworzenie NCR przy blokujących błędach QC lub final testu
 - linki montażowe między urządzeniem a zeskanowanymi komponentami
 - Pythonowy final-test-runner z mock MCU i interfejsem serial/USB
-- przepływ CI dla backendu, runnera i buildu Docker
+- webowy panel operacyjny dla shipment readiness i jakości komponentów
+- przepływ CI dla backendu, runnera, web-app i buildu Docker
 
 Na poziomie scaffoldu lub szkicu:
 
-- `web-app/` jako UI dla produkcji i jakości
 - `android-app/` jako mobilny klient offline-first dla serwisu
 - Service AR Part Identification
 
@@ -40,7 +40,7 @@ Na poziomie scaffoldu lub szkicu:
 .
 |-- backend/             backend FastAPI, modele DB, API, testy, Alembic
 |-- final-test-runner/   Python CLI do final testu urządzenia
-|-- web-app/             scaffold frontendu Production / Quality
+|-- web-app/             panel React dla Production / Quality
 |-- android-app/         scaffold aplikacji Android dla serwisu
 |-- docs/                PRD, pipeline, stack, mechanizmy, backlog
 |-- .github/             przepływ CI, szablon PR, CODEOWNERS
@@ -87,6 +87,19 @@ uvicorn app.main:app --reload
 
 Przydatne zmienne środowiskowe są opisane w [`.env.example`](./.env.example).
 
+### Opcja 3: lokalny panel webowy
+
+Uruchom backend, a potem frontend:
+
+```bash
+cd web-app
+npm install
+npm run dev
+```
+
+Panel używa domyślnie `/api`, a Vite proxy przekazuje ruch do
+`http://localhost:8000`.
+
 ## Testy i quality checks
 
 Backend:
@@ -105,6 +118,14 @@ cd final-test-runner
 pytest
 ruff check .
 mypy servicetrace_runner
+```
+
+Web-app:
+
+```bash
+cd web-app
+npm test
+npm run build
 ```
 
 ## Final-test-runner
@@ -141,6 +162,10 @@ python -m servicetrace_runner.main --device ZSS-000123 --backend http://localhos
 - `POST /api/devices`
 - `GET /api/devices/{serial_number}`
 - `PATCH /api/devices/{serial_number}/status`
+- `GET /api/shipment-readiness`
+- `GET /api/component-quality`
+- `GET /api/devices/{serial_number}/shipment-readiness`
+- `GET /api/devices/{serial_number}/component-quality`
 - `GET /api/audit-events`
 
 ## Ograniczenia produktowe
@@ -180,6 +205,7 @@ Wysokopoziomowo:
 - [docs/CI_CD.md](./docs/CI_CD.md) - kierunek CI/CD
 - [docs/adr/README.md](./docs/adr/README.md) - decyzje architektoniczne
 - [backend/README.md](./backend/README.md) - notatki specyficzne dla backendu
+- [web-app/README.md](./web-app/README.md) - uruchomienie i zakres panelu webowego
 - [final-test-runner/README.md](./final-test-runner/README.md) - użycie runnera
 - [AGENTS.md](./AGENTS.md) - zasady pracy dla agentów kodujących
 
@@ -187,5 +213,5 @@ Wysokopoziomowo:
 
 - wydzielić, jeśli zajdzie potrzeba, osobną domenę `devices`, zamiast zostawiać device CRUD w `assembly`
 - rozszerzyć testy PostgreSQL w CI o bardziej scenariuszowe przypadki integracyjne
-- zbudować używalny UI dla produkcji i jakości
+- dodać testy komponentów i e2e dla panelu webowego
 - rozpocząć MVP Android commissioning
