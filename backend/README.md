@@ -112,6 +112,7 @@ Do smoke testu migracji i seedów dochodzą teraz też:
 
 - `tests/test_alembic_migrations.py`
 - `tests/test_demo_seed.py`
+- `tests/test_dev_dashboard_demo.py`
 
 ## Struktura pakietu
 
