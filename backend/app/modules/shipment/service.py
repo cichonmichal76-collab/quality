@@ -434,6 +434,7 @@ def _build_device_component_quality_read(
         total_installed_components=len(component_rows),
         passing_components=len(component_rows) - blocked_components,
         blocked_components=blocked_components,
+        passes_component_quality_gate=blocked_components == 0,
         primary_quality_status=primary_quality_status,
         primary_blocking_component_type=(
             primary_blocking_component.component_type if primary_blocking_component else None
@@ -740,6 +741,7 @@ def list_device_component_quality(
     primary_blocking_component_serial_number: str | None = None,
     stale_bucket: str | None = None,
     recommended_action: str | None = None,
+    passes_component_quality_gate: bool | None = None,
     created_after: datetime | None = None,
     created_before: datetime | None = None,
     updated_after: datetime | None = None,
@@ -824,6 +826,12 @@ def list_device_component_quality(
         ]
     if only_blocking:
         quality_rows = [row for row in quality_rows if row.blocked_components > 0]
+    if passes_component_quality_gate is not None:
+        quality_rows = [
+            row
+            for row in quality_rows
+            if row.passes_component_quality_gate is passes_component_quality_gate
+        ]
     if quality_status:
         quality_rows = [
             row
@@ -887,6 +895,7 @@ def list_device_component_quality(
             "primary_blocking_component_serial_number": primary_blocking_component_serial_number,
             "stale_bucket": stale_bucket,
             "recommended_action": recommended_action,
+            "passes_component_quality_gate": passes_component_quality_gate,
             "created_after": created_after.isoformat() if created_after else None,
             "created_before": created_before.isoformat() if created_before else None,
             "updated_after": updated_after.isoformat() if updated_after else None,

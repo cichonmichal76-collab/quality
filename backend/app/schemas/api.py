@@ -297,6 +297,7 @@ class DeviceComponentQualityRead(BaseModel):
     total_installed_components: int
     passing_components: int
     blocked_components: int
+    passes_component_quality_gate: bool
     primary_quality_status: str
     primary_blocking_component_type: str | None = None
     primary_blocking_component_serial_number: str | None = None
