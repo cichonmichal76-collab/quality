@@ -5,6 +5,7 @@ from app.core.audit import record_audit_event
 from app.database import utc_now
 from app.models import Device
 from app.modules.assembly.bom_groups import evaluate_bom_requirement_groups
+from app.modules.assembly.service import resolve_bom_template_context
 from app.modules.shipment import repository, rules
 from app.schemas import DeviceStatusUpdate
 
@@ -43,34 +44,8 @@ def update_device_status(db: Session, serial_number: str, payload: DeviceStatusU
 
 
 def _ensure_required_components_installed(db: Session, device: Device) -> None:
-    bom_template = repository.get_bound_bom_template_for_device(db, device.device_serial_number)
-    if not bom_template:
-        bom_template = repository.get_active_bom_template_by_device_type(
-            db,
-            device.device_type,
-            device.variant_code,
-        )
-    if not bom_template and device.variant_code != "DEFAULT":
-        bom_template = repository.get_active_bom_template_by_device_type(
-            db,
-            device.device_type,
-            "DEFAULT",
-        )
-    if not bom_template and (
-        repository.get_any_bom_template_by_device_type_and_variant(
-            db,
-            device.device_type,
-            device.variant_code,
-        )
-        or (
-            device.variant_code != "DEFAULT"
-            and repository.get_any_bom_template_by_device_type_and_variant(
-                db,
-                device.device_type,
-                "DEFAULT",
-            )
-        )
-    ):
+    bom_template, _, blocking_reason, _, _ = resolve_bom_template_context(db, device)
+    if blocking_reason:
         raise HTTPException(
             status_code=400,
             detail="READY_FOR_SHIPMENT requires an active effective BOM template",

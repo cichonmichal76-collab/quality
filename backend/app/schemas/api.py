@@ -66,6 +66,26 @@ class DeviceBomTemplateRead(DeviceBomTemplateCreate):
     model_config = {"from_attributes": True}
 
 
+class DeviceBomResolutionRead(BaseModel):
+    device_serial_number: str
+    device_type: str
+    device_variant_code: str
+    resolution_source: str
+    resolved_template_id: str | None = None
+    resolved_variant_code: str | None = None
+    resolved_version: str | None = None
+    resolved_status: str | None = None
+    resolved_is_active: bool = False
+    resolved_is_effective_now: bool = False
+    is_bound_template: bool
+    is_default_fallback: bool
+    has_variant_templates: bool
+    has_default_templates: bool
+    blocks_assembly: bool
+    blocks_shipment: bool
+    blocking_reason: str | None = None
+
+
 class DeviceBomTemplateLineageNodeRead(BaseModel):
     template_id: str
     device_type: str

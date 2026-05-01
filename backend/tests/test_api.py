@@ -203,6 +203,172 @@ def test_device_lifecycle():
     assert response.status_code == 400
 
 
+def test_device_bom_resolution_reports_no_template_configuration():
+    device_serial_number = unique_id("DEV")
+    device_type = unique_id("DT")
+    created = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
+    )
+    assert created.status_code == 200
+
+    resolution = client.get(f"/api/devices/{device_serial_number}/bom-resolution")
+    assert resolution.status_code == 200
+    payload = resolution.json()
+    assert payload["resolution_source"] == "NO_TEMPLATE_CONFIGURED"
+    assert payload["resolved_template_id"] is None
+    assert payload["blocks_assembly"] is False
+    assert payload["blocks_shipment"] is False
+    assert payload["blocking_reason"] is None
+    assert payload["has_variant_templates"] is False
+    assert payload["has_default_templates"] is False
+
+
+def test_device_bom_resolution_prefers_active_variant_template():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=True,
+        variant_code="DEFAULT",
+    )
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="FAN_MODULE",
+        version="2.0",
+        is_active=True,
+        variant_code="PREMIUM",
+    )
+
+    device_serial_number = unique_id("DEV")
+    created = client.post(
+        "/api/devices",
+        json={
+            "device_serial_number": device_serial_number,
+            "device_type": device_type,
+            "variant_code": "PREMIUM",
+        },
+    )
+    assert created.status_code == 200
+
+    resolution = client.get(f"/api/devices/{device_serial_number}/bom-resolution")
+    assert resolution.status_code == 200
+    payload = resolution.json()
+    assert payload["resolution_source"] == "ACTIVE_VARIANT"
+    assert payload["resolved_variant_code"] == "PREMIUM"
+    assert payload["resolved_version"] == "2.0"
+    assert payload["is_default_fallback"] is False
+    assert payload["blocks_assembly"] is False
+    assert payload["blocks_shipment"] is False
+
+
+def test_device_bom_resolution_falls_back_to_default_template():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=True,
+        variant_code="DEFAULT",
+    )
+
+    device_serial_number = unique_id("DEV")
+    created = client.post(
+        "/api/devices",
+        json={
+            "device_serial_number": device_serial_number,
+            "device_type": device_type,
+            "variant_code": "PREMIUM",
+        },
+    )
+    assert created.status_code == 200
+
+    resolution = client.get(f"/api/devices/{device_serial_number}/bom-resolution")
+    assert resolution.status_code == 200
+    payload = resolution.json()
+    assert payload["resolution_source"] == "ACTIVE_DEFAULT_FALLBACK"
+    assert payload["resolved_variant_code"] == "DEFAULT"
+    assert payload["resolved_version"] == "1.0"
+    assert payload["is_default_fallback"] is True
+    assert payload["has_variant_templates"] is False
+    assert payload["has_default_templates"] is True
+
+
+def test_device_bom_resolution_reports_bound_template_after_retirement():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=True,
+        variant_code="DEFAULT",
+    )
+
+    device_serial_number = unique_id("DEV")
+    created = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
+    )
+    assert created.status_code == 200
+
+    session = start_work_session(role="PRODUCTION_OPERATOR")
+    item = create_qc_passed_item(session, item_type="CONTROL_PCB")
+    installed = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": session["work_session_id"],
+        },
+    )
+    assert installed.status_code == 200
+
+    retired = client.post(
+        f"/api/device-bom-templates/{device_type}/retire",
+        json={"version": "1.0", "reason": "Superseded after build start"},
+    )
+    assert retired.status_code == 200
+
+    resolution = client.get(f"/api/devices/{device_serial_number}/bom-resolution")
+    assert resolution.status_code == 200
+    payload = resolution.json()
+    assert payload["resolution_source"] == "BOUND_TEMPLATE"
+    assert payload["resolved_version"] == "1.0"
+    assert payload["resolved_status"] == "RETIRED"
+    assert payload["is_bound_template"] is True
+    assert payload["blocks_assembly"] is False
+    assert payload["blocks_shipment"] is False
+
+
+def test_device_bom_resolution_reports_missing_active_effective_template():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=True,
+        effective_from=(utc_now() + timedelta(days=1)).isoformat(),
+    )
+
+    device_serial_number = unique_id("DEV")
+    created = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
+    )
+    assert created.status_code == 200
+
+    resolution = client.get(f"/api/devices/{device_serial_number}/bom-resolution")
+    assert resolution.status_code == 200
+    payload = resolution.json()
+    assert payload["resolution_source"] == "NO_ACTIVE_EFFECTIVE_TEMPLATE"
+    assert payload["resolved_template_id"] is None
+    assert payload["blocks_assembly"] is True
+    assert payload["blocks_shipment"] is True
+    assert payload["blocking_reason"] == "No active effective BOM template available for device type"
+    assert payload["has_variant_templates"] is True
+
+
 def test_manual_device_components_can_be_added_and_listed():
     serial_number = unique_id("ZSS")
     created = client.post(

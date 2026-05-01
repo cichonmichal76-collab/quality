@@ -9,6 +9,7 @@ from app.schemas import (
     AssemblyScanRequest,
     ComponentCreate,
     ComponentRead,
+    DeviceBomResolutionRead,
     DeviceBomTemplateBindingRead,
     DeviceBomTemplateCatalogEntryRead,
     DeviceBomTemplateCoverageRead,
@@ -48,6 +49,17 @@ def list_devices(db: Session = Depends(get_db)):
 @router.get("/devices/{device_serial_number}", response_model=DeviceRead)
 def get_device(device_serial_number: str, db: Session = Depends(get_db)):
     return service.get_device_or_404(db, device_serial_number)
+
+
+@router.get(
+    "/devices/{device_serial_number}/bom-resolution",
+    response_model=DeviceBomResolutionRead,
+)
+def get_device_bom_resolution(
+    device_serial_number: str,
+    db: Session = Depends(get_db),
+):
+    return service.get_device_bom_resolution(db, device_serial_number)
 
 
 @router.post("/device-bom-templates", response_model=DeviceBomTemplateRead)

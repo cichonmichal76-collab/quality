@@ -494,6 +494,12 @@ Odczyt użycia i mutowalności konkretnej wersji BOM:
 curl "http://localhost:8000/api/device-bom-templates/ZSS/usage?version=3.0&variant_code=DEFAULT"
 ```
 
+Odczyt BOM realnie rozwiązanego dla konkretnego urządzenia:
+
+```bash
+curl "http://localhost:8000/api/devices/ZSS-000123/bom-resolution"
+```
+
 Zbiorczy katalog wersji BOM dla danego `device_type` i wariantu:
 
 ```bash
@@ -628,6 +634,7 @@ Reguły assembly:
 - aktywną wersję BOM można też promować do nowej rewizji jednym endpointem, który klonuje pozycje, aktywuje nową wersję i wycofuje starą
 - aktywna wersja BOM nie może być już modyfikowana w miejscu, nawet jeśli nie została jeszcze użyta przez urządzenia; zmiany powinny iść przez `clone` albo `promote`
 - endpoint `usage` zwraca także `recommended_action`, np. `modify_or_approve`, `activate_or_modify`, `clone` albo `clone_or_promote`
+- endpoint `bom-resolution` pokazuje dla konkretnego urządzenia, czy backend używa BOM przypiętego po montażu, aktywnego BOM wariantowego, fallbacku `DEFAULT`, czy też nie ma dziś aktywnej skutecznej wersji do użycia
 - endpoint `catalog` zbiera wszystkie wersje BOM dla danego `device_type` i `variant_code` oraz pokazuje dla każdej z nich `can_activate`, `can_release`, liczbę pozycji, liczbę powiązanych urządzeń, blokady lifecycle i `recommended_action`
 - endpoint `bindings` zwraca konkretne urządzenia przypięte do wersji BOM wraz z `installed_component_count` i czasem pierwszego związania
 - endpoint `coverage` zwraca dla tych urządzeń kompletność względem BOM, w tym `missing_required_components` i status per komponent

@@ -21,6 +21,7 @@ from app.modules.assembly import repository
 from app.schemas import (
     AssemblyScanRequest,
     ComponentCreate,
+    DeviceBomResolutionRead,
     DeviceBomComponentCoverageRead,
     DeviceBomTemplateBindingRead,
     DeviceBomTemplateCatalogEntryRead,
@@ -139,6 +140,108 @@ def add_component(db: Session, device_serial_number: str, payload: ComponentCrea
 def list_components(db: Session, device_serial_number: str) -> list[DeviceComponent]:
     get_device_or_404(db, device_serial_number)
     return repository.list_device_components(db, device_serial_number)
+
+
+def resolve_bom_template_context(
+    db: Session,
+    device: Device,
+) -> tuple[DeviceBomTemplate | None, str, str | None, bool, bool]:
+    has_variant_templates = repository.has_bom_templates_for_device_type_and_variant(
+        db,
+        device.device_type,
+        device.variant_code,
+    )
+    has_default_templates = repository.has_bom_templates_for_device_type_and_variant(
+        db,
+        device.device_type,
+        "DEFAULT",
+    )
+
+    bound_template = repository.get_bound_bom_template_for_device(db, device.device_serial_number)
+    if bound_template:
+        return (
+            bound_template,
+            "BOUND_TEMPLATE",
+            None,
+            has_variant_templates,
+            has_default_templates,
+        )
+
+    active_template = repository.get_active_bom_template_by_device_type(
+        db,
+        device.device_type,
+        device.variant_code,
+    )
+    if active_template:
+        return (
+            active_template,
+            "ACTIVE_VARIANT",
+            None,
+            has_variant_templates,
+            has_default_templates,
+        )
+
+    if device.variant_code != "DEFAULT":
+        fallback_template = repository.get_active_bom_template_by_device_type(
+            db,
+            device.device_type,
+            "DEFAULT",
+        )
+        if fallback_template:
+            return (
+                fallback_template,
+                "ACTIVE_DEFAULT_FALLBACK",
+                None,
+                has_variant_templates,
+                has_default_templates,
+            )
+
+    if has_variant_templates or (device.variant_code != "DEFAULT" and has_default_templates):
+        return (
+            None,
+            "NO_ACTIVE_EFFECTIVE_TEMPLATE",
+            "No active effective BOM template available for device type",
+            has_variant_templates,
+            has_default_templates,
+        )
+
+    return (
+        None,
+        "NO_TEMPLATE_CONFIGURED",
+        None,
+        has_variant_templates,
+        has_default_templates,
+    )
+
+
+def get_device_bom_resolution(
+    db: Session,
+    device_serial_number: str,
+) -> DeviceBomResolutionRead:
+    device = get_device_or_404(db, device_serial_number)
+    template, resolution_source, blocking_reason, has_variant_templates, has_default_templates = (
+        resolve_bom_template_context(db, device)
+    )
+
+    return DeviceBomResolutionRead(
+        device_serial_number=device.device_serial_number,
+        device_type=device.device_type,
+        device_variant_code=device.variant_code,
+        resolution_source=resolution_source,
+        resolved_template_id=template.id if template else None,
+        resolved_variant_code=template.variant_code if template else None,
+        resolved_version=template.version if template else None,
+        resolved_status=template.status if template else None,
+        resolved_is_active=template.is_active if template else False,
+        resolved_is_effective_now=_is_bom_template_effective_now(template) if template else False,
+        is_bound_template=resolution_source == "BOUND_TEMPLATE",
+        is_default_fallback=resolution_source == "ACTIVE_DEFAULT_FALLBACK",
+        has_variant_templates=has_variant_templates,
+        has_default_templates=has_default_templates,
+        blocks_assembly=resolution_source == "NO_ACTIVE_EFFECTIVE_TEMPLATE",
+        blocks_shipment=resolution_source == "NO_ACTIVE_EFFECTIVE_TEMPLATE",
+        blocking_reason=blocking_reason,
+    )
 
 
 def create_device_bom_template(db: Session, payload: DeviceBomTemplateCreate) -> DeviceBomTemplate:
@@ -1499,41 +1602,13 @@ def list_device_bom_items(
 
 
 def _resolve_bom_template_for_device(db: Session, device: Device) -> DeviceBomTemplate | None:
-    bound_template = repository.get_bound_bom_template_for_device(db, device.device_serial_number)
-    if bound_template:
-        return bound_template
-    active_template = repository.get_active_bom_template_by_device_type(
-        db,
-        device.device_type,
-        device.variant_code,
-    )
-    if active_template:
-        return active_template
-    if device.variant_code != "DEFAULT":
-        fallback_template = repository.get_active_bom_template_by_device_type(
-            db,
-            device.device_type,
-            "DEFAULT",
-        )
-        if fallback_template:
-            return fallback_template
-    if repository.has_bom_templates_for_device_type_and_variant(
-        db,
-        device.device_type,
-        device.variant_code,
-    ) or (
-        device.variant_code != "DEFAULT"
-        and repository.has_bom_templates_for_device_type_and_variant(
-            db,
-            device.device_type,
-            "DEFAULT",
-        )
-    ):
+    template, _, blocking_reason, _, _ = resolve_bom_template_context(db, device)
+    if blocking_reason:
         raise HTTPException(
             status_code=400,
-            detail="No active effective BOM template available for device type",
+            detail=blocking_reason,
         )
-    return None
+    return template
 
 
 def _validate_substitution_group_consistency(
