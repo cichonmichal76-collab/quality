@@ -8,6 +8,8 @@ from app.modules.assembly.service import get_device_bom_compliance
 from app.modules.shipment import repository, rules
 from app.schemas import (
     DeviceComponentQualityRead,
+    DeviceComponentQualityQueueRead,
+    DeviceComponentQualityStatusSummaryRead,
     DeviceShipmentActionSummaryRead,
     DeviceBomComplianceRead,
     DeviceShipmentBlockingCheckRead,
@@ -47,6 +49,7 @@ VALID_QUEUE_SORT_FIELDS = {"created_at", "device_serial_number", "priority", "re
 MAX_QUEUE_LIMIT = 500
 MAX_SHIPMENT_GATE_HISTORY_LIMIT = 200
 VALID_LATEST_GATE_RESULTS = {"PASS", "BLOCKED", "NONE"}
+VALID_COMPONENT_QUALITY_STATUSES = {"PASS", "QC_NOT_PASSED", "CRITICAL_NCR_OPEN"}
 
 
 def get_device_or_404(db: Session, serial_number: str) -> Device:
@@ -337,6 +340,103 @@ def get_device_component_quality(
         passing_components=len(component_rows) - blocked_components,
         blocked_components=blocked_components,
         components=component_rows,
+    )
+
+
+def _build_component_quality_status_summary(
+    quality_rows: list[DeviceComponentQualityRead],
+) -> list[DeviceComponentQualityStatusSummaryRead]:
+    component_counts: dict[str, int] = {}
+    device_sets: dict[str, set[str]] = {}
+    for row in quality_rows:
+        for component in row.components:
+            component_counts[component.quality_status] = (
+                component_counts.get(component.quality_status, 0) + 1
+            )
+            device_sets.setdefault(component.quality_status, set()).add(row.device_serial_number)
+    return [
+        DeviceComponentQualityStatusSummaryRead(
+            quality_status=quality_status,
+            component_count=component_count,
+            device_count=len(device_sets.get(quality_status, set())),
+        )
+        for quality_status, component_count in sorted(
+            component_counts.items(),
+            key=lambda item: (-item[1], item[0]),
+        )
+    ]
+
+
+def list_device_component_quality(
+    db: Session,
+    *,
+    device_type: str | None = None,
+    variant_code: str | None = None,
+    production_status: str | None = None,
+    quality_status: str | None = None,
+    only_blocking: bool = False,
+    offset: int = 0,
+    limit: int = 100,
+) -> DeviceComponentQualityQueueRead:
+    if offset < 0:
+        raise HTTPException(status_code=400, detail="offset must be >= 0")
+    if limit < 1:
+        raise HTTPException(status_code=400, detail="limit must be >= 1")
+    if limit > MAX_QUEUE_LIMIT:
+        raise HTTPException(status_code=400, detail=f"limit must be <= {MAX_QUEUE_LIMIT}")
+    if quality_status and quality_status not in VALID_COMPONENT_QUALITY_STATUSES:
+        raise HTTPException(status_code=400, detail="Unsupported quality_status filter")
+
+    devices = repository.list_devices_for_shipment(
+        db,
+        device_type=device_type,
+        variant_code=variant_code,
+        limit=None,
+    )
+    quality_rows = [get_device_component_quality(db, device.device_serial_number) for device in devices]
+
+    if production_status:
+        quality_rows = [row for row in quality_rows if row.production_status == production_status]
+    if only_blocking:
+        quality_rows = [row for row in quality_rows if row.blocked_components > 0]
+    if quality_status:
+        quality_rows = [
+            row
+            for row in quality_rows
+            if any(component.quality_status == quality_status for component in row.components)
+        ]
+
+    quality_rows = sorted(
+        quality_rows,
+        key=lambda row: (-row.blocked_components, row.device_serial_number),
+    )
+
+    total_devices = len(quality_rows)
+    devices_with_issues = sum(1 for row in quality_rows if row.blocked_components > 0)
+    paged_rows = quality_rows[offset : offset + limit]
+    returned_count = len(paged_rows)
+    has_more = offset + returned_count < total_devices
+    next_offset = offset + returned_count if has_more else None
+
+    return DeviceComponentQualityQueueRead(
+        total_devices=total_devices,
+        devices_with_issues=devices_with_issues,
+        returned_count=returned_count,
+        offset=offset,
+        limit=limit,
+        has_more=has_more,
+        next_offset=next_offset,
+        filters={
+            "device_type": device_type,
+            "variant_code": variant_code,
+            "production_status": production_status,
+            "quality_status": quality_status,
+            "only_blocking": only_blocking,
+            "offset": offset,
+            "limit": limit,
+        },
+        quality_status_summary=_build_component_quality_status_summary(quality_rows),
+        devices=paged_rows,
     )
 
 

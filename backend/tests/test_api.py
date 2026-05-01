@@ -3779,6 +3779,133 @@ def test_component_quality_endpoint_reports_pass_qc_gap_and_component_ncr():
     ]
 
 
+def test_component_quality_queue_supports_summary_and_filters():
+    queue_device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=queue_device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=True,
+    )
+
+    passing_device = unique_id("DEV")
+    qc_gap_device = unique_id("DEV")
+    ncr_device = unique_id("DEV")
+    for serial_number in (passing_device, qc_gap_device, ncr_device):
+        created = client.post(
+            "/api/devices",
+            json={"device_serial_number": serial_number, "device_type": queue_device_type},
+        )
+        assert created.status_code == 200
+
+    db = SessionLocal()
+    try:
+        template = (
+            db.query(DeviceBomTemplate)
+            .filter(
+                DeviceBomTemplate.device_type == queue_device_type,
+                DeviceBomTemplate.variant_code == "DEFAULT",
+                DeviceBomTemplate.version == "1.0",
+            )
+            .first()
+        )
+        assert template is not None
+
+        passing_component_serial = unique_id("ITEM")
+        qc_gap_component_serial = unique_id("ITEM")
+        ncr_component_serial = unique_id("ITEM")
+        db.add_all(
+            [
+                AssemblyLink(
+                    parent_device_serial_number=passing_device,
+                    child_item_serial_number=passing_component_serial,
+                    child_barcode_value=unique_id("BC"),
+                    component_type="CONTROL_PCB",
+                    installed_by="pytest",
+                    installed_at=utc_now(),
+                    bom_template_id=template.id,
+                    bom_version=template.version,
+                    scan_event_id=unique_id("SCAN"),
+                    status="INSTALLED",
+                    component_qc_passed=True,
+                ),
+                AssemblyLink(
+                    parent_device_serial_number=qc_gap_device,
+                    child_item_serial_number=qc_gap_component_serial,
+                    child_barcode_value=unique_id("BC"),
+                    component_type="FAN_MODULE",
+                    installed_by="pytest",
+                    installed_at=utc_now(),
+                    bom_template_id=template.id,
+                    bom_version=template.version,
+                    scan_event_id=unique_id("SCAN"),
+                    status="INSTALLED",
+                    component_qc_passed=False,
+                ),
+                AssemblyLink(
+                    parent_device_serial_number=ncr_device,
+                    child_item_serial_number=ncr_component_serial,
+                    child_barcode_value=unique_id("BC"),
+                    component_type="IO_MODULE",
+                    installed_by="pytest",
+                    installed_at=utc_now(),
+                    bom_template_id=template.id,
+                    bom_version=template.version,
+                    scan_event_id=unique_id("SCAN"),
+                    status="INSTALLED",
+                    component_qc_passed=True,
+                ),
+            ]
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    component_ncr = client.post(
+        "/api/nonconformities",
+        json={
+            "ncr_id": unique_id("NCR"),
+            "component_serial_number": ncr_component_serial,
+            "process_stage": "INCOMING_INSPECTION",
+            "description": "Critical issue on installed component",
+            "severity": "CRITICAL",
+            "detected_by": "pytest",
+        },
+    )
+    assert component_ncr.status_code == 200
+
+    queue = client.get(f"/api/component-quality?device_type={queue_device_type}")
+    assert queue.status_code == 200
+    payload = queue.json()
+    assert payload["total_devices"] == 3
+    assert payload["devices_with_issues"] == 2
+    assert payload["returned_count"] == 3
+    assert payload["filters"]["device_type"] == queue_device_type
+
+    status_summary = {
+        entry["quality_status"]: (entry["component_count"], entry["device_count"])
+        for entry in payload["quality_status_summary"]
+    }
+    assert status_summary["PASS"] == (1, 1)
+    assert status_summary["QC_NOT_PASSED"] == (1, 1)
+    assert status_summary["CRITICAL_NCR_OPEN"] == (1, 1)
+
+    blocked_only = client.get(
+        f"/api/component-quality?device_type={queue_device_type}&only_blocking=true"
+    )
+    assert blocked_only.status_code == 200
+    assert blocked_only.json()["total_devices"] == 2
+    assert {
+        row["device_serial_number"] for row in blocked_only.json()["devices"]
+    } == {qc_gap_device, ncr_device}
+
+    ncr_only = client.get(
+        f"/api/component-quality?device_type={queue_device_type}&quality_status=CRITICAL_NCR_OPEN"
+    )
+    assert ncr_only.status_code == 200
+    assert [row["device_serial_number"] for row in ncr_only.json()["devices"]] == [ncr_device]
+
+
 def test_audit_events_can_filter_shipment_gate_by_event_type_and_result():
     allowed_device_type = unique_id("DT")
     ensure_device_bom_template(allowed_device_type, component_type="CONTROL_PCB")

@@ -6,6 +6,7 @@ from app.modules.shipment import service
 from app.schemas import (
     AuditEventRead,
     DeviceComponentQualityRead,
+    DeviceComponentQualityQueueRead,
     DeviceRead,
     DeviceShipmentQueueRead,
     DeviceShipmentReadinessRead,
@@ -13,6 +14,29 @@ from app.schemas import (
 )
 
 router = APIRouter(tags=["shipment"])
+
+
+@router.get("/component-quality", response_model=DeviceComponentQualityQueueRead)
+def list_device_component_quality(
+    device_type: str | None = None,
+    variant_code: str | None = None,
+    production_status: str | None = None,
+    quality_status: str | None = None,
+    only_blocking: bool = False,
+    offset: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+):
+    return service.list_device_component_quality(
+        db,
+        device_type=device_type,
+        variant_code=variant_code,
+        production_status=production_status,
+        quality_status=quality_status,
+        only_blocking=only_blocking,
+        offset=offset,
+        limit=limit,
+    )
 
 
 @router.get("/shipment-readiness", response_model=DeviceShipmentQueueRead)

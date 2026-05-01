@@ -292,6 +292,25 @@ class DeviceComponentQualityRead(BaseModel):
     components: list[DeviceInstalledComponentQualityRead]
 
 
+class DeviceComponentQualityStatusSummaryRead(BaseModel):
+    quality_status: str
+    component_count: int
+    device_count: int
+
+
+class DeviceComponentQualityQueueRead(BaseModel):
+    total_devices: int
+    devices_with_issues: int
+    returned_count: int
+    offset: int
+    limit: int
+    has_more: bool
+    next_offset: int | None = None
+    filters: dict[str, str | bool | int | None]
+    quality_status_summary: list[DeviceComponentQualityStatusSummaryRead]
+    devices: list[DeviceComponentQualityRead]
+
+
 class DeviceShipmentReadinessRead(BaseModel):
     device_serial_number: str
     device_type: str
