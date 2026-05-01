@@ -638,6 +638,91 @@ describe("App", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it("flushes pending shipment text filters on Enter", async () => {
+    vi.useFakeTimers();
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(createJsonResponse(shipmentPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const deviceTypeInput = screen.getByLabelText("Typ urządzenia");
+    expect(screen.getByText("SHIP-001")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    fireEvent.change(deviceTypeInput, {
+      target: { value: "DEMO-OPS" },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    fireEvent.keyDown(deviceTypeInput, { key: "Enter", code: "Enter" });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/shipment-readiness?device_type=DEMO-OPS&sort_by=created_at&sort_desc=true&limit=100",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+  });
+
+  it("flushes pending component text filters on Enter", async () => {
+    vi.useFakeTimers();
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(createJsonResponse(shipmentPayload))
+      .mockResolvedValueOnce(createJsonResponse(componentPayload))
+      .mockResolvedValue(createJsonResponse(componentPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Komponenty" }));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.getByText("COMP-001")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    const blockingComponentInput = screen.getByLabelText("Typ blokującego komponentu");
+    fireEvent.change(blockingComponentInput, {
+      target: { value: "FAN_MODULE" },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    fireEvent.keyDown(blockingComponentInput, { key: "Enter", code: "Enter" });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/component-quality?blocking_component_type=FAN_MODULE&only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=100",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+  });
+
   it("applies shipment filters and keeps blocked and ready toggles exclusive", async () => {
     const fetchMock = vi
       .fn()

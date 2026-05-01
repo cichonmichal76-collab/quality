@@ -440,6 +440,7 @@ export function App() {
               filters={shipmentFilters}
               onChange={updateShipmentFilter}
               onReset={() => setShipmentFilters(DEFAULT_SHIPMENT_FILTERS)}
+              onCommitTextFilters={flushShipmentRequestFilters}
             />
             <ShipmentDashboard
               data={shipmentData}
@@ -454,6 +455,7 @@ export function App() {
               filters={componentFilters}
               onChange={updateComponentFilter}
               onReset={() => setComponentFilters(DEFAULT_COMPONENT_FILTERS)}
+              onCommitTextFilters={flushComponentRequestFilters}
             />
             <ComponentDashboard
               data={componentData}
@@ -472,6 +474,7 @@ function ShipmentFiltersPanel({
   filters,
   onChange,
   onReset,
+  onCommitTextFilters,
 }: {
   filters: ShipmentFilters;
   onChange: <Key extends keyof ShipmentFilters>(
@@ -479,6 +482,7 @@ function ShipmentFiltersPanel({
     value: ShipmentFilters[Key],
   ) => void;
   onReset: () => void;
+  onCommitTextFilters: () => void;
 }) {
   const actionOptions: SelectOption[] = SHIPMENT_ACTION_OPTIONS.map((option) => ({
     value: option,
@@ -503,12 +507,14 @@ function ShipmentFiltersPanel({
           label="Typ urządzenia"
           value={filters.device_type}
           onChange={(value) => onChange("device_type", value)}
+          onCommit={onCommitTextFilters}
           placeholder="np. ZSS-VENT"
         />
         <TextField
           label="Wariant"
           value={filters.variant_code}
           onChange={(value) => onChange("variant_code", value)}
+          onCommit={onCommitTextFilters}
           placeholder="np. DEFAULT"
         />
         <SelectField
@@ -576,6 +582,7 @@ function ComponentFiltersPanel({
   filters,
   onChange,
   onReset,
+  onCommitTextFilters,
 }: {
   filters: ComponentFilters;
   onChange: <Key extends keyof ComponentFilters>(
@@ -583,6 +590,7 @@ function ComponentFiltersPanel({
     value: ComponentFilters[Key],
   ) => void;
   onReset: () => void;
+  onCommitTextFilters: () => void;
 }) {
   return (
     <section className="filters-card" aria-label="Filtry jakości komponentów">
@@ -600,12 +608,14 @@ function ComponentFiltersPanel({
           label="Typ urządzenia"
           value={filters.device_type}
           onChange={(value) => onChange("device_type", value)}
+          onCommit={onCommitTextFilters}
           placeholder="np. ZSS-VENT"
         />
         <TextField
           label="Wariant"
           value={filters.variant_code}
           onChange={(value) => onChange("variant_code", value)}
+          onCommit={onCommitTextFilters}
           placeholder="np. SERVICE"
         />
         <SelectField
@@ -618,6 +628,7 @@ function ComponentFiltersPanel({
           label="Typ blokującego komponentu"
           value={filters.blocking_component_type}
           onChange={(value) => onChange("blocking_component_type", value)}
+          onCommit={onCommitTextFilters}
           placeholder="np. CONTROL_PCB"
         />
         <SelectField
@@ -1187,11 +1198,13 @@ function TextField({
   label,
   value,
   onChange,
+  onCommit,
   placeholder,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  onCommit?: () => void;
   placeholder?: string;
 }) {
   return (
@@ -1200,6 +1213,14 @@ function TextField({
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter") {
+            return;
+          }
+
+          event.preventDefault();
+          onCommit?.();
+        }}
         placeholder={placeholder}
         spellCheck={false}
       />
