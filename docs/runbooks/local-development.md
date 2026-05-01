@@ -1,17 +1,17 @@
 # Lokalny development
 
-Ten runbook opisuje, jak uruchomić repo lokalnie do pracy skoncentrowanej głównie na backendzie.
+Ten runbook opisuje, jak uruchomić repo lokalnie do pracy nad backendem, panelem webowym i scenariuszami demo dashboardu.
 
 ## Aktualna rzeczywistość
 
-Najłatwiej pracuje się dziś z repo w kolejności:
+Najczęstsza lokalna pętla pracy wygląda dziś tak:
 
-1. backend
-2. final-test-runner
-3. dokumentacja
-4. web i Android później
+1. backend i migracje
+2. seed danych demo pod dashboard
+3. web-app dla panelu operacyjnego
+4. final-test-runner, gdy zmiana dotyka final testu
 
-Backend jest najbardziej kompletną częścią repo i stanowi centrum ciężkości dla lokalnego developmentu.
+Backend nadal pozostaje centrum ciężkości repo, ale web-app ma już własne testy komponentowe i smoke e2e, więc warto traktować go jako aktywną część codziennego developmentu.
 
 ## Wymagania wstępne
 
@@ -71,6 +71,46 @@ Domyślny lokalny adres backendu:
 http://localhost:8000
 ```
 
+## Opcja 3: szybki start dashboardu demo
+
+Z katalogu głównego repo:
+
+```bash
+cd backend
+pip install -e .[dev]
+cd ..
+py scripts/dev_dashboard_demo.py --reload
+```
+
+Ten skrypt:
+
+- wykona `alembic upgrade head`
+- zasieje dane demo dla dashboardu
+- uruchomi weryfikację kolejek po seedzie
+- wystartuje backend pod `http://127.0.0.1:8000`
+
+Przydatne warianty:
+
+```bash
+py scripts/dev_dashboard_demo.py --no-server
+py scripts/dev_dashboard_demo.py --device-type DEMO-QA --tag QA --reload
+py scripts/dev_dashboard_demo.py --database-url sqlite:///./servicetrace_dashboard_demo_alt.db --no-server
+```
+
+Po przygotowaniu backendu możesz uruchomić panel:
+
+```bash
+cd web-app
+npm install
+npm run dev
+```
+
+Domyślny adres Vite:
+
+```text
+http://127.0.0.1:5173
+```
+
 ## Zmienne środowiskowe
 
 Główne lokalne wartości domyślne są opisane w [`.env.example`](../../.env.example).
@@ -104,6 +144,7 @@ Możesz też użyć:
 
 - `http://localhost:8000/docs`
 - `http://localhost:8000/openapi.json`
+- `http://127.0.0.1:5173`, jeśli działa web-app
 
 ## Lokalny setup final-test-runnera
 
@@ -128,12 +169,13 @@ Ważne:
 ## Rekomendowana codzienna pętla pracy
 
 1. pobierz najnowsze zmiany
-2. uruchom backend
-3. zastosuj migracje
-4. wprowadź zmiany w kodzie
-5. uruchom testy i lint backendu
-6. uruchom testy runnera, jeśli go dotykałeś
-7. pushuj dopiero po zielonych checkach
+2. uruchom backend albo `py scripts/dev_dashboard_demo.py --reload`
+3. zastosuj migracje lub pozwól skryptowi zrobić to za Ciebie
+4. uruchom web-app, jeśli zmiana dotyka dashboardu
+5. wprowadź zmiany w kodzie
+6. uruchom właściwe testy lokalne
+7. uruchom testy runnera, jeśli go dotykałeś
+8. pushuj dopiero po zielonych checkach
 
 ## Częste lokalne pułapki
 
@@ -142,3 +184,4 @@ Ważne:
 - próba uruchomienia uploadu final testu bez aktywnej work session
 - zmiana modeli backendu bez dodania migracji
 - dokładanie logiki do legacy routes zamiast do modułów
+- uruchomienie web-app bez działającego backendu na `localhost:8000` albo bez poprawnego `API base`

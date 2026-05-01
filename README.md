@@ -89,6 +89,12 @@ uvicorn app.main:app --reload
 
 Przydatne zmienne środowiskowe są opisane w [`.env.example`](./.env.example).
 
+Szybki lokalny bootstrap demo dashboardu:
+
+```bash
+py scripts/dev_dashboard_demo.py --reload
+```
+
 ### Opcja 3: lokalny panel webowy
 
 Uruchom backend, a potem frontend:
@@ -216,5 +222,5 @@ Wysokopoziomowo:
 
 - wydzielić, jeśli zajdzie potrzeba, osobną domenę `devices`, zamiast zostawiać device CRUD w `assembly`
 - rozszerzyć testy PostgreSQL w CI o bardziej scenariuszowe przypadki integracyjne
-- rozszerzyć pokrycie panelu webowego o scenariusze filtrów, pustych stanów i paginacji
+- rozszerzyć pokrycie panelu webowego o paginację i bardziej rozbudowane scenariusze regresyjne
 - rozpocząć MVP Android commissioning

@@ -11,6 +11,8 @@ Celem jest to, żeby powtarzalne zadania inżynierskie nie wymagały rekonstruow
 - [Testy i CI](./testing-and-ci.md)
 - [Publikacja zmian do GitHuba](./publish-to-github.md)
 
+Najwygodniejszy szybki start dashboardu demo jest opisany w [Lokalnym developmencie](./local-development.md) i opiera się na skrypcie `scripts/dev_dashboard_demo.py`.
+
 ## Sugerowana kolejność czytania
 
 1. zacznij od [Lokalnego developmentu](./local-development.md)

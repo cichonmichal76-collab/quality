@@ -31,6 +31,13 @@ Co sprawdza każdy krok:
 - `mypy app`
   typecheck backendu
 
+Jeżeli zmiana dotyka migracji albo dashboardowego seeda, warto dodatkowo uruchomić:
+
+```bash
+cd backend
+python -m app.services.demo_seed --device-type DEMO-LOCAL-CHECK --tag CHECK --verify
+```
+
 ## Checki final-test-runnera
 
 Z katalogu głównego repo:
@@ -41,6 +48,26 @@ pytest
 ruff check .
 mypy servicetrace_runner
 ```
+
+## Checki web-app
+
+Z katalogu głównego repo:
+
+```bash
+cd web-app
+npm ci
+npm test
+npm run build
+```
+
+Jeżeli zmieniałeś dashboard, filtry, integrację z API albo warstwę renderowania, uruchom też smoke e2e:
+
+```bash
+cd web-app
+npm run e2e
+```
+
+Do e2e potrzebny jest backend pod `http://127.0.0.1:8000` z danymi `DEMO-E2E` albo własnym seedem o tym samym kształcie.
 
 ## Check buildu Docker
 
@@ -67,6 +94,8 @@ Aktualne joby:
 - `backend`
 - `backend-postgres`
 - `final-test-runner`
+- `web-app`
+- `web-app-e2e`
 - `docker-build`
 
 ## Ważna uwaga o obecnym CI
@@ -76,7 +105,9 @@ Obecnie CI egzekwuje twardo:
 - `ruff` i `mypy` dla backendu
 - `ruff` i `mypy` dla runnera
 - testy backendu na domyślnym środowisku
-- osobny przebieg backendu na PostgreSQL z migracjami Alembic
+- osobny przebieg backendu na PostgreSQL z migracjami Alembic i weryfikacją danych demo dashboardu
+- testy i build web-app
+- smoke test Playwright dla web-app na odpalonym lokalnie API
 
 Najbezpieczniejsza lokalna polityka nadal brzmi:
 
@@ -87,9 +118,10 @@ Najbezpieczniejsza lokalna polityka nadal brzmi:
 1. uruchom `alembic upgrade head`, jeśli zmienił się schemat backendu
 2. uruchom checki backendu, jeśli zmieniałeś backend
 3. uruchom checki runnera, jeśli zmieniałeś runner
-4. przejrzyj `git diff`
-5. commituj świadomie
-6. pushuj tylko z czystego working tree
+4. uruchom checki web-app, jeśli zmieniałeś frontend
+5. przejrzyj `git diff`
+6. commituj świadomie
+7. pushuj tylko z czystego working tree
 
 ## Jak interpretować błędy
 
@@ -112,4 +144,6 @@ Jeśli pada build Docker:
 ## Aktualne luki w testowaniu
 
 - obecny przebieg PostgreSQL sprawdza migracje i suite testów, ale nie pokrywa jeszcze pełnych scenariuszy integracyjnych
-- web i Android nie mają jeszcze sensownych automatycznych checków w tym repo
+- Playwright sprawdza dziś głównie smoke flow dashboardu, a nie pełne scenariusze regresyjne
+- web-app nie ma jeszcze pokrytej paginacji i bardziej rozbudowanych scenariuszy wielostanowych
+- Android nadal nie ma automatycznych checków w tym repo
