@@ -299,6 +299,7 @@ class DeviceComponentQualityRead(BaseModel):
     blocked_components: int
     primary_quality_status: str
     primary_blocking_component_type: str | None = None
+    primary_blocking_component_serial_number: str | None = None
     recommended_action: str
     components: list[DeviceInstalledComponentQualityRead]
 

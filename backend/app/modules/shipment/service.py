@@ -378,9 +378,9 @@ def _recommended_action_for_component_quality_status(primary_quality_status: str
     return NO_COMPONENT_ACTION
 
 
-def _primary_blocking_component_type(
+def _primary_blocking_component(
     component_rows: list[DeviceInstalledComponentQualityRead],
-) -> str | None:
+) -> DeviceInstalledComponentQualityRead | None:
     primary_quality_status = _primary_component_quality_status(component_rows)
     if primary_quality_status == "PASS":
         return None
@@ -394,7 +394,7 @@ def _primary_blocking_component_type(
     )
     if not blocking_rows:
         return None
-    return blocking_rows[0].component_type
+    return blocking_rows[0]
 
 
 def get_device_component_quality(
@@ -418,7 +418,7 @@ def _build_device_component_quality_read(
     component_rows = _build_installed_component_quality_rows(db, device)
     blocked_components = sum(1 for row in component_rows if row.blocks_shipment)
     primary_quality_status = _primary_component_quality_status(component_rows)
-    primary_blocking_component_type = _primary_blocking_component_type(component_rows)
+    primary_blocking_component = _primary_blocking_component(component_rows)
     return DeviceComponentQualityRead(
         device_serial_number=device.device_serial_number,
         device_type=device.device_type,
@@ -434,7 +434,14 @@ def _build_device_component_quality_read(
         passing_components=len(component_rows) - blocked_components,
         blocked_components=blocked_components,
         primary_quality_status=primary_quality_status,
-        primary_blocking_component_type=primary_blocking_component_type,
+        primary_blocking_component_type=(
+            primary_blocking_component.component_type if primary_blocking_component else None
+        ),
+        primary_blocking_component_serial_number=(
+            primary_blocking_component.component_serial_number
+            if primary_blocking_component
+            else None
+        ),
         recommended_action=_recommended_action_for_component_quality_status(primary_quality_status),
         components=component_rows,
     )

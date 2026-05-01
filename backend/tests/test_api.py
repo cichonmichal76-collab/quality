@@ -3767,6 +3767,7 @@ def test_component_quality_endpoint_reports_pass_qc_gap_and_component_ncr():
     assert payload["blocked_components"] == 2
     assert payload["primary_quality_status"] == "CRITICAL_NCR_OPEN"
     assert payload["primary_blocking_component_type"] == "IO_MODULE"
+    assert payload["primary_blocking_component_serial_number"] == component_with_ncr_serial
     assert payload["recommended_action"] == "RESOLVE_COMPONENT_NCR"
     assert payload["stale_bucket"] == "LT_24H"
 
@@ -3926,6 +3927,7 @@ def test_component_quality_queue_supports_summary_and_filters():
     device_rows = {row["device_serial_number"]: row for row in payload["devices"]}
     assert device_rows[passing_device]["primary_quality_status"] == "PASS"
     assert device_rows[passing_device]["primary_blocking_component_type"] is None
+    assert device_rows[passing_device]["primary_blocking_component_serial_number"] is None
     assert device_rows[passing_device]["recommended_action"] == "NO_ACTION"
     assert device_rows[passing_device]["device_created_at"] is not None
     assert device_rows[passing_device]["device_updated_at"] is not None
@@ -3933,12 +3935,20 @@ def test_component_quality_queue_supports_summary_and_filters():
     assert device_rows[qc_gap_device]["primary_quality_status"] == "QC_NOT_PASSED"
     assert device_rows[qc_gap_device]["primary_blocking_component_type"] == "FAN_MODULE"
     assert (
+        device_rows[qc_gap_device]["primary_blocking_component_serial_number"]
+        == qc_gap_component_serial
+    )
+    assert (
         device_rows[qc_gap_device]["recommended_action"]
         == "RUN_COMPONENT_QC_OR_REWORK"
     )
     assert device_rows[qc_gap_device]["stale_bucket"] == "D1_TO_D3"
     assert device_rows[ncr_device]["primary_quality_status"] == "CRITICAL_NCR_OPEN"
     assert device_rows[ncr_device]["primary_blocking_component_type"] == "IO_MODULE"
+    assert (
+        device_rows[ncr_device]["primary_blocking_component_serial_number"]
+        == ncr_component_serial
+    )
     assert (
         device_rows[ncr_device]["recommended_action"] == "RESOLVE_COMPONENT_NCR"
     )
