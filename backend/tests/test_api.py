@@ -3373,6 +3373,22 @@ def test_final_test_pass_sets_status_and_audit_context():
     assert response.status_code == 200
     assert response.json()["production_status"] == "READY_FOR_SHIPMENT"
 
+    device_audit = client.get(
+        f"/api/audit-events?entity_type=DEVICE&entity_id={device_serial_number}"
+    )
+    assert device_audit.status_code == 200
+    shipment_gate_event = next(
+        row for row in device_audit.json() if row["event_type"] == "SHIPMENT_GATE_PASSED"
+    )
+    assert shipment_gate_event["result"] == "PASS"
+    assert shipment_gate_event["message"] == "Shipment gate passed"
+    assert shipment_gate_event["payload"]["requested_status"] == "READY_FOR_SHIPMENT"
+    assert shipment_gate_event["payload"]["current_status_before"] == "FINAL_TEST_PASSED"
+    assert shipment_gate_event["payload"]["can_transition_to_ready_for_shipment"] is True
+    assert shipment_gate_event["payload"]["primary_blocking_code"] is None
+    assert shipment_gate_event["payload"]["recommended_action"] == "MARK_READY_FOR_SHIPMENT"
+    assert shipment_gate_event["payload"]["blocking_codes"] == []
+
     audit = client.get(f"/api/audit-events?entity_type=FINAL_TEST&entity_id={test_run_id}")
     assert audit.status_code == 200
     assert audit.json()[0]["work_session_id"] == session["work_session_id"]
@@ -3412,6 +3428,23 @@ def test_shipment_is_blocked_when_required_component_is_missing():
     assert response.json()["detail"] == (
         "READY_FOR_SHIPMENT requires installed components: CONTROL_PCB"
     )
+
+    device_audit = client.get(
+        f"/api/audit-events?entity_type=DEVICE&entity_id={device_serial_number}"
+    )
+    assert device_audit.status_code == 200
+    shipment_gate_event = next(
+        row for row in device_audit.json() if row["event_type"] == "SHIPMENT_GATE_BLOCKED"
+    )
+    assert shipment_gate_event["result"] == "BLOCKED"
+    assert shipment_gate_event["message"] == "READY_FOR_SHIPMENT requires installed components"
+    assert shipment_gate_event["payload"]["requested_status"] == "READY_FOR_SHIPMENT"
+    assert shipment_gate_event["payload"]["current_status_before"] == "FINAL_TEST_PASSED"
+    assert shipment_gate_event["payload"]["can_transition_to_ready_for_shipment"] is False
+    assert shipment_gate_event["payload"]["primary_blocking_code"] == "BOM_REQUIRED_COMPONENTS_MISSING"
+    assert shipment_gate_event["payload"]["recommended_action"] == "COMPLETE_ASSEMBLY"
+    assert shipment_gate_event["payload"]["blocking_codes"] == ["BOM_REQUIRED_COMPONENTS_MISSING"]
+    assert shipment_gate_event["payload"]["missing_required_components"] == ["CONTROL_PCB"]
 
 
 def test_device_shipment_readiness_reports_multiple_blockers():

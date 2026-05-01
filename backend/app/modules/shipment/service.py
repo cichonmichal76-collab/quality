@@ -42,11 +42,70 @@ def get_device_or_404(db: Session, serial_number: str) -> Device:
     return device
 
 
+def _build_shipment_gate_audit_payload(
+    device: Device,
+    readiness: DeviceShipmentReadinessRead,
+    *,
+    requested_status: str,
+) -> dict:
+    return {
+        "requested_status": requested_status,
+        "current_status_before": device.production_status,
+        "can_transition_to_ready_for_shipment": readiness.can_transition_to_ready_for_shipment,
+        "primary_blocking_code": readiness.primary_blocking_code,
+        "primary_blocking_message": readiness.primary_blocking_message,
+        "recommended_action": readiness.recommended_action,
+        "blocking_reasons": readiness.blocking_reasons,
+        "blocking_codes": [check.code for check in readiness.blocking_checks if check.is_blocking],
+        "final_test_passed": readiness.final_test_passed,
+        "critical_open_ncr_ids": readiness.critical_open_ncr_ids,
+        "bom_resolution_source": readiness.bom_compliance.resolution_source,
+        "bom_passes_gate": readiness.bom_compliance.passes_bom_gate,
+        "missing_required_components": readiness.bom_compliance.missing_required_components,
+        "over_installed_components": readiness.bom_compliance.over_installed_components,
+        "unexpected_component_types": readiness.bom_compliance.unexpected_component_types,
+    }
+
+
+def _record_shipment_gate_decision_audit(
+    db: Session,
+    device: Device,
+    readiness: DeviceShipmentReadinessRead,
+    *,
+    requested_status: str,
+) -> None:
+    is_allowed = readiness.can_transition_to_ready_for_shipment
+    record_audit_event(
+        db,
+        event_type="SHIPMENT_GATE_PASSED" if is_allowed else "SHIPMENT_GATE_BLOCKED",
+        entity_type="DEVICE",
+        entity_id=device.device_serial_number,
+        result="PASS" if is_allowed else "BLOCKED",
+        message=(
+            "Shipment gate passed"
+            if is_allowed
+            else (readiness.primary_blocking_message or readiness.blocking_reasons[0])
+        ),
+        payload=_build_shipment_gate_audit_payload(
+            device,
+            readiness,
+            requested_status=requested_status,
+        ),
+    )
+
+
 def update_device_status(db: Session, serial_number: str, payload: DeviceStatusUpdate) -> Device:
     device = get_device_or_404(db, serial_number)
     if payload.production_status == rules.READY_FOR_SHIPMENT:
         readiness = _build_device_shipment_readiness(db, device)
+        _record_shipment_gate_decision_audit(
+            db,
+            device,
+            readiness,
+            requested_status=payload.production_status,
+        )
         if not readiness.can_transition_to_ready_for_shipment:
+            db.commit()
             raise HTTPException(status_code=400, detail=readiness.blocking_reasons[0])
     device.production_status = payload.production_status
     device.updated_at = utc_now()
