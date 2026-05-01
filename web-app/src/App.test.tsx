@@ -152,6 +152,24 @@ const componentPayload: DeviceComponentQualityQueue = {
   ],
 };
 
+const emptyComponentPayload: DeviceComponentQualityQueue = {
+  ...componentPayload,
+  total_devices: 0,
+  devices_with_issues: 0,
+  returned_count: 0,
+  devices: [],
+  quality_status_summary: [],
+  variant_code_summary: [],
+  production_status_summary: [],
+  primary_quality_status_summary: [],
+  component_quality_gate_summary: [],
+  staleness_summary: [],
+  component_type_summary: [],
+  blocking_component_type_summary: [],
+  primary_blocking_component_type_summary: [],
+  recommended_action_summary: [],
+};
+
 function createJsonResponse(payload: unknown): Response {
   return {
     ok: true,
@@ -254,5 +272,78 @@ describe("App", () => {
     expect(alert).toHaveTextContent(
       "API 503 Service Unavailable: backend temporarily down",
     );
+  });
+
+  it("applies shipment filters and keeps blocked and ready toggles exclusive", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(createJsonResponse(shipmentPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("SHIP-001")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Typ urządzenia"), {
+      target: { value: "DEMO-OPS" },
+    });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/shipment-readiness?device_type=DEMO-OPS&sort_by=created_at&sort_desc=true&limit=100",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+
+    fireEvent.click(screen.getByLabelText("Tylko zablokowane"));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/shipment-readiness?device_type=DEMO-OPS&only_blocked=true&sort_by=created_at&sort_desc=true&limit=100",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+
+    fireEvent.click(screen.getByLabelText("Tylko gotowe"));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/shipment-readiness?device_type=DEMO-OPS&only_ready=true&sort_by=created_at&sort_desc=true&limit=100",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+
+    expect(screen.getByLabelText("Tylko zablokowane")).not.toBeChecked();
+    expect(screen.getByLabelText("Tylko gotowe")).toBeChecked();
+  });
+
+  it("renders empty state for component queue when API returns no devices", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(createJsonResponse(shipmentPayload))
+      .mockResolvedValueOnce(createJsonResponse(emptyComponentPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("SHIP-001")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Komponenty" }));
+
+    expect(
+      await screen.findByText("Brak urządzeń w kolejce jakości komponentów."),
+    ).toBeInTheDocument();
+    const emptyState = screen
+      .getByText("Brak urządzeń w kolejce jakości komponentów.")
+      .closest("section");
+    expect(emptyState).not.toBeNull();
+    expect(
+      within(emptyState as HTMLElement).getByText(
+        "Jeśli backend działa, zawęź lub wyczyść filtry i odśwież kolejkę.",
+      ),
+    ).toBeInTheDocument();
   });
 });
