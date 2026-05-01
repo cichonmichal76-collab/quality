@@ -94,3 +94,36 @@ print(json.dumps({{
     assert summary["component_issue_count"] >= 2
     assert "CRITICAL_NCR_OPEN" in summary["component_primary_statuses"]
     assert "QC_NOT_PASSED" in summary["component_primary_statuses"]
+
+
+def test_dev_dashboard_demo_uses_database_url_from_environment(tmp_path):
+    repo_dir = Path(__file__).resolve().parents[2]
+    database_path = tmp_path / "dashboard-demo-env.db"
+    database_url = f"sqlite:///{database_path.as_posix()}"
+    environment = os.environ.copy()
+    environment["DATABASE_URL"] = database_url
+    environment["SERVICE_TRACE_ENV"] = "pytest-bootstrap"
+
+    bootstrap = subprocess.run(
+        [
+            sys.executable,
+            "scripts/dev_dashboard_demo.py",
+            "--device-type",
+            "DEMO-BOOTSTRAP-ENV",
+            "--tag",
+            "ENV",
+            "--no-server",
+        ],
+        cwd=repo_dir,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert bootstrap.returncode == 0, (
+        "Dashboard bootstrap script did not respect DATABASE_URL from environment.\n"
+        f"stdout:\n{bootstrap.stdout}\n"
+        f"stderr:\n{bootstrap.stderr}"
+    )
+    assert f"DATABASE_URL={database_url}" in bootstrap.stdout
+    assert database_path.exists()

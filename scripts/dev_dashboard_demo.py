@@ -9,6 +9,11 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BACKEND_DIR = REPO_ROOT / "backend"
+DEFAULT_DATABASE_URL = os.environ.get(
+    "DATABASE_URL",
+    "sqlite:///./servicetrace_dashboard_demo.db",
+)
+DEFAULT_SERVICE_TRACE_ENV = os.environ.get("SERVICE_TRACE_ENV", "local")
 
 
 def parse_args() -> argparse.Namespace:
@@ -17,7 +22,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--database-url",
-        default="sqlite:///./servicetrace_dashboard_demo.db",
+        default=DEFAULT_DATABASE_URL,
         help="DATABASE_URL używany podczas migracji, seeda i startu backendu.",
     )
     parser.add_argument(
@@ -43,7 +48,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--environment",
-        default="local",
+        default=DEFAULT_SERVICE_TRACE_ENV,
         help="Wartość SERVICE_TRACE_ENV ustawiana dla komend backendu.",
     )
     parser.add_argument(
