@@ -615,6 +615,7 @@ Reguły assembly:
 - endpoint `coverage` zwraca dla tych urządzeń kompletność względem BOM, w tym `missing_required_components` i status per komponent
 - endpointy `approve` i `release` pozwalają zapisać metadane zatwierdzenia BOM i użyć ich jako jawnej ścieżki wejścia wersji do produkcji
 - `POST /api/device-bom-templates` nie pozwala już tworzyć BOM od razu jako aktywnego; prawidłowy flow to create inactive -> add items -> approve/activate albo release
+- `approve` działa tylko dla wersji `INACTIVE`, które mają już co najmniej jedną pozycję i co najmniej jedną pozycję wymaganą
 - endpoint `readiness` zwraca, czy dana wersja ma zdefiniowane pozycje, co najmniej jedną pozycję wymaganą i approval przed aktywacją
 - `clone` z `activate=true` oraz `promote` wymagają teraz `approved_by`, bo aktywują nową wersję BOM w tym samym kroku
 - jeśli zatwierdzona wersja robocza BOM zostanie zmieniona przez `POST/PATCH/DELETE` na pozycjach BOM, approval jest automatycznie czyszczony i wersję trzeba zatwierdzić ponownie przed aktywacją

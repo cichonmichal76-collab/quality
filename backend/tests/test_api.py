@@ -408,15 +408,9 @@ def test_device_bom_template_activation_requires_required_items():
         f"/api/device-bom-templates/{device_type}/approve",
         json={"version": "1.0", "approved_by": "PYTEST-QA"},
     )
-    assert approved.status_code == 200
-
-    activate = client.post(
-        f"/api/device-bom-templates/{device_type}/activate",
-        json={"version": "1.0"},
-    )
-    assert activate.status_code == 400
-    assert activate.json()["detail"] == (
-        "BOM template is not ready for activation: BOM template has no required items"
+    assert approved.status_code == 400
+    assert approved.json()["detail"] == (
+        "BOM template is not ready for approval: BOM template has no required items"
     )
 
 
@@ -931,6 +925,47 @@ def test_device_bom_template_can_be_approved_with_release_metadata():
     )
     assert usage.status_code == 200
     assert usage.json()["is_approved"] is True
+
+
+def test_empty_bom_template_cannot_be_approved():
+    device_type = unique_id("DT")
+    created = client.post(
+        "/api/device-bom-templates",
+        json={
+            "device_type": device_type,
+            "name": "Empty BOM",
+            "version": "1.0",
+            "is_active": False,
+        },
+    )
+    assert created.status_code == 200
+
+    approved = client.post(
+        f"/api/device-bom-templates/{device_type}/approve",
+        json={"version": "1.0", "approved_by": "QA-LEAD"},
+    )
+    assert approved.status_code == 400
+    assert approved.json()["detail"] == (
+        "BOM template is not ready for approval: "
+        "BOM template has no items; BOM template has no required items"
+    )
+
+
+def test_active_bom_template_cannot_be_approved_again():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=True,
+    )
+
+    approved = client.post(
+        f"/api/device-bom-templates/{device_type}/approve",
+        json={"version": "1.0", "approved_by": "QA-LEAD"},
+    )
+    assert approved.status_code == 400
+    assert approved.json()["detail"] == "Active BOM template cannot be approved again"
 
 
 def test_device_bom_template_can_be_released_and_activated():

@@ -290,19 +290,15 @@ def _evaluate_bom_template_readiness(
     db: Session,
     template: DeviceBomTemplate,
 ) -> DeviceBomTemplateReadinessRead:
-    items = repository.list_bom_items_for_template(db, template.id)
-    item_count = len(items)
-    required_item_count = sum(1 for item in items if item.is_required)
+    item_count, required_item_count, is_effective_now, blocking_reasons = _evaluate_bom_template_requirements(
+        db,
+        template,
+        require_approval=True,
+    )
     now = utc_now()
-    is_effective_now = _is_bom_template_effective_now(template, now)
-    blocking_reasons: list[str] = []
-    if item_count == 0:
-        blocking_reasons.append("BOM template has no items")
-    if required_item_count == 0:
-        blocking_reasons.append("BOM template has no required items")
-    if template.effective_to and template.effective_to < now:
+    if template.effective_to and template.effective_to < now and "BOM template effectivity window already ended" not in blocking_reasons:
         blocking_reasons.append("BOM template effectivity window already ended")
-    if template.approved_at is None:
+    if template.approved_at is None and "BOM template is not approved" not in blocking_reasons:
         blocking_reasons.append("BOM template is not approved")
     return DeviceBomTemplateReadinessRead(
         template_id=template.id,
@@ -321,6 +317,28 @@ def _evaluate_bom_template_readiness(
         can_activate=not blocking_reasons,
         blocking_reasons=blocking_reasons,
     )
+
+
+def _evaluate_bom_template_requirements(
+    db: Session,
+    template: DeviceBomTemplate,
+    require_approval: bool,
+) -> tuple[int, int, bool, list[str]]:
+    items = repository.list_bom_items_for_template(db, template.id)
+    item_count = len(items)
+    required_item_count = sum(1 for item in items if item.is_required)
+    now = utc_now()
+    is_effective_now = _is_bom_template_effective_now(template, now)
+    blocking_reasons: list[str] = []
+    if item_count == 0:
+        blocking_reasons.append("BOM template has no items")
+    if required_item_count == 0:
+        blocking_reasons.append("BOM template has no required items")
+    if template.effective_to and template.effective_to < now:
+        blocking_reasons.append("BOM template effectivity window already ended")
+    if require_approval and template.approved_at is None:
+        blocking_reasons.append("BOM template is not approved")
+    return item_count, required_item_count, is_effective_now, blocking_reasons
 
 
 def get_device_bom_template_readiness(
@@ -477,6 +495,18 @@ def approve_device_bom_template(
     template = get_device_bom_template_or_404(db, device_type, payload.version, variant_code)
     if template.status == "RETIRED":
         raise HTTPException(status_code=400, detail="Retired BOM template cannot be approved")
+    if template.status == "ACTIVE":
+        raise HTTPException(status_code=400, detail="Active BOM template cannot be approved again")
+    _, _, _, blocking_reasons = _evaluate_bom_template_requirements(
+        db,
+        template,
+        require_approval=False,
+    )
+    if blocking_reasons:
+        raise HTTPException(
+            status_code=400,
+            detail="BOM template is not ready for approval: " + "; ".join(blocking_reasons),
+        )
     template.approved_by = payload.approved_by
     template.approved_at = utc_now()
     template.release_note = payload.release_note

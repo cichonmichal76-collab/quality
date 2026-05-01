@@ -209,6 +209,7 @@ Najważniejsze reguły:
 - kompletność tych urządzeń względem BOM jest dostępna przez odczyt `coverage`, który pokazuje braki i status per komponent
 - wersja BOM może mieć też jawne metadane release: `approved_by`, `approved_at` i `release_note`
 - wersja BOM nie może być utworzona od razu jako aktywna; prawidłowy flow to utworzenie wersji roboczej, dodanie pozycji, approval i dopiero aktywacja albo release
+- approval można nadać tylko wersji `INACTIVE`, która ma już sensowną strukturę BOM, czyli co najmniej jedną pozycję i co najmniej jedną pozycję wymaganą
 - stan gotowości konkretnej wersji BOM jest dostępny przez odczyt `readiness`, który blokuje aktywację pustych, wyłącznie opcjonalnych albo niezatwierdzonych wersji
 - jeśli zatwierdzona wersja robocza BOM zostanie później zmodyfikowana na poziomie pozycji, approval jest zrzucany automatycznie i wymaga ponownego nadania
 - aktywna wersja BOM jest już niemutowalna niezależnie od tego, czy została użyta przez urządzenia; dalsze zmiany przechodzą przez kolejną wersję
