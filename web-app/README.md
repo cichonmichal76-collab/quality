@@ -13,6 +13,10 @@ i zapamiętanie w `localStorage`:
 - aktywnej zakładki `Wysyłka` / `Komponenty`
 - ostatnich filtrów dla obu widoków
 
+Tekstowe filtry są odpytywane z debounce `250 ms`. W trakcie oczekiwania panel
+pokazuje znacznik `Oczekuje na zastosowanie`, a klawisz `Enter` wymusza
+natychmiastowe wysłanie bieżącego filtra.
+
 ## Uruchomienie lokalne
 
 Backend powinien działać pod `http://localhost:8000`.

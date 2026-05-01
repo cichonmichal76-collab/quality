@@ -525,11 +525,13 @@ describe("App", () => {
 
     expect(screen.getByLabelText("Typ urządzenia")).toHaveValue("DEMO-OPS");
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("Oczekuje na zastosowanie")).toBeInTheDocument();
 
     await act(async () => {
       vi.advanceTimersByTime(249);
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("Oczekuje na zastosowanie")).toBeInTheDocument();
 
     await act(async () => {
       vi.advanceTimersByTime(1);
@@ -545,6 +547,7 @@ describe("App", () => {
         signal: expect.any(AbortSignal),
       }),
     );
+    expect(screen.queryByText("Oczekuje na zastosowanie")).not.toBeInTheDocument();
   });
 
   it("flushes pending shipment text filters when a non-text filter changes", async () => {
@@ -660,6 +663,7 @@ describe("App", () => {
       target: { value: "DEMO-OPS" },
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("Oczekuje na zastosowanie")).toBeInTheDocument();
 
     fireEvent.keyDown(deviceTypeInput, { key: "Enter", code: "Enter" });
     await act(async () => {
@@ -675,6 +679,7 @@ describe("App", () => {
         signal: expect.any(AbortSignal),
       }),
     );
+    expect(screen.queryByText("Oczekuje na zastosowanie")).not.toBeInTheDocument();
   });
 
   it("flushes pending component text filters on Enter", async () => {
@@ -706,6 +711,7 @@ describe("App", () => {
       target: { value: "FAN_MODULE" },
     });
     expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(screen.getByText("Oczekuje na zastosowanie")).toBeInTheDocument();
 
     fireEvent.keyDown(blockingComponentInput, { key: "Enter", code: "Enter" });
     await act(async () => {
@@ -721,6 +727,7 @@ describe("App", () => {
         signal: expect.any(AbortSignal),
       }),
     );
+    expect(screen.queryByText("Oczekuje na zastosowanie")).not.toBeInTheDocument();
   });
 
   it("applies shipment filters and keeps blocked and ready toggles exclusive", async () => {

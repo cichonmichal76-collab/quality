@@ -265,6 +265,13 @@ select:focus {
   margin-bottom: 16px;
 }
 
+.section-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .section-heading h2 {
   margin: 0;
   font-size: 1.14rem;
@@ -493,6 +500,15 @@ td span {
   border-radius: 999px;
   background: rgb(185 106 24 / 13%);
   color: var(--amber);
+  padding: 7px 10px;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.pending-chip {
+  border-radius: 999px;
+  background: rgb(19 78 74 / 10%);
+  color: rgb(17 94 89);
   padding: 7px 10px;
   font-size: 0.78rem;
   font-weight: 900;

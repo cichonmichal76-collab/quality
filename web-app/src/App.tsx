@@ -184,13 +184,21 @@ export function App() {
   const [componentFilters, setComponentFilters] = useState(() => {
     return readStoredComponentFilters();
   });
-  const [shipmentRequestFilters, flushShipmentRequestFilters] =
+  const [
+    shipmentRequestFilters,
+    flushShipmentRequestFilters,
+    shipmentFiltersPending,
+  ] =
     useDebouncedRequestFilters(
       shipmentFilters,
       SHIPMENT_TEXT_FILTER_KEYS,
       TEXT_FILTER_DEBOUNCE_MS,
     );
-  const [componentRequestFilters, flushComponentRequestFilters] =
+  const [
+    componentRequestFilters,
+    flushComponentRequestFilters,
+    componentFiltersPending,
+  ] =
     useDebouncedRequestFilters(
       componentFilters,
       COMPONENT_TEXT_FILTER_KEYS,
@@ -441,6 +449,7 @@ export function App() {
               onChange={updateShipmentFilter}
               onReset={() => setShipmentFilters(DEFAULT_SHIPMENT_FILTERS)}
               onCommitTextFilters={flushShipmentRequestFilters}
+              hasPendingTextFilters={shipmentFiltersPending}
             />
             <ShipmentDashboard
               data={shipmentData}
@@ -456,6 +465,7 @@ export function App() {
               onChange={updateComponentFilter}
               onReset={() => setComponentFilters(DEFAULT_COMPONENT_FILTERS)}
               onCommitTextFilters={flushComponentRequestFilters}
+              hasPendingTextFilters={componentFiltersPending}
             />
             <ComponentDashboard
               data={componentData}
@@ -475,6 +485,7 @@ function ShipmentFiltersPanel({
   onChange,
   onReset,
   onCommitTextFilters,
+  hasPendingTextFilters,
 }: {
   filters: ShipmentFilters;
   onChange: <Key extends keyof ShipmentFilters>(
@@ -483,6 +494,7 @@ function ShipmentFiltersPanel({
   ) => void;
   onReset: () => void;
   onCommitTextFilters: () => void;
+  hasPendingTextFilters: boolean;
 }) {
   const actionOptions: SelectOption[] = SHIPMENT_ACTION_OPTIONS.map((option) => ({
     value: option,
@@ -498,9 +510,14 @@ function ShipmentFiltersPanel({
           <p className="eyebrow">Kontrola kolejki</p>
           <h2>Filtry wysyłki</h2>
         </div>
-        <button className="ghost-button" type="button" onClick={onReset}>
-          Wyczyść
-        </button>
+        <div className="section-actions">
+          {hasPendingTextFilters ? (
+            <span className="pending-chip">Oczekuje na zastosowanie</span>
+          ) : null}
+          <button className="ghost-button" type="button" onClick={onReset}>
+            Wyczyść
+          </button>
+        </div>
       </div>
       <div className="filters-grid">
         <TextField
@@ -583,6 +600,7 @@ function ComponentFiltersPanel({
   onChange,
   onReset,
   onCommitTextFilters,
+  hasPendingTextFilters,
 }: {
   filters: ComponentFilters;
   onChange: <Key extends keyof ComponentFilters>(
@@ -591,6 +609,7 @@ function ComponentFiltersPanel({
   ) => void;
   onReset: () => void;
   onCommitTextFilters: () => void;
+  hasPendingTextFilters: boolean;
 }) {
   return (
     <section className="filters-card" aria-label="Filtry jakości komponentów">
@@ -599,9 +618,14 @@ function ComponentFiltersPanel({
           <p className="eyebrow">Triage jakości</p>
           <h2>Filtry komponentów</h2>
         </div>
-        <button className="ghost-button" type="button" onClick={onReset}>
-          Wyczyść
-        </button>
+        <div className="section-actions">
+          {hasPendingTextFilters ? (
+            <span className="pending-chip">Oczekuje na zastosowanie</span>
+          ) : null}
+          <button className="ghost-button" type="button" onClick={onReset}>
+            Wyczyść
+          </button>
+        </div>
       </div>
       <div className="filters-grid">
         <TextField
@@ -1680,8 +1704,9 @@ function useDebouncedRequestFilters<T extends object>(
   filters: T,
   textKeys: Array<keyof T>,
   delayMs: number,
-): [T, (nextFilters?: T) => void] {
+): [T, (nextFilters?: T) => void, boolean] {
   const [requestFilters, setRequestFilters] = useState(filters);
+  const [hasPendingTextChanges, setHasPendingTextChanges] = useState(false);
   const previousFiltersRef = useRef(filters);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -1693,6 +1718,7 @@ function useDebouncedRequestFilters<T extends object>(
 
     previousFiltersRef.current = nextFilters;
     setRequestFilters(nextFilters);
+    setHasPendingTextChanges(false);
   };
 
   useEffect(() => {
@@ -1713,13 +1739,16 @@ function useDebouncedRequestFilters<T extends object>(
     const onlyTextChanges = changedKeys.every((key) => textKeys.includes(key));
 
     if (onlyTextChanges) {
+      setHasPendingTextChanges(true);
       timeoutRef.current = setTimeout(() => {
         previousFiltersRef.current = filters;
         setRequestFilters(filters);
+        setHasPendingTextChanges(false);
         timeoutRef.current = null;
       }, delayMs);
     } else {
       setRequestFilters(filters);
+      setHasPendingTextChanges(false);
     }
 
     previousFiltersRef.current = filters;
@@ -1733,7 +1762,7 @@ function useDebouncedRequestFilters<T extends object>(
     };
   }, []);
 
-  return [requestFilters, flush];
+  return [requestFilters, flush, hasPendingTextChanges];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
