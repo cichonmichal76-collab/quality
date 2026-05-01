@@ -415,6 +415,7 @@ Reguły assembly:
 - status itemu nie może być `QC_FAILED`, `SCRAPPED` ani `REWORK_REQUIRED`
 - typ zeskanowanego itemu musi zgadzać się z `component_type`
 - jeśli dla `device_type` istnieje aktywny BOM, `component_type` musi być dozwolony przez ten BOM
+- jeśli dla `device_type` istnieją już wersje BOM, ale żadna nie jest aktywna, nowy assembly scan jest blokowany do czasu aktywacji kolejnej wersji
 - jeśli BOM definiuje `required_part_number`, zeskanowany item musi mieć dokładnie ten `part_number`
 - jeśli BOM definiuje `required_revision`, zeskanowany item musi mieć dokładnie tę `revision`
 - jeśli BOM definiuje `required_drawing_number`, zeskanowany item musi mieć dokładnie ten `drawing_number`
@@ -424,6 +425,7 @@ Reguły assembly:
 - assembly zapisuje zarówno relację montażową, jak i ślad skanu oraz audytu
 - pierwszy poprawny skan dla urządzenia przypina je do konkretnego `bom_template_id` i `bom_version`; kolejne skany używają już tej samej wersji BOM
 - wersja BOM może mieć jawny `status`: `ACTIVE`, `INACTIVE` albo `RETIRED`
+- wersja `RETIRED` jest niemodyfikowalna; nie można dodawać do niej nowych pozycji BOM
 
 ## 7. Final test
 
@@ -469,6 +471,7 @@ Shipment gate w aktualnym MVP:
 - otwarta krytyczna NCR blokuje shipment
 - shipment pozostaje końcową walidacją kompletności, nawet jeśli assembly wcześniej odrzuci niedozwolony skan
 - jeśli urządzenie zostało już przypięte do konkretnego `bom_version` podczas assembly, shipment używa tej samej wersji zamiast aktualnie aktywnej
+- jeśli urządzenie nie jest jeszcze przypięte do BOM, a dla jego `device_type` nie ma aktywnej wersji, shipment jest blokowany do czasu aktywacji nowego BOM
 
 ## 8. Audit trail
 

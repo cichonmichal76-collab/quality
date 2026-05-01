@@ -184,6 +184,7 @@ Najważniejsze reguły:
 - komponent ze złym statusem nie może być zamontowany
 - typ zeskanowanego itemu musi zgadzać się z deklarowanym `component_type`
 - jeśli aktywny BOM istnieje dla `device_type`, komponent musi być dozwolony przez ten BOM
+- jeśli dla `device_type` istnieją już wersje BOM, ale żadna nie jest aktywna, nowy montaż urządzenia bez przypiętej wersji BOM jest blokowany
 - jeśli pozycja BOM wymaga konkretnego `part_number`, zeskanowany item musi mieć dokładnie tę wartość
 - jeśli pozycja BOM wymaga konkretnej `revision`, zeskanowany item musi mieć dokładnie tę rewizję
 - jeśli pozycja BOM wymaga konkretnego `drawing_number`, zeskanowany item musi mieć dokładnie ten numer rysunku
@@ -195,6 +196,7 @@ Najważniejsze reguły:
 - pozycja `DeviceBomItem` może dodatkowo zawęzić dopuszczalny `part_number` i `revision`
 - pozycja `DeviceBomItem` może też zawęzić dopuszczalny `drawing_number` i `drawing_revision`
 - wersja `DeviceBomTemplate` ma jawny status lifecycle: `ACTIVE`, `INACTIVE` albo `RETIRED`
+- wersja `RETIRED` jest niemodyfikowalna i może być używana dalej tylko przez urządzenia już wcześniej przypięte do tej wersji
 
 Stan implementacji:
 
@@ -246,6 +248,7 @@ Aktualnie zaimplementowana reguła:
 - wymagane komponenty są odczytywane z aktywnego BOM w tabelach `device_bom_templates` i `device_bom_items`
 - brakujący komponent jest raportowany w błędzie wraz z ilością, jeśli `quantity_required > 1`
 - otwarta krytyczna NCR blokuje shipment
+- jeśli urządzenie nie jest jeszcze przypięte do BOM, a dla jego `device_type` nie ma aktywnej wersji, shipment jest blokowany
 
 Stan implementacji:
 

@@ -242,6 +242,8 @@ def add_device_bom_item(
     version: str | None = None,
 ) -> DeviceBomItem:
     template = get_device_bom_template_or_404(db, device_type, version)
+    if template.status == "RETIRED":
+        raise HTTPException(status_code=400, detail="Retired BOM template cannot be modified")
     if repository.get_bom_item(db, template.id, payload.component_type):
         raise HTTPException(status_code=409, detail="BOM item already exists for component type")
     item = DeviceBomItem(template_id=template.id, **payload.model_dump())
@@ -281,7 +283,12 @@ def _resolve_bom_template_for_device(db: Session, device: Device) -> DeviceBomTe
     bound_template = repository.get_bound_bom_template_for_device(db, device.device_serial_number)
     if bound_template:
         return bound_template
-    return repository.get_active_bom_template_by_device_type(db, device.device_type)
+    active_template = repository.get_active_bom_template_by_device_type(db, device.device_type)
+    if active_template:
+        return active_template
+    if repository.get_bom_template_by_device_type(db, device.device_type):
+        raise HTTPException(status_code=400, detail="No active BOM template available for device type")
+    return None
 
 
 def _validate_component_against_bom(

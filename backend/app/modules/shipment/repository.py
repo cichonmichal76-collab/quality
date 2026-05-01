@@ -48,6 +48,18 @@ def get_active_bom_template_by_device_type(
     )
 
 
+def get_any_bom_template_by_device_type(
+    db: Session,
+    device_type: str,
+) -> DeviceBomTemplate | None:
+    return (
+        db.query(DeviceBomTemplate)
+        .filter(DeviceBomTemplate.device_type == device_type)
+        .order_by(DeviceBomTemplate.created_at.desc())
+        .first()
+    )
+
+
 def get_bound_bom_template_for_device(
     db: Session,
     device_serial_number: str,

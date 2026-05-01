@@ -45,6 +45,11 @@ def _ensure_required_components_installed(db: Session, device: Device) -> None:
     bom_template = repository.get_bound_bom_template_for_device(db, device.device_serial_number)
     if not bom_template:
         bom_template = repository.get_active_bom_template_by_device_type(db, device.device_type)
+    if not bom_template and repository.get_any_bom_template_by_device_type(db, device.device_type):
+        raise HTTPException(
+            status_code=400,
+            detail="READY_FOR_SHIPMENT requires an active BOM template",
+        )
     if not bom_template:
         return
     required_bom_items = repository.list_required_bom_items_for_template(db, bom_template.id)

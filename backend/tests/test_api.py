@@ -321,6 +321,33 @@ def test_device_bom_template_can_be_retired_and_cannot_be_reactivated():
     assert retired_template["is_active"] is False
 
 
+def test_retired_bom_template_cannot_be_modified():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=True,
+    )
+
+    retired = client.post(
+        f"/api/device-bom-templates/{device_type}/retire",
+        json={"version": "1.0", "reason": "Frozen for audit"},
+    )
+    assert retired.status_code == 200
+
+    add_item = client.post(
+        f"/api/device-bom-templates/{device_type}/items?version=1.0",
+        json={
+            "component_type": "FAN_MODULE",
+            "quantity_required": 1,
+            "is_required": True,
+        },
+    )
+    assert add_item.status_code == 400
+    assert add_item.json()["detail"] == "Retired BOM template cannot be modified"
+
+
 def test_device_bom_audit_events_are_recorded():
     device_type = unique_id("DT")
     ensure_device_bom_template(
@@ -1065,6 +1092,41 @@ def test_assembly_scan_blocks_drawing_revision_mismatch():
     assert blocked.json()["detail"] == "Scanned item drawing revision does not match device BOM"
 
 
+def test_assembly_scan_blocks_when_device_type_has_no_active_bom():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=True,
+    )
+    retired = client.post(
+        f"/api/device-bom-templates/{device_type}/retire",
+        json={"version": "1.0", "reason": "Pending successor"},
+    )
+    assert retired.status_code == 200
+
+    session = start_work_session(role="PRODUCTION_OPERATOR")
+    device_serial_number = unique_id("DEV")
+    create_device = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
+    )
+    assert create_device.status_code == 200
+
+    item = create_qc_passed_item(session, item_type="CONTROL_PCB")
+    blocked = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": session["work_session_id"],
+        },
+    )
+    assert blocked.status_code == 400
+    assert blocked.json()["detail"] == "No active BOM template available for device type"
+
+
 def test_expired_work_session_is_timed_out_and_blocked():
     session = start_work_session()
     db = SessionLocal()
@@ -1242,6 +1304,106 @@ def test_shipment_reads_bom_requirements_from_database():
         },
     )
     assert second_install.status_code == 200
+
+    ready = client.patch(
+        f"/api/devices/{device_serial_number}/status",
+        json={"production_status": "READY_FOR_SHIPMENT"},
+    )
+    assert ready.status_code == 200
+    assert ready.json()["production_status"] == "READY_FOR_SHIPMENT"
+
+
+def test_shipment_blocks_when_device_type_has_no_active_bom():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=True,
+    )
+    retired = client.post(
+        f"/api/device-bom-templates/{device_type}/retire",
+        json={"version": "1.0", "reason": "Pending successor"},
+    )
+    assert retired.status_code == 200
+
+    device_serial_number = unique_id("DEV")
+    device_response = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
+    )
+    assert device_response.status_code == 200
+
+    final_test_session = start_work_session(role="FINAL_TEST_OPERATOR")
+    final_test = client.post(
+        "/api/final-tests",
+        json={
+            "test_run_id": unique_id("FT"),
+            "device_serial_number": device_serial_number,
+            "result": "PASS",
+            "firmware_version": "1.2.4",
+            "bootloader_version": "0.9.8",
+            "work_session_id": final_test_session["work_session_id"],
+        },
+    )
+    assert final_test.status_code == 200
+
+    blocked = client.patch(
+        f"/api/devices/{device_serial_number}/status",
+        json={"production_status": "READY_FOR_SHIPMENT"},
+    )
+    assert blocked.status_code == 400
+    assert blocked.json()["detail"] == "READY_FOR_SHIPMENT requires an active BOM template"
+
+
+def test_shipment_uses_bound_bom_even_after_template_retirement():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=True,
+    )
+
+    device_serial_number = unique_id("DEV")
+    device_response = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
+    )
+    assert device_response.status_code == 200
+
+    production_session = start_work_session(role="PRODUCTION_OPERATOR")
+    item = create_qc_passed_item(production_session, item_type="CONTROL_PCB")
+    install = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": production_session["work_session_id"],
+        },
+    )
+    assert install.status_code == 200
+    assert install.json()["bom_version"] == "1.0"
+
+    retired = client.post(
+        f"/api/device-bom-templates/{device_type}/retire",
+        json={"version": "1.0", "reason": "Superseded after build start"},
+    )
+    assert retired.status_code == 200
+
+    final_test_session = start_work_session(role="FINAL_TEST_OPERATOR")
+    final_test = client.post(
+        "/api/final-tests",
+        json={
+            "test_run_id": unique_id("FT"),
+            "device_serial_number": device_serial_number,
+            "result": "PASS",
+            "firmware_version": "1.2.4",
+            "bootloader_version": "0.9.8",
+            "work_session_id": final_test_session["work_session_id"],
+        },
+    )
+    assert final_test.status_code == 200
 
     ready = client.patch(
         f"/api/devices/{device_serial_number}/status",

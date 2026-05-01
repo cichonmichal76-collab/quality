@@ -120,7 +120,7 @@ Aktualne moduły:
 - `files`
 - `nonconformities`
 
-Zaobserwowane domeny backendu działają już przez routery i serwisy modułowe. Moduł `assembly` obsługuje dodatkowo device CRUD, proste endpointy komponentów i lifecycle BOM per `device_type`, razem z regułami `part_number`, `revision`, `drawing_number` i `drawing_revision`.
+Zaobserwowane domeny backendu działają już przez routery i serwisy modułowe. Moduł `assembly` obsługuje dodatkowo device CRUD, proste endpointy komponentów i lifecycle BOM per `device_type`, razem z regułami `part_number`, `revision`, `drawing_number` i `drawing_revision`. Status `RETIRED` zamraża wersję BOM dla nowych zmian i blokuje nowe montaże lub shipment bez aktywnej wersji, jeśli urządzenie nie jest jeszcze przypięte do konkretnego BOM.
 
 ## Najważniejsze endpointy
 
