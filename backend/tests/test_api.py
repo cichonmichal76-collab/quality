@@ -553,6 +553,7 @@ def test_qc_run_pass_updates_item_status():
 
 
 def test_assembly_scan_installs_component_and_blocks_duplicate_use():
+    ensure_device_bom_template("ZSS")
     session = start_work_session(role="PRODUCTION_OPERATOR")
     device_serial_number = unique_id("ZSS")
 
@@ -562,7 +563,7 @@ def test_assembly_scan_installs_component_and_blocks_duplicate_use():
     )
     assert create_device.status_code == 200
 
-    item = create_qc_passed_item(session)
+    item = create_qc_passed_item(session, item_type="CONTROL_PCB")
     item_serial_number = item["item_serial_number"]
     barcode_value = item["barcode_value"]
 
@@ -598,6 +599,97 @@ def test_assembly_scan_installs_component_and_blocks_duplicate_use():
     )
     assert duplicate.status_code == 409
     assert duplicate.json()["detail"] == "Component already installed in another device"
+
+
+def test_assembly_scan_blocks_component_type_not_in_active_bom():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(device_type=device_type, component_type="CONTROL_PCB")
+    session = start_work_session(role="PRODUCTION_OPERATOR")
+    device_serial_number = unique_id("DEV")
+
+    create_device = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
+    )
+    assert create_device.status_code == 200
+
+    item = create_qc_passed_item(session, item_type="FAN_MODULE")
+    blocked = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": item["barcode_value"],
+            "component_type": "FAN_MODULE",
+            "work_session_id": session["work_session_id"],
+        },
+    )
+    assert blocked.status_code == 400
+    assert blocked.json()["detail"] == "Component type is not allowed by active BOM"
+
+
+def test_assembly_scan_blocks_item_type_mismatch():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(device_type=device_type, component_type="CONTROL_PCB")
+    session = start_work_session(role="PRODUCTION_OPERATOR")
+    device_serial_number = unique_id("DEV")
+
+    create_device = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
+    )
+    assert create_device.status_code == 200
+
+    item = create_qc_passed_item(session, item_type="SENSOR_MODULE")
+    blocked = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": session["work_session_id"],
+        },
+    )
+    assert blocked.status_code == 400
+    assert blocked.json()["detail"] == "Scanned item type does not match requested component type"
+
+
+def test_assembly_scan_blocks_component_count_above_bom_quantity():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="FAN_MODULE",
+        quantity_required=1,
+    )
+    session = start_work_session(role="PRODUCTION_OPERATOR")
+    device_serial_number = unique_id("DEV")
+
+    create_device = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
+    )
+    assert create_device.status_code == 200
+
+    first_item = create_qc_passed_item(session, item_type="FAN_MODULE")
+    second_item = create_qc_passed_item(session, item_type="FAN_MODULE")
+
+    first_install = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": first_item["barcode_value"],
+            "component_type": "FAN_MODULE",
+            "work_session_id": session["work_session_id"],
+        },
+    )
+    assert first_install.status_code == 200
+
+    blocked = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": second_item["barcode_value"],
+            "component_type": "FAN_MODULE",
+            "work_session_id": session["work_session_id"],
+        },
+    )
+    assert blocked.status_code == 409
+    assert blocked.json()["detail"] == "Active BOM quantity already satisfied for component type"
 
 
 def test_expired_work_session_is_timed_out_and_blocked():
@@ -643,7 +735,7 @@ def test_final_test_pass_sets_status_and_audit_context():
     assert device_response.status_code == 200
 
     production_session = start_work_session(role="PRODUCTION_OPERATOR")
-    item = create_qc_passed_item(production_session)
+    item = create_qc_passed_item(production_session, item_type="CONTROL_PCB")
     install = client.post(
         f"/api/devices/{device_serial_number}/assembly/scan-component",
         json={

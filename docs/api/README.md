@@ -363,9 +363,11 @@ Reguły assembly:
 
 - barcode komponentu musi istnieć
 - status itemu nie może być `QC_FAILED`, `SCRAPPED` ani `REWORK_REQUIRED`
+- typ zeskanowanego itemu musi zgadzać się z `component_type`
+- jeśli dla `device_type` istnieje aktywny BOM, `component_type` musi być dozwolony przez ten BOM
+- jeśli aktywny BOM ogranicza ilość danego komponentu, assembly blokuje przekroczenie limitu już podczas skanu
 - komponent nie może być zainstalowany drugi raz, jeśli już ma aktywne `INSTALLED`
 - assembly zapisuje zarówno relację montażową, jak i ślad skanu oraz audytu
-- zgodność z BOM nie jest jeszcze sprawdzana w samym endpointcie assembly; aktywny BOM jest dziś egzekwowany przez shipment gate
 
 ## 7. Final test
 
@@ -408,6 +410,7 @@ Shipment gate w aktualnym MVP:
 - wymagane komponenty są odczytywane z aktywnego `device_bom_template` dla `device_type`
 - brakujący komponent jest zwracany w treści błędu, np. `CONTROL_PCB` albo `FAN_MODULE x2`
 - otwarta krytyczna NCR blokuje shipment
+- shipment pozostaje końcową walidacją kompletności, nawet jeśli assembly wcześniej odrzuci niedozwolony skan
 
 ## 8. Audit trail
 

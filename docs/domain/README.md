@@ -182,6 +182,9 @@ Najważniejsze reguły:
 
 - komponent musi istnieć, zanim zostanie zainstalowany
 - komponent ze złym statusem nie może być zamontowany
+- typ zeskanowanego itemu musi zgadzać się z deklarowanym `component_type`
+- jeśli aktywny BOM istnieje dla `device_type`, komponent musi być dozwolony przez ten BOM
+- jeśli BOM ogranicza ilość danego komponentu, assembly blokuje przekroczenie limitu już na etapie skanu
 - komponent nie może zostać zainstalowany drugi raz, jeśli jest już aktywny w innym urządzeniu
 - assembly produkuje zarówno relację montażową, jak i ślad skanu
 - definicje BOM dla `device_type` są utrzymywane w `DeviceBomTemplate` i `DeviceBomItem`
@@ -190,6 +193,7 @@ Stan implementacji:
 
 - zaimplementowane w module `assembly`
 - moduł `assembly` obsługuje też device CRUD, proste endpointy komponentów i API do zarządzania BOM
+- shipment dalej sprawdza końcową kompletność wymaganego BOM przed `READY_FOR_SHIPMENT`
 
 ### 5. Final test
 

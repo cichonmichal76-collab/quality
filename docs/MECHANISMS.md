@@ -26,7 +26,7 @@ NCR powstaje przy wyniku NOK albo ręcznym zgłoszeniu niezgodności. Krytyczna 
 
 ## Assembly by scan
 
-Montaż urządzenia odbywa się przez skanowanie komponentów. W obecnym MVP backend sprawdza aktywną sesję pracy, status komponentu i to, czy część nie jest już użyta w innym urządzeniu. Endpoint assembly zapisuje relację device → component, scan event i audit trail. Zgodność z BOM jest dziś egzekwowana na etapie shipment gate.
+Montaż urządzenia odbywa się przez skanowanie komponentów. W obecnym MVP backend sprawdza aktywną sesję pracy, status komponentu, zgodność typu z aktywnym BOM, limit ilości z BOM i to, czy część nie jest już użyta w innym urządzeniu. Endpoint assembly zapisuje relację device → component, scan event i audit trail.
 
 ## Digital device tree
 
@@ -40,7 +40,7 @@ Gotowe urządzenie musi przejść final test. Wynik PASS dopuszcza do wysyłki. 
 
 Status READY_FOR_SHIPMENT jest możliwy tylko wtedy, gdy urządzenie ma wymagane komponenty, komponenty mają pozytywne QC, final test jest PASS i nie ma blokujących NCR.
 
-W obecnym MVP wymagane komponenty są odczytywane z aktywnego BOM zapisanego w tabelach `device_bom_templates` i `device_bom_items`. Backend porównuje ilości wymagane z faktycznie zainstalowanymi `AssemblyLink`. Bazowa migracja dostarcza minimalny BOM dla `ZSS`, wymagający `CONTROL_PCB`.
+W obecnym MVP wymagane komponenty są odczytywane z aktywnego BOM zapisanego w tabelach `device_bom_templates` i `device_bom_items`. Backend porównuje ilości wymagane z faktycznie zainstalowanymi `AssemblyLink`, a bazowa migracja dostarcza minimalny BOM dla `ZSS`, wymagający `CONTROL_PCB`. Część walidacji BOM dzieje się już podczas assembly scan, a shipment pozostaje końcową bramką kompletności.
 
 ## Mobile offline commissioning
 

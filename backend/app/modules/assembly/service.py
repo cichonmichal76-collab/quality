@@ -104,12 +104,37 @@ def list_device_bom_items(db: Session, device_type: str) -> list[DeviceBomItem]:
     return repository.list_bom_items_for_template(db, template.id)
 
 
+def _validate_component_against_active_bom(
+    db: Session,
+    device: Device,
+    item_type: str,
+    component_type: str,
+) -> DeviceBomItem | None:
+    if item_type != component_type:
+        raise HTTPException(
+            status_code=400,
+            detail="Scanned item type does not match requested component type",
+        )
+
+    bom_template = repository.get_active_bom_template_by_device_type(db, device.device_type)
+    if not bom_template:
+        return None
+
+    bom_item = repository.get_bom_item(db, bom_template.id, component_type)
+    if not bom_item:
+        raise HTTPException(
+            status_code=400,
+            detail="Component type is not allowed by active BOM",
+        )
+    return bom_item
+
+
 def scan_component_for_assembly(
     db: Session,
     device_serial_number: str,
     payload: AssemblyScanRequest,
 ) -> AssemblyLink:
-    get_device_or_404(db, device_serial_number)
+    device = get_device_or_404(db, device_serial_number)
     work_session = require_active_work_session(
         db,
         payload.work_session_id,
@@ -122,10 +147,27 @@ def scan_component_for_assembly(
         raise HTTPException(status_code=404, detail="Component barcode not found")
     if item.current_status in {"QC_FAILED", "SCRAPPED", "REWORK_REQUIRED"}:
         raise HTTPException(status_code=400, detail="Component status blocks assembly")
+    bom_item = _validate_component_against_active_bom(
+        db,
+        device,
+        item.item_type,
+        payload.component_type,
+    )
 
     existing = repository.get_active_assembly_link_by_barcode(db, payload.child_barcode_value)
     if existing:
         raise HTTPException(status_code=409, detail="Component already installed in another device")
+    if bom_item is not None:
+        installed_count = repository.count_installed_component_type_for_device(
+            db,
+            device.device_serial_number,
+            payload.component_type,
+        )
+        if installed_count >= bom_item.quantity_required:
+            raise HTTPException(
+                status_code=409,
+                detail="Active BOM quantity already satisfied for component type",
+            )
 
     scan_event_id = f"SCAN-{uuid.uuid4().hex[:12]}"
     operator_id = payload.installed_by or work_session.operator_id

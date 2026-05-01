@@ -59,6 +59,20 @@ def get_bom_template_by_device_type(db: Session, device_type: str) -> DeviceBomT
     )
 
 
+def get_active_bom_template_by_device_type(
+    db: Session,
+    device_type: str,
+) -> DeviceBomTemplate | None:
+    return (
+        db.query(DeviceBomTemplate)
+        .filter(
+            DeviceBomTemplate.device_type == device_type,
+            DeviceBomTemplate.is_active.is_(True),
+        )
+        .first()
+    )
+
+
 def list_bom_templates(db: Session) -> list[DeviceBomTemplate]:
     return db.query(DeviceBomTemplate).order_by(DeviceBomTemplate.device_type.asc()).all()
 
@@ -84,4 +98,20 @@ def get_bom_item(
             DeviceBomItem.component_type == component_type,
         )
         .first()
+    )
+
+
+def count_installed_component_type_for_device(
+    db: Session,
+    device_serial_number: str,
+    component_type: str,
+) -> int:
+    return (
+        db.query(AssemblyLink)
+        .filter(
+            AssemblyLink.parent_device_serial_number == device_serial_number,
+            AssemblyLink.component_type == component_type,
+            AssemblyLink.status == "INSTALLED",
+        )
+        .count()
     )
