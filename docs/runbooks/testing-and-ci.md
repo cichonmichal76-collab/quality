@@ -105,7 +105,7 @@ Obecnie CI egzekwuje twardo:
 - `ruff` i `mypy` dla backendu
 - `ruff` i `mypy` dla runnera
 - testy backendu na domyślnym środowisku
-- osobny przebieg backendu na PostgreSQL z migracjami Alembic i weryfikacją danych demo dashboardu
+- osobny przebieg backendu na PostgreSQL z migracjami Alembic, bootstrapem danych demo dashboardu i dedykowanym smoke testem na zmigrowanej bazie
 - testy i build web-app
 - smoke test Playwright dla web-app na odpalonym lokalnie API
 
@@ -144,6 +144,7 @@ Jeśli pada build Docker:
 ## Aktualne luki w testowaniu
 
 - obecny przebieg PostgreSQL sprawdza migracje i suite testów, ale nie pokrywa jeszcze pełnych scenariuszy integracyjnych
+- obecny przebieg PostgreSQL sprawdza już bootstrap dashboardowego datasetu na zmigrowanej bazie, ale nadal nie pokrywa pełnych scenariuszy integracyjnych poza tym smoke flow
 - Playwright sprawdza dziś smoke flow dashboardu, filtry i paginację, ale nie pełne scenariusze regresyjne
 - web-app nie ma jeszcze szerokiego pokrycia bardziej rozbudowanych scenariuszy wielostanowych
 - Android nadal nie ma automatycznych checków w tym repo
