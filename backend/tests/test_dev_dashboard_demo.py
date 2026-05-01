@@ -241,3 +241,57 @@ def test_dev_dashboard_demo_can_verify_existing_dataset_without_reseeding(tmp_pa
     )
     assert "Demo dashboardu zweryfikowane." in verify_run.stdout
     assert f"DATABASE_URL={database_url}" in verify_run.stdout
+
+
+def test_dev_dashboard_demo_rejects_verify_only_with_skip_seed(tmp_path):
+    repo_dir = Path(__file__).resolve().parents[2]
+    database_path = tmp_path / "dashboard-demo-invalid-skip-seed.db"
+    database_url = f"sqlite:///{database_path.as_posix()}"
+
+    invalid_run = subprocess.run(
+        [
+            sys.executable,
+            "scripts/dev_dashboard_demo.py",
+            "--database-url",
+            database_url,
+            "--device-type",
+            "DEMO-BOOTSTRAP-INVALID-SKIP-SEED",
+            "--verify-only",
+            "--skip-seed",
+            "--no-server",
+        ],
+        cwd=repo_dir,
+        env=os.environ.copy(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert invalid_run.returncode == 2
+    assert "--verify-only nie może być łączone z --skip-seed." in invalid_run.stderr
+
+
+def test_dev_dashboard_demo_rejects_verify_only_with_skip_verify(tmp_path):
+    repo_dir = Path(__file__).resolve().parents[2]
+    database_path = tmp_path / "dashboard-demo-invalid-skip-verify.db"
+    database_url = f"sqlite:///{database_path.as_posix()}"
+
+    invalid_run = subprocess.run(
+        [
+            sys.executable,
+            "scripts/dev_dashboard_demo.py",
+            "--database-url",
+            database_url,
+            "--device-type",
+            "DEMO-BOOTSTRAP-INVALID-SKIP-VERIFY",
+            "--verify-only",
+            "--skip-verify",
+            "--no-server",
+        ],
+        cwd=repo_dir,
+        env=os.environ.copy(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert invalid_run.returncode == 2
+    assert "--verify-only nie może być łączone z --skip-verify." in invalid_run.stderr

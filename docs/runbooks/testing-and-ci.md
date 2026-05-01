@@ -38,6 +38,13 @@ cd backend
 python -m app.services.demo_seed --device-type DEMO-LOCAL-CHECK --tag CHECK --verify
 ```
 
+Jeżeli chcesz tylko potwierdzić spójność już istniejącego datasetu demo bez
+dosiewania rekordów, użyj:
+
+```bash
+py scripts/dev_dashboard_demo.py --device-type DEMO-LOCAL-CHECK --verify-only --skip-migrate --no-server
+```
+
 ## Checki final-test-runnera
 
 Z katalogu głównego repo:
@@ -105,7 +112,7 @@ Obecnie CI egzekwuje twardo:
 - `ruff` i `mypy` dla backendu
 - `ruff` i `mypy` dla runnera
 - testy backendu na domyślnym środowisku
-- osobny przebieg backendu na PostgreSQL z migracjami Alembic, podwójnym bootstrapem danych demo dashboardu oraz smoke testem filtrów i paginacji na zmigrowanej bazie
+- osobny przebieg backendu na PostgreSQL z migracjami Alembic, podwójnym bootstrapem danych demo dashboardu, `verify-only` na już przygotowanym datasetcie oraz smoke testem filtrów i paginacji na zmigrowanej bazie
 - testy i build web-app
 - smoke test Playwright dla web-app na odpalonym lokalnie API
 
@@ -143,8 +150,7 @@ Jeśli pada build Docker:
 
 ## Aktualne luki w testowaniu
 
-- obecny przebieg PostgreSQL sprawdza migracje i suite testów, ale nie pokrywa jeszcze pełnych scenariuszy integracyjnych
-- obecny przebieg PostgreSQL sprawdza już bootstrap dashboardowego datasetu na zmigrowanej bazie razem z podstawowymi filtrami i paginacją, ale nadal nie pokrywa pełnych scenariuszy integracyjnych poza tym smoke flow
+- obecny przebieg PostgreSQL sprawdza już bootstrap dashboardowego datasetu na zmigrowanej bazie, rerun `verify-only` oraz podstawowe filtry i paginację, ale nadal nie pokrywa pełnych scenariuszy integracyjnych poza tym smoke flow
 - Playwright sprawdza dziś smoke flow dashboardu, filtry i paginację, ale nie pełne scenariusze regresyjne
 - web-app nie ma jeszcze szerokiego pokrycia bardziej rozbudowanych scenariuszy wielostanowych
 - Android nadal nie ma automatycznych checków w tym repo

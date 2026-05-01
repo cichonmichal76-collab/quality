@@ -95,6 +95,12 @@ Szybki lokalny bootstrap demo dashboardu:
 py scripts/dev_dashboard_demo.py --reload
 ```
 
+Jeżeli dataset demo już istnieje i chcesz tylko sprawdzić jego spójność:
+
+```bash
+py scripts/dev_dashboard_demo.py --device-type DEMO-LOCAL --verify-only --no-server
+```
+
 ### Opcja 3: lokalny panel webowy
 
 Uruchom backend, a potem frontend:
