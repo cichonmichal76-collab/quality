@@ -314,6 +314,65 @@ def test_device_bom_template_usage_reports_mutable_active_template():
     assert payload["recommended_action"] == "modify_in_place"
 
 
+def test_device_bom_template_readiness_reports_empty_template_as_blocked():
+    device_type = unique_id("DT")
+    created = client.post(
+        "/api/device-bom-templates",
+        json={
+            "device_type": device_type,
+            "name": "Empty BOM",
+            "version": "1.0",
+            "is_active": False,
+        },
+    )
+    assert created.status_code == 200
+
+    readiness = client.get(f"/api/device-bom-templates/{device_type}/readiness?version=1.0")
+    assert readiness.status_code == 200
+    payload = readiness.json()
+    assert payload["item_count"] == 0
+    assert payload["required_item_count"] == 0
+    assert payload["has_any_items"] is False
+    assert payload["can_activate"] is False
+    assert payload["blocking_reasons"] == [
+        "BOM template has no items",
+        "BOM template has no required items",
+    ]
+
+
+def test_device_bom_template_activation_requires_required_items():
+    device_type = unique_id("DT")
+    created = client.post(
+        "/api/device-bom-templates",
+        json={
+            "device_type": device_type,
+            "name": "Optional Only BOM",
+            "version": "1.0",
+            "is_active": False,
+        },
+    )
+    assert created.status_code == 200
+
+    added = client.post(
+        f"/api/device-bom-templates/{device_type}/items?version=1.0",
+        json={
+            "component_type": "FAN_MODULE",
+            "quantity_required": 1,
+            "is_required": False,
+        },
+    )
+    assert added.status_code == 200
+
+    activate = client.post(
+        f"/api/device-bom-templates/{device_type}/activate",
+        json={"version": "1.0"},
+    )
+    assert activate.status_code == 400
+    assert activate.json()["detail"] == (
+        "BOM template is not ready for activation: BOM template has no required items"
+    )
+
+
 def test_device_bom_template_diff_reports_added_removed_modified_and_unchanged_items():
     device_type = unique_id("DT")
     ensure_device_bom_template(
@@ -404,6 +463,44 @@ def test_device_bom_template_diff_reports_added_removed_modified_and_unchanged_i
     assert modified_rows["CONTROL_PCB"]["target"]["required_revision"] == "B"
     assert modified_rows["CONTROL_PCB"]["source"]["quantity_required"] == 1
     assert modified_rows["CONTROL_PCB"]["target"]["quantity_required"] == 2
+
+
+def test_clone_with_activation_requires_ready_bom_template():
+    device_type = unique_id("DT")
+    created = client.post(
+        "/api/device-bom-templates",
+        json={
+            "device_type": device_type,
+            "name": "Optional Source BOM",
+            "version": "1.0",
+            "is_active": False,
+        },
+    )
+    assert created.status_code == 200
+
+    added = client.post(
+        f"/api/device-bom-templates/{device_type}/items?version=1.0",
+        json={
+            "component_type": "FAN_MODULE",
+            "quantity_required": 1,
+            "is_required": False,
+        },
+    )
+    assert added.status_code == 200
+
+    cloned = client.post(
+        f"/api/device-bom-templates/{device_type}/clone",
+        json={
+            "source_version": "1.0",
+            "target_version": "2.0",
+            "activate": True,
+        },
+    )
+    assert cloned.status_code == 400
+    assert cloned.json()["detail"] == (
+        "Cloned BOM template would not be ready for activation: "
+        "BOM template has no required items"
+    )
 
 
 def test_mutable_bom_item_can_be_updated_and_deleted():

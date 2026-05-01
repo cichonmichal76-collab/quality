@@ -69,6 +69,19 @@ class DeviceBomTemplateUsageRead(BaseModel):
     recommended_action: str
 
 
+class DeviceBomTemplateReadinessRead(BaseModel):
+    template_id: str
+    device_type: str
+    version: str
+    status: str
+    is_active: bool
+    item_count: int
+    required_item_count: int
+    has_any_items: bool
+    can_activate: bool
+    blocking_reasons: list[str]
+
+
 class DeviceBomTemplateActivateRequest(BaseModel):
     version: str = Field(pattern=r"^\d+(?:\.\d+)*$")
 

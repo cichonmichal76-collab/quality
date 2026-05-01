@@ -28,6 +28,7 @@ from app.schemas import (
     DeviceBomItemUpdate,
     DeviceBomTemplateCreate,
     DeviceBomTemplateDiffRead,
+    DeviceBomTemplateReadinessRead,
     DeviceBomTemplateRetireRequest,
     DeviceBomTemplateUsageRead,
     DeviceCreate,
@@ -197,6 +198,57 @@ def get_device_bom_template_usage(
     )
 
 
+def _evaluate_bom_template_readiness(
+    db: Session,
+    template: DeviceBomTemplate,
+) -> DeviceBomTemplateReadinessRead:
+    items = repository.list_bom_items_for_template(db, template.id)
+    item_count = len(items)
+    required_item_count = sum(1 for item in items if item.is_required)
+    blocking_reasons: list[str] = []
+    if item_count == 0:
+        blocking_reasons.append("BOM template has no items")
+    if required_item_count == 0:
+        blocking_reasons.append("BOM template has no required items")
+    return DeviceBomTemplateReadinessRead(
+        template_id=template.id,
+        device_type=template.device_type,
+        version=template.version,
+        status=template.status,
+        is_active=template.is_active,
+        item_count=item_count,
+        required_item_count=required_item_count,
+        has_any_items=item_count > 0,
+        can_activate=not blocking_reasons,
+        blocking_reasons=blocking_reasons,
+    )
+
+
+def get_device_bom_template_readiness(
+    db: Session,
+    device_type: str,
+    version: str | None = None,
+) -> DeviceBomTemplateReadinessRead:
+    template = get_device_bom_template_or_404(db, device_type, version)
+    return _evaluate_bom_template_readiness(db, template)
+
+
+def _ensure_bom_template_can_be_activated(
+    db: Session,
+    template: DeviceBomTemplate,
+) -> None:
+    readiness = _evaluate_bom_template_readiness(db, template)
+    if readiness.can_activate:
+        return
+    raise HTTPException(
+        status_code=400,
+        detail=(
+            "BOM template is not ready for activation: "
+            + "; ".join(readiness.blocking_reasons)
+        ),
+    )
+
+
 def _snapshot_bom_item(item: DeviceBomItem) -> DeviceBomItemSnapshotRead:
     return DeviceBomItemSnapshotRead(
         component_type=item.component_type,
@@ -300,6 +352,7 @@ def activate_device_bom_template(
         return template
     if template.status == "RETIRED":
         raise HTTPException(status_code=400, detail="Retired BOM template cannot be activated")
+    _ensure_bom_template_can_be_activated(db, template)
     previously_active = repository.set_active_bom_template(db, template)
     for deactivated_template in previously_active:
         record_audit_event(
@@ -383,6 +436,17 @@ def clone_device_bom_template(
             status_code=409,
             detail="BOM template version already exists for device type",
         )
+    source_items = repository.list_bom_items_for_template(db, source_template.id)
+    if payload.activate:
+        candidate_readiness = _evaluate_bom_template_readiness(db, source_template)
+        if not candidate_readiness.can_activate:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Cloned BOM template would not be ready for activation: "
+                    + "; ".join(candidate_readiness.blocking_reasons)
+                ),
+            )
 
     deactivated_templates: list[DeviceBomTemplate] = []
     if payload.activate:
@@ -404,7 +468,6 @@ def clone_device_bom_template(
     db.add(cloned_template)
     db.flush()
 
-    source_items = repository.list_bom_items_for_template(db, source_template.id)
     for source_item in source_items:
         cloned_item = DeviceBomItem(
             template_id=cloned_template.id,
