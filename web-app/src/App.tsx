@@ -233,7 +233,14 @@ export function App() {
     value: ShipmentFilters[Key],
   ) => {
     setShipmentFilters((previous) => {
-      const next = { ...previous, [key]: value } as ShipmentFilters;
+      const normalizedValue =
+        key === "limit"
+          ? (clampLimit(value as number) as ShipmentFilters[Key])
+          : value;
+      const next = {
+        ...previous,
+        [key]: normalizedValue,
+      } as ShipmentFilters;
       if (key !== "offset") {
         next.offset = 0;
       }
@@ -246,7 +253,14 @@ export function App() {
     value: ComponentFilters[Key],
   ) => {
     setComponentFilters((previous) => {
-      const next = { ...previous, [key]: value } as ComponentFilters;
+      const normalizedValue =
+        key === "limit"
+          ? (clampLimit(value as number) as ComponentFilters[Key])
+          : value;
+      const next = {
+        ...previous,
+        [key]: normalizedValue,
+      } as ComponentFilters;
       if (key !== "offset") {
         next.offset = 0;
       }

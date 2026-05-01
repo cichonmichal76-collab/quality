@@ -543,6 +543,31 @@ describe("App", () => {
     );
   });
 
+  it("clamps shipment limit in UI state before sending request", async () => {
+    const fetchMock = vi.fn(async () =>
+      createJsonResponse(paginatedShipmentPageOnePayload),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("SHIP-001")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Limit"), {
+      target: { value: "999" },
+    });
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(screen.getByLabelText("Limit")).toHaveValue(500);
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/shipment-readiness?sort_by=created_at&sort_desc=true&limit=500",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+  });
+
   it("pages through component queue in both directions", async () => {
     const fetchMock = vi
       .fn()
@@ -596,5 +621,35 @@ describe("App", () => {
       }),
     );
     expect(await screen.findByText("COMP-001")).toBeInTheDocument();
+  });
+
+  it("clamps component limit to minimum value before sending request", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(createJsonResponse(shipmentPayload))
+      .mockResolvedValueOnce(createJsonResponse(componentPayload))
+      .mockResolvedValueOnce(createJsonResponse(componentPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("SHIP-001")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Komponenty" }));
+    expect(await screen.findByText("COMP-001")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Limit"), {
+      target: { value: "0" },
+    });
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(screen.getByLabelText("Limit")).toHaveValue(1);
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/component-quality?only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=1",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
   });
 });
