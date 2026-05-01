@@ -171,5 +171,5 @@ Ten kontekst trafia do audit trail i jest krytyczny dla traceability.
 
 - rozważyć wydzielenie osobnej domeny `devices`, jeśli device CRUD urośnie poza odpowiedzialność modułu `assembly`
 - wydzielić współdzielone elementy DB ze starego `database.py` do `app/db/`
-- dodać pokrycie integracyjne PostgreSQL w CI
+- rozszerzyć pokrycie PostgreSQL w CI o bardziej scenariuszowe przypadki integracyjne
 - dodać mocniejsze reguły domenowe shipment, service i plików wraz z testami integracyjnymi

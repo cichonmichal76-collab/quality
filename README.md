@@ -185,6 +185,6 @@ Wysokopoziomowo:
 ## Najbliższe cele
 
 - wydzielić, jeśli zajdzie potrzeba, osobną domenę `devices`, zamiast zostawiać device CRUD w `assembly`
-- dodać testy integracyjne PostgreSQL do CI
+- rozszerzyć testy PostgreSQL w CI o bardziej scenariuszowe przypadki integracyjne
 - zbudować używalny UI dla produkcji i jakości
 - rozpocząć MVP Android commissioning

@@ -39,11 +39,8 @@ Z katalogu głównego repo:
 cd final-test-runner
 pytest
 ruff check .
+mypy servicetrace_runner
 ```
-
-Uwaga:
-
-- obecny plik CI zawiera `mypy servicetrace_runner`, ale optional dependencies pakietu `final-test-runner` nie dodają jeszcze `mypy`
 
 ## Check buildu Docker
 
@@ -68,23 +65,22 @@ Repo uruchamia dziś jeden przepływ GitHub Actions w:
 Aktualne joby:
 
 - `backend`
+- `backend-postgres`
 - `final-test-runner`
 - `docker-build`
 
 ## Ważna uwaga o obecnym CI
 
-Obecnie:
+Obecnie CI egzekwuje twardo:
 
-- lint backendu jest nieblokujący
-- mypy backendu jest nieblokujący
-- lint runnera jest nieblokujący
-- mypy runnera jest nieblokujący
+- `ruff` i `mypy` dla backendu
+- `ruff` i `mypy` dla runnera
+- testy backendu na domyślnym środowisku
+- osobny przebieg backendu na PostgreSQL z migracjami Alembic
 
-To oznacza, że CI może pozostać zielone, nawet jeśli część quality checks zawiedzie.
+Najbezpieczniejsza lokalna polityka nadal brzmi:
 
-Dopóki to nie zostanie zaostrzone, najbezpieczniejsza lokalna polityka brzmi:
-
-- traktuj `ruff` i `mypy` jako wymagane lokalnie
+- traktuj `ruff`, `mypy` i `pytest` jako wymagane lokalnie przed pushem
 
 ## Rekomendowana checklista przed pushem
 
@@ -115,6 +111,5 @@ Jeśli pada build Docker:
 
 ## Aktualne luki w testowaniu
 
-- testy integracyjne PostgreSQL nie są jeszcze wymuszane w CI
-- quality gates w CI są nadal bardziej miękkie niż sugeruje docelowa architektura
+- obecny przebieg PostgreSQL sprawdza migracje i suite testów, ale nie pokrywa jeszcze pełnych scenariuszy integracyjnych
 - web i Android nie mają jeszcze sensownych automatycznych checków w tym repo

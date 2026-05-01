@@ -18,7 +18,7 @@ Każdy PR powinien mieć opis celu, wpływ na traceability, wpływ na ryzyko i b
 
 ## Zadania CI
 
-Backend CI: instalacja zależności, `ruff`, `mypy`, `pytest`, test migracji, build obrazu Docker.
+Backend CI: instalacja zależności, `ruff`, `mypy`, `pytest`, osobny przebieg backendu na PostgreSQL z `alembic upgrade head`, test migracji i build obrazu Docker.
 Runner CI: `ruff`, `mypy`, `pytest`, test `MockMcuClient`, test parsera odpowiedzi MCU.
 Web CI: instalacja zależności, lint, sprawdzanie typów, testy, build.
 Android CI: testy Gradle, Android lint, build debug APK.
