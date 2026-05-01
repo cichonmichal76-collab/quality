@@ -144,6 +144,6 @@ Jeśli pada build Docker:
 ## Aktualne luki w testowaniu
 
 - obecny przebieg PostgreSQL sprawdza migracje i suite testów, ale nie pokrywa jeszcze pełnych scenariuszy integracyjnych
-- Playwright sprawdza dziś głównie smoke flow dashboardu, a nie pełne scenariusze regresyjne
-- web-app nie ma jeszcze pokrytej paginacji i bardziej rozbudowanych scenariuszy wielostanowych
+- Playwright sprawdza dziś smoke flow dashboardu, filtry i paginację, ale nie pełne scenariusze regresyjne
+- web-app nie ma jeszcze szerokiego pokrycia bardziej rozbudowanych scenariuszy wielostanowych
 - Android nadal nie ma automatycznych checków w tym repo

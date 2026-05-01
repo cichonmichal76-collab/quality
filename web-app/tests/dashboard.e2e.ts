@@ -35,3 +35,42 @@ test("dashboard renders seeded shipment and component queues", async ({
   await expect(componentTable.getByText("QC niezaliczone")).toBeVisible();
   await expect(componentTable.getByText("Krytyczne NCR otwarte")).toBeVisible();
 });
+
+test("dashboard paginates shipment and component queues", async ({ page }) => {
+  await page.goto("/");
+
+  await expect(page.getByText("API OK")).toBeVisible();
+
+  await page.getByLabel("Typ urządzenia").fill("DEMO-E2E");
+  await page.getByLabel("Limit").fill("2");
+
+  const shipmentTable = page.locator(".table-card");
+
+  await expect(page.getByText("1-2 z 6 urządzeń")).toBeVisible();
+  await expect(page.locator(".table-card tbody tr")).toHaveCount(2);
+  await expect(shipmentTable.getByText(/DN-E2E-/)).toBeVisible();
+  await expect(shipmentTable.getByText(/CN-E2E-/)).toBeVisible();
+
+  await page.getByRole("button", { name: "Następna strona" }).click();
+
+  await expect(page.getByText("3-4 z 6 urządzeń")).toBeVisible();
+  await expect(page.locator(".table-card tbody tr")).toHaveCount(2);
+  await expect(shipmentTable.getByText(/CQ-E2E-/)).toBeVisible();
+  await expect(shipmentTable.getByText(/TEST-E2E-/)).toBeVisible();
+
+  await page.getByRole("button", { name: "Komponenty" }).click();
+  await page.getByLabel("Typ urządzenia").fill("DEMO-E2E");
+  await page.getByLabel("Limit").fill("1");
+
+  const componentTable = page.locator(".table-card");
+
+  await expect(page.getByText("1-1 z 2 urządzeń")).toBeVisible();
+  await expect(page.locator(".table-card tbody tr")).toHaveCount(1);
+  await expect(componentTable.getByText(/CQ-E2E-/)).toBeVisible();
+
+  await page.getByRole("button", { name: "Następna strona" }).click();
+
+  await expect(page.getByText("2-2 z 2 urządzeń")).toBeVisible();
+  await expect(page.locator(".table-card tbody tr")).toHaveCount(1);
+  await expect(componentTable.getByText(/CN-E2E-/)).toBeVisible();
+});

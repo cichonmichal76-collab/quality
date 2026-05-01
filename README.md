@@ -222,5 +222,5 @@ Wysokopoziomowo:
 
 - wydzielić, jeśli zajdzie potrzeba, osobną domenę `devices`, zamiast zostawiać device CRUD w `assembly`
 - rozszerzyć testy PostgreSQL w CI o bardziej scenariuszowe przypadki integracyjne
-- rozszerzyć pokrycie panelu webowego o paginację i bardziej rozbudowane scenariusze regresyjne
+- rozszerzyć pokrycie panelu webowego o bardziej rozbudowane scenariusze regresyjne
 - rozpocząć MVP Android commissioning
