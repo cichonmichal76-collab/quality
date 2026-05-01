@@ -3414,6 +3414,136 @@ def test_shipment_is_blocked_when_required_component_is_missing():
     )
 
 
+def test_device_shipment_readiness_reports_multiple_blockers():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(device_type, component_type="CONTROL_PCB")
+    device_serial_number = unique_id("DEV")
+    device_response = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
+    )
+    assert device_response.status_code == 200
+
+    readiness = client.get(f"/api/devices/{device_serial_number}/shipment-readiness")
+    assert readiness.status_code == 200
+    payload = readiness.json()
+    assert payload["device_serial_number"] == device_serial_number
+    assert payload["final_test_passed"] is False
+    assert payload["has_critical_open_ncr"] is False
+    assert payload["can_transition_to_ready_for_shipment"] is False
+    assert payload["blocking_reasons"] == [
+        "READY_FOR_SHIPMENT requires FINAL_TEST_PASSED",
+        "READY_FOR_SHIPMENT requires installed components: CONTROL_PCB",
+    ]
+    assert payload["bom_compliance"]["passes_bom_gate"] is False
+    assert payload["bom_compliance"]["missing_required_components"] == ["CONTROL_PCB"]
+
+
+def test_device_shipment_readiness_reports_critical_ncr_blocker():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(device_type, component_type="CONTROL_PCB")
+    device_serial_number = unique_id("DEV")
+    device_response = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
+    )
+    assert device_response.status_code == 200
+
+    production_session = start_work_session(role="PRODUCTION_OPERATOR")
+    item = create_qc_passed_item(production_session, item_type="CONTROL_PCB")
+    install = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": production_session["work_session_id"],
+        },
+    )
+    assert install.status_code == 200
+
+    final_test_session = start_work_session(role="FINAL_TEST_OPERATOR")
+    final_test = client.post(
+        "/api/final-tests",
+        json={
+            "test_run_id": unique_id("FT"),
+            "device_serial_number": device_serial_number,
+            "result": "PASS",
+            "firmware_version": "1.2.4",
+            "bootloader_version": "0.9.8",
+            "work_session_id": final_test_session["work_session_id"],
+        },
+    )
+    assert final_test.status_code == 200
+
+    ncr = client.post(
+        "/api/nonconformities",
+        json={
+            "ncr_id": unique_id("NCR"),
+            "device_serial_number": device_serial_number,
+            "process_stage": "FINAL_TEST",
+            "description": "Critical blocker",
+            "severity": "CRITICAL",
+            "detected_by": "pytest",
+        },
+    )
+    assert ncr.status_code == 200
+
+    readiness = client.get(f"/api/devices/{device_serial_number}/shipment-readiness")
+    assert readiness.status_code == 200
+    payload = readiness.json()
+    assert payload["final_test_passed"] is True
+    assert payload["has_critical_open_ncr"] is True
+    assert payload["can_transition_to_ready_for_shipment"] is False
+    assert payload["blocking_reasons"] == ["Open critical NCR blocks shipment"]
+    assert payload["bom_compliance"]["passes_bom_gate"] is True
+
+
+def test_device_shipment_readiness_passes_when_gate_is_clear():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(device_type, component_type="CONTROL_PCB")
+    device_serial_number = unique_id("DEV")
+    device_response = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
+    )
+    assert device_response.status_code == 200
+
+    production_session = start_work_session(role="PRODUCTION_OPERATOR")
+    item = create_qc_passed_item(production_session, item_type="CONTROL_PCB")
+    install = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": production_session["work_session_id"],
+        },
+    )
+    assert install.status_code == 200
+
+    final_test_session = start_work_session(role="FINAL_TEST_OPERATOR")
+    final_test = client.post(
+        "/api/final-tests",
+        json={
+            "test_run_id": unique_id("FT"),
+            "device_serial_number": device_serial_number,
+            "result": "PASS",
+            "firmware_version": "1.2.4",
+            "bootloader_version": "0.9.8",
+            "work_session_id": final_test_session["work_session_id"],
+        },
+    )
+    assert final_test.status_code == 200
+
+    readiness = client.get(f"/api/devices/{device_serial_number}/shipment-readiness")
+    assert readiness.status_code == 200
+    payload = readiness.json()
+    assert payload["final_test_passed"] is True
+    assert payload["has_critical_open_ncr"] is False
+    assert payload["can_transition_to_ready_for_shipment"] is True
+    assert payload["blocking_reasons"] == []
+    assert payload["bom_compliance"]["passes_bom_gate"] is True
+
+
 def test_shipment_reads_bom_requirements_from_database():
     device_type = unique_id("DT")
     ensure_device_bom_template(

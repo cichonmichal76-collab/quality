@@ -4,10 +4,13 @@ from sqlalchemy.orm import Session
 from app.core.audit import record_audit_event
 from app.database import utc_now
 from app.models import Device
-from app.modules.assembly.bom_groups import evaluate_bom_requirement_groups
-from app.modules.assembly.service import resolve_bom_template_context
+from app.modules.assembly.service import get_device_bom_compliance
 from app.modules.shipment import repository, rules
-from app.schemas import DeviceStatusUpdate
+from app.schemas import DeviceBomComplianceRead, DeviceShipmentReadinessRead, DeviceStatusUpdate
+
+READY_FOR_SHIPMENT_REQUIRES_FINAL_TEST = "READY_FOR_SHIPMENT requires FINAL_TEST_PASSED"
+READY_FOR_SHIPMENT_REQUIRES_ACTIVE_BOM = "READY_FOR_SHIPMENT requires an active effective BOM template"
+READY_FOR_SHIPMENT_BLOCKED_BY_NCR = "Open critical NCR blocks shipment"
 
 
 def get_device_or_404(db: Session, serial_number: str) -> Device:
@@ -20,14 +23,9 @@ def get_device_or_404(db: Session, serial_number: str) -> Device:
 def update_device_status(db: Session, serial_number: str, payload: DeviceStatusUpdate) -> Device:
     device = get_device_or_404(db, serial_number)
     if payload.production_status == rules.READY_FOR_SHIPMENT:
-        if device.production_status != rules.FINAL_TEST_PASSED:
-            raise HTTPException(
-                status_code=400,
-                detail="READY_FOR_SHIPMENT requires FINAL_TEST_PASSED",
-            )
-        _ensure_required_components_installed(db, device)
-        if repository.has_critical_open_ncr(db, serial_number):
-            raise HTTPException(status_code=400, detail="Open critical NCR blocks shipment")
+        readiness = _build_device_shipment_readiness(db, device)
+        if not readiness.can_transition_to_ready_for_shipment:
+            raise HTTPException(status_code=400, detail=readiness.blocking_reasons[0])
     device.production_status = payload.production_status
     device.updated_at = utc_now()
     record_audit_event(
@@ -43,66 +41,64 @@ def update_device_status(db: Session, serial_number: str, payload: DeviceStatusU
     return device
 
 
-def _ensure_required_components_installed(db: Session, device: Device) -> None:
-    bom_template, _, blocking_reason, _, _ = resolve_bom_template_context(db, device)
-    if blocking_reason:
-        raise HTTPException(
-            status_code=400,
-            detail="READY_FOR_SHIPMENT requires an active effective BOM template",
-        )
-    if not bom_template:
-        return
-    bom_items = repository.list_bom_items_for_template(db, bom_template.id)
-    if not bom_items:
-        return
-
-    installed_links = repository.list_installed_assembly_links_for_device(
-        db,
-        device.device_serial_number,
-    )
-    installed_component_counts: dict[str, int] = {}
-    for link in installed_links:
-        installed_component_counts[link.component_type] = (
-            installed_component_counts.get(link.component_type, 0) + 1
+def _build_bom_shipment_blocking_reason(
+    bom_compliance: DeviceBomComplianceRead,
+) -> str | None:
+    if bom_compliance.passes_bom_gate:
+        return None
+    if bom_compliance.blocking_reason:
+        return READY_FOR_SHIPMENT_REQUIRES_ACTIVE_BOM
+    if bom_compliance.missing_required_components:
+        return "READY_FOR_SHIPMENT requires installed components: " + ", ".join(
+            bom_compliance.missing_required_components
         )
 
-    missing_component_types: list[str] = []
-    over_installed_component_types: list[str] = []
-    evaluations, remaining_counts = evaluate_bom_requirement_groups(
-        bom_items,
-        installed_component_counts,
+    issue_fragments: list[str] = []
+    if bom_compliance.over_installed_components:
+        issue_fragments.append(
+            "over-installed components: " + ", ".join(bom_compliance.over_installed_components)
+        )
+    if bom_compliance.unexpected_component_types:
+        issue_fragments.append(
+            "unexpected components: " + ", ".join(sorted(bom_compliance.unexpected_component_types))
+        )
+    if not issue_fragments:
+        return None
+    return "READY_FOR_SHIPMENT requires BOM-compliant assembly: " + "; ".join(issue_fragments)
+
+
+def _build_device_shipment_readiness(db: Session, device: Device) -> DeviceShipmentReadinessRead:
+    final_test_passed = device.production_status == rules.FINAL_TEST_PASSED
+    has_critical_open_ncr = repository.has_critical_open_ncr(db, device.device_serial_number)
+    bom_compliance = get_device_bom_compliance(db, device.device_serial_number)
+
+    blocking_reasons: list[str] = []
+    if not final_test_passed:
+        blocking_reasons.append(READY_FOR_SHIPMENT_REQUIRES_FINAL_TEST)
+
+    bom_blocking_reason = _build_bom_shipment_blocking_reason(bom_compliance)
+    if bom_blocking_reason:
+        blocking_reasons.append(bom_blocking_reason)
+
+    if has_critical_open_ncr:
+        blocking_reasons.append(READY_FOR_SHIPMENT_BLOCKED_BY_NCR)
+
+    return DeviceShipmentReadinessRead(
+        device_serial_number=device.device_serial_number,
+        device_type=device.device_type,
+        device_variant_code=device.variant_code,
+        production_status=device.production_status,
+        final_test_passed=final_test_passed,
+        has_critical_open_ncr=has_critical_open_ncr,
+        bom_compliance=bom_compliance,
+        can_transition_to_ready_for_shipment=not blocking_reasons,
+        blocking_reasons=blocking_reasons,
     )
-    for evaluation in evaluations:
-        requirement = evaluation.requirement
-        if evaluation.installed_quantity < requirement.quantity_required and requirement.is_required:
-            if requirement.quantity_required == 1:
-                missing_component_types.append(requirement.display_name)
-            else:
-                missing_component_types.append(
-                    f"{requirement.display_name} x{requirement.quantity_required}"
-                )
-        if evaluation.installed_quantity > requirement.quantity_required:
-            over_installed_component_types.append(
-                f"{requirement.display_name} x{evaluation.installed_quantity}/{requirement.quantity_required}"
-            )
-    if missing_component_types:
-        missing_components = ", ".join(missing_component_types)
-        raise HTTPException(
-            status_code=400,
-            detail=f"READY_FOR_SHIPMENT requires installed components: {missing_components}",
-        )
-    if over_installed_component_types or remaining_counts:
-        issue_fragments: list[str] = []
-        if over_installed_component_types:
-            issue_fragments.append(
-                "over-installed components: " + ", ".join(over_installed_component_types)
-            )
-        if remaining_counts:
-            issue_fragments.append(
-                "unexpected components: " + ", ".join(sorted(remaining_counts))
-            )
-        raise HTTPException(
-            status_code=400,
-            detail="READY_FOR_SHIPMENT requires BOM-compliant assembly: "
-            + "; ".join(issue_fragments),
-        )
+
+
+def get_device_shipment_readiness(
+    db: Session,
+    serial_number: str,
+) -> DeviceShipmentReadinessRead:
+    device = get_device_or_404(db, serial_number)
+    return _build_device_shipment_readiness(db, device)

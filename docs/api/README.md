@@ -530,6 +530,12 @@ Odczyt zgodności BOM dla konkretnego urządzenia:
 curl "http://localhost:8000/api/devices/ZSS-000123/bom-compliance"
 ```
 
+Odczyt gotowości urządzenia do `READY_FOR_SHIPMENT`:
+
+```bash
+curl "http://localhost:8000/api/devices/ZSS-000123/shipment-readiness"
+```
+
 Zatwierdzenie wersji BOM z metadanymi release:
 
 ```bash
@@ -642,6 +648,7 @@ Reguły assembly:
 - endpoint `usage` zwraca także `recommended_action`, np. `modify_or_approve`, `activate_or_modify`, `clone` albo `clone_or_promote`
 - endpoint `bom-resolution` pokazuje dla konkretnego urządzenia, czy backend używa BOM przypiętego po montażu, aktywnego BOM wariantowego, fallbacku `DEFAULT`, czy też nie ma dziś aktywnej skutecznej wersji do użycia
 - endpoint `bom-compliance` pokazuje dla konkretnego urządzenia końcową zgodność z rozwiązaną wersją BOM, w tym `missing_required_components`, `over_installed_components`, `unexpected_component_types`, `passes_bom_gate` i `component_coverage`
+- endpoint `shipment-readiness` zwraca pełny werdykt bramki wysyłkowej, w tym `final_test_passed`, `has_critical_open_ncr`, zagnieżdżone `bom_compliance`, `can_transition_to_ready_for_shipment` i uporządkowaną listę `blocking_reasons`
 - endpoint `catalog` zbiera wszystkie wersje BOM dla danego `device_type` i `variant_code` oraz pokazuje dla każdej z nich `can_activate`, `can_release`, liczbę pozycji, liczbę powiązanych urządzeń, blokady lifecycle i `recommended_action`
 - endpoint `bindings` zwraca konkretne urządzenia przypięte do wersji BOM wraz z `installed_component_count` i czasem pierwszego związania
 - endpoint `coverage` zwraca dla tych urządzeń kompletność względem BOM, w tym `missing_required_components`, `over_installed_components` i status per komponent; urządzenie z komponentem `OVER_INSTALLED` nie jest już traktowane jako kompletne

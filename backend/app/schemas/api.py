@@ -229,6 +229,18 @@ class DeviceBomComplianceRead(BaseModel):
     blocking_reason: str | None = None
 
 
+class DeviceShipmentReadinessRead(BaseModel):
+    device_serial_number: str
+    device_type: str
+    device_variant_code: str
+    production_status: str
+    final_test_passed: bool
+    has_critical_open_ncr: bool
+    bom_compliance: DeviceBomComplianceRead
+    can_transition_to_ready_for_shipment: bool
+    blocking_reasons: list[str]
+
+
 class DeviceBomTemplateActivateRequest(BaseModel):
     version: str = Field(pattern=r"^\d+(?:\.\d+)*$")
 
