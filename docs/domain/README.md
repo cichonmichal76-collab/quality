@@ -206,6 +206,7 @@ Najważniejsze reguły:
 - kompletność tych urządzeń względem BOM jest dostępna przez odczyt `coverage`, który pokazuje braki i status per komponent
 - stan gotowości konkretnej wersji BOM jest dostępny przez odczyt `readiness`, który blokuje aktywację pustych albo wyłącznie opcjonalnych wersji
 - porównanie dwóch wersji BOM jest dostępne przez odczyt `diff`, który rozbija zmiany na pozycje dodane, usunięte i zmodyfikowane
+- shipment gate wymaga już nie tylko obecności komponentów wymaganych, ale też braku komponentów nieoczekiwanych i nadmiarowych względem BOM
 - pozycje `DeviceBomItem` w wersjach roboczych mogą być już nie tylko dodawane, ale też aktualizowane i usuwane w ramach tej samej polityki mutowalności
 
 Stan implementacji:

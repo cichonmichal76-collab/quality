@@ -87,3 +87,7 @@ def list_required_bom_items_for_template(db: Session, template_id: str) -> list[
         )
         .all()
     )
+
+
+def list_bom_items_for_template(db: Session, template_id: str) -> list[DeviceBomItem]:
+    return db.query(DeviceBomItem).filter(DeviceBomItem.template_id == template_id).all()

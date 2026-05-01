@@ -533,6 +533,7 @@ Reguły assembly:
 - endpoint `coverage` zwraca dla tych urządzeń kompletność względem BOM, w tym `missing_required_components` i status per komponent
 - endpoint `readiness` zwraca, czy dana wersja ma zdefiniowane pozycje i co najmniej jedną pozycję wymaganą przed aktywacją
 - endpoint `diff` zwraca różnice między dwiema wersjami BOM jako `added`, `removed`, `modified` i `unchanged_count`
+- `READY_FOR_SHIPMENT` jest blokowany nie tylko przy brakujących komponentach, ale też przy nadmiarowych i nieoczekiwanych komponentach względem aktywnego albo przypiętego BOM
 - pozycje BOM można edytować i usuwać tylko wtedy, gdy wersja BOM jest jeszcze legalnie modyfikowalna
 
 ## 7. Final test

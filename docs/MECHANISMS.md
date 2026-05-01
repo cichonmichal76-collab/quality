@@ -38,7 +38,7 @@ Gotowe urządzenie musi przejść final test. Wynik PASS dopuszcza do wysyłki. 
 
 ## Shipment gate
 
-Status READY_FOR_SHIPMENT jest możliwy tylko wtedy, gdy urządzenie ma wymagane komponenty, komponenty mają pozytywne QC, final test jest PASS i nie ma blokujących NCR.
+Status READY_FOR_SHIPMENT jest możliwy tylko wtedy, gdy urządzenie ma wymagane komponenty, nie ma komponentów nadmiarowych ani nieoczekiwanych względem BOM, komponenty mają pozytywne QC, final test jest PASS i nie ma blokujących NCR.
 
 W obecnym MVP wymagane komponenty są odczytywane z aktywnego BOM zapisanego w tabelach `device_bom_templates` i `device_bom_items`. Backend porównuje ilości wymagane z faktycznie zainstalowanymi `AssemblyLink`, a bazowa migracja dostarcza minimalny BOM dla `ZSS`, wymagający `CONTROL_PCB`. Część walidacji BOM dzieje się już podczas assembly scan, a pierwszy poprawny montaż przypina urządzenie do konkretnej wersji BOM zapisanej na `AssemblyLink`. Wersja BOM ma jawny status lifecycle `ACTIVE`, `INACTIVE` albo `RETIRED`, a wersja `RETIRED` jest traktowana jako niemodyfikowalna. Shipment pozostaje końcową bramką kompletności i korzysta z tej samej wersji, jeśli urządzenie zostało już do niej przypięte; dla nowych, jeszcze nieprzypiętych urządzeń brak aktywnej wersji BOM blokuje przejście dalej.
 

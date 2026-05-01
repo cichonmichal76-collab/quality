@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.db import SessionLocal, utc_now
 from app.main import app
-from app.models import WorkSession
+from app.models import AssemblyLink, DeviceBomTemplate, WorkSession
 
 client = TestClient(app)
 
@@ -2179,6 +2179,169 @@ def test_shipment_reads_bom_requirements_from_database():
     )
     assert ready.status_code == 200
     assert ready.json()["production_status"] == "READY_FOR_SHIPMENT"
+
+
+def test_shipment_is_blocked_when_unexpected_component_is_present():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=True,
+    )
+    device_serial_number = unique_id("DEV")
+    device_response = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
+    )
+    assert device_response.status_code == 200
+
+    production_session = start_work_session(role="PRODUCTION_OPERATOR")
+    item = create_qc_passed_item(production_session, item_type="CONTROL_PCB")
+    install = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": production_session["work_session_id"],
+        },
+    )
+    assert install.status_code == 200
+
+    db = SessionLocal()
+    try:
+        template = (
+            db.query(DeviceBomTemplate)
+            .filter(
+                DeviceBomTemplate.device_type == device_type,
+                DeviceBomTemplate.version == "1.0",
+            )
+            .first()
+        )
+        assert template is not None
+        db.add(
+            AssemblyLink(
+                parent_device_serial_number=device_serial_number,
+                child_item_serial_number=unique_id("ITEM"),
+                child_barcode_value=unique_id("BC"),
+                component_type="UNEXPECTED_MODULE",
+                installed_by="pytest",
+                installed_at=utc_now(),
+                bom_template_id=template.id,
+                bom_version=template.version,
+                scan_event_id=unique_id("SCAN"),
+                status="INSTALLED",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    final_test_session = start_work_session(role="FINAL_TEST_OPERATOR")
+    final_test = client.post(
+        "/api/final-tests",
+        json={
+            "test_run_id": unique_id("FT"),
+            "device_serial_number": device_serial_number,
+            "result": "PASS",
+            "firmware_version": "1.2.4",
+            "bootloader_version": "0.9.8",
+            "work_session_id": final_test_session["work_session_id"],
+        },
+    )
+    assert final_test.status_code == 200
+
+    blocked = client.patch(
+        f"/api/devices/{device_serial_number}/status",
+        json={"production_status": "READY_FOR_SHIPMENT"},
+    )
+    assert blocked.status_code == 400
+    assert blocked.json()["detail"] == (
+        "READY_FOR_SHIPMENT requires BOM-compliant assembly: "
+        "unexpected components: UNEXPECTED_MODULE"
+    )
+
+
+def test_shipment_is_blocked_when_component_quantity_exceeds_bom():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        quantity_required=1,
+        version="1.0",
+        is_active=True,
+    )
+    device_serial_number = unique_id("DEV")
+    device_response = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
+    )
+    assert device_response.status_code == 200
+
+    production_session = start_work_session(role="PRODUCTION_OPERATOR")
+    item = create_qc_passed_item(production_session, item_type="CONTROL_PCB")
+    install = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": production_session["work_session_id"],
+        },
+    )
+    assert install.status_code == 200
+
+    db = SessionLocal()
+    try:
+        template = (
+            db.query(DeviceBomTemplate)
+            .filter(
+                DeviceBomTemplate.device_type == device_type,
+                DeviceBomTemplate.version == "1.0",
+            )
+            .first()
+        )
+        assert template is not None
+        db.add(
+            AssemblyLink(
+                parent_device_serial_number=device_serial_number,
+                child_item_serial_number=unique_id("ITEM"),
+                child_barcode_value=unique_id("BC"),
+                component_type="CONTROL_PCB",
+                installed_by="pytest",
+                installed_at=utc_now(),
+                bom_template_id=template.id,
+                bom_version=template.version,
+                scan_event_id=unique_id("SCAN"),
+                status="INSTALLED",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    final_test_session = start_work_session(role="FINAL_TEST_OPERATOR")
+    final_test = client.post(
+        "/api/final-tests",
+        json={
+            "test_run_id": unique_id("FT"),
+            "device_serial_number": device_serial_number,
+            "result": "PASS",
+            "firmware_version": "1.2.4",
+            "bootloader_version": "0.9.8",
+            "work_session_id": final_test_session["work_session_id"],
+        },
+    )
+    assert final_test.status_code == 200
+
+    blocked = client.patch(
+        f"/api/devices/{device_serial_number}/status",
+        json={"production_status": "READY_FOR_SHIPMENT"},
+    )
+    assert blocked.status_code == 400
+    assert blocked.json()["detail"] == (
+        "READY_FOR_SHIPMENT requires BOM-compliant assembly: "
+        "over-installed components: CONTROL_PCB x2/1"
+    )
 
 
 def test_shipment_blocks_when_device_type_has_no_active_bom():

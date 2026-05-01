@@ -52,8 +52,8 @@ def _ensure_required_components_installed(db: Session, device: Device) -> None:
         )
     if not bom_template:
         return
-    required_bom_items = repository.list_required_bom_items_for_template(db, bom_template.id)
-    if not required_bom_items:
+    bom_items = repository.list_bom_items_for_template(db, bom_template.id)
+    if not bom_items:
         return
 
     installed_links = repository.list_installed_assembly_links_for_device(
@@ -67,18 +67,39 @@ def _ensure_required_components_installed(db: Session, device: Device) -> None:
         )
 
     missing_component_types: list[str] = []
-    for bom_item in required_bom_items:
-        installed_count = installed_component_counts.get(bom_item.component_type, 0)
+    over_installed_component_types: list[str] = []
+    for bom_item in bom_items:
+        installed_count = installed_component_counts.pop(bom_item.component_type, 0)
         if installed_count < bom_item.quantity_required:
-            if bom_item.quantity_required == 1:
-                missing_component_types.append(bom_item.component_type)
-            else:
-                missing_component_types.append(
-                    f"{bom_item.component_type} x{bom_item.quantity_required}"
-                )
+            if bom_item.is_required:
+                if bom_item.quantity_required == 1:
+                    missing_component_types.append(bom_item.component_type)
+                else:
+                    missing_component_types.append(
+                        f"{bom_item.component_type} x{bom_item.quantity_required}"
+                    )
+        if installed_count > bom_item.quantity_required:
+            over_installed_component_types.append(
+                f"{bom_item.component_type} x{installed_count}/{bom_item.quantity_required}"
+            )
     if missing_component_types:
         missing_components = ", ".join(missing_component_types)
         raise HTTPException(
             status_code=400,
             detail=f"READY_FOR_SHIPMENT requires installed components: {missing_components}",
+        )
+    if over_installed_component_types or installed_component_counts:
+        issue_fragments: list[str] = []
+        if over_installed_component_types:
+            issue_fragments.append(
+                "over-installed components: " + ", ".join(over_installed_component_types)
+            )
+        if installed_component_counts:
+            issue_fragments.append(
+                "unexpected components: " + ", ".join(sorted(installed_component_counts))
+            )
+        raise HTTPException(
+            status_code=400,
+            detail="READY_FOR_SHIPMENT requires BOM-compliant assembly: "
+            + "; ".join(issue_fragments),
         )
