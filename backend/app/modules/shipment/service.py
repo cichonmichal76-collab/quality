@@ -578,6 +578,8 @@ def list_device_component_quality(
     quality_status: str | None = None,
     primary_quality_status: str | None = None,
     recommended_action: str | None = None,
+    created_after: datetime | None = None,
+    created_before: datetime | None = None,
     updated_after: datetime | None = None,
     updated_before: datetime | None = None,
     only_blocking: bool = False,
@@ -592,6 +594,11 @@ def list_device_component_quality(
         raise HTTPException(status_code=400, detail="limit must be >= 1")
     if limit > MAX_QUEUE_LIMIT:
         raise HTTPException(status_code=400, detail=f"limit must be <= {MAX_QUEUE_LIMIT}")
+    if created_after and created_before and created_after > created_before:
+        raise HTTPException(
+            status_code=400,
+            detail="created_after must be <= created_before",
+        )
     if updated_after and updated_before and updated_after > updated_before:
         raise HTTPException(
             status_code=400,
@@ -626,6 +633,10 @@ def list_device_component_quality(
 
     if production_status:
         quality_rows = [row for row in quality_rows if row.production_status == production_status]
+    if created_after:
+        quality_rows = [row for row in quality_rows if row.device_created_at >= created_after]
+    if created_before:
+        quality_rows = [row for row in quality_rows if row.device_created_at <= created_before]
     if updated_after:
         quality_rows = [row for row in quality_rows if row.device_updated_at >= updated_after]
     if updated_before:
@@ -679,6 +690,8 @@ def list_device_component_quality(
             "quality_status": quality_status,
             "primary_quality_status": primary_quality_status,
             "recommended_action": recommended_action,
+            "created_after": created_after.isoformat() if created_after else None,
+            "created_before": created_before.isoformat() if created_before else None,
             "updated_after": updated_after.isoformat() if updated_after else None,
             "updated_before": updated_before.isoformat() if updated_before else None,
             "only_blocking": only_blocking,

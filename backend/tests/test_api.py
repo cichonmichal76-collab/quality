@@ -4004,6 +4004,44 @@ def test_component_quality_queue_supports_summary_and_filters():
         ncr_device
     ]
 
+    created_after_only = client.get(
+        "/api/component-quality",
+        params={
+            "device_type": queue_device_type,
+            "created_after": created_at_by_device[qc_gap_device].isoformat(),
+            "sort_by": "created_at",
+        },
+    )
+    assert created_after_only.status_code == 200
+    created_after_payload = created_after_only.json()
+    assert created_after_payload["total_devices"] == 2
+    assert created_after_payload["filters"]["created_after"] == created_at_by_device[
+        qc_gap_device
+    ].isoformat()
+    assert [row["device_serial_number"] for row in created_after_payload["devices"]] == [
+        qc_gap_device,
+        ncr_device,
+    ]
+
+    created_before_only = client.get(
+        "/api/component-quality",
+        params={
+            "device_type": queue_device_type,
+            "created_before": created_at_by_device[qc_gap_device].isoformat(),
+            "sort_by": "created_at",
+        },
+    )
+    assert created_before_only.status_code == 200
+    created_before_payload = created_before_only.json()
+    assert created_before_payload["total_devices"] == 2
+    assert created_before_payload["filters"]["created_before"] == created_at_by_device[
+        qc_gap_device
+    ].isoformat()
+    assert [row["device_serial_number"] for row in created_before_payload["devices"]] == [
+        passing_device,
+        qc_gap_device,
+    ]
+
     updated_after_only = client.get(
         "/api/component-quality",
         params={
@@ -4169,6 +4207,18 @@ def test_component_quality_queue_rejects_invalid_update_window():
     )
     assert response.status_code == 400
     assert response.json()["detail"] == "updated_after must be <= updated_before"
+
+
+def test_component_quality_queue_rejects_invalid_create_window():
+    response = client.get(
+        "/api/component-quality",
+        params={
+            "created_after": "2026-05-01T12:00:00+00:00",
+            "created_before": "2026-05-01T11:00:00+00:00",
+        },
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "created_after must be <= created_before"
 
 
 def test_audit_events_can_filter_shipment_gate_by_event_type_and_result():
