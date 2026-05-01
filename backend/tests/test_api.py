@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from app.db import SessionLocal, utc_now
 from app.main import app
 from app.models import AssemblyLink, Device, DeviceBomTemplate, WorkSession
+from app.services.demo_seed import seed_operations_dashboard_demo
 
 client = TestClient(app)
 
@@ -4351,6 +4352,72 @@ def test_component_quality_queue_rejects_unsupported_sort_by():
     assert response.json()["detail"] == "Unsupported component quality sort_by value"
 
 
+def test_component_quality_queue_supports_pagination():
+    queue_device_type = unique_id("DEMO-CQ")
+    seed_tag = unique_id("PAG")
+    seeded = seed_operations_dashboard_demo(
+        device_type=queue_device_type,
+        tag=seed_tag,
+        verify=True,
+    )
+    expected_serials = sorted(
+        [
+            seeded.ready_device_serial_number,
+            seeded.assembly_gap_device_serial_number,
+            seeded.final_test_gap_device_serial_number,
+            seeded.component_qc_gap_device_serial_number,
+            seeded.component_ncr_device_serial_number,
+            seeded.device_ncr_device_serial_number,
+        ]
+    )
+
+    first_page = client.get(
+        f"/api/component-quality?device_type={queue_device_type}&sort_by=device_serial_number&limit=2"
+    )
+    assert first_page.status_code == 200
+    first_payload = first_page.json()
+    assert first_payload["total_devices"] == 6
+    assert first_payload["devices_with_issues"] == 2
+    assert first_payload["returned_count"] == 2
+    assert first_payload["offset"] == 0
+    assert first_payload["limit"] == 2
+    assert first_payload["has_more"] is True
+    assert first_payload["next_offset"] == 2
+    assert first_payload["filters"]["device_type"] == queue_device_type
+    assert first_payload["filters"]["sort_by"] == "device_serial_number"
+    assert first_payload["filters"]["offset"] == 0
+    assert first_payload["filters"]["limit"] == 2
+    assert [row["device_serial_number"] for row in first_payload["devices"]] == expected_serials[:2]
+
+    second_page = client.get(
+        f"/api/component-quality?device_type={queue_device_type}&sort_by=device_serial_number&limit=2&offset=2"
+    )
+    assert second_page.status_code == 200
+    second_payload = second_page.json()
+    assert second_payload["total_devices"] == 6
+    assert second_payload["devices_with_issues"] == 2
+    assert second_payload["returned_count"] == 2
+    assert second_payload["offset"] == 2
+    assert second_payload["limit"] == 2
+    assert second_payload["has_more"] is True
+    assert second_payload["next_offset"] == 4
+    assert [row["device_serial_number"] for row in second_payload["devices"]] == expected_serials[2:4]
+
+    third_page = client.get(
+        f"/api/component-quality?device_type={queue_device_type}&sort_by=device_serial_number&limit=2&offset=4"
+    )
+    assert third_page.status_code == 200
+    third_payload = third_page.json()
+    assert third_payload["total_devices"] == 6
+    assert third_payload["devices_with_issues"] == 2
+    assert third_payload["returned_count"] == 2
+    assert third_payload["offset"] == 4
+    assert third_payload["limit"] == 2
+    assert third_payload["has_more"] is False
+    assert third_payload["next_offset"] is None
+    assert [row["device_serial_number"] for row in third_payload["devices"]] == expected_serials[4:]
+
+
 def test_component_quality_queue_rejects_unsupported_recommended_action():
     response = client.get("/api/component-quality?recommended_action=UNSUPPORTED")
     assert response.status_code == 400
@@ -4394,6 +4461,20 @@ def test_component_quality_queue_rejects_invalid_create_window():
     )
     assert response.status_code == 400
     assert response.json()["detail"] == "created_after must be <= created_before"
+
+
+def test_component_quality_queue_rejects_invalid_pagination():
+    negative_offset = client.get("/api/component-quality?offset=-1")
+    assert negative_offset.status_code == 400
+    assert negative_offset.json()["detail"] == "offset must be >= 0"
+
+    zero_limit = client.get("/api/component-quality?limit=0")
+    assert zero_limit.status_code == 400
+    assert zero_limit.json()["detail"] == "limit must be >= 1"
+
+    over_limit = client.get("/api/component-quality?limit=501")
+    assert over_limit.status_code == 400
+    assert over_limit.json()["detail"] == "limit must be <= 500"
 
 
 def test_audit_events_can_filter_shipment_gate_by_event_type_and_result():
