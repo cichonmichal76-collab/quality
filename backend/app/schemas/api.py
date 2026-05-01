@@ -51,6 +51,7 @@ class DeviceBomTemplateCreate(BaseModel):
 
 class DeviceBomTemplateRead(DeviceBomTemplateCreate):
     id: str
+    status: str
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -58,6 +59,11 @@ class DeviceBomTemplateRead(DeviceBomTemplateCreate):
 
 class DeviceBomTemplateActivateRequest(BaseModel):
     version: str
+
+
+class DeviceBomTemplateRetireRequest(BaseModel):
+    version: str
+    reason: str | None = None
 
 
 class DeviceBomItemCreate(BaseModel):

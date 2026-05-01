@@ -380,6 +380,17 @@ curl -X POST http://localhost:8000/api/device-bom-templates/ZSS/activate \
   }'
 ```
 
+Wycofanie wersji BOM:
+
+```bash
+curl -X POST http://localhost:8000/api/device-bom-templates/ZSS/retire \
+  -H "Content-Type: application/json" \
+  -d '{
+    "version": "1.0",
+    "reason": "Obsolete revision"
+  }'
+```
+
 Instalacja komponentu do urządzenia:
 
 ```bash
@@ -412,6 +423,7 @@ Reguły assembly:
 - komponent nie może być zainstalowany drugi raz, jeśli już ma aktywne `INSTALLED`
 - assembly zapisuje zarówno relację montażową, jak i ślad skanu oraz audytu
 - pierwszy poprawny skan dla urządzenia przypina je do konkretnego `bom_template_id` i `bom_version`; kolejne skany używają już tej samej wersji BOM
+- wersja BOM może mieć jawny `status`: `ACTIVE`, `INACTIVE` albo `RETIRED`
 
 ## 7. Final test
 
@@ -471,6 +483,7 @@ Audit obejmuje także lifecycle BOM:
 - `DEVICE_BOM_TEMPLATE_CREATED`
 - `DEVICE_BOM_TEMPLATE_ACTIVATED`
 - `DEVICE_BOM_TEMPLATE_DEACTIVATED`
+- `DEVICE_BOM_TEMPLATE_RETIRED`
 - `DEVICE_BOM_ITEM_ADDED`
 
 Filtrowanie po work session:

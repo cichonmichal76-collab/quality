@@ -22,6 +22,7 @@ from app.schemas import (
     DeviceBomTemplateActivateRequest,
     DeviceBomItemCreate,
     DeviceBomTemplateCreate,
+    DeviceBomTemplateRetireRequest,
     DeviceCreate,
 )
 
@@ -83,7 +84,11 @@ def create_device_bom_template(db: Session, payload: DeviceBomTemplateCreate) ->
         )
         for active_template in deactivated_templates:
             active_template.is_active = False
-    template = DeviceBomTemplate(**payload.model_dump())
+            active_template.status = "INACTIVE"
+    template = DeviceBomTemplate(
+        **payload.model_dump(),
+        status="ACTIVE" if payload.is_active else "INACTIVE",
+    )
     db.add(template)
     db.flush()
     record_audit_event(
@@ -91,9 +96,12 @@ def create_device_bom_template(db: Session, payload: DeviceBomTemplateCreate) ->
         event_type="DEVICE_BOM_TEMPLATE_CREATED",
         entity_type="DEVICE_BOM_TEMPLATE",
         entity_id=template.id,
-        result="ACTIVE" if template.is_active else "INACTIVE",
+        result=template.status,
         message=f"Created BOM template {template.device_type} v{template.version}",
-        payload=payload.model_dump(),
+        payload={
+            **payload.model_dump(),
+            "status": template.status,
+        },
     )
     for deactivated_template in deactivated_templates:
         record_audit_event(
@@ -119,11 +127,12 @@ def create_device_bom_template(db: Session, payload: DeviceBomTemplateCreate) ->
             event_type="DEVICE_BOM_TEMPLATE_ACTIVATED",
             entity_type="DEVICE_BOM_TEMPLATE",
             entity_id=template.id,
-            result="ACTIVE",
+            result=template.status,
             message=f"Activated BOM template {template.device_type} v{template.version}",
             payload={
                 "device_type": template.device_type,
                 "version": template.version,
+                "status": template.status,
             },
         )
     db.commit()
@@ -157,6 +166,8 @@ def activate_device_bom_template(
     template = get_device_bom_template_or_404(db, device_type, payload.version)
     if template.is_active:
         return template
+    if template.status == "RETIRED":
+        raise HTTPException(status_code=400, detail="Retired BOM template cannot be activated")
     previously_active = repository.set_active_bom_template(db, template)
     for deactivated_template in previously_active:
         record_audit_event(
@@ -172,6 +183,7 @@ def activate_device_bom_template(
             payload={
                 "device_type": deactivated_template.device_type,
                 "version": deactivated_template.version,
+                "status": deactivated_template.status,
                 "replaced_by_template_id": template.id,
                 "replaced_by_version": template.version,
             },
@@ -186,6 +198,36 @@ def activate_device_bom_template(
         payload={
             "device_type": template.device_type,
             "version": template.version,
+            "status": template.status,
+        },
+    )
+    db.commit()
+    db.refresh(template)
+    return template
+
+
+def retire_device_bom_template(
+    db: Session,
+    device_type: str,
+    payload: DeviceBomTemplateRetireRequest,
+) -> DeviceBomTemplate:
+    template = get_device_bom_template_or_404(db, device_type, payload.version)
+    if template.status == "RETIRED":
+        return template
+    template.is_active = False
+    template.status = "RETIRED"
+    record_audit_event(
+        db,
+        event_type="DEVICE_BOM_TEMPLATE_RETIRED",
+        entity_type="DEVICE_BOM_TEMPLATE",
+        entity_id=template.id,
+        result=template.status,
+        message=f"Retired BOM template {template.device_type} v{template.version}",
+        payload={
+            "device_type": template.device_type,
+            "version": template.version,
+            "status": template.status,
+            "reason": payload.reason,
         },
     )
     db.commit()

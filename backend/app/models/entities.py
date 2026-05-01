@@ -47,6 +47,7 @@ class DeviceBomTemplate(Base):
     device_type: Mapped[str] = mapped_column(String, index=True)
     name: Mapped[str] = mapped_column(String)
     version: Mapped[str] = mapped_column(String, default="1.0")
+    status: Mapped[str] = mapped_column(String, default="ACTIVE")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 

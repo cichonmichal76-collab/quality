@@ -42,7 +42,7 @@ def get_active_bom_template_by_device_type(
         db.query(DeviceBomTemplate)
         .filter(
             DeviceBomTemplate.device_type == device_type,
-            DeviceBomTemplate.is_active.is_(True),
+            DeviceBomTemplate.status == "ACTIVE",
         )
         .first()
     )

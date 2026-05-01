@@ -273,8 +273,52 @@ def test_device_bom_template_versions_can_be_activated():
     device_templates = [row for row in templates.json() if row["device_type"] == device_type]
     assert len(device_templates) == 2
     assert sum(1 for row in device_templates if row["is_active"]) == 1
+    assert next(row for row in device_templates if row["version"] == "2.0")["status"] == "ACTIVE"
+    assert next(row for row in device_templates if row["version"] == "1.0")["status"] == "INACTIVE"
     assert next(row for row in device_templates if row["version"] == "2.0")["is_active"] is True
     assert next(row for row in device_templates if row["version"] == "1.0")["is_active"] is False
+
+
+def test_device_bom_template_can_be_retired_and_cannot_be_reactivated():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=True,
+    )
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="FAN_MODULE",
+        version="2.0",
+        is_active=False,
+    )
+
+    retired = client.post(
+        f"/api/device-bom-templates/{device_type}/retire",
+        json={"version": "1.0", "reason": "Obsolete revision"},
+    )
+    assert retired.status_code == 200
+    assert retired.json()["version"] == "1.0"
+    assert retired.json()["status"] == "RETIRED"
+    assert retired.json()["is_active"] is False
+
+    activate_retired = client.post(
+        f"/api/device-bom-templates/{device_type}/activate",
+        json={"version": "1.0"},
+    )
+    assert activate_retired.status_code == 400
+    assert activate_retired.json()["detail"] == "Retired BOM template cannot be activated"
+
+    templates = client.get("/api/device-bom-templates")
+    assert templates.status_code == 200
+    retired_template = next(
+        row
+        for row in templates.json()
+        if row["device_type"] == device_type and row["version"] == "1.0"
+    )
+    assert retired_template["status"] == "RETIRED"
+    assert retired_template["is_active"] is False
 
 
 def test_device_bom_audit_events_are_recorded():
@@ -326,6 +370,35 @@ def test_device_bom_audit_events_are_recorded():
     }
     assert ("DEVICE_BOM_ITEM_ADDED", "1.0", "CONTROL_PCB") in item_markers
     assert ("DEVICE_BOM_ITEM_ADDED", "2.0", "FAN_MODULE") in item_markers
+
+
+def test_device_bom_retire_audit_event_is_recorded():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=True,
+    )
+
+    retired = client.post(
+        f"/api/device-bom-templates/{device_type}/retire",
+        json={"version": "1.0", "reason": "Superseded BOM"},
+    )
+    assert retired.status_code == 200
+
+    template_audit = client.get("/api/audit-events?entity_type=DEVICE_BOM_TEMPLATE")
+    assert template_audit.status_code == 200
+    retire_event = next(
+        row
+        for row in template_audit.json()
+        if row["event_type"] == "DEVICE_BOM_TEMPLATE_RETIRED"
+        and row["payload"]
+        and row["payload"].get("device_type") == device_type
+        and row["payload"].get("version") == "1.0"
+    )
+    assert retire_event["result"] == "RETIRED"
+    assert retire_event["payload"]["reason"] == "Superseded BOM"
 
 
 def test_device_bom_item_can_store_part_number_and_revision_rules():

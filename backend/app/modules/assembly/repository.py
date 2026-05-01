@@ -83,7 +83,7 @@ def get_active_bom_template_by_device_type(
         db.query(DeviceBomTemplate)
         .filter(
             DeviceBomTemplate.device_type == device_type,
-            DeviceBomTemplate.is_active.is_(True),
+            DeviceBomTemplate.status == "ACTIVE",
         )
         .first()
     )
@@ -105,7 +105,7 @@ def list_active_bom_templates_for_device_type(
 ) -> list[DeviceBomTemplate]:
     query = db.query(DeviceBomTemplate).filter(
         DeviceBomTemplate.device_type == device_type,
-        DeviceBomTemplate.is_active.is_(True),
+        DeviceBomTemplate.status == "ACTIVE",
     )
     if exclude_template_id:
         query = query.filter(DeviceBomTemplate.id != exclude_template_id)
@@ -123,7 +123,9 @@ def set_active_bom_template(
     )
     for active_template in previously_active:
         active_template.is_active = False
+        active_template.status = "INACTIVE"
     template.is_active = True
+    template.status = "ACTIVE"
     return previously_active
 
 

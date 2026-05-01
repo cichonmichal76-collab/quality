@@ -194,6 +194,7 @@ Najważniejsze reguły:
 - definicje BOM dla `device_type` są utrzymywane w `DeviceBomTemplate` i `DeviceBomItem`
 - pozycja `DeviceBomItem` może dodatkowo zawęzić dopuszczalny `part_number` i `revision`
 - pozycja `DeviceBomItem` może też zawęzić dopuszczalny `drawing_number` i `drawing_revision`
+- wersja `DeviceBomTemplate` ma jawny status lifecycle: `ACTIVE`, `INACTIVE` albo `RETIRED`
 
 Stan implementacji:
 
@@ -523,6 +524,7 @@ Zdarzenie audytowe obejmujące także administracyjny lifecycle BOM:
 - dodanie pozycji BOM
 - aktywację wersji BOM
 - dezaktywację poprzednio aktywnej wersji BOM
+- wycofanie wersji BOM do stanu `RETIRED`
 
 ### `FinalTestRun`
 

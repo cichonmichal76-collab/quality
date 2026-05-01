@@ -13,6 +13,7 @@ from app.schemas import (
     DeviceBomItemCreate,
     DeviceBomItemRead,
     DeviceBomTemplateCreate,
+    DeviceBomTemplateRetireRequest,
     DeviceBomTemplateRead,
     DeviceCreate,
     DeviceRead,
@@ -59,6 +60,18 @@ def activate_device_bom_template(
     db: Session = Depends(get_db),
 ):
     return service.activate_device_bom_template(db, device_type, payload)
+
+
+@router.post(
+    "/device-bom-templates/{device_type}/retire",
+    response_model=DeviceBomTemplateRead,
+)
+def retire_device_bom_template(
+    device_type: str,
+    payload: DeviceBomTemplateRetireRequest,
+    db: Session = Depends(get_db),
+):
+    return service.retire_device_bom_template(db, device_type, payload)
 
 
 @router.post(
