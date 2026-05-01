@@ -609,8 +609,8 @@ Reguły assembly:
 - wersja `RETIRED` jest niemodyfikowalna; nie można dodawać do niej nowych pozycji BOM
 - nową wersję BOM można utworzyć przez klonowanie istniejącej wersji wraz z kompletem pozycji i opcjonalną natychmiastową aktywacją
 - aktywną wersję BOM można też promować do nowej rewizji jednym endpointem, który klonuje pozycje, aktywuje nową wersję i wycofuje starą
-- aktywna wersja BOM, która została już użyta przez urządzenia w montażu, dostaje soft-lock i nie może być dalej rozszerzana; zmiany powinny iść przez `clone` albo `promote`
-- endpoint `usage` zwraca także `recommended_action`, np. `modify_in_place`, `modify_or_activate`, `clone` albo `clone_or_promote`
+- aktywna wersja BOM nie może być już modyfikowana w miejscu, nawet jeśli nie została jeszcze użyta przez urządzenia; zmiany powinny iść przez `clone` albo `promote`
+- endpoint `usage` zwraca także `recommended_action`, np. `modify_or_activate`, `clone` albo `clone_or_promote`
 - endpoint `bindings` zwraca konkretne urządzenia przypięte do wersji BOM wraz z `installed_component_count` i czasem pierwszego związania
 - endpoint `coverage` zwraca dla tych urządzeń kompletność względem BOM, w tym `missing_required_components` i status per komponent
 - endpointy `approve` i `release` pozwalają zapisać metadane zatwierdzenia BOM i użyć ich jako jawnej ścieżki wejścia wersji do produkcji
@@ -620,7 +620,7 @@ Reguły assembly:
 - jeśli zatwierdzona wersja robocza BOM zostanie zmieniona przez `POST/PATCH/DELETE` na pozycjach BOM, approval jest automatycznie czyszczony i wersję trzeba zatwierdzić ponownie przed aktywacją
 - endpoint `diff` zwraca różnice między dwiema wersjami BOM jako `added`, `removed`, `modified` i `unchanged_count`
 - `READY_FOR_SHIPMENT` jest blokowany nie tylko przy brakujących komponentach, ale też przy nadmiarowych i nieoczekiwanych komponentach względem aktywnego albo przypiętego BOM
-- pozycje BOM można edytować i usuwać tylko wtedy, gdy wersja BOM jest jeszcze legalnie modyfikowalna
+- pozycje BOM można edytować i usuwać tylko wtedy, gdy wersja BOM jest `INACTIVE`; aktywne wersje wymagają `clone` albo `promote`
 
 ## 7. Final test
 

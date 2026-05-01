@@ -152,6 +152,24 @@ def ensure_device_bom_template(
         assert release_response.status_code == 200
 
 
+def release_device_bom_template(
+    device_type: str,
+    version: str = "1.0",
+    variant_code: str = "DEFAULT",
+    approved_by: str = "PYTEST-APPROVER",
+    release_note: str = "Pytest auto release",
+) -> None:
+    release_response = client.post(
+        f"/api/device-bom-templates/{device_type}/release?variant_code={variant_code}",
+        json={
+            "version": version,
+            "approved_by": approved_by,
+            "release_note": release_note,
+        },
+    )
+    assert release_response.status_code == 200
+
+
 def test_health():
     response = client.get("/health")
     assert response.status_code == 200
@@ -316,7 +334,7 @@ def test_device_bom_template_versions_can_be_activated():
     assert next(row for row in device_templates if row["version"] == "1.0")["is_active"] is False
 
 
-def test_device_bom_template_usage_reports_mutable_active_template():
+def test_device_bom_template_usage_reports_active_template_as_clone_or_promote():
     device_type = unique_id("DT")
     ensure_device_bom_template(
         device_type=device_type,
@@ -333,8 +351,8 @@ def test_device_bom_template_usage_reports_mutable_active_template():
     assert payload["status"] == "ACTIVE"
     assert payload["bound_device_count"] == 0
     assert payload["is_bound"] is False
-    assert payload["can_modify"] is True
-    assert payload["recommended_action"] == "modify_in_place"
+    assert payload["can_modify"] is False
+    assert payload["recommended_action"] == "clone_or_promote"
 
 
 def test_device_bom_template_readiness_reports_empty_template_as_blocked():
@@ -408,7 +426,7 @@ def test_device_bom_template_bindings_list_bound_devices():
         device_type=device_type,
         component_type="CONTROL_PCB",
         version="1.0",
-        is_active=True,
+        is_active=False,
     )
     extra_item = client.post(
         f"/api/device-bom-templates/{device_type}/items?version=1.0",
@@ -419,6 +437,7 @@ def test_device_bom_template_bindings_list_bound_devices():
         },
     )
     assert extra_item.status_code == 200
+    release_device_bom_template(device_type=device_type, version="1.0")
 
     first_device_serial_number = unique_id("DEV")
     second_device_serial_number = unique_id("DEV")
@@ -491,7 +510,7 @@ def test_device_bom_template_coverage_reports_complete_and_incomplete_devices():
         component_type="CONTROL_PCB",
         quantity_required=2,
         version="1.0",
-        is_active=True,
+        is_active=False,
     )
     optional_item = client.post(
         f"/api/device-bom-templates/{device_type}/items?version=1.0",
@@ -502,6 +521,7 @@ def test_device_bom_template_coverage_reports_complete_and_incomplete_devices():
         },
     )
     assert optional_item.status_code == 200
+    release_device_bom_template(device_type=device_type, version="1.0")
 
     incomplete_device_serial_number = unique_id("DEV")
     complete_device_serial_number = unique_id("DEV")
@@ -778,7 +798,7 @@ def test_substitution_group_allows_one_of_alternative_components():
         substitution_group="CONTROL_PCB_SLOT",
         quantity_required=1,
         version="1.0",
-        is_active=True,
+        is_active=False,
     )
     alternative_item = client.post(
         f"/api/device-bom-templates/{device_type}/items?version=1.0",
@@ -790,6 +810,7 @@ def test_substitution_group_allows_one_of_alternative_components():
         },
     )
     assert alternative_item.status_code == 200
+    release_device_bom_template(device_type=device_type, version="1.0")
 
     session = start_work_session(role="PRODUCTION_OPERATOR")
     device_serial_number = unique_id("DEV")
@@ -832,7 +853,7 @@ def test_substitution_group_blocks_second_alternative_after_slot_is_satisfied():
         substitution_group="CONTROL_PCB_SLOT",
         quantity_required=1,
         version="1.0",
-        is_active=True,
+        is_active=False,
     )
     alternative_item = client.post(
         f"/api/device-bom-templates/{device_type}/items?version=1.0",
@@ -844,6 +865,7 @@ def test_substitution_group_blocks_second_alternative_after_slot_is_satisfied():
         },
     )
     assert alternative_item.status_code == 200
+    release_device_bom_template(device_type=device_type, version="1.0")
 
     session = start_work_session(role="PRODUCTION_OPERATOR")
     device_serial_number = unique_id("DEV")
@@ -1039,13 +1061,47 @@ def test_inactive_approved_bom_loses_approval_after_item_changes():
     }
 
 
-def test_device_bom_template_diff_reports_added_removed_modified_and_unchanged_items():
+def test_active_unbound_bom_cannot_be_modified_in_place():
     device_type = unique_id("DT")
     ensure_device_bom_template(
         device_type=device_type,
         component_type="CONTROL_PCB",
         version="1.0",
         is_active=True,
+    )
+
+    add_item = client.post(
+        f"/api/device-bom-templates/{device_type}/items?version=1.0",
+        json={
+            "component_type": "FAN_MODULE",
+            "quantity_required": 1,
+            "is_required": True,
+        },
+    )
+    assert add_item.status_code == 400
+    assert add_item.json()["detail"] == "Active BOM template cannot be modified; use clone or promote"
+
+    updated = client.patch(
+        f"/api/device-bom-templates/{device_type}/items/CONTROL_PCB?version=1.0",
+        json={"quantity_required": 2},
+    )
+    assert updated.status_code == 400
+    assert updated.json()["detail"] == "Active BOM template cannot be modified; use clone or promote"
+
+    removed = client.delete(
+        f"/api/device-bom-templates/{device_type}/items/CONTROL_PCB?version=1.0",
+    )
+    assert removed.status_code == 400
+    assert removed.json()["detail"] == "Active BOM template cannot be modified; use clone or promote"
+
+
+def test_device_bom_template_diff_reports_added_removed_modified_and_unchanged_items():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=False,
         required_part_number="PCB-CTRL-001",
         required_revision="A",
     )
@@ -1067,6 +1123,7 @@ def test_device_bom_template_diff_reports_added_removed_modified_and_unchanged_i
         },
     )
     assert unchanged_item.status_code == 200
+    release_device_bom_template(device_type=device_type, version="1.0")
 
     cloned = client.post(
         f"/api/device-bom-templates/{device_type}/clone",
@@ -1209,7 +1266,7 @@ def test_device_bom_template_can_be_cloned_with_all_items():
         device_type=device_type,
         component_type="CONTROL_PCB",
         version="1.0",
-        is_active=True,
+        is_active=False,
         required_part_number="PCB-CTRL-001",
         required_revision="B",
     )
@@ -1224,6 +1281,7 @@ def test_device_bom_template_can_be_cloned_with_all_items():
         },
     )
     assert extra_item.status_code == 200
+    release_device_bom_template(device_type=device_type, version="1.0")
 
     cloned = client.post(
         f"/api/device-bom-templates/{device_type}/clone",
@@ -1319,7 +1377,7 @@ def test_active_bom_template_can_be_promoted_in_one_operation():
         device_type=device_type,
         component_type="CONTROL_PCB",
         version="1.0",
-        is_active=True,
+        is_active=False,
         required_part_number="PCB-CTRL-001",
     )
     extra_item = client.post(
@@ -1331,6 +1389,7 @@ def test_active_bom_template_can_be_promoted_in_one_operation():
         },
     )
     assert extra_item.status_code == 200
+    release_device_bom_template(device_type=device_type, version="1.0")
 
     promoted = client.post(
         f"/api/device-bom-templates/{device_type}/promote",
@@ -1537,26 +1596,20 @@ def test_active_bound_bom_template_cannot_be_modified():
         },
     )
     assert add_item.status_code == 400
-    assert add_item.json()["detail"] == (
-        "Active BOM template already used by devices cannot be modified; use clone or promote"
-    )
+    assert add_item.json()["detail"] == "Active BOM template cannot be modified; use clone or promote"
 
     updated = client.patch(
         f"/api/device-bom-templates/{device_type}/items/CONTROL_PCB?version=1.0",
         json={"quantity_required": 2},
     )
     assert updated.status_code == 400
-    assert updated.json()["detail"] == (
-        "Active BOM template already used by devices cannot be modified; use clone or promote"
-    )
+    assert updated.json()["detail"] == "Active BOM template cannot be modified; use clone or promote"
 
     removed = client.delete(
         f"/api/device-bom-templates/{device_type}/items/CONTROL_PCB?version=1.0",
     )
     assert removed.status_code == 400
-    assert removed.json()["detail"] == (
-        "Active BOM template already used by devices cannot be modified; use clone or promote"
-    )
+    assert removed.json()["detail"] == "Active BOM template cannot be modified; use clone or promote"
 
 
 def test_device_bom_template_usage_reports_bound_active_template():
@@ -2732,7 +2785,7 @@ def test_shipment_accepts_substitution_group_when_one_alternative_is_installed()
         substitution_group="CONTROL_PCB_SLOT",
         quantity_required=1,
         version="1.0",
-        is_active=True,
+        is_active=False,
     )
     alternative_item = client.post(
         f"/api/device-bom-templates/{device_type}/items?version=1.0",
@@ -2744,6 +2797,7 @@ def test_shipment_accepts_substitution_group_when_one_alternative_is_installed()
         },
     )
     assert alternative_item.status_code == 200
+    release_device_bom_template(device_type=device_type, version="1.0")
 
     device_serial_number = unique_id("DEV")
     device_response = client.post(

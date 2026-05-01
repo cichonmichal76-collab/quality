@@ -259,14 +259,12 @@ def get_device_bom_template_usage(
     template = get_device_bom_template_or_404(db, device_type, version, variant_code)
     bound_device_count = repository.count_bound_devices_for_template(db, template.id)
     is_bound = bound_device_count > 0
-    can_modify = template.status != "RETIRED" and not (template.status == "ACTIVE" and is_bound)
+    can_modify = template.status == "INACTIVE"
     is_effective_now = _is_bom_template_effective_now(template)
     if template.status == "RETIRED":
         recommended_action = "clone"
-    elif template.status == "ACTIVE" and is_bound:
-        recommended_action = "clone_or_promote"
     elif template.status == "ACTIVE":
-        recommended_action = "modify_in_place"
+        recommended_action = "clone_or_promote"
     else:
         recommended_action = "modify_or_activate"
 
@@ -644,10 +642,10 @@ def get_device_bom_template_or_404(
 def _ensure_bom_template_is_mutable(db: Session, template: DeviceBomTemplate) -> None:
     if template.status == "RETIRED":
         raise HTTPException(status_code=400, detail="Retired BOM template cannot be modified")
-    if template.status == "ACTIVE" and repository.has_bom_template_bindings(db, template.id):
+    if template.status == "ACTIVE":
         raise HTTPException(
             status_code=400,
-            detail="Active BOM template already used by devices cannot be modified; use clone or promote",
+            detail="Active BOM template cannot be modified; use clone or promote",
         )
 
 
