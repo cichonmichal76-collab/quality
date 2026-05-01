@@ -11,6 +11,7 @@ from app.modules.shipment import repository, rules
 from app.schemas import (
     DeviceComponentPrimaryBlockingTypeSummaryRead,
     DeviceComponentPrimaryQualityStatusSummaryRead,
+    DeviceComponentQualityGateSummaryRead,
     DeviceComponentQualityRead,
     DeviceComponentQualityQueueRead,
     DeviceComponentQualityStatusSummaryRead,
@@ -493,6 +494,26 @@ def _build_primary_component_quality_status_summary(
     ]
 
 
+def _build_component_quality_gate_summary(
+    quality_rows: list[DeviceComponentQualityRead],
+) -> list[DeviceComponentQualityGateSummaryRead]:
+    summary: dict[bool, int] = {}
+    for row in quality_rows:
+        summary[row.passes_component_quality_gate] = (
+            summary.get(row.passes_component_quality_gate, 0) + 1
+        )
+    return [
+        DeviceComponentQualityGateSummaryRead(
+            passes_component_quality_gate=passes_component_quality_gate,
+            device_count=device_count,
+        )
+        for passes_component_quality_gate, device_count in sorted(
+            summary.items(),
+            key=lambda item: not item[0],
+        )
+    ]
+
+
 def _build_component_quality_production_status_summary(
     quality_rows: list[DeviceComponentQualityRead],
 ) -> list[DeviceShipmentProductionStatusSummaryRead]:
@@ -912,6 +933,9 @@ def list_device_component_quality(
             quality_rows
         ),
         primary_quality_status_summary=_build_primary_component_quality_status_summary(
+            quality_rows
+        ),
+        component_quality_gate_summary=_build_component_quality_gate_summary(
             quality_rows
         ),
         staleness_summary=_build_component_quality_staleness_summary(

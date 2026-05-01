@@ -3985,6 +3985,12 @@ def test_component_quality_queue_supports_summary_and_filters():
     assert primary_status_summary["PASS"] == 1
     assert primary_status_summary["QC_NOT_PASSED"] == 1
     assert primary_status_summary["CRITICAL_NCR_OPEN"] == 1
+    component_quality_gate_summary = {
+        entry["passes_component_quality_gate"]: entry["device_count"]
+        for entry in payload["component_quality_gate_summary"]
+    }
+    assert component_quality_gate_summary[True] == 1
+    assert component_quality_gate_summary[False] == 2
     staleness_summary = {
         entry["stale_bucket"]: entry["device_count"]
         for entry in payload["staleness_summary"]
