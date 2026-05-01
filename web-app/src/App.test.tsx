@@ -568,7 +568,7 @@ describe("App", () => {
     expect(screen.getByLabelText("Tylko zablokowane")).not.toBeChecked();
   });
 
-  it("turns off incompatible shipment toggles when explicit filters are selected", async () => {
+  it("disables incompatible shipment filter controls when only ready is enabled", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue(createJsonResponse(shipmentPayload));
@@ -581,36 +581,51 @@ describe("App", () => {
     fireEvent.click(screen.getByLabelText("Tylko gotowe"));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
 
-    fireEvent.change(screen.getByLabelText("Główna blokada"), {
-      target: { value: "FINAL_TEST_NOT_PASSED" },
-    });
+    expect(screen.getByLabelText("Główna blokada")).toBeDisabled();
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
-    expect(fetchMock).toHaveBeenLastCalledWith(
-      "/api/shipment-readiness?primary_blocking_code=FINAL_TEST_NOT_PASSED&sort_by=created_at&sort_desc=true&limit=100",
-      expect.objectContaining({
-        headers: { Accept: "application/json" },
-        signal: expect.any(AbortSignal),
-      }),
+    const actionSelect = screen.getByLabelText("Akcja") as HTMLSelectElement;
+    const readyOption = Array.from(actionSelect.options).find(
+      (option) => option.value === "MARK_READY_FOR_SHIPMENT",
     );
-    expect(screen.getByLabelText("Tylko gotowe")).not.toBeChecked();
+    const assemblyOption = Array.from(actionSelect.options).find(
+      (option) => option.value === "COMPLETE_ASSEMBLY",
+    );
+
+    if (!readyOption || !assemblyOption) {
+      throw new Error("Expected shipment action options to exist.");
+    }
+
+    expect(readyOption.disabled).toBe(false);
+    expect(assemblyOption.disabled).toBe(true);
+  });
+
+  it("disables ready-for-shipment action when only blocked is enabled", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(createJsonResponse(shipmentPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("SHIP-001")).toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText("Tylko zablokowane"));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
 
-    fireEvent.change(screen.getByLabelText("Akcja"), {
-      target: { value: "MARK_READY_FOR_SHIPMENT" },
-    });
-
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(5));
-    expect(fetchMock).toHaveBeenLastCalledWith(
-      "/api/shipment-readiness?primary_blocking_code=FINAL_TEST_NOT_PASSED&recommended_action=MARK_READY_FOR_SHIPMENT&sort_by=created_at&sort_desc=true&limit=100",
-      expect.objectContaining({
-        headers: { Accept: "application/json" },
-        signal: expect.any(AbortSignal),
-      }),
+    const actionSelect = screen.getByLabelText("Akcja") as HTMLSelectElement;
+    const readyOption = Array.from(actionSelect.options).find(
+      (option) => option.value === "MARK_READY_FOR_SHIPMENT",
     );
-    expect(screen.getByLabelText("Tylko zablokowane")).not.toBeChecked();
+    const assemblyOption = Array.from(actionSelect.options).find(
+      (option) => option.value === "COMPLETE_ASSEMBLY",
+    );
+
+    if (!readyOption || !assemblyOption) {
+      throw new Error("Expected shipment action options to exist.");
+    }
+
+    expect(readyOption.disabled).toBe(true);
+    expect(assemblyOption.disabled).toBe(false);
   });
 
   it("renders empty state for component queue when API returns no devices", async () => {

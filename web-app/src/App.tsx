@@ -433,6 +433,13 @@ function ShipmentFiltersPanel({
   ) => void;
   onReset: () => void;
 }) {
+  const actionOptions: SelectOption[] = SHIPMENT_ACTION_OPTIONS.map((option) => ({
+    value: option,
+    disabled:
+      (filters.only_ready && option !== "MARK_READY_FOR_SHIPMENT") ||
+      (filters.only_blocked && option === "MARK_READY_FOR_SHIPMENT"),
+  }));
+
   return (
     <section className="filters-card" aria-label="Filtry wysyłki">
       <div className="section-heading">
@@ -468,11 +475,12 @@ function ShipmentFiltersPanel({
           value={filters.primary_blocking_code}
           options={SHIPMENT_BLOCKING_OPTIONS}
           onChange={(value) => onChange("primary_blocking_code", value)}
+          disabled={filters.only_ready}
         />
         <SelectField
           label="Akcja"
           value={filters.recommended_action}
-          options={SHIPMENT_ACTION_OPTIONS}
+          options={actionOptions}
           onChange={(value) => onChange("recommended_action", value)}
         />
         <SelectField
@@ -1152,34 +1160,53 @@ function TextField({
   );
 }
 
+type SelectOption = {
+  value: string;
+  disabled?: boolean;
+};
+
 function SelectField({
   label,
   value,
   options,
   onChange,
   allowEmpty = true,
+  disabled = false,
 }: {
   label: string;
   value: string;
-  options: string[];
+  options: Array<string | SelectOption>;
   onChange: (value: string) => void;
   allowEmpty?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <label className="field">
       <span>{label}</span>
       <select
+        disabled={disabled}
         value={value}
         onChange={(event: ChangeEvent<HTMLSelectElement>) =>
           onChange(event.target.value)
         }
       >
         {allowEmpty ? <option value="">Wszystkie</option> : null}
-        {options.map((option) => (
-          <option key={option} value={option}>
-            {labelForCode(option)}
-          </option>
-        ))}
+        {options.map((option) => {
+          const normalizedOption =
+            typeof option === "string"
+              ? { value: option, disabled: false }
+              : { value: option.value, disabled: option.disabled ?? false };
+
+          return (
+            <option
+              key={normalizedOption.value}
+              value={normalizedOption.value}
+              disabled={normalizedOption.disabled}
+            >
+              {labelForCode(normalizedOption.value)}
+            </option>
+          );
+        })}
       </select>
     </label>
   );
