@@ -10,6 +10,7 @@ from app.schemas import (
     DeviceComponentQualityRead,
     DeviceComponentQualityQueueRead,
     DeviceComponentQualityStatusSummaryRead,
+    DeviceComponentTypeSummaryRead,
     DeviceShipmentActionSummaryRead,
     DeviceBomComplianceRead,
     DeviceShipmentBlockingCheckRead,
@@ -372,6 +373,34 @@ def _build_component_quality_status_summary(
     ]
 
 
+def _build_component_type_summary(
+    quality_rows: list[DeviceComponentQualityRead],
+    *,
+    component_type_filter: str | None = None,
+) -> list[DeviceComponentTypeSummaryRead]:
+    component_counts: dict[str, int] = {}
+    device_sets: dict[str, set[str]] = {}
+    for row in quality_rows:
+        for component in row.components:
+            if component_type_filter and component.component_type != component_type_filter:
+                continue
+            component_counts[component.component_type] = (
+                component_counts.get(component.component_type, 0) + 1
+            )
+            device_sets.setdefault(component.component_type, set()).add(row.device_serial_number)
+    return [
+        DeviceComponentTypeSummaryRead(
+            component_type=component_type,
+            component_count=component_count,
+            device_count=len(device_sets.get(component_type, set())),
+        )
+        for component_type, component_count in sorted(
+            component_counts.items(),
+            key=lambda item: (-item[1], item[0]),
+        )
+    ]
+
+
 def _sort_component_quality_rows(
     quality_rows: list[DeviceComponentQualityRead],
     *,
@@ -408,6 +437,7 @@ def list_device_component_quality(
     device_type: str | None = None,
     variant_code: str | None = None,
     production_status: str | None = None,
+    component_type: str | None = None,
     quality_status: str | None = None,
     only_blocking: bool = False,
     sort_by: str = "blocked_components",
@@ -434,6 +464,12 @@ def list_device_component_quality(
 
     if production_status:
         quality_rows = [row for row in quality_rows if row.production_status == production_status]
+    if component_type:
+        quality_rows = [
+            row
+            for row in quality_rows
+            if any(component.component_type == component_type for component in row.components)
+        ]
     if only_blocking:
         quality_rows = [row for row in quality_rows if row.blocked_components > 0]
     if quality_status:
@@ -467,6 +503,7 @@ def list_device_component_quality(
             "device_type": device_type,
             "variant_code": variant_code,
             "production_status": production_status,
+            "component_type": component_type,
             "quality_status": quality_status,
             "only_blocking": only_blocking,
             "sort_by": sort_by,
@@ -475,6 +512,10 @@ def list_device_component_quality(
             "limit": limit,
         },
         quality_status_summary=_build_component_quality_status_summary(quality_rows),
+        component_type_summary=_build_component_type_summary(
+            quality_rows,
+            component_type_filter=component_type,
+        ),
         devices=paged_rows,
     )
 

@@ -298,6 +298,12 @@ class DeviceComponentQualityStatusSummaryRead(BaseModel):
     device_count: int
 
 
+class DeviceComponentTypeSummaryRead(BaseModel):
+    component_type: str
+    component_count: int
+    device_count: int
+
+
 class DeviceComponentQualityQueueRead(BaseModel):
     total_devices: int
     devices_with_issues: int
@@ -308,6 +314,7 @@ class DeviceComponentQualityQueueRead(BaseModel):
     next_offset: int | None = None
     filters: dict[str, str | bool | int | None]
     quality_status_summary: list[DeviceComponentQualityStatusSummaryRead]
+    component_type_summary: list[DeviceComponentTypeSummaryRead]
     devices: list[DeviceComponentQualityRead]
 
 

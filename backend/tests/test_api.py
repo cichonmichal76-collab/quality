@@ -3896,6 +3896,13 @@ def test_component_quality_queue_supports_summary_and_filters():
     assert status_summary["PASS"] == (1, 1)
     assert status_summary["QC_NOT_PASSED"] == (1, 1)
     assert status_summary["CRITICAL_NCR_OPEN"] == (1, 1)
+    component_type_summary = {
+        entry["component_type"]: (entry["component_count"], entry["device_count"])
+        for entry in payload["component_type_summary"]
+    }
+    assert component_type_summary["CONTROL_PCB"] == (1, 1)
+    assert component_type_summary["FAN_MODULE"] == (1, 1)
+    assert component_type_summary["IO_MODULE"] == (1, 1)
 
     blocked_only = client.get(
         f"/api/component-quality?device_type={queue_device_type}&only_blocking=true"
@@ -3911,6 +3918,18 @@ def test_component_quality_queue_supports_summary_and_filters():
     )
     assert ncr_only.status_code == 200
     assert [row["device_serial_number"] for row in ncr_only.json()["devices"]] == [ncr_device]
+
+    fan_only = client.get(
+        f"/api/component-quality?device_type={queue_device_type}&component_type=FAN_MODULE"
+    )
+    assert fan_only.status_code == 200
+    fan_payload = fan_only.json()
+    assert fan_payload["total_devices"] == 1
+    assert [row["device_serial_number"] for row in fan_payload["devices"]] == [qc_gap_device]
+    assert fan_payload["filters"]["component_type"] == "FAN_MODULE"
+    assert fan_payload["component_type_summary"] == [
+        {"component_type": "FAN_MODULE", "component_count": 1, "device_count": 1}
+    ]
 
     serial_sorted = client.get(
         f"/api/component-quality?device_type={queue_device_type}&sort_by=device_serial_number"
