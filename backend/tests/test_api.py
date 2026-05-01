@@ -101,6 +101,7 @@ def ensure_device_bom_template(
     quantity_required: int = 1,
     version: str = "1.0",
     is_active: bool = True,
+    variant_code: str = "DEFAULT",
     required_part_number: str | None = None,
     required_revision: str | None = None,
     required_drawing_number: str | None = None,
@@ -110,6 +111,7 @@ def ensure_device_bom_template(
         "/api/device-bom-templates",
         json={
             "device_type": device_type,
+            "variant_code": variant_code,
             "name": f"{device_type} Default BOM",
             "version": version,
             "is_active": is_active,
@@ -118,7 +120,7 @@ def ensure_device_bom_template(
     assert template_response.status_code in {200, 409}
 
     item_response = client.post(
-        f"/api/device-bom-templates/{device_type}/items?version={version}",
+        f"/api/device-bom-templates/{device_type}/items?version={version}&variant_code={variant_code}",
         json={
             "component_type": component_type,
             "required_part_number": required_part_number,
@@ -143,6 +145,7 @@ def test_device_lifecycle():
     payload = {
         "device_serial_number": serial_number,
         "device_type": "ZSS",
+        "variant_code": "DEFAULT",
         "hardware_version": "HW-1.0",
         "created_by": "pytest",
     }
@@ -446,6 +449,8 @@ def test_device_bom_template_bindings_list_bound_devices():
 
     rows = {row["device_serial_number"]: row for row in payload}
     assert rows[first_device_serial_number]["device_type"] == device_type
+    assert rows[first_device_serial_number]["device_variant_code"] == "DEFAULT"
+    assert rows[first_device_serial_number]["bom_variant_code"] == "DEFAULT"
     assert rows[first_device_serial_number]["bom_version"] == "1.0"
     assert rows[first_device_serial_number]["installed_component_count"] == 2
     assert rows[first_device_serial_number]["production_status"] == "CREATED"
@@ -540,6 +545,8 @@ def test_device_bom_template_coverage_reports_complete_and_incomplete_devices():
 
     incomplete_row = rows[incomplete_device_serial_number]
     assert incomplete_row["is_complete"] is False
+    assert incomplete_row["device_variant_code"] == "DEFAULT"
+    assert incomplete_row["bom_variant_code"] == "DEFAULT"
     assert incomplete_row["missing_required_components"] == ["CONTROL_PCB x2"]
     incomplete_components = {
         row["component_type"]: row for row in incomplete_row["component_coverage"]
@@ -558,6 +565,103 @@ def test_device_bom_template_coverage_reports_complete_and_incomplete_devices():
     assert complete_components["CONTROL_PCB"]["status"] == "SATISFIED"
     assert complete_components["FAN_MODULE"]["installed_quantity"] == 1
     assert complete_components["FAN_MODULE"]["status"] == "OPTIONAL_PRESENT"
+
+
+def test_variant_specific_bom_overrides_default_variant():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=True,
+        variant_code="DEFAULT",
+    )
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="FAN_MODULE",
+        version="1.0",
+        is_active=True,
+        variant_code="PREMIUM",
+    )
+
+    device_serial_number = unique_id("DEV")
+    device_response = client.post(
+        "/api/devices",
+        json={
+            "device_serial_number": device_serial_number,
+            "device_type": device_type,
+            "variant_code": "PREMIUM",
+        },
+    )
+    assert device_response.status_code == 200
+    assert device_response.json()["variant_code"] == "PREMIUM"
+
+    production_session = start_work_session(role="PRODUCTION_OPERATOR")
+    premium_item = create_qc_passed_item(production_session, item_type="FAN_MODULE")
+    install = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": premium_item["barcode_value"],
+            "component_type": "FAN_MODULE",
+            "work_session_id": production_session["work_session_id"],
+        },
+    )
+    assert install.status_code == 200
+    assert install.json()["bom_version"] == "1.0"
+
+    default_item = create_qc_passed_item(production_session, item_type="CONTROL_PCB")
+    blocked = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": default_item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": production_session["work_session_id"],
+        },
+    )
+    assert blocked.status_code == 400
+    assert blocked.json()["detail"] == "Component type is not allowed by device BOM"
+
+
+def test_variant_device_falls_back_to_default_bom_when_specific_variant_is_missing():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=True,
+        variant_code="DEFAULT",
+    )
+
+    device_serial_number = unique_id("DEV")
+    device_response = client.post(
+        "/api/devices",
+        json={
+            "device_serial_number": device_serial_number,
+            "device_type": device_type,
+            "variant_code": "PREMIUM",
+        },
+    )
+    assert device_response.status_code == 200
+
+    production_session = start_work_session(role="PRODUCTION_OPERATOR")
+    item = create_qc_passed_item(production_session, item_type="CONTROL_PCB")
+    install = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": production_session["work_session_id"],
+        },
+    )
+    assert install.status_code == 200
+
+    bindings = client.get(
+        f"/api/device-bom-templates/{device_type}/bindings?version=1.0&variant_code=DEFAULT"
+    )
+    assert bindings.status_code == 200
+    rows = {row["device_serial_number"]: row for row in bindings.json()}
+    assert rows[device_serial_number]["device_variant_code"] == "PREMIUM"
+    assert rows[device_serial_number]["bom_variant_code"] == "DEFAULT"
 
 
 def test_device_bom_template_diff_reports_added_removed_modified_and_unchanged_items():

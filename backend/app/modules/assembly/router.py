@@ -65,9 +65,10 @@ def list_device_bom_templates(db: Session = Depends(get_db)):
 def get_device_bom_template_usage(
     device_type: str,
     version: str | None = None,
+    variant_code: str = "DEFAULT",
     db: Session = Depends(get_db),
 ):
-    return service.get_device_bom_template_usage(db, device_type, version)
+    return service.get_device_bom_template_usage(db, device_type, version, variant_code)
 
 
 @router.get(
@@ -77,9 +78,10 @@ def get_device_bom_template_usage(
 def get_device_bom_template_readiness(
     device_type: str,
     version: str | None = None,
+    variant_code: str = "DEFAULT",
     db: Session = Depends(get_db),
 ):
-    return service.get_device_bom_template_readiness(db, device_type, version)
+    return service.get_device_bom_template_readiness(db, device_type, version, variant_code)
 
 
 @router.get(
@@ -89,9 +91,10 @@ def get_device_bom_template_readiness(
 def list_device_bom_template_bindings(
     device_type: str,
     version: str | None = None,
+    variant_code: str = "DEFAULT",
     db: Session = Depends(get_db),
 ):
-    return service.list_device_bom_template_bindings(db, device_type, version)
+    return service.list_device_bom_template_bindings(db, device_type, version, variant_code)
 
 
 @router.get(
@@ -101,9 +104,10 @@ def list_device_bom_template_bindings(
 def list_device_bom_template_coverage(
     device_type: str,
     version: str | None = None,
+    variant_code: str = "DEFAULT",
     db: Session = Depends(get_db),
 ):
-    return service.list_device_bom_template_coverage(db, device_type, version)
+    return service.list_device_bom_template_coverage(db, device_type, version, variant_code)
 
 
 @router.get(
@@ -114,9 +118,16 @@ def get_device_bom_template_diff(
     device_type: str,
     source_version: str,
     target_version: str,
+    variant_code: str = "DEFAULT",
     db: Session = Depends(get_db),
 ):
-    return service.get_device_bom_template_diff(db, device_type, source_version, target_version)
+    return service.get_device_bom_template_diff(
+        db,
+        device_type,
+        source_version,
+        target_version,
+        variant_code,
+    )
 
 
 @router.post(
@@ -126,9 +137,10 @@ def get_device_bom_template_diff(
 def activate_device_bom_template(
     device_type: str,
     payload: DeviceBomTemplateActivateRequest,
+    variant_code: str = "DEFAULT",
     db: Session = Depends(get_db),
 ):
-    return service.activate_device_bom_template(db, device_type, payload)
+    return service.activate_device_bom_template(db, device_type, payload, variant_code)
 
 
 @router.post(
@@ -138,9 +150,10 @@ def activate_device_bom_template(
 def retire_device_bom_template(
     device_type: str,
     payload: DeviceBomTemplateRetireRequest,
+    variant_code: str = "DEFAULT",
     db: Session = Depends(get_db),
 ):
-    return service.retire_device_bom_template(db, device_type, payload)
+    return service.retire_device_bom_template(db, device_type, payload, variant_code)
 
 
 @router.post(
@@ -150,9 +163,10 @@ def retire_device_bom_template(
 def clone_device_bom_template(
     device_type: str,
     payload: DeviceBomTemplateCloneRequest,
+    variant_code: str = "DEFAULT",
     db: Session = Depends(get_db),
 ):
-    return service.clone_device_bom_template(db, device_type, payload)
+    return service.clone_device_bom_template(db, device_type, payload, variant_code)
 
 
 @router.post(
@@ -162,9 +176,10 @@ def clone_device_bom_template(
 def promote_device_bom_template(
     device_type: str,
     payload: DeviceBomTemplatePromoteRequest,
+    variant_code: str = "DEFAULT",
     db: Session = Depends(get_db),
 ):
-    return service.promote_device_bom_template(db, device_type, payload)
+    return service.promote_device_bom_template(db, device_type, payload, variant_code)
 
 
 @router.post(
@@ -175,9 +190,10 @@ def add_device_bom_item(
     device_type: str,
     payload: DeviceBomItemCreate,
     version: str | None = None,
+    variant_code: str = "DEFAULT",
     db: Session = Depends(get_db),
 ):
-    return service.add_device_bom_item(db, device_type, payload, version)
+    return service.add_device_bom_item(db, device_type, payload, version, variant_code)
 
 
 @router.patch(
@@ -189,9 +205,17 @@ def update_device_bom_item(
     component_type: str,
     payload: DeviceBomItemUpdate,
     version: str | None = None,
+    variant_code: str = "DEFAULT",
     db: Session = Depends(get_db),
 ):
-    return service.update_device_bom_item(db, device_type, component_type, payload, version)
+    return service.update_device_bom_item(
+        db,
+        device_type,
+        component_type,
+        payload,
+        version,
+        variant_code,
+    )
 
 
 @router.delete(
@@ -202,9 +226,10 @@ def delete_device_bom_item(
     device_type: str,
     component_type: str,
     version: str | None = None,
+    variant_code: str = "DEFAULT",
     db: Session = Depends(get_db),
 ):
-    return service.delete_device_bom_item(db, device_type, component_type, version)
+    return service.delete_device_bom_item(db, device_type, component_type, version, variant_code)
 
 
 @router.get(
@@ -214,9 +239,10 @@ def delete_device_bom_item(
 def list_device_bom_items(
     device_type: str,
     version: str | None = None,
+    variant_code: str = "DEFAULT",
     db: Session = Depends(get_db),
 ):
-    return service.list_device_bom_items(db, device_type, version)
+    return service.list_device_bom_items(db, device_type, version, variant_code)
 
 
 @router.post("/devices/{device_serial_number}/components", response_model=ComponentRead)

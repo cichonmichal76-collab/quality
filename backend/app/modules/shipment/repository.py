@@ -37,24 +37,30 @@ def list_installed_assembly_links_for_device(
 def get_active_bom_template_by_device_type(
     db: Session,
     device_type: str,
+    variant_code: str = "DEFAULT",
 ) -> DeviceBomTemplate | None:
     return (
         db.query(DeviceBomTemplate)
         .filter(
             DeviceBomTemplate.device_type == device_type,
+            DeviceBomTemplate.variant_code == variant_code,
             DeviceBomTemplate.status == "ACTIVE",
         )
         .first()
     )
 
 
-def get_any_bom_template_by_device_type(
+def get_any_bom_template_by_device_type_and_variant(
     db: Session,
     device_type: str,
+    variant_code: str,
 ) -> DeviceBomTemplate | None:
     return (
         db.query(DeviceBomTemplate)
-        .filter(DeviceBomTemplate.device_type == device_type)
+        .filter(
+            DeviceBomTemplate.device_type == device_type,
+            DeviceBomTemplate.variant_code == variant_code,
+        )
         .order_by(DeviceBomTemplate.created_at.desc())
         .first()
     )

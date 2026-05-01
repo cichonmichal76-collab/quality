@@ -97,6 +97,7 @@ def create_device_bom_template(db: Session, payload: DeviceBomTemplateCreate) ->
         db,
         payload.device_type,
         payload.version,
+        payload.variant_code,
     ):
         raise HTTPException(
             status_code=409,
@@ -107,6 +108,7 @@ def create_device_bom_template(db: Session, payload: DeviceBomTemplateCreate) ->
         deactivated_templates = repository.list_active_bom_templates_for_device_type(
             db,
             payload.device_type,
+            payload.variant_code,
         )
         for active_template in deactivated_templates:
             active_template.is_active = False
@@ -142,8 +144,10 @@ def create_device_bom_template(db: Session, payload: DeviceBomTemplateCreate) ->
             ),
             payload={
                 "device_type": deactivated_template.device_type,
+                "variant_code": deactivated_template.variant_code,
                 "version": deactivated_template.version,
                 "replaced_by_template_id": template.id,
+                "replaced_by_variant_code": template.variant_code,
                 "replaced_by_version": template.version,
             },
         )
@@ -157,6 +161,7 @@ def create_device_bom_template(db: Session, payload: DeviceBomTemplateCreate) ->
             message=f"Activated BOM template {template.device_type} v{template.version}",
             payload={
                 "device_type": template.device_type,
+                "variant_code": template.variant_code,
                 "version": template.version,
                 "status": template.status,
             },
@@ -174,8 +179,9 @@ def get_device_bom_template_usage(
     db: Session,
     device_type: str,
     version: str | None = None,
+    variant_code: str = "DEFAULT",
 ) -> DeviceBomTemplateUsageRead:
-    template = get_device_bom_template_or_404(db, device_type, version)
+    template = get_device_bom_template_or_404(db, device_type, version, variant_code)
     bound_device_count = repository.count_bound_devices_for_template(db, template.id)
     is_bound = bound_device_count > 0
     can_modify = template.status != "RETIRED" and not (template.status == "ACTIVE" and is_bound)
@@ -191,6 +197,7 @@ def get_device_bom_template_usage(
     return DeviceBomTemplateUsageRead(
         template_id=template.id,
         device_type=template.device_type,
+        variant_code=template.variant_code,
         version=template.version,
         status=template.status,
         is_active=template.is_active,
@@ -216,6 +223,7 @@ def _evaluate_bom_template_readiness(
     return DeviceBomTemplateReadinessRead(
         template_id=template.id,
         device_type=template.device_type,
+        variant_code=template.variant_code,
         version=template.version,
         status=template.status,
         is_active=template.is_active,
@@ -231,8 +239,9 @@ def get_device_bom_template_readiness(
     db: Session,
     device_type: str,
     version: str | None = None,
+    variant_code: str = "DEFAULT",
 ) -> DeviceBomTemplateReadinessRead:
-    template = get_device_bom_template_or_404(db, device_type, version)
+    template = get_device_bom_template_or_404(db, device_type, version, variant_code)
     return _evaluate_bom_template_readiness(db, template)
 
 
@@ -240,12 +249,15 @@ def list_device_bom_template_bindings(
     db: Session,
     device_type: str,
     version: str | None = None,
+    variant_code: str = "DEFAULT",
 ) -> list[DeviceBomTemplateBindingRead]:
-    template = get_device_bom_template_or_404(db, device_type, version)
+    template = get_device_bom_template_or_404(db, device_type, version, variant_code)
     return [
         DeviceBomTemplateBindingRead(
             device_serial_number=device_serial_number,
             device_type=bound_device_type,
+            device_variant_code=device_variant_code,
+            bom_variant_code=template.variant_code,
             production_status=production_status,
             bom_version=bom_version,
             installed_component_count=installed_component_count,
@@ -254,6 +266,7 @@ def list_device_bom_template_bindings(
         for (
             device_serial_number,
             bound_device_type,
+            device_variant_code,
             production_status,
             bom_version,
             installed_component_count,
@@ -266,14 +279,16 @@ def list_device_bom_template_coverage(
     db: Session,
     device_type: str,
     version: str | None = None,
+    variant_code: str = "DEFAULT",
 ) -> list[DeviceBomTemplateCoverageRead]:
-    template = get_device_bom_template_or_404(db, device_type, version)
+    template = get_device_bom_template_or_404(db, device_type, version, variant_code)
     bom_items = repository.list_bom_items_for_template(db, template.id)
     coverage_rows: list[DeviceBomTemplateCoverageRead] = []
 
     for (
         device_serial_number,
         bound_device_type,
+        device_variant_code,
         production_status,
         bom_version,
         installed_component_count,
@@ -338,6 +353,8 @@ def list_device_bom_template_coverage(
             DeviceBomTemplateCoverageRead(
                 device_serial_number=device_serial_number,
                 device_type=bound_device_type,
+                device_variant_code=device_variant_code,
+                bom_variant_code=template.variant_code,
                 production_status=production_status,
                 bom_version=bom_version,
                 installed_component_count=installed_component_count,
@@ -385,9 +402,10 @@ def get_device_bom_template_diff(
     device_type: str,
     source_version: str,
     target_version: str,
+    variant_code: str = "DEFAULT",
 ) -> DeviceBomTemplateDiffRead:
-    source_template = get_device_bom_template_or_404(db, device_type, source_version)
-    target_template = get_device_bom_template_or_404(db, device_type, target_version)
+    source_template = get_device_bom_template_or_404(db, device_type, source_version, variant_code)
+    target_template = get_device_bom_template_or_404(db, device_type, target_version, variant_code)
 
     source_items = {
         item.component_type: _snapshot_bom_item(item)
@@ -428,6 +446,7 @@ def get_device_bom_template_diff(
 
     return DeviceBomTemplateDiffRead(
         device_type=device_type,
+        variant_code=source_template.variant_code,
         source_version=source_template.version,
         target_version=target_template.version,
         added=added,
@@ -441,11 +460,17 @@ def get_device_bom_template_or_404(
     db: Session,
     device_type: str,
     version: str | None = None,
+    variant_code: str = "DEFAULT",
 ) -> DeviceBomTemplate:
     if version is not None:
-        template = repository.get_bom_template_by_device_type_and_version(db, device_type, version)
+        template = repository.get_bom_template_by_device_type_and_version(
+            db,
+            device_type,
+            version,
+            variant_code,
+        )
     else:
-        template = repository.get_active_bom_template_by_device_type(db, device_type)
+        template = repository.get_active_bom_template_by_device_type(db, device_type, variant_code)
     if not template:
         raise HTTPException(status_code=404, detail="BOM template not found")
     return template
@@ -465,8 +490,9 @@ def activate_device_bom_template(
     db: Session,
     device_type: str,
     payload: DeviceBomTemplateActivateRequest,
+    variant_code: str = "DEFAULT",
 ) -> DeviceBomTemplate:
-    template = get_device_bom_template_or_404(db, device_type, payload.version)
+    template = get_device_bom_template_or_404(db, device_type, payload.version, variant_code)
     if template.is_active:
         return template
     if template.status == "RETIRED":
@@ -486,9 +512,11 @@ def activate_device_bom_template(
             ),
             payload={
                 "device_type": deactivated_template.device_type,
+                "variant_code": deactivated_template.variant_code,
                 "version": deactivated_template.version,
                 "status": deactivated_template.status,
                 "replaced_by_template_id": template.id,
+                "replaced_by_variant_code": template.variant_code,
                 "replaced_by_version": template.version,
             },
         )
@@ -501,6 +529,7 @@ def activate_device_bom_template(
         message=f"Activated BOM template {template.device_type} v{template.version}",
         payload={
             "device_type": template.device_type,
+            "variant_code": template.variant_code,
             "version": template.version,
             "status": template.status,
         },
@@ -514,8 +543,9 @@ def retire_device_bom_template(
     db: Session,
     device_type: str,
     payload: DeviceBomTemplateRetireRequest,
+    variant_code: str = "DEFAULT",
 ) -> DeviceBomTemplate:
-    template = get_device_bom_template_or_404(db, device_type, payload.version)
+    template = get_device_bom_template_or_404(db, device_type, payload.version, variant_code)
     if template.status == "RETIRED":
         return template
     template.is_active = False
@@ -529,6 +559,7 @@ def retire_device_bom_template(
         message=f"Retired BOM template {template.device_type} v{template.version}",
         payload={
             "device_type": template.device_type,
+            "variant_code": template.variant_code,
             "version": template.version,
             "status": template.status,
             "reason": payload.reason,
@@ -543,13 +574,20 @@ def clone_device_bom_template(
     db: Session,
     device_type: str,
     payload: DeviceBomTemplateCloneRequest,
+    variant_code: str = "DEFAULT",
 ) -> DeviceBomTemplate:
-    source_template = get_device_bom_template_or_404(db, device_type, payload.source_version)
+    source_template = get_device_bom_template_or_404(
+        db,
+        device_type,
+        payload.source_version,
+        variant_code,
+    )
     _ensure_target_version_progresses(payload.source_version, payload.target_version)
     if repository.get_bom_template_by_device_type_and_version(
         db,
         device_type,
         payload.target_version,
+        variant_code,
     ):
         raise HTTPException(
             status_code=409,
@@ -572,6 +610,7 @@ def clone_device_bom_template(
         deactivated_templates = repository.list_active_bom_templates_for_device_type(
             db,
             device_type,
+            variant_code,
         )
         for active_template in deactivated_templates:
             active_template.is_active = False
@@ -579,6 +618,7 @@ def clone_device_bom_template(
 
     cloned_template = DeviceBomTemplate(
         device_type=device_type,
+        variant_code=variant_code,
         name=payload.name or source_template.name,
         version=payload.target_version,
         is_active=payload.activate,
@@ -610,6 +650,7 @@ def clone_device_bom_template(
         message=f"Created BOM template {cloned_template.device_type} v{cloned_template.version}",
         payload={
             "device_type": cloned_template.device_type,
+            "variant_code": cloned_template.variant_code,
             "name": cloned_template.name,
             "version": cloned_template.version,
             "is_active": cloned_template.is_active,
@@ -629,9 +670,11 @@ def clone_device_bom_template(
         ),
         payload={
             "device_type": cloned_template.device_type,
+            "variant_code": cloned_template.variant_code,
             "source_template_id": source_template.id,
             "source_version": source_template.version,
             "target_template_id": cloned_template.id,
+            "target_variant_code": cloned_template.variant_code,
             "target_version": cloned_template.version,
             "copied_item_count": len(source_items),
             "status": cloned_template.status,
@@ -653,6 +696,7 @@ def clone_device_bom_template(
             ),
             payload={
                 "device_type": cloned_template.device_type,
+                "variant_code": cloned_template.variant_code,
                 "version": cloned_template.version,
                 "component_type": source_item.component_type,
                 "quantity_required": source_item.quantity_required,
@@ -678,9 +722,11 @@ def clone_device_bom_template(
             ),
             payload={
                 "device_type": deactivated_template.device_type,
+                "variant_code": deactivated_template.variant_code,
                 "version": deactivated_template.version,
                 "status": deactivated_template.status,
                 "replaced_by_template_id": cloned_template.id,
+                "replaced_by_variant_code": cloned_template.variant_code,
                 "replaced_by_version": cloned_template.version,
             },
         )
@@ -697,6 +743,7 @@ def clone_device_bom_template(
             ),
             payload={
                 "device_type": cloned_template.device_type,
+                "variant_code": cloned_template.variant_code,
                 "version": cloned_template.version,
                 "status": cloned_template.status,
                 "activated_from_version": source_template.version,
@@ -712,8 +759,14 @@ def promote_device_bom_template(
     db: Session,
     device_type: str,
     payload: DeviceBomTemplatePromoteRequest,
+    variant_code: str = "DEFAULT",
 ) -> DeviceBomTemplate:
-    source_template = get_device_bom_template_or_404(db, device_type, payload.source_version)
+    source_template = get_device_bom_template_or_404(
+        db,
+        device_type,
+        payload.source_version,
+        variant_code,
+    )
     if source_template.status != "ACTIVE":
         raise HTTPException(status_code=400, detail="Only active BOM template can be promoted")
     _ensure_target_version_progresses(payload.source_version, payload.target_version)
@@ -727,9 +780,15 @@ def promote_device_bom_template(
             name=payload.name,
             activate=True,
         ),
+        variant_code,
     )
 
-    refreshed_source = get_device_bom_template_or_404(db, device_type, payload.source_version)
+    refreshed_source = get_device_bom_template_or_404(
+        db,
+        device_type,
+        payload.source_version,
+        variant_code,
+    )
     refreshed_source.is_active = False
     refreshed_source.status = "RETIRED"
     retire_reason = payload.retire_reason or f"Promoted to version {cloned_template.version}"
@@ -745,10 +804,12 @@ def promote_device_bom_template(
         ),
         payload={
             "device_type": refreshed_source.device_type,
+            "variant_code": refreshed_source.variant_code,
             "version": refreshed_source.version,
             "status": refreshed_source.status,
             "reason": retire_reason,
             "replaced_by_template_id": cloned_template.id,
+            "replaced_by_variant_code": cloned_template.variant_code,
             "replaced_by_version": cloned_template.version,
         },
     )
@@ -764,9 +825,11 @@ def promote_device_bom_template(
         ),
         payload={
             "device_type": cloned_template.device_type,
+            "variant_code": cloned_template.variant_code,
             "source_template_id": refreshed_source.id,
             "source_version": refreshed_source.version,
             "target_template_id": cloned_template.id,
+            "target_variant_code": cloned_template.variant_code,
             "target_version": cloned_template.version,
             "retire_reason": retire_reason,
             "status": cloned_template.status,
@@ -782,8 +845,9 @@ def add_device_bom_item(
     device_type: str,
     payload: DeviceBomItemCreate,
     version: str | None = None,
+    variant_code: str = "DEFAULT",
 ) -> DeviceBomItem:
-    template = get_device_bom_template_or_404(db, device_type, version)
+    template = get_device_bom_template_or_404(db, device_type, version, variant_code)
     _ensure_bom_template_is_mutable(db, template)
     if repository.get_bom_item(db, template.id, payload.component_type):
         raise HTTPException(status_code=409, detail="BOM item already exists for component type")
@@ -802,6 +866,7 @@ def add_device_bom_item(
         ),
         payload={
             "device_type": template.device_type,
+            "variant_code": template.variant_code,
             "version": template.version,
             **payload.model_dump(exclude_none=True),
         },
@@ -817,8 +882,9 @@ def update_device_bom_item(
     component_type: str,
     payload: DeviceBomItemUpdate,
     version: str | None = None,
+    variant_code: str = "DEFAULT",
 ) -> DeviceBomItem:
-    template = get_device_bom_template_or_404(db, device_type, version)
+    template = get_device_bom_template_or_404(db, device_type, version, variant_code)
     _ensure_bom_template_is_mutable(db, template)
     item = repository.get_bom_item(db, template.id, component_type)
     if not item:
@@ -851,6 +917,7 @@ def update_device_bom_item(
         ),
         payload={
             "device_type": template.device_type,
+            "variant_code": template.variant_code,
             "version": template.version,
             "component_type": component_type,
             "before": previous_state,
@@ -874,8 +941,9 @@ def delete_device_bom_item(
     device_type: str,
     component_type: str,
     version: str | None = None,
+    variant_code: str = "DEFAULT",
 ) -> DeviceBomItem:
-    template = get_device_bom_template_or_404(db, device_type, version)
+    template = get_device_bom_template_or_404(db, device_type, version, variant_code)
     _ensure_bom_template_is_mutable(db, template)
     item = repository.get_bom_item(db, template.id, component_type)
     if not item:
@@ -902,6 +970,7 @@ def delete_device_bom_item(
         ),
         payload={
             "device_type": template.device_type,
+            "variant_code": template.variant_code,
             "version": template.version,
             **removed_snapshot,
         },
@@ -915,8 +984,9 @@ def list_device_bom_items(
     db: Session,
     device_type: str,
     version: str | None = None,
+    variant_code: str = "DEFAULT",
 ) -> list[DeviceBomItem]:
-    template = get_device_bom_template_or_404(db, device_type, version)
+    template = get_device_bom_template_or_404(db, device_type, version, variant_code)
     return repository.list_bom_items_for_template(db, template.id)
 
 
@@ -924,10 +994,33 @@ def _resolve_bom_template_for_device(db: Session, device: Device) -> DeviceBomTe
     bound_template = repository.get_bound_bom_template_for_device(db, device.device_serial_number)
     if bound_template:
         return bound_template
-    active_template = repository.get_active_bom_template_by_device_type(db, device.device_type)
+    active_template = repository.get_active_bom_template_by_device_type(
+        db,
+        device.device_type,
+        device.variant_code,
+    )
     if active_template:
         return active_template
-    if repository.get_bom_template_by_device_type(db, device.device_type):
+    if device.variant_code != "DEFAULT":
+        fallback_template = repository.get_active_bom_template_by_device_type(
+            db,
+            device.device_type,
+            "DEFAULT",
+        )
+        if fallback_template:
+            return fallback_template
+    if repository.has_bom_templates_for_device_type_and_variant(
+        db,
+        device.device_type,
+        device.variant_code,
+    ) or (
+        device.variant_code != "DEFAULT"
+        and repository.has_bom_templates_for_device_type_and_variant(
+            db,
+            device.device_type,
+            "DEFAULT",
+        )
+    ):
         raise HTTPException(status_code=400, detail="No active BOM template available for device type")
     return None
 

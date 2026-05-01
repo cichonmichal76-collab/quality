@@ -336,6 +336,7 @@ curl -X POST http://localhost:8000/api/device-bom-templates \
   -H "Content-Type: application/json" \
   -d '{
     "device_type": "ZSS",
+    "variant_code": "DEFAULT",
     "name": "ZSS Default BOM",
     "version": "1.0",
     "is_active": true
@@ -345,7 +346,7 @@ curl -X POST http://localhost:8000/api/device-bom-templates \
 Dodanie wymaganego komponentu do BOM:
 
 ```bash
-curl -X POST http://localhost:8000/api/device-bom-templates/ZSS/items \
+curl -X POST "http://localhost:8000/api/device-bom-templates/ZSS/items?variant_code=DEFAULT" \
   -H "Content-Type: application/json" \
   -d '{
     "component_type": "CONTROL_PCB",
@@ -365,6 +366,7 @@ curl -X POST http://localhost:8000/api/device-bom-templates \
   -H "Content-Type: application/json" \
   -d '{
     "device_type": "ZSS",
+    "variant_code": "DEFAULT",
     "name": "ZSS Default BOM",
     "version": "2.0",
     "is_active": false
@@ -374,7 +376,7 @@ curl -X POST http://localhost:8000/api/device-bom-templates \
 Dodanie komponentu do konkretnej wersji BOM:
 
 ```bash
-curl -X POST "http://localhost:8000/api/device-bom-templates/ZSS/items?version=2.0" \
+curl -X POST "http://localhost:8000/api/device-bom-templates/ZSS/items?version=2.0&variant_code=DEFAULT" \
   -H "Content-Type: application/json" \
   -d '{
     "component_type": "FAN_MODULE",
@@ -386,7 +388,7 @@ curl -X POST "http://localhost:8000/api/device-bom-templates/ZSS/items?version=2
 Aktywacja wybranej wersji BOM:
 
 ```bash
-curl -X POST http://localhost:8000/api/device-bom-templates/ZSS/activate \
+curl -X POST "http://localhost:8000/api/device-bom-templates/ZSS/activate?variant_code=DEFAULT" \
   -H "Content-Type: application/json" \
   -d '{
     "version": "2.0"
@@ -396,7 +398,7 @@ curl -X POST http://localhost:8000/api/device-bom-templates/ZSS/activate \
 Klonowanie istniejącej wersji BOM do nowej rewizji:
 
 ```bash
-curl -X POST http://localhost:8000/api/device-bom-templates/ZSS/clone \
+curl -X POST "http://localhost:8000/api/device-bom-templates/ZSS/clone?variant_code=DEFAULT" \
   -H "Content-Type: application/json" \
   -d '{
     "source_version": "1.0",
@@ -409,7 +411,7 @@ curl -X POST http://localhost:8000/api/device-bom-templates/ZSS/clone \
 Klonowanie i natychmiastowa aktywacja nowej wersji:
 
 ```bash
-curl -X POST http://localhost:8000/api/device-bom-templates/ZSS/clone \
+curl -X POST "http://localhost:8000/api/device-bom-templates/ZSS/clone?variant_code=DEFAULT" \
   -H "Content-Type: application/json" \
   -d '{
     "source_version": "1.0",
@@ -421,7 +423,7 @@ curl -X POST http://localhost:8000/api/device-bom-templates/ZSS/clone \
 Promocja aktywnej wersji BOM do nowej rewizji w jednym kroku:
 
 ```bash
-curl -X POST http://localhost:8000/api/device-bom-templates/ZSS/promote \
+curl -X POST "http://localhost:8000/api/device-bom-templates/ZSS/promote?variant_code=DEFAULT" \
   -H "Content-Type: application/json" \
   -d '{
     "source_version": "2.0",
@@ -434,37 +436,37 @@ curl -X POST http://localhost:8000/api/device-bom-templates/ZSS/promote \
 Odczyt użycia i mutowalności konkretnej wersji BOM:
 
 ```bash
-curl "http://localhost:8000/api/device-bom-templates/ZSS/usage?version=3.0"
+curl "http://localhost:8000/api/device-bom-templates/ZSS/usage?version=3.0&variant_code=DEFAULT"
 ```
 
 Odczyt gotowości wersji BOM do aktywacji:
 
 ```bash
-curl "http://localhost:8000/api/device-bom-templates/ZSS/readiness?version=3.0"
+curl "http://localhost:8000/api/device-bom-templates/ZSS/readiness?version=3.0&variant_code=DEFAULT"
 ```
 
 Odczyt urządzeń już przypiętych do wersji BOM:
 
 ```bash
-curl "http://localhost:8000/api/device-bom-templates/ZSS/bindings?version=3.0"
+curl "http://localhost:8000/api/device-bom-templates/ZSS/bindings?version=3.0&variant_code=DEFAULT"
 ```
 
 Odczyt kompletności powiązanych urządzeń względem wersji BOM:
 
 ```bash
-curl "http://localhost:8000/api/device-bom-templates/ZSS/coverage?version=3.0"
+curl "http://localhost:8000/api/device-bom-templates/ZSS/coverage?version=3.0&variant_code=DEFAULT"
 ```
 
 Porównanie dwóch wersji BOM:
 
 ```bash
-curl "http://localhost:8000/api/device-bom-templates/ZSS/diff?source_version=2.0&target_version=3.0"
+curl "http://localhost:8000/api/device-bom-templates/ZSS/diff?source_version=2.0&target_version=3.0&variant_code=DEFAULT"
 ```
 
 Edycja pozycji BOM w wersji roboczej:
 
 ```bash
-curl -X PATCH "http://localhost:8000/api/device-bom-templates/ZSS/items/CONTROL_PCB?version=3.0" \
+curl -X PATCH "http://localhost:8000/api/device-bom-templates/ZSS/items/CONTROL_PCB?version=3.0&variant_code=DEFAULT" \
   -H "Content-Type: application/json" \
   -d '{
     "required_part_number": "PCB-CTRL-002",
@@ -476,13 +478,13 @@ curl -X PATCH "http://localhost:8000/api/device-bom-templates/ZSS/items/CONTROL_
 Usunięcie pozycji BOM z wersji roboczej:
 
 ```bash
-curl -X DELETE "http://localhost:8000/api/device-bom-templates/ZSS/items/CONTROL_PCB?version=3.0"
+curl -X DELETE "http://localhost:8000/api/device-bom-templates/ZSS/items/CONTROL_PCB?version=3.0&variant_code=DEFAULT"
 ```
 
 Wycofanie wersji BOM:
 
 ```bash
-curl -X POST http://localhost:8000/api/device-bom-templates/ZSS/retire \
+curl -X POST "http://localhost:8000/api/device-bom-templates/ZSS/retire?variant_code=DEFAULT" \
   -H "Content-Type: application/json" \
   -d '{
     "version": "1.0",
@@ -514,6 +516,7 @@ Reguły assembly:
 - status itemu nie może być `QC_FAILED`, `SCRAPPED` ani `REWORK_REQUIRED`
 - typ zeskanowanego itemu musi zgadzać się z `component_type`
 - jeśli dla `device_type` istnieje aktywny BOM, `component_type` musi być dozwolony przez ten BOM
+- lookup BOM wspiera `variant_code`; backend najpierw szuka aktywnego BOM dla wariantu urządzenia, a potem może spaść do wariantu `DEFAULT`
 - jeśli dla `device_type` istnieją już wersje BOM, ale żadna nie jest aktywna, nowy assembly scan jest blokowany do czasu aktywacji kolejnej wersji
 - jeśli BOM definiuje `required_part_number`, zeskanowany item musi mieć dokładnie ten `part_number`
 - jeśli BOM definiuje `required_revision`, zeskanowany item musi mieć dokładnie tę `revision`

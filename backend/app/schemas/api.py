@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 class DeviceCreate(BaseModel):
     device_serial_number: str
     device_type: str
+    variant_code: str = "DEFAULT"
     hardware_version: str | None = None
     firmware_version: str | None = None
     bootloader_version: str | None = None
@@ -44,6 +45,7 @@ class ComponentRead(ComponentCreate):
 
 class DeviceBomTemplateCreate(BaseModel):
     device_type: str
+    variant_code: str = "DEFAULT"
     name: str
     version: str = Field(default="1.0", pattern=r"^\d+(?:\.\d+)*$")
     is_active: bool = True
@@ -60,6 +62,7 @@ class DeviceBomTemplateRead(DeviceBomTemplateCreate):
 class DeviceBomTemplateUsageRead(BaseModel):
     template_id: str
     device_type: str
+    variant_code: str
     version: str
     status: str
     is_active: bool
@@ -72,6 +75,7 @@ class DeviceBomTemplateUsageRead(BaseModel):
 class DeviceBomTemplateReadinessRead(BaseModel):
     template_id: str
     device_type: str
+    variant_code: str
     version: str
     status: str
     is_active: bool
@@ -85,6 +89,8 @@ class DeviceBomTemplateReadinessRead(BaseModel):
 class DeviceBomTemplateBindingRead(BaseModel):
     device_serial_number: str
     device_type: str
+    device_variant_code: str
+    bom_variant_code: str
     production_status: str
     bom_version: str
     installed_component_count: int
@@ -102,6 +108,8 @@ class DeviceBomComponentCoverageRead(BaseModel):
 class DeviceBomTemplateCoverageRead(BaseModel):
     device_serial_number: str
     device_type: str
+    device_variant_code: str
+    bom_variant_code: str
     production_status: str
     bom_version: str
     installed_component_count: int
@@ -181,6 +189,7 @@ class DeviceBomItemDiffRead(BaseModel):
 
 class DeviceBomTemplateDiffRead(BaseModel):
     device_type: str
+    variant_code: str
     source_version: str
     target_version: str
     added: list[DeviceBomItemSnapshotRead]

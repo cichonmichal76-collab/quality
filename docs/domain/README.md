@@ -193,6 +193,7 @@ Najważniejsze reguły:
 - komponent nie może zostać zainstalowany drugi raz, jeśli jest już aktywny w innym urządzeniu
 - assembly produkuje zarówno relację montażową, jak i ślad skanu
 - definicje BOM dla `device_type` są utrzymywane w `DeviceBomTemplate` i `DeviceBomItem`
+- definicje BOM są dziś scope’owane nie tylko per `device_type`, ale też per `variant_code`, z fallbackiem urządzeń do wariantu `DEFAULT`
 - pozycja `DeviceBomItem` może dodatkowo zawęzić dopuszczalny `part_number` i `revision`
 - pozycja `DeviceBomItem` może też zawęzić dopuszczalny `drawing_number` i `drawing_revision`
 - wersja `DeviceBomTemplate` ma jawny status lifecycle: `ACTIVE`, `INACTIVE` albo `RETIRED`
@@ -210,7 +211,7 @@ Najważniejsze reguły:
 - baza wymusza już unikalność `component_type` w obrębie jednego template BOM, co stabilizuje dalsze rozszerzenia modelu
 
 Najbliższe punkty rozszerzenia BOM:
-- wariantowanie przez dodatkowy scope, np. `variant_code`, `market_code`, `station_type` albo profil urządzenia
+- dalsze scope’y ponad `variant_code`, np. `market_code`, `station_type` albo profil urządzenia
 - okna obowiązywania, np. `effective_from` i `effective_to`, jeśli jedna wersja BOM ma działać tylko w określonym zakresie czasu albo partii
 - grupy zamienników, jeśli jeden wymagany slot ma akceptować kilka alternatywnych `component_type` lub `part_number`
 - kontrola zatwierdzenia wersji, np. `approved_by`, `approved_at`, `release_note`, jeśli BOM ma wejść w formalny workflow release

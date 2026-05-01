@@ -17,6 +17,7 @@ class Device(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True, default=uuid_str)
     device_serial_number: Mapped[str] = mapped_column(String, unique=True, index=True)
     device_type: Mapped[str] = mapped_column(String)
+    variant_code: Mapped[str] = mapped_column(String, default="DEFAULT")
     hardware_version: Mapped[str | None] = mapped_column(String, nullable=True)
     firmware_version: Mapped[str | None] = mapped_column(String, nullable=True)
     bootloader_version: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -43,11 +44,17 @@ class DeviceComponent(Base):
 class DeviceBomTemplate(Base):
     __tablename__ = "device_bom_templates"
     __table_args__ = (
-        Index("ix_device_bom_templates_device_type_status", "device_type", "status"),
+        Index(
+            "ix_device_bom_templates_device_type_variant_code_status",
+            "device_type",
+            "variant_code",
+            "status",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=uuid_str)
     device_type: Mapped[str] = mapped_column(String, index=True)
+    variant_code: Mapped[str] = mapped_column(String, default="DEFAULT")
     name: Mapped[str] = mapped_column(String)
     version: Mapped[str] = mapped_column(String, default="1.0")
     status: Mapped[str] = mapped_column(String, default="ACTIVE")
