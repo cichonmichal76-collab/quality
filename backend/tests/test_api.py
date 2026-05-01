@@ -3620,6 +3620,113 @@ def test_device_shipment_gate_history_returns_blocked_and_passed_attempts():
     assert passed_only.status_code == 200
     assert [row["event_type"] for row in passed_only.json()] == ["SHIPMENT_GATE_PASSED"]
 
+    readiness = client.get(f"/api/devices/{device_serial_number}/shipment-readiness")
+    assert readiness.status_code == 200
+    latest_decision = readiness.json()["latest_shipment_gate_decision"]
+    assert latest_decision["event_type"] == "SHIPMENT_GATE_PASSED"
+    assert latest_decision["result"] == "PASS"
+    assert latest_decision["recommended_action"] == "MARK_READY_FOR_SHIPMENT"
+
+
+def test_shipment_readiness_queue_can_filter_by_latest_gate_result():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(device_type, component_type="CONTROL_PCB")
+
+    pass_serial_number = unique_id("DEV")
+    blocked_serial_number = unique_id("DEV")
+    none_serial_number = unique_id("DEV")
+    for serial_number in [pass_serial_number, blocked_serial_number, none_serial_number]:
+        response = client.post(
+            "/api/devices",
+            json={"device_serial_number": serial_number, "device_type": device_type},
+        )
+        assert response.status_code == 200
+
+    final_test_session = start_work_session(role="FINAL_TEST_OPERATOR")
+    for serial_number in [pass_serial_number, blocked_serial_number]:
+        final_test = client.post(
+            "/api/final-tests",
+            json={
+                "test_run_id": unique_id("FT"),
+                "device_serial_number": serial_number,
+                "result": "PASS",
+                "firmware_version": "1.2.4",
+                "bootloader_version": "0.9.8",
+                "work_session_id": final_test_session["work_session_id"],
+            },
+        )
+        assert final_test.status_code == 200
+
+    blocked_attempt = client.patch(
+        f"/api/devices/{blocked_serial_number}/status",
+        json={"production_status": "READY_FOR_SHIPMENT"},
+    )
+    assert blocked_attempt.status_code == 400
+
+    first_blocked_attempt = client.patch(
+        f"/api/devices/{pass_serial_number}/status",
+        json={"production_status": "READY_FOR_SHIPMENT"},
+    )
+    assert first_blocked_attempt.status_code == 400
+
+    production_session = start_work_session(role="PRODUCTION_OPERATOR")
+    item = create_qc_passed_item(production_session, item_type="CONTROL_PCB")
+    install = client.post(
+        f"/api/devices/{pass_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": production_session["work_session_id"],
+        },
+    )
+    assert install.status_code == 200
+
+    passed_attempt = client.patch(
+        f"/api/devices/{pass_serial_number}/status",
+        json={"production_status": "READY_FOR_SHIPMENT"},
+    )
+    assert passed_attempt.status_code == 200
+
+    queue = client.get(f"/api/shipment-readiness?device_type={device_type}")
+    assert queue.status_code == 200
+    payload = queue.json()
+    latest_summary = {
+        entry["result"]: entry["device_count"]
+        for entry in payload["latest_shipment_gate_result_summary"]
+    }
+    assert latest_summary["PASS"] == 1
+    assert latest_summary["BLOCKED"] == 1
+    assert latest_summary["NONE"] == 1
+
+    devices = {row["device_serial_number"]: row for row in payload["devices"]}
+    assert devices[pass_serial_number]["latest_shipment_gate_decision"]["result"] == "PASS"
+    assert devices[blocked_serial_number]["latest_shipment_gate_decision"]["result"] == "BLOCKED"
+    assert devices[none_serial_number]["latest_shipment_gate_decision"] is None
+
+    passed_only = client.get(
+        f"/api/shipment-readiness?device_type={device_type}&latest_gate_result=PASS"
+    )
+    assert passed_only.status_code == 200
+    assert [row["device_serial_number"] for row in passed_only.json()["devices"]] == [
+        pass_serial_number
+    ]
+
+    blocked_only = client.get(
+        f"/api/shipment-readiness?device_type={device_type}&latest_gate_result=BLOCKED"
+    )
+    assert blocked_only.status_code == 200
+    assert [row["device_serial_number"] for row in blocked_only.json()["devices"]] == [
+        blocked_serial_number
+    ]
+
+    none_only = client.get(
+        f"/api/shipment-readiness?device_type={device_type}&latest_gate_result=NONE"
+    )
+    assert none_only.status_code == 200
+    assert [row["device_serial_number"] for row in none_only.json()["devices"]] == [
+        none_serial_number
+    ]
+
 
 def test_device_shipment_readiness_reports_multiple_blockers():
     device_type = unique_id("DT")
@@ -4255,6 +4362,12 @@ def test_shipment_readiness_queue_rejects_unsupported_sort_by():
     response = client.get("/api/shipment-readiness?sort_by=unsupported")
     assert response.status_code == 400
     assert response.json()["detail"] == "Unsupported sort_by value"
+
+
+def test_shipment_readiness_queue_rejects_unsupported_latest_gate_result():
+    response = client.get("/api/shipment-readiness?latest_gate_result=INVALID")
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Unsupported latest_gate_result filter"
 
 
 def test_shipment_readiness_queue_rejects_invalid_pagination():

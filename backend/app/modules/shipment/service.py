@@ -11,6 +11,8 @@ from app.schemas import (
     DeviceBomComplianceRead,
     DeviceShipmentBlockingCheckRead,
     DeviceShipmentBlockingSummaryRead,
+    DeviceShipmentLatestDecisionRead,
+    DeviceShipmentLatestDecisionSummaryRead,
     DeviceShipmentQueueRead,
     DeviceShipmentReadinessRead,
     DeviceStatusUpdate,
@@ -34,6 +36,7 @@ RUN_FINAL_TEST_ACTION = "RUN_FINAL_TEST"
 VALID_QUEUE_SORT_FIELDS = {"created_at", "device_serial_number", "priority", "recommended_action"}
 MAX_QUEUE_LIMIT = 500
 MAX_SHIPMENT_GATE_HISTORY_LIMIT = 200
+VALID_LATEST_GATE_RESULTS = {"PASS", "BLOCKED", "NONE"}
 
 
 def get_device_or_404(db: Session, serial_number: str) -> Device:
@@ -249,6 +252,10 @@ def _build_device_shipment_readiness(db: Session, device: Device) -> DeviceShipm
     critical_open_ncr_ids = repository.list_critical_open_ncr_ids(db, device.device_serial_number)
     has_critical_open_ncr = bool(critical_open_ncr_ids)
     bom_compliance = get_device_bom_compliance(db, device.device_serial_number)
+    latest_shipment_gate_event = repository.get_latest_shipment_gate_audit_event_for_device(
+        db,
+        device.device_serial_number,
+    )
 
     blocking_reasons: list[str] = []
     blocking_checks: list[DeviceShipmentBlockingCheckRead] = []
@@ -291,6 +298,9 @@ def _build_device_shipment_readiness(db: Session, device: Device) -> DeviceShipm
         critical_open_ncr_ids=critical_open_ncr_ids,
         bom_compliance=bom_compliance,
         can_transition_to_ready_for_shipment=not blocking_reasons,
+        latest_shipment_gate_decision=_build_latest_shipment_gate_decision(
+            latest_shipment_gate_event
+        ),
         primary_blocking_code=primary_blocking_code,
         primary_blocking_message=_primary_blocking_message(primary_blocking_code, blocking_checks),
         recommended_action=_recommended_action_for_primary_blocking_code(primary_blocking_code),
@@ -395,6 +405,47 @@ def _build_recommended_action_summary(
     ]
 
 
+def _build_latest_shipment_gate_decision(
+    audit_event: AuditEvent | None,
+) -> DeviceShipmentLatestDecisionRead | None:
+    if audit_event is None:
+        return None
+    recommended_action = None
+    if audit_event.payload:
+        recommended_action = audit_event.payload.get("recommended_action")
+    return DeviceShipmentLatestDecisionRead(
+        event_type=audit_event.event_type,
+        result=audit_event.result or "UNKNOWN",
+        message=audit_event.message,
+        recommended_action=recommended_action,
+        created_at=audit_event.created_at,
+    )
+
+
+def _latest_shipment_gate_result(
+    readiness: DeviceShipmentReadinessRead,
+) -> str:
+    if readiness.latest_shipment_gate_decision is None:
+        return "NONE"
+    return readiness.latest_shipment_gate_decision.result
+
+
+def _build_latest_shipment_gate_result_summary(
+    readiness_rows: list[DeviceShipmentReadinessRead],
+) -> list[DeviceShipmentLatestDecisionSummaryRead]:
+    summary: dict[str, int] = {}
+    for row in readiness_rows:
+        result = _latest_shipment_gate_result(row)
+        summary[result] = summary.get(result, 0) + 1
+    return [
+        DeviceShipmentLatestDecisionSummaryRead(
+            result=result,
+            device_count=device_count,
+        )
+        for result, device_count in sorted(summary.items(), key=lambda item: (-item[1], item[0]))
+    ]
+
+
 def _sort_shipment_readiness_rows(
     readiness_rows: list[DeviceShipmentReadinessRead],
     *,
@@ -443,6 +494,7 @@ def list_device_shipment_readiness(
     blocking_code: str | None = None,
     primary_blocking_code: str | None = None,
     recommended_action: str | None = None,
+    latest_gate_result: str | None = None,
     only_blocked: bool = False,
     only_ready: bool = False,
     sort_by: str = "created_at",
@@ -481,6 +533,8 @@ def list_device_shipment_readiness(
             status_code=400,
             detail="recommended_action MARK_READY_FOR_SHIPMENT cannot be combined with only_blocked",
         )
+    if latest_gate_result and latest_gate_result not in VALID_LATEST_GATE_RESULTS:
+        raise HTTPException(status_code=400, detail="Unsupported latest_gate_result filter")
     devices = repository.list_devices_for_shipment(
         db,
         device_type=device_type,
@@ -508,6 +562,10 @@ def list_device_shipment_readiness(
     if recommended_action:
         readiness_rows = [
             row for row in readiness_rows if row.recommended_action == recommended_action
+        ]
+    if latest_gate_result:
+        readiness_rows = [
+            row for row in readiness_rows if _latest_shipment_gate_result(row) == latest_gate_result
         ]
     readiness_rows = _sort_shipment_readiness_rows(
         readiness_rows,
@@ -538,6 +596,7 @@ def list_device_shipment_readiness(
             "blocking_code": blocking_code,
             "primary_blocking_code": primary_blocking_code,
             "recommended_action": recommended_action,
+            "latest_gate_result": latest_gate_result,
             "only_blocked": only_blocked,
             "only_ready": only_ready,
             "sort_by": sort_by,
@@ -548,5 +607,8 @@ def list_device_shipment_readiness(
         blocking_summary=_build_blocking_summary(readiness_rows),
         primary_blocking_summary=_build_primary_blocking_summary(readiness_rows),
         recommended_action_summary=_build_recommended_action_summary(readiness_rows),
+        latest_shipment_gate_result_summary=_build_latest_shipment_gate_result_summary(
+            readiness_rows
+        ),
         devices=paged_rows,
     )

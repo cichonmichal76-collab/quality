@@ -167,3 +167,19 @@ def list_shipment_gate_audit_events_for_device(
     if offset:
         query = query.offset(offset)
     return query.limit(limit).all()
+
+
+def get_latest_shipment_gate_audit_event_for_device(
+    db: Session,
+    device_serial_number: str,
+) -> AuditEvent | None:
+    return (
+        db.query(AuditEvent)
+        .filter(
+            AuditEvent.entity_type == "DEVICE",
+            AuditEvent.entity_id == device_serial_number,
+            AuditEvent.event_type.in_(["SHIPMENT_GATE_PASSED", "SHIPMENT_GATE_BLOCKED"]),
+        )
+        .order_by(AuditEvent.created_at.desc())
+        .first()
+    )

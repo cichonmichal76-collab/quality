@@ -247,6 +247,19 @@ class DeviceShipmentActionSummaryRead(BaseModel):
     device_count: int
 
 
+class DeviceShipmentLatestDecisionRead(BaseModel):
+    event_type: str
+    result: str
+    message: str | None = None
+    recommended_action: str | None = None
+    created_at: datetime
+
+
+class DeviceShipmentLatestDecisionSummaryRead(BaseModel):
+    result: str
+    device_count: int
+
+
 class DeviceShipmentReadinessRead(BaseModel):
     device_serial_number: str
     device_type: str
@@ -259,6 +272,7 @@ class DeviceShipmentReadinessRead(BaseModel):
     critical_open_ncr_ids: list[str]
     bom_compliance: DeviceBomComplianceRead
     can_transition_to_ready_for_shipment: bool
+    latest_shipment_gate_decision: DeviceShipmentLatestDecisionRead | None = None
     primary_blocking_code: str | None = None
     primary_blocking_message: str | None = None
     recommended_action: str
@@ -279,6 +293,7 @@ class DeviceShipmentQueueRead(BaseModel):
     blocking_summary: list[DeviceShipmentBlockingSummaryRead]
     primary_blocking_summary: list[DeviceShipmentBlockingSummaryRead]
     recommended_action_summary: list[DeviceShipmentActionSummaryRead]
+    latest_shipment_gate_result_summary: list[DeviceShipmentLatestDecisionSummaryRead]
     devices: list[DeviceShipmentReadinessRead]
 
 
