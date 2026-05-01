@@ -340,7 +340,7 @@ function ShipmentFiltersPanel({
     <section className="filters-card" aria-label="Filtry wysyłki">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Queue control</p>
+          <p className="eyebrow">Kontrola kolejki</p>
           <h2>Filtry wysyłki</h2>
         </div>
         <button className="ghost-button" type="button" onClick={onReset}>
@@ -349,13 +349,13 @@ function ShipmentFiltersPanel({
       </div>
       <div className="filters-grid">
         <TextField
-          label="Device type"
+          label="Typ urządzenia"
           value={filters.device_type}
           onChange={(value) => onChange("device_type", value)}
           placeholder="np. ZSS-VENT"
         />
         <TextField
-          label="Variant"
+          label="Wariant"
           value={filters.variant_code}
           onChange={(value) => onChange("variant_code", value)}
           placeholder="np. DEFAULT"
@@ -436,7 +436,7 @@ function ComponentFiltersPanel({
     <section className="filters-card" aria-label="Filtry jakości komponentów">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Quality triage</p>
+          <p className="eyebrow">Triage jakości</p>
           <h2>Filtry komponentów</h2>
         </div>
         <button className="ghost-button" type="button" onClick={onReset}>
@@ -445,13 +445,13 @@ function ComponentFiltersPanel({
       </div>
       <div className="filters-grid">
         <TextField
-          label="Device type"
+          label="Typ urządzenia"
           value={filters.device_type}
           onChange={(value) => onChange("device_type", value)}
           placeholder="np. ZSS-VENT"
         />
         <TextField
-          label="Variant"
+          label="Wariant"
           value={filters.variant_code}
           onChange={(value) => onChange("variant_code", value)}
           placeholder="np. SERVICE"
@@ -469,13 +469,13 @@ function ComponentFiltersPanel({
           placeholder="np. CONTROL_PCB"
         />
         <SelectField
-          label="Primary quality"
+          label="Główny status jakości"
           value={filters.primary_quality_status}
           options={COMPONENT_STATUS_OPTIONS}
           onChange={(value) => onChange("primary_quality_status", value)}
         />
         <SelectField
-          label="Staleness"
+          label="Świeżość danych"
           value={filters.stale_bucket}
           options={COMPONENT_STALE_OPTIONS}
           onChange={(value) => onChange("stale_bucket", value)}
@@ -667,7 +667,7 @@ function ShipmentTable({
     <section className="table-card">
       <div className="section-heading compact">
         <div>
-          <p className="eyebrow">Shipment queue</p>
+          <p className="eyebrow">Kolejka wysyłki</p>
           <h2>Urządzenia do decyzji</h2>
         </div>
         {isLoading ? <span className="loading-chip">Odświeżanie...</span> : null}
@@ -764,7 +764,7 @@ function ComponentTable({
     <section className="table-card">
       <div className="section-heading compact">
         <div>
-          <p className="eyebrow">Component quality queue</p>
+          <p className="eyebrow">Kolejka jakości komponentów</p>
           <h2>Urządzenia z komponentami</h2>
         </div>
         {isLoading ? <span className="loading-chip">Odświeżanie...</span> : null}

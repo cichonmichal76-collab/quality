@@ -21,6 +21,7 @@ node_modules/
 dist/
 coverage/
 *.tsbuildinfo
+web-app/playwright-smoke*.png
 
 # Android / Gradle
 .gradle/
@@ -33,6 +34,7 @@ build/
 .env.local
 
 # Runtime data
+servicetrace_dev.db
 backend/servicetrace_dev.db
 backend/app/storage/
 backend_storage/
