@@ -616,24 +616,25 @@ Reguły assembly:
 - komponent nie może być zainstalowany drugi raz, jeśli już ma aktywne `INSTALLED`
 - assembly zapisuje zarówno relację montażową, jak i ślad skanu oraz audytu
 - pierwszy poprawny skan dla urządzenia przypina je do konkretnego `bom_template_id` i `bom_version`; kolejne skany używają już tej samej wersji BOM
-- wersja BOM może mieć jawny `status`: `ACTIVE`, `INACTIVE` albo `RETIRED`
+- wersja BOM może mieć jawny `status`: `INACTIVE`, `APPROVED`, `ACTIVE` albo `RETIRED`
 - wersja `RETIRED` jest niemodyfikowalna; nie można dodawać do niej nowych pozycji BOM
 - nową wersję BOM można utworzyć przez klonowanie istniejącej wersji wraz z kompletem pozycji i opcjonalną natychmiastową aktywacją
 - aktywną wersję BOM można też promować do nowej rewizji jednym endpointem, który klonuje pozycje, aktywuje nową wersję i wycofuje starą
 - aktywna wersja BOM nie może być już modyfikowana w miejscu, nawet jeśli nie została jeszcze użyta przez urządzenia; zmiany powinny iść przez `clone` albo `promote`
-- endpoint `usage` zwraca także `recommended_action`, np. `modify_or_activate`, `clone` albo `clone_or_promote`
+- endpoint `usage` zwraca także `recommended_action`, np. `modify_or_approve`, `activate_or_modify`, `clone` albo `clone_or_promote`
 - endpoint `bindings` zwraca konkretne urządzenia przypięte do wersji BOM wraz z `installed_component_count` i czasem pierwszego związania
 - endpoint `coverage` zwraca dla tych urządzeń kompletność względem BOM, w tym `missing_required_components` i status per komponent
 - endpointy `approve` i `release` pozwalają zapisać metadane zatwierdzenia BOM i użyć ich jako jawnej ścieżki wejścia wersji do produkcji
 - `POST /api/device-bom-templates` nie pozwala już tworzyć BOM od razu jako aktywnego; prawidłowy flow to create inactive -> add items -> approve/activate albo release
-- `approve` działa tylko dla wersji `INACTIVE`, które mają już co najmniej jedną pozycję i co najmniej jedną pozycję wymaganą
-- `revoke-approval` pozwala ręcznie cofnąć approval tylko dla wersji `INACTIVE`; aktywna albo niezatwierdzona wersja nie przejdzie tej operacji
+- `approve` działa tylko dla wersji `INACTIVE`, które mają już co najmniej jedną pozycję i co najmniej jedną pozycję wymaganą; po zatwierdzeniu wersja przechodzi do statusu `APPROVED`
+- `revoke-approval` pozwala ręcznie cofnąć approval tylko dla wersji `APPROVED`; aktywna albo niezatwierdzona wersja nie przejdzie tej operacji
+- `revoke-approval` cofa też status `APPROVED` z powrotem do `INACTIVE`
 - endpoint `readiness` zwraca, czy dana wersja ma zdefiniowane pozycje, co najmniej jedną pozycję wymaganą i approval przed aktywacją
 - `clone` z `activate=true` oraz `promote` wymagają teraz `approved_by`, bo aktywują nową wersję BOM w tym samym kroku
 - jeśli zatwierdzona wersja robocza BOM zostanie zmieniona przez `POST/PATCH/DELETE` na pozycjach BOM, approval jest automatycznie czyszczony i wersję trzeba zatwierdzić ponownie przed aktywacją
 - endpoint `diff` zwraca różnice między dwiema wersjami BOM jako `added`, `removed`, `modified` i `unchanged_count`
 - `READY_FOR_SHIPMENT` jest blokowany nie tylko przy brakujących komponentach, ale też przy nadmiarowych i nieoczekiwanych komponentach względem aktywnego albo przypiętego BOM
-- pozycje BOM można edytować i usuwać tylko wtedy, gdy wersja BOM jest `INACTIVE`; aktywne wersje wymagają `clone` albo `promote`
+- pozycje BOM można edytować i usuwać tylko wtedy, gdy wersja BOM jest `INACTIVE` albo `APPROVED`; modyfikacja zatwierdzonego draftu automatycznie wraca ze stanem do `INACTIVE`, a aktywne wersje wymagają `clone` albo `promote`
 
 ## 7. Final test
 

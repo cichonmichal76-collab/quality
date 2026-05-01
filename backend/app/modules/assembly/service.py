@@ -260,14 +260,16 @@ def get_device_bom_template_usage(
     template = get_device_bom_template_or_404(db, device_type, version, variant_code)
     bound_device_count = repository.count_bound_devices_for_template(db, template.id)
     is_bound = bound_device_count > 0
-    can_modify = template.status == "INACTIVE"
+    can_modify = template.status in {"INACTIVE", "APPROVED"}
     is_effective_now = _is_bom_template_effective_now(template)
     if template.status == "RETIRED":
         recommended_action = "clone"
     elif template.status == "ACTIVE":
         recommended_action = "clone_or_promote"
+    elif template.status == "APPROVED":
+        recommended_action = "activate_or_modify"
     else:
-        recommended_action = "modify_or_activate"
+        recommended_action = "modify_or_approve"
 
     return DeviceBomTemplateUsageRead(
         template_id=template.id,
@@ -498,6 +500,8 @@ def approve_device_bom_template(
         raise HTTPException(status_code=400, detail="Retired BOM template cannot be approved")
     if template.status == "ACTIVE":
         raise HTTPException(status_code=400, detail="Active BOM template cannot be approved again")
+    if template.status == "APPROVED":
+        raise HTTPException(status_code=400, detail="BOM template is already approved")
     _, _, _, blocking_reasons = _evaluate_bom_template_requirements(
         db,
         template,
@@ -508,6 +512,7 @@ def approve_device_bom_template(
             status_code=400,
             detail="BOM template is not ready for approval: " + "; ".join(blocking_reasons),
         )
+    template.status = "APPROVED"
     template.approved_by = payload.approved_by
     template.approved_at = utc_now()
     template.release_note = payload.release_note
@@ -543,7 +548,7 @@ def revoke_device_bom_template_approval(
         raise HTTPException(status_code=400, detail="Retired BOM template cannot have approval revoked")
     if template.status == "ACTIVE":
         raise HTTPException(status_code=400, detail="Active BOM template cannot have approval revoked")
-    if template.approved_at is None:
+    if template.status != "APPROVED" or template.approved_at is None:
         raise HTTPException(status_code=400, detail="BOM template is not approved")
 
     previous_approval = {
@@ -551,6 +556,7 @@ def revoke_device_bom_template_approval(
         "approved_at": template.approved_at.isoformat() if template.approved_at else None,
         "release_note": template.release_note,
     }
+    template.status = "INACTIVE"
     template.approved_by = None
     template.approved_at = None
     template.release_note = None
@@ -728,13 +734,14 @@ def _clear_inactive_bom_template_approval(
     mutation_type: str,
     component_type: str | None = None,
 ) -> None:
-    if template.status != "INACTIVE" or template.approved_at is None:
+    if template.status not in {"INACTIVE", "APPROVED"} or template.approved_at is None:
         return
     previous_approval = {
         "approved_by": template.approved_by,
         "approved_at": template.approved_at.isoformat() if template.approved_at else None,
         "release_note": template.release_note,
     }
+    template.status = "INACTIVE"
     template.approved_by = None
     template.approved_at = None
     template.release_note = None
@@ -778,7 +785,7 @@ def activate_device_bom_template(
             event_type="DEVICE_BOM_TEMPLATE_DEACTIVATED",
             entity_type="DEVICE_BOM_TEMPLATE",
             entity_id=deactivated_template.id,
-            result="INACTIVE",
+            result=deactivated_template.status,
             message=(
                 f"Deactivated BOM template {deactivated_template.device_type} "
                 f"v{deactivated_template.version}"
@@ -904,7 +911,7 @@ def clone_device_bom_template(
         )
         for active_template in deactivated_templates:
             active_template.is_active = False
-            active_template.status = "INACTIVE"
+            active_template.status = "APPROVED" if active_template.approved_at is not None else "INACTIVE"
 
     cloned_template = DeviceBomTemplate(
         device_type=device_type,
@@ -1058,7 +1065,7 @@ def clone_device_bom_template(
             event_type="DEVICE_BOM_TEMPLATE_DEACTIVATED",
             entity_type="DEVICE_BOM_TEMPLATE",
             entity_id=deactivated_template.id,
-            result="INACTIVE",
+            result=deactivated_template.status,
             message=(
                 f"Deactivated BOM template {deactivated_template.device_type} "
                 f"v{deactivated_template.version}"

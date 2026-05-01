@@ -329,7 +329,7 @@ def test_device_bom_template_versions_can_be_activated():
     assert len(device_templates) == 2
     assert sum(1 for row in device_templates if row["is_active"]) == 1
     assert next(row for row in device_templates if row["version"] == "2.0")["status"] == "ACTIVE"
-    assert next(row for row in device_templates if row["version"] == "1.0")["status"] == "INACTIVE"
+    assert next(row for row in device_templates if row["version"] == "1.0")["status"] == "APPROVED"
     assert next(row for row in device_templates if row["version"] == "2.0")["is_active"] is True
     assert next(row for row in device_templates if row["version"] == "1.0")["is_active"] is False
 
@@ -915,6 +915,7 @@ def test_device_bom_template_can_be_approved_with_release_metadata():
     )
     assert approved.status_code == 200
     payload = approved.json()
+    assert payload["status"] == "APPROVED"
     assert payload["approved_by"] == "QA-LEAD"
     assert payload["approved_at"] is not None
     assert payload["release_note"] == "Checked for pilot release"
@@ -924,7 +925,10 @@ def test_device_bom_template_can_be_approved_with_release_metadata():
         f"/api/device-bom-templates/{device_type}/usage?version=1.0&variant_code=DEFAULT"
     )
     assert usage.status_code == 200
+    assert usage.json()["status"] == "APPROVED"
     assert usage.json()["is_approved"] is True
+    assert usage.json()["can_modify"] is True
+    assert usage.json()["recommended_action"] == "activate_or_modify"
 
 
 def test_empty_bom_template_cannot_be_approved():
@@ -968,6 +972,29 @@ def test_active_bom_template_cannot_be_approved_again():
     assert approved.json()["detail"] == "Active BOM template cannot be approved again"
 
 
+def test_approved_bom_template_cannot_be_approved_twice():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=False,
+    )
+
+    approved = client.post(
+        f"/api/device-bom-templates/{device_type}/approve",
+        json={"version": "1.0", "approved_by": "QA-LEAD"},
+    )
+    assert approved.status_code == 200
+
+    approved_again = client.post(
+        f"/api/device-bom-templates/{device_type}/approve",
+        json={"version": "1.0", "approved_by": "QA-LEAD"},
+    )
+    assert approved_again.status_code == 400
+    assert approved_again.json()["detail"] == "BOM template is already approved"
+
+
 def test_inactive_bom_template_approval_can_be_revoked_manually():
     device_type = unique_id("DT")
     ensure_device_bom_template(
@@ -994,6 +1021,7 @@ def test_inactive_bom_template_approval_can_be_revoked_manually():
     )
     assert revoked.status_code == 200
     payload = revoked.json()
+    assert payload["status"] == "INACTIVE"
     assert payload["approved_by"] is None
     assert payload["approved_at"] is None
     assert payload["release_note"] is None
@@ -1494,7 +1522,7 @@ def test_cloned_bom_template_can_be_activated_immediately():
     device_templates = [row for row in templates.json() if row["device_type"] == device_type]
     assert len(device_templates) == 2
     assert next(row for row in device_templates if row["version"] == "2.0")["status"] == "ACTIVE"
-    assert next(row for row in device_templates if row["version"] == "1.0")["status"] == "INACTIVE"
+    assert next(row for row in device_templates if row["version"] == "1.0")["status"] == "APPROVED"
 
 
 def test_active_bom_template_can_be_promoted_in_one_operation():

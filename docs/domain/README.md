@@ -197,7 +197,7 @@ Najważniejsze reguły:
 - pozycja `DeviceBomItem` może dodatkowo zawęzić dopuszczalny `part_number` i `revision`
 - pozycja `DeviceBomItem` może też zawęzić dopuszczalny `drawing_number` i `drawing_revision`
 - pozycja `DeviceBomItem` może też należeć do `substitution_group`, która opisuje jeden logiczny slot akceptujący kilka alternatywnych typów komponentów
-- wersja `DeviceBomTemplate` ma jawny status lifecycle: `ACTIVE`, `INACTIVE` albo `RETIRED`
+- wersja `DeviceBomTemplate` ma jawny status lifecycle: `INACTIVE`, `APPROVED`, `ACTIVE` albo `RETIRED`
 - wersja `DeviceBomTemplate` ma też lineage przez `source_template_id` i `replaced_by_template_id`
 - wersja `RETIRED` jest niemodyfikowalna i może być używana dalej tylko przez urządzenia już wcześniej przypięte do tej wersji
 - nowa wersja `DeviceBomTemplate` może powstać przez klonowanie istniejącej wersji razem z kompletem pozycji BOM
@@ -209,10 +209,10 @@ Najważniejsze reguły:
 - kompletność tych urządzeń względem BOM jest dostępna przez odczyt `coverage`, który pokazuje braki i status per komponent
 - wersja BOM może mieć też jawne metadane release: `approved_by`, `approved_at` i `release_note`
 - wersja BOM nie może być utworzona od razu jako aktywna; prawidłowy flow to utworzenie wersji roboczej, dodanie pozycji, approval i dopiero aktywacja albo release
-- approval można nadać tylko wersji `INACTIVE`, która ma już sensowną strukturę BOM, czyli co najmniej jedną pozycję i co najmniej jedną pozycję wymaganą
-- approval dla wersji `INACTIVE` można też ręcznie cofnąć, jeśli BOM wraca do poprawek albo trafia na hold przed releasem
+- approval można nadać tylko wersji `INACTIVE`, która ma już sensowną strukturę BOM, czyli co najmniej jedną pozycję i co najmniej jedną pozycję wymaganą; po tym kroku BOM przechodzi do statusu `APPROVED`
+- approval dla wersji `APPROVED` można też ręcznie cofnąć, jeśli BOM wraca do poprawek albo trafia na hold przed releasem
 - stan gotowości konkretnej wersji BOM jest dostępny przez odczyt `readiness`, który blokuje aktywację pustych, wyłącznie opcjonalnych albo niezatwierdzonych wersji
-- jeśli zatwierdzona wersja robocza BOM zostanie później zmodyfikowana na poziomie pozycji, approval jest zrzucany automatycznie i wymaga ponownego nadania
+- jeśli zatwierdzona wersja robocza BOM zostanie później zmodyfikowana na poziomie pozycji, approval jest zrzucany automatycznie, status wraca do `INACTIVE` i wymaga ponownego nadania
 - aktywna wersja BOM jest już niemutowalna niezależnie od tego, czy została użyta przez urządzenia; dalsze zmiany przechodzą przez kolejną wersję
 - porównanie dwóch wersji BOM jest dostępne przez odczyt `diff`, który rozbija zmiany na pozycje dodane, usunięte i zmodyfikowane
 - shipment gate wymaga już nie tylko obecności komponentów wymaganych, ale też braku komponentów nieoczekiwanych i nadmiarowych względem BOM

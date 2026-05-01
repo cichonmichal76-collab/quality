@@ -48,7 +48,7 @@ class DeviceBomTemplateCreate(BaseModel):
     variant_code: str = "DEFAULT"
     name: str
     version: str = Field(default="1.0", pattern=r"^\d+(?:\.\d+)*$")
-    is_active: bool = True
+    is_active: bool = False
     effective_from: datetime | None = None
     effective_to: datetime | None = None
 

@@ -178,7 +178,7 @@ def set_active_bom_template(
     )
     for active_template in previously_active:
         active_template.is_active = False
-        active_template.status = "INACTIVE"
+        active_template.status = "APPROVED" if active_template.approved_at is not None else "INACTIVE"
         active_template.replaced_by_template_id = template.id
     template.is_active = True
     template.status = "ACTIVE"
