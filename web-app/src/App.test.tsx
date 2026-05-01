@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import type { DeviceComponentQualityQueue, DeviceShipmentQueue } from "./api";
 
+const API_STORAGE_KEY = "servicetrace.web.apiBaseUrl";
+
 const shipmentPayload: DeviceShipmentQueue = {
   total_devices: 1,
   ready_count: 1,
@@ -345,5 +347,85 @@ describe("App", () => {
         "Jeśli backend działa, zawęź lub wyczyść filtry i odśwież kolejkę.",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("loads API base from localStorage and persists manual changes", async () => {
+    localStorage.setItem(API_STORAGE_KEY, "http://localhost:9100/api");
+
+    const fetchMock = vi.fn(async () => createJsonResponse(shipmentPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    const apiBaseInput = screen.getByDisplayValue("http://localhost:9100/api");
+    expect(await screen.findByText("SHIP-001")).toBeInTheDocument();
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:9100/api/shipment-readiness?sort_by=created_at&sort_desc=true&limit=100",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+
+    fireEvent.change(apiBaseInput, {
+      target: { value: "http://localhost:9200/api" },
+    });
+
+    await waitFor(() =>
+      expect(localStorage.getItem(API_STORAGE_KEY)).toBe("http://localhost:9200/api"),
+    );
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "http://localhost:9200/api/shipment-readiness?sort_by=created_at&sort_desc=true&limit=100",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+  });
+
+  it("blocks fetch and shows validation when api base is empty", async () => {
+    localStorage.setItem(API_STORAGE_KEY, "");
+
+    const blockedFetch = vi.fn();
+    vi.stubGlobal("fetch", blockedFetch);
+
+    render(<App />);
+
+    const emptyApiAlert = await screen.findByRole("alert");
+    expect(emptyApiAlert).toHaveTextContent("Podaj bazowy adres API.");
+    expect(blockedFetch).not.toHaveBeenCalled();
+  });
+
+  it("restores default shipment filters after reset", async () => {
+    const fetchMock = vi.fn(async () => createJsonResponse(shipmentPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("SHIP-001")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Typ urządzenia"), {
+      target: { value: "DEMO-OPS" },
+    });
+    fireEvent.click(screen.getByLabelText("Tylko zablokowane"));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+
+    fireEvent.click(screen.getByRole("button", { name: "Wyczyść" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+    expect(screen.getByLabelText("Typ urządzenia")).toHaveValue("");
+    expect(screen.getByLabelText("Tylko zablokowane")).not.toBeChecked();
+    expect(screen.getByLabelText("Tylko gotowe")).not.toBeChecked();
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/shipment-readiness?sort_by=created_at&sort_desc=true&limit=100",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
   });
 });
