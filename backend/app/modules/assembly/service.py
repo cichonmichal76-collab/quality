@@ -75,12 +75,57 @@ def create_device_bom_template(db: Session, payload: DeviceBomTemplateCreate) ->
             status_code=409,
             detail="BOM template version already exists for device type",
         )
+    deactivated_templates: list[DeviceBomTemplate] = []
     if payload.is_active:
-        active_template = repository.get_active_bom_template_by_device_type(db, payload.device_type)
-        if active_template:
+        deactivated_templates = repository.list_active_bom_templates_for_device_type(
+            db,
+            payload.device_type,
+        )
+        for active_template in deactivated_templates:
             active_template.is_active = False
     template = DeviceBomTemplate(**payload.model_dump())
     db.add(template)
+    db.flush()
+    record_audit_event(
+        db,
+        event_type="DEVICE_BOM_TEMPLATE_CREATED",
+        entity_type="DEVICE_BOM_TEMPLATE",
+        entity_id=template.id,
+        result="ACTIVE" if template.is_active else "INACTIVE",
+        message=f"Created BOM template {template.device_type} v{template.version}",
+        payload=payload.model_dump(),
+    )
+    for deactivated_template in deactivated_templates:
+        record_audit_event(
+            db,
+            event_type="DEVICE_BOM_TEMPLATE_DEACTIVATED",
+            entity_type="DEVICE_BOM_TEMPLATE",
+            entity_id=deactivated_template.id,
+            result="INACTIVE",
+            message=(
+                f"Deactivated BOM template {deactivated_template.device_type} "
+                f"v{deactivated_template.version}"
+            ),
+            payload={
+                "device_type": deactivated_template.device_type,
+                "version": deactivated_template.version,
+                "replaced_by_template_id": template.id,
+                "replaced_by_version": template.version,
+            },
+        )
+    if template.is_active:
+        record_audit_event(
+            db,
+            event_type="DEVICE_BOM_TEMPLATE_ACTIVATED",
+            entity_type="DEVICE_BOM_TEMPLATE",
+            entity_id=template.id,
+            result="ACTIVE",
+            message=f"Activated BOM template {template.device_type} v{template.version}",
+            payload={
+                "device_type": template.device_type,
+                "version": template.version,
+            },
+        )
     db.commit()
     db.refresh(template)
     return template
@@ -110,7 +155,42 @@ def activate_device_bom_template(
     payload: DeviceBomTemplateActivateRequest,
 ) -> DeviceBomTemplate:
     template = get_device_bom_template_or_404(db, device_type, payload.version)
-    return repository.set_active_bom_template(db, template)
+    if template.is_active:
+        return template
+    previously_active = repository.set_active_bom_template(db, template)
+    for deactivated_template in previously_active:
+        record_audit_event(
+            db,
+            event_type="DEVICE_BOM_TEMPLATE_DEACTIVATED",
+            entity_type="DEVICE_BOM_TEMPLATE",
+            entity_id=deactivated_template.id,
+            result="INACTIVE",
+            message=(
+                f"Deactivated BOM template {deactivated_template.device_type} "
+                f"v{deactivated_template.version}"
+            ),
+            payload={
+                "device_type": deactivated_template.device_type,
+                "version": deactivated_template.version,
+                "replaced_by_template_id": template.id,
+                "replaced_by_version": template.version,
+            },
+        )
+    record_audit_event(
+        db,
+        event_type="DEVICE_BOM_TEMPLATE_ACTIVATED",
+        entity_type="DEVICE_BOM_TEMPLATE",
+        entity_id=template.id,
+        result="ACTIVE",
+        message=f"Activated BOM template {template.device_type} v{template.version}",
+        payload={
+            "device_type": template.device_type,
+            "version": template.version,
+        },
+    )
+    db.commit()
+    db.refresh(template)
+    return template
 
 
 def add_device_bom_item(
@@ -124,6 +204,23 @@ def add_device_bom_item(
         raise HTTPException(status_code=409, detail="BOM item already exists for component type")
     item = DeviceBomItem(template_id=template.id, **payload.model_dump())
     db.add(item)
+    db.flush()
+    record_audit_event(
+        db,
+        event_type="DEVICE_BOM_ITEM_ADDED",
+        entity_type="DEVICE_BOM_ITEM",
+        entity_id=item.id,
+        result="ADDED",
+        message=(
+            f"Added BOM item {payload.component_type} to "
+            f"{template.device_type} v{template.version}"
+        ),
+        payload={
+            "device_type": template.device_type,
+            "version": template.version,
+            **payload.model_dump(exclude_none=True),
+        },
+    )
     db.commit()
     db.refresh(item)
     return item

@@ -60,7 +60,7 @@ Moduł AR dla serwisanta identyfikuje część lub pozwala ją wskazać z hotspo
 
 ## Audit trail
 
-Każda istotna operacja zapisuje kto, kiedy, gdzie, co zrobił, na jakim obiekcie, z jakim wynikiem. Audit trail jest wymagany dla jakości, serwisu i analizy błędów.
+Każda istotna operacja zapisuje kto, kiedy, gdzie, co zrobił, na jakim obiekcie, z jakim wynikiem. Audit trail jest wymagany dla jakości, serwisu i analizy błędów. Obejmuje to także lifecycle BOM: utworzenie wersji, dodanie pozycji oraz aktywację i dezaktywację wersji BOM.
 
 ## Versioning
 

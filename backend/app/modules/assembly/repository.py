@@ -97,16 +97,34 @@ def list_bom_templates(db: Session) -> list[DeviceBomTemplate]:
     )
 
 
-def set_active_bom_template(db: Session, template: DeviceBomTemplate) -> DeviceBomTemplate:
-    (
-        db.query(DeviceBomTemplate)
-        .filter(DeviceBomTemplate.device_type == template.device_type)
-        .update({"is_active": False}, synchronize_session=False)
+def list_active_bom_templates_for_device_type(
+    db: Session,
+    device_type: str,
+    *,
+    exclude_template_id: str | None = None,
+) -> list[DeviceBomTemplate]:
+    query = db.query(DeviceBomTemplate).filter(
+        DeviceBomTemplate.device_type == device_type,
+        DeviceBomTemplate.is_active.is_(True),
     )
+    if exclude_template_id:
+        query = query.filter(DeviceBomTemplate.id != exclude_template_id)
+    return query.order_by(DeviceBomTemplate.created_at.desc()).all()
+
+
+def set_active_bom_template(
+    db: Session,
+    template: DeviceBomTemplate,
+) -> list[DeviceBomTemplate]:
+    previously_active = list_active_bom_templates_for_device_type(
+        db,
+        template.device_type,
+        exclude_template_id=template.id,
+    )
+    for active_template in previously_active:
+        active_template.is_active = False
     template.is_active = True
-    db.commit()
-    db.refresh(template)
-    return template
+    return previously_active
 
 
 def list_bom_items_for_template(db: Session, template_id: str) -> list[DeviceBomItem]:

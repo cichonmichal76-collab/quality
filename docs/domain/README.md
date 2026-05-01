@@ -515,6 +515,15 @@ Kluczowe pola:
 - `bom_version`
 - `status`
 
+### `AuditEvent`
+
+Zdarzenie audytowe obejmujące także administracyjny lifecycle BOM:
+
+- utworzenie wersji BOM
+- dodanie pozycji BOM
+- aktywację wersji BOM
+- dezaktywację poprzednio aktywnej wersji BOM
+
 ### `FinalTestRun`
 
 Jedno wykonanie final testu dla urządzenia.

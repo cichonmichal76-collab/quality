@@ -277,6 +277,57 @@ def test_device_bom_template_versions_can_be_activated():
     assert next(row for row in device_templates if row["version"] == "1.0")["is_active"] is False
 
 
+def test_device_bom_audit_events_are_recorded():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=True,
+    )
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="FAN_MODULE",
+        version="2.0",
+        is_active=False,
+    )
+
+    activated = client.post(
+        f"/api/device-bom-templates/{device_type}/activate",
+        json={"version": "2.0"},
+    )
+    assert activated.status_code == 200
+
+    template_audit = client.get("/api/audit-events?entity_type=DEVICE_BOM_TEMPLATE")
+    assert template_audit.status_code == 200
+    template_events = [
+        row for row in template_audit.json() if row["payload"] and row["payload"].get("device_type") == device_type
+    ]
+    template_markers = {
+        (row["event_type"], row["payload"].get("version"))
+        for row in template_events
+        if row["payload"]
+    }
+    assert ("DEVICE_BOM_TEMPLATE_CREATED", "1.0") in template_markers
+    assert ("DEVICE_BOM_TEMPLATE_CREATED", "2.0") in template_markers
+    assert ("DEVICE_BOM_TEMPLATE_ACTIVATED", "1.0") in template_markers
+    assert ("DEVICE_BOM_TEMPLATE_ACTIVATED", "2.0") in template_markers
+    assert ("DEVICE_BOM_TEMPLATE_DEACTIVATED", "1.0") in template_markers
+
+    item_audit = client.get("/api/audit-events?entity_type=DEVICE_BOM_ITEM")
+    assert item_audit.status_code == 200
+    item_events = [
+        row for row in item_audit.json() if row["payload"] and row["payload"].get("device_type") == device_type
+    ]
+    item_markers = {
+        (row["event_type"], row["payload"].get("version"), row["payload"].get("component_type"))
+        for row in item_events
+        if row["payload"]
+    }
+    assert ("DEVICE_BOM_ITEM_ADDED", "1.0", "CONTROL_PCB") in item_markers
+    assert ("DEVICE_BOM_ITEM_ADDED", "2.0", "FAN_MODULE") in item_markers
+
+
 def test_device_bom_item_can_store_part_number_and_revision_rules():
     device_type = unique_id("DT")
     ensure_device_bom_template(

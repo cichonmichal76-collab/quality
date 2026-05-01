@@ -466,6 +466,13 @@ Lista wszystkich audit eventów:
 curl http://localhost:8000/api/audit-events
 ```
 
+Audit obejmuje także lifecycle BOM:
+
+- `DEVICE_BOM_TEMPLATE_CREATED`
+- `DEVICE_BOM_TEMPLATE_ACTIVATED`
+- `DEVICE_BOM_TEMPLATE_DEACTIVATED`
+- `DEVICE_BOM_ITEM_ADDED`
+
 Filtrowanie po work session:
 
 ```bash
