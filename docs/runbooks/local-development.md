@@ -103,6 +103,7 @@ py scripts/dev_dashboard_demo.py --device-type DEMO-LOCAL --verify-only --no-ser
 `--skip-seed --no-server` uruchamia tylko migracje.
 `--skip-migrate --skip-seed --no-server` robi jawny no-op i pozwala tylko sprawdzić konfigurację ścieżek i środowiska.
 Ostatnia komenda nie dosiewa danych. Służy do szybkiego sanity checku istniejącego kompletnego datasetu demo dla podanego `device_type` i kończy się błędem, jeśli taki zestaw nie istnieje albo nie spełnia oczekiwanego kontraktu dashboardu.
+Przy błędzie `verify-only` skrypt wypisuje teraz także oryginalny komunikat seeda, więc łatwiej od razu zobaczyć, czy problemem jest brak datasetu, zła baza czy niespójny stan danych.
 
 Po zakończeniu skrypt wypisuje teraz nie tylko `DATABASE_URL`, ale też
 `DATABASE_PATH`, czyli rzeczywistą lokalną ścieżkę pliku SQLite użytego przez backend.

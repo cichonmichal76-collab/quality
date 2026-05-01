@@ -97,14 +97,22 @@ def run_command(command: list[str], *, env: dict[str, str]) -> None:
 
 def run_json_command(command: list[str], *, env: dict[str, str]) -> dict[str, object]:
     print(f">>> {' '.join(command)}", flush=True)
-    completed = subprocess.run(
-        command,
-        cwd=BACKEND_DIR,
-        env=env,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=BACKEND_DIR,
+            env=env,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        if exc.stdout:
+            print(exc.stdout, end="", flush=True)
+        if exc.stderr:
+            print(exc.stderr, end="", file=sys.stderr, flush=True)
+        raise
+
     if completed.stdout:
         print(completed.stdout, end="", flush=True)
     if completed.stderr:

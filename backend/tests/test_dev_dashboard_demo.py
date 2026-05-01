@@ -334,6 +334,35 @@ def test_dev_dashboard_demo_reports_noop_mode(tmp_path):
     assert f"DATABASE_PATH={database_path.resolve()}" in noop_run.stdout
 
 
+def test_dev_dashboard_demo_surfaces_verify_only_seed_error(tmp_path):
+    repo_dir = Path(__file__).resolve().parents[2]
+    database_path = tmp_path / "dashboard-demo-missing-verify-only.db"
+    database_url = f"sqlite:///{database_path.as_posix()}"
+
+    verify_only_run = subprocess.run(
+        [
+            sys.executable,
+            "scripts/dev_dashboard_demo.py",
+            "--database-url",
+            database_url,
+            "--device-type",
+            "DEMO-BOOTSTRAP-MISSING-VERIFY-ONLY",
+            "--verify-only",
+            "--no-server",
+        ],
+        cwd=repo_dir,
+        env=os.environ.copy(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert verify_only_run.returncode != 0
+    assert (
+        "expected existing complete dashboard demo dataset for "
+        "DEMO-BOOTSTRAP-MISSING-VERIFY-ONLY"
+    ) in verify_only_run.stderr
+
+
 def test_dev_dashboard_demo_rejects_verify_only_with_skip_seed(tmp_path):
     repo_dir = Path(__file__).resolve().parents[2]
     database_path = tmp_path / "dashboard-demo-invalid-skip-seed.db"
