@@ -479,6 +479,7 @@ Reguły assembly:
 - wersja `RETIRED` jest niemodyfikowalna; nie można dodawać do niej nowych pozycji BOM
 - nową wersję BOM można utworzyć przez klonowanie istniejącej wersji wraz z kompletem pozycji i opcjonalną natychmiastową aktywacją
 - aktywną wersję BOM można też promować do nowej rewizji jednym endpointem, który klonuje pozycje, aktywuje nową wersję i wycofuje starą
+- aktywna wersja BOM, która została już użyta przez urządzenia w montażu, dostaje soft-lock i nie może być dalej rozszerzana; zmiany powinny iść przez `clone` albo `promote`
 
 ## 7. Final test
 

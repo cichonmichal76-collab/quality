@@ -185,3 +185,12 @@ def get_bound_bom_template_for_device(
     if not link or not link.bom_template_id:
         return None
     return db.query(DeviceBomTemplate).filter(DeviceBomTemplate.id == link.bom_template_id).first()
+
+
+def has_bom_template_bindings(db: Session, template_id: str) -> bool:
+    return (
+        db.query(AssemblyLink)
+        .filter(AssemblyLink.bom_template_id == template_id)
+        .first()
+        is not None
+    )

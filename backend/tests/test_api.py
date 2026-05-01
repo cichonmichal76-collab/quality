@@ -551,6 +551,48 @@ def test_retired_bom_template_cannot_be_modified():
     assert add_item.json()["detail"] == "Retired BOM template cannot be modified"
 
 
+def test_active_bound_bom_template_cannot_be_modified():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(
+        device_type=device_type,
+        component_type="CONTROL_PCB",
+        version="1.0",
+        is_active=True,
+    )
+
+    session = start_work_session(role="PRODUCTION_OPERATOR")
+    device_serial_number = unique_id("DEV")
+    create_device = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
+    )
+    assert create_device.status_code == 200
+
+    item = create_qc_passed_item(session, item_type="CONTROL_PCB")
+    installed = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": session["work_session_id"],
+        },
+    )
+    assert installed.status_code == 200
+
+    add_item = client.post(
+        f"/api/device-bom-templates/{device_type}/items?version=1.0",
+        json={
+            "component_type": "FAN_MODULE",
+            "quantity_required": 1,
+            "is_required": True,
+        },
+    )
+    assert add_item.status_code == 400
+    assert add_item.json()["detail"] == (
+        "Active BOM template already used by devices cannot be modified; use clone or promote"
+    )
+
+
 def test_device_bom_audit_events_are_recorded():
     device_type = unique_id("DT")
     ensure_device_bom_template(
@@ -1064,13 +1106,14 @@ def test_qc_run_pass_updates_item_status():
 
 
 def test_assembly_scan_installs_component_and_blocks_duplicate_use():
-    ensure_device_bom_template("ZSS")
+    device_type = unique_id("DT")
+    ensure_device_bom_template(device_type, component_type="CONTROL_PCB")
     session = start_work_session(role="PRODUCTION_OPERATOR")
     device_serial_number = unique_id("ZSS")
 
     create_device = client.post(
         "/api/devices",
-        json={"device_serial_number": device_serial_number, "device_type": "ZSS"},
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
     )
     assert create_device.status_code == 200
 
@@ -1443,11 +1486,12 @@ def test_expired_work_session_is_timed_out_and_blocked():
 
 
 def test_final_test_pass_sets_status_and_audit_context():
-    ensure_device_bom_template("ZSS")
+    device_type = unique_id("DT")
+    ensure_device_bom_template(device_type, component_type="CONTROL_PCB")
     device_serial_number = unique_id("ZSS")
     device_response = client.post(
         "/api/devices",
-        json={"device_serial_number": device_serial_number, "device_type": "ZSS"},
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
     )
     assert device_response.status_code == 200
 
@@ -1493,11 +1537,12 @@ def test_final_test_pass_sets_status_and_audit_context():
 
 
 def test_shipment_is_blocked_when_required_component_is_missing():
-    ensure_device_bom_template("ZSS")
+    device_type = unique_id("DT")
+    ensure_device_bom_template(device_type, component_type="CONTROL_PCB")
     device_serial_number = unique_id("ZSS")
     device_response = client.post(
         "/api/devices",
-        json={"device_serial_number": device_serial_number, "device_type": "ZSS"},
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
     )
     assert device_response.status_code == 200
 

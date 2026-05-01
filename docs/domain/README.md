@@ -200,6 +200,7 @@ Najważniejsze reguły:
 - nowa wersja `DeviceBomTemplate` może powstać przez klonowanie istniejącej wersji razem z kompletem pozycji BOM
 - aktywna wersja `DeviceBomTemplate` może zostać promowana do nowej rewizji jako operacja biznesowa łącząca klonowanie, aktywację i wycofanie poprzedniej wersji
 - wersje BOM używają numerycznego formatu rozdzielanego kropkami, a `target_version` w `clone` i `promote` musi być semantycznie większy od `source_version`
+- aktywna wersja `DeviceBomTemplate`, która została już przypięta do urządzeń przez `AssemblyLink`, dostaje soft-lock i nie może być dalej rozszerzana o nowe pozycje
 
 Stan implementacji:
 

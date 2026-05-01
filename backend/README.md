@@ -121,7 +121,7 @@ Aktualne moduły:
 - `nonconformities`
 
 Zaobserwowane domeny backendu działają już przez routery i serwisy modułowe. Moduł `assembly` obsługuje dodatkowo device CRUD, proste endpointy komponentów i lifecycle BOM per `device_type`, razem z regułami `part_number`, `revision`, `drawing_number` i `drawing_revision`. Status `RETIRED` zamraża wersję BOM dla nowych zmian i blokuje nowe montaże lub shipment bez aktywnej wersji, jeśli urządzenie nie jest jeszcze przypięte do konkretnego BOM.
-Backend wspiera też klonowanie wersji BOM do nowej rewizji wraz z pozycjami, z opcjonalną natychmiastową aktywacją nowej wersji, oraz promocję aktywnej wersji do nowej rewizji w jednym kroku. Wersje BOM mają format numeryczny rozdzielany kropkami, a nowe rewizje w `clone` i `promote` muszą być semantycznie większe od wersji źródłowej.
+Backend wspiera też klonowanie wersji BOM do nowej rewizji wraz z pozycjami, z opcjonalną natychmiastową aktywacją nowej wersji, oraz promocję aktywnej wersji do nowej rewizji w jednym kroku. Wersje BOM mają format numeryczny rozdzielany kropkami, a nowe rewizje w `clone` i `promote` muszą być semantycznie większe od wersji źródłowej. Aktywny BOM użyty już przez urządzenia dostaje soft-lock na dalsze rozszerzanie i powinien być rozwijany przez kolejną wersję.
 
 ## Najważniejsze endpointy
 
