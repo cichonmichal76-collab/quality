@@ -111,6 +111,7 @@ test("dashboard downloads CSV for the active shipment queue", async ({
   await expect(page.getByText("API OK")).toBeVisible();
 
   await page.locator(".filters-card input").first().fill("DEMO-E2E");
+  await page.locator('.filters-card input[type="number"]').fill("1");
 
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Eksport CSV" }).click();
@@ -126,6 +127,7 @@ test("dashboard downloads CSV for the active shipment queue", async ({
 
   expect(exportContent).toContain("device_serial_number");
   expect(exportContent).toContain("READY-E2E-");
+  expect(exportContent).toContain("DN-E2E-");
   expect(exportContent).toContain("DEMO-E2E");
 });
 

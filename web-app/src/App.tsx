@@ -117,6 +117,7 @@ const COMPONENT_STALE_OPTIONS = ["LT_24H", "D1_TO_D3", "D3_TO_D7", "GT_7D"];
 const SHIPMENT_GATE_RESULT_OPTIONS = ["PASS", "BLOCKED", "NONE"];
 const AUTO_REFRESH_INTERVAL_OPTIONS = [5000, 15000, 30000, 60000];
 const DEFAULT_AUTO_REFRESH_INTERVAL_MS = 30000;
+const CSV_EXPORT_PAGE_LIMIT = 500;
 
 const SHIPMENT_SORT_OPTIONS = [
   "created_at",
@@ -415,6 +416,7 @@ export function App() {
     string | null
   >(null);
   const [refreshVersion, setRefreshVersion] = useState(0);
+  const [csvExportState, setCsvExportState] = useState<LoadState>("idle");
   const copyFeedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
@@ -424,11 +426,12 @@ export function App() {
       activeView === "shipment"
         ? shipmentRequestFilters
         : componentRequestFilters;
-    const canExportActiveQueue =
-      activeView === "shipment"
-        ? Boolean(shipmentData && shipmentData.devices.length > 0)
-        : Boolean(componentData && componentData.devices.length > 0);
-    const selectedDeviceSerial = selectedDevice?.serialNumber ?? null;
+  const canExportActiveQueue =
+    activeView === "shipment"
+      ? Boolean(shipmentData && shipmentData.devices.length > 0)
+      : Boolean(componentData && componentData.devices.length > 0);
+  const isExportingCsv = csvExportState === "loading";
+  const selectedDeviceSerial = selectedDevice?.serialNumber ?? null;
   const requiresCompleteAssemblyAction =
     deviceDetails?.shipment.recommended_action === "COMPLETE_ASSEMBLY";
   const requiresFinalTestAction =
@@ -562,43 +565,85 @@ export function App() {
     }
   };
 
-  const exportActiveQueueCsv = () => {
+  const exportActiveQueueCsv = async () => {
+    if (!apiBaseUrl.trim()) {
+      showCopyFeedback("dashboard", "error", "Podaj bazowy adres API.");
+      return;
+    }
+
+    setCsvExportState("loading");
+
     try {
       if (activeView === "shipment") {
-        if (!shipmentData || shipmentData.devices.length === 0) {
+        const exportData = await fetchAllPaginatedQueuePages<
+          DeviceShipmentQueue,
+          DeviceShipmentReadiness
+        >(
+          apiBaseUrl.trim(),
+          "/shipment-readiness",
+          shipmentQueryParams({
+            ...shipmentFilters,
+            offset: 0,
+            limit: CSV_EXPORT_PAGE_LIMIT,
+          }),
+        );
+
+        if (exportData.devices.length === 0) {
+          setCsvExportState("error");
           showCopyFeedback("dashboard", "error", "Brak danych do eksportu.");
           return;
         }
 
         downloadTextFile(
           buildDashboardCsvFileName("shipment"),
-          buildShipmentQueueCsv(shipmentData),
+          buildShipmentQueueCsv(exportData),
           "text/csv;charset=utf-8",
         );
+        setCsvExportState("loaded");
         showCopyFeedback(
           "dashboard",
           "success",
-          "Wyeksportowano CSV kolejki wysyłki.",
+          `Wyeksportowano CSV kolejki wysyłki (${formatNumber(
+            exportData.devices.length,
+          )} urządzeń).`,
         );
         return;
       }
 
-      if (!componentData || componentData.devices.length === 0) {
+      const exportData = await fetchAllPaginatedQueuePages<
+        DeviceComponentQualityQueue,
+        DeviceComponentQuality
+      >(
+        apiBaseUrl.trim(),
+        "/component-quality",
+        componentQueryParams({
+          ...componentFilters,
+          offset: 0,
+          limit: CSV_EXPORT_PAGE_LIMIT,
+        }),
+      );
+
+      if (exportData.devices.length === 0) {
+        setCsvExportState("error");
         showCopyFeedback("dashboard", "error", "Brak danych do eksportu.");
         return;
       }
 
       downloadTextFile(
         buildDashboardCsvFileName("components"),
-        buildComponentQueueCsv(componentData),
+        buildComponentQueueCsv(exportData),
         "text/csv;charset=utf-8",
       );
+      setCsvExportState("loaded");
       showCopyFeedback(
         "dashboard",
         "success",
-        "Wyeksportowano CSV kolejki komponentów.",
+        `Wyeksportowano CSV kolejki komponentów (${formatNumber(
+          exportData.devices.length,
+        )} urządzeń).`,
       );
     } catch {
+      setCsvExportState("error");
       showCopyFeedback("dashboard", "error", "Nie udało się wyeksportować CSV.");
     }
   };
@@ -1524,11 +1569,11 @@ export function App() {
           </button>
             <button
               className="ghost-button"
-              disabled={!canExportActiveQueue}
+              disabled={!canExportActiveQueue || isExportingCsv}
               type="button"
               onClick={exportActiveQueueCsv}
             >
-              Eksport CSV
+              {isExportingCsv ? "Eksportuję CSV..." : "Eksport CSV"}
             </button>
             <button
               className="ghost-button"
@@ -4532,6 +4577,63 @@ async function copyTextToClipboard(text: string): Promise<void> {
   } finally {
     document.body.removeChild(textarea);
   }
+}
+
+async function fetchAllPaginatedQueuePages<
+  TQueue extends {
+    devices: TDevice[];
+    returned_count: number;
+    offset: number;
+    limit: number;
+    has_more: boolean;
+    next_offset: number | null;
+  },
+  TDevice,
+>(
+  apiBaseUrl: string,
+  path: string,
+  baseParams: Record<string, QueryValue>,
+): Promise<TQueue> {
+  let offset = 0;
+  let firstPage: TQueue | null = null;
+  const devices: TDevice[] = [];
+
+  while (true) {
+    const page = await fetchJson<TQueue>(
+      joinApiUrl(apiBaseUrl, path) +
+        buildQuery({
+          ...baseParams,
+          limit: CSV_EXPORT_PAGE_LIMIT,
+          offset: offset > 0 ? offset : undefined,
+        }),
+    );
+
+    if (firstPage === null) {
+      firstPage = page;
+    }
+
+    devices.push(...page.devices);
+
+    if (!page.has_more || page.next_offset === null) {
+      break;
+    }
+
+    offset = page.next_offset;
+  }
+
+  if (firstPage === null) {
+    throw new Error("Nie udało się pobrać danych eksportu.");
+  }
+
+  return {
+    ...firstPage,
+    devices,
+    returned_count: devices.length,
+    offset: 0,
+    limit: devices.length > 0 ? devices.length : firstPage.limit,
+    has_more: false,
+    next_offset: null,
+  };
 }
 
 function downloadTextFile(

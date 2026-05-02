@@ -1924,7 +1924,62 @@ describe("App", () => {
       },
     );
 
-    const fetchMock = vi.fn(async () => createJsonResponse(shipmentPayload));
+    const shipmentExportPageOne: DeviceShipmentQueue = {
+      ...shipmentPayload,
+      total_devices: 3,
+      returned_count: 2,
+      limit: 500,
+      has_more: true,
+      next_offset: 500,
+      devices: [
+        shipmentPayload.devices[0],
+        {
+          ...shipmentPayload.devices[0],
+          device_serial_number: "SHIP-002",
+        },
+      ],
+    };
+    const shipmentExportPageTwo: DeviceShipmentQueue = {
+      ...shipmentPayload,
+      total_devices: 3,
+      returned_count: 1,
+      offset: 500,
+      limit: 500,
+      has_more: false,
+      next_offset: null,
+      devices: [
+        {
+          ...shipmentPayload.devices[0],
+          device_serial_number: "SHIP-003",
+        },
+      ],
+    };
+    const fetchMock = vi.fn((input: string | URL | Request) => {
+      const url = String(input);
+
+      if (
+        url ===
+        "/api/shipment-readiness?sort_by=created_at&sort_desc=true&limit=100"
+      ) {
+        return Promise.resolve(createJsonResponse(shipmentPayload));
+      }
+
+      if (
+        url ===
+        "/api/shipment-readiness?sort_by=created_at&sort_desc=true&limit=500"
+      ) {
+        return Promise.resolve(createJsonResponse(shipmentExportPageOne));
+      }
+
+      if (
+        url ===
+        "/api/shipment-readiness?sort_by=created_at&sort_desc=true&limit=500&offset=500"
+      ) {
+        return Promise.resolve(createJsonResponse(shipmentExportPageTwo));
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
@@ -1938,11 +1993,14 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Eksport CSV" }));
 
-    expect(createObjectURLMock).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(createObjectURLMock).toHaveBeenCalledTimes(1));
     const csvBlob = createObjectURLMock.mock.calls[0]?.[0] as unknown as Blob;
     const csvText = await csvBlob.text();
     expect(csvText).toContain("device_serial_number");
     expect(csvText).toContain("SHIP-001");
+    expect(csvText).toContain("SHIP-002");
+    expect(csvText).toContain("SHIP-003");
     expect(csvText).toContain("MARK_READY_FOR_SHIPMENT");
     expect(clickedDownloads).toHaveLength(1);
     expect(clickedDownloads[0]?.download).toMatch(
@@ -1951,7 +2009,7 @@ describe("App", () => {
     expect(clickedDownloads[0]?.href).toBe("blob:shipment-export");
     expect(revokeObjectURLMock).toHaveBeenCalledWith("blob:shipment-export");
     expect(screen.getByRole("status")).toHaveTextContent(
-      "Wyeksportowano CSV kolejki wysyłki.",
+      "Wyeksportowano CSV kolejki wysyłki (3 urządzeń).",
     );
   });
 
@@ -1981,7 +2039,62 @@ describe("App", () => {
       },
     );
 
-    const fetchMock = vi.fn(async () => createJsonResponse(componentPayload));
+    const componentExportPageOne: DeviceComponentQualityQueue = {
+      ...componentPayload,
+      total_devices: 3,
+      returned_count: 2,
+      limit: 500,
+      has_more: true,
+      next_offset: 500,
+      devices: [
+        componentPayload.devices[0],
+        {
+          ...componentPayload.devices[0],
+          device_serial_number: "COMP-002",
+        },
+      ],
+    };
+    const componentExportPageTwo: DeviceComponentQualityQueue = {
+      ...componentPayload,
+      total_devices: 3,
+      returned_count: 1,
+      offset: 500,
+      limit: 500,
+      has_more: false,
+      next_offset: null,
+      devices: [
+        {
+          ...componentPayload.devices[0],
+          device_serial_number: "COMP-003",
+        },
+      ],
+    };
+    const fetchMock = vi.fn((input: string | URL | Request) => {
+      const url = String(input);
+
+      if (
+        url ===
+        "/api/component-quality?only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=100"
+      ) {
+        return Promise.resolve(createJsonResponse(componentPayload));
+      }
+
+      if (
+        url ===
+        "/api/component-quality?only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=500"
+      ) {
+        return Promise.resolve(createJsonResponse(componentExportPageOne));
+      }
+
+      if (
+        url ===
+        "/api/component-quality?only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=500&offset=500"
+      ) {
+        return Promise.resolve(createJsonResponse(componentExportPageTwo));
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
@@ -1995,11 +2108,14 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Eksport CSV" }));
 
-    expect(createObjectURLMock).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(createObjectURLMock).toHaveBeenCalledTimes(1));
     const csvBlob = createObjectURLMock.mock.calls[0]?.[0] as unknown as Blob;
     const csvText = await csvBlob.text();
     expect(csvText).toContain("device_serial_number");
     expect(csvText).toContain("COMP-001");
+    expect(csvText).toContain("COMP-002");
+    expect(csvText).toContain("COMP-003");
     expect(csvText).toContain("RUN_COMPONENT_QC_OR_REWORK");
     expect(clickedDownloads).toHaveLength(1);
     expect(clickedDownloads[0]?.download).toMatch(
@@ -2008,7 +2124,7 @@ describe("App", () => {
     expect(clickedDownloads[0]?.href).toBe("blob:component-export");
     expect(revokeObjectURLMock).toHaveBeenCalledWith("blob:component-export");
     expect(screen.getByRole("status")).toHaveTextContent(
-      "Wyeksportowano CSV kolejki komponentów.",
+      "Wyeksportowano CSV kolejki komponentów (3 urządzeń).",
     );
   });
 
@@ -2519,7 +2635,7 @@ describe("App", () => {
     });
     await waitFor(() => {
       expect(
-        screen.queryByRole("button", { name: "Oznacz gotowe do wysy�ki" }),
+        screen.queryByRole("button", { name: "Oznacz gotowe do wysyłki" }),
       ).not.toBeInTheDocument();
     });
   });
@@ -3277,7 +3393,7 @@ describe("App", () => {
     await waitFor(() => {
       expect(
         screen.queryByRole("button", {
-          name: "Zamknij krytyczne NCR komponent�w",
+          name: "Zamknij krytyczne NCR komponentów",
         }),
       ).not.toBeInTheDocument();
     });
