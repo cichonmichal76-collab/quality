@@ -12,6 +12,7 @@ import com.servicetrace.mobile.data.local.ServiceTraceMobileDatabase
 import com.servicetrace.mobile.files.CommissioningArtifactStore
 import com.servicetrace.mobile.mcu.MockMcuClient
 import com.servicetrace.mobile.mcu.UsbMcuClient
+import com.servicetrace.mobile.sync.AndroidConnectivityMonitor
 import com.servicetrace.mobile.sync.ServiceSessionUploader
 import com.servicetrace.mobile.ui.CommissioningScreen
 import com.servicetrace.mobile.ui.CommissioningViewModel
@@ -25,6 +26,7 @@ class MainActivity : ComponentActivity() {
             mockMcuClient = MockMcuClient(),
             usbMcuClient = UsbMcuClient(applicationContext),
             artifactStore = CommissioningArtifactStore(applicationContext),
+            connectivityMonitor = AndroidConnectivityMonitor(applicationContext),
             uploader = ServiceSessionUploader(),
         )
     }

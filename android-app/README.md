@@ -14,6 +14,7 @@
 - generowanie lokalnej paczki ZIP z `manifest.json`, `draft.json`, `snapshot.json`, `checklist.json` i zdjeciami
 - kolejka synchronizacji `READY_TO_SYNC -> SYNCED` do backendu `POST /api/service-sessions/upload`
 - licznik prob synchronizacji i ostatni blad sync per sesja
+- auto-sync po odzyskaniu lacznosci albo po oznaczeniu sesji jako gotowej przy aktywnej sieci
 - lokalna checklista 5 krokow
 - komentarz ogolny, firmware i bootloader
 - status `DRAFT` / `READY_TO_SYNC`
@@ -29,7 +30,7 @@ Po uruchomieniu aplikacji serwisant moze:
 7. przejsc przez checkliste krok po kroku
 8. zapisac wynik lokalnie w `Room`
 9. oznaczyc sesje jako gotowa do przyszlej synchronizacji
-10. zsynchronizowac gotowe sesje do backendu po adresie API
+10. zsynchronizowac gotowe sesje do backendu recznie albo poczekac na auto-sync po powrocie sieci
 11. sprawdzic ostatni blad lub liczbe prob i ponowic synchronizacje
 
 Domyslny adres backendu w aplikacji to `http://10.0.2.2:8000/api`, co pasuje do emulatora Android. Na fizycznym urzadzeniu trzeba wpisac adres LAN hosta z backendem.
@@ -49,7 +50,7 @@ Domyslny adres backendu w aplikacji to `http://10.0.2.2:8000/api`, co pasuje do 
 1. rozszerzyc snapshoty MCU o dodatkowe artefakty diagnostyczne
 2. zapisac konfiguracje backendu i stan sync bardziej trwale
 3. dodac retry / backoff w tle zamiast tylko recznego ponowienia
-4. dolozyc automatyczny sync po odzyskaniu lacznosci
+4. przeniesc auto-sync do pracy w tle poza aktywnym ekranem
 
 ## Poza zakresem MVP
 

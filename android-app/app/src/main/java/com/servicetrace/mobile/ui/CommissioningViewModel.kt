@@ -15,12 +15,14 @@ import com.servicetrace.mobile.model.SessionSyncStatus
 import com.servicetrace.mobile.model.UsbCandidateDevice
 import com.servicetrace.mobile.mcu.MockMcuClient
 import com.servicetrace.mobile.mcu.UsbMcuClient
+import com.servicetrace.mobile.sync.ConnectivityMonitor
 import com.servicetrace.mobile.sync.ServiceSessionUploader
 import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -38,6 +40,7 @@ data class CommissioningUiState(
     val usbDevices: List<UsbCandidateDevice> = emptyList(),
     val usbPermissionInFlight: Boolean = false,
     val uploadBaseUrl: String = DEFAULT_UPLOAD_BASE_URL,
+    val networkAvailable: Boolean = false,
     val syncInFlight: Boolean = false,
     val bannerMessage: String? = null,
 )
@@ -47,6 +50,7 @@ class CommissioningViewModel(
     private val mockMcuClient: MockMcuClient,
     private val usbMcuClient: UsbMcuClient,
     private val artifactStore: CommissioningArtifactStore,
+    private val connectivityMonitor: ConnectivityMonitor,
     private val uploader: ServiceSessionUploader,
 ) : ViewModel() {
     private val inputs = MutableStateFlow(NewDraftInputs())
@@ -54,8 +58,10 @@ class CommissioningViewModel(
     private val usbDevices = MutableStateFlow<List<UsbCandidateDevice>>(emptyList())
     private val usbPermissionInFlight = MutableStateFlow(false)
     private val uploadBaseUrl = MutableStateFlow(DEFAULT_UPLOAD_BASE_URL)
+    private val networkAvailable = MutableStateFlow(connectivityMonitor.currentStatus())
     private val syncInFlight = MutableStateFlow(false)
     private val bannerMessage = MutableStateFlow<String?>(null)
+    private var lastAutoSyncReadySignature: String = ""
 
     val uiState: StateFlow<CommissioningUiState> = combine(
         repository.observeDrafts(),
@@ -64,9 +70,10 @@ class CommissioningViewModel(
         usbDevices,
         usbPermissionInFlight,
         uploadBaseUrl,
+        networkAvailable,
         syncInFlight,
         bannerMessage,
-    ) { drafts, draftInputs, currentDraft, availableUsbDevices, permissionInFlight, currentUploadBaseUrl, syncRunning, message ->
+    ) { drafts, draftInputs, currentDraft, availableUsbDevices, permissionInFlight, currentUploadBaseUrl, online, syncRunning, message ->
         val selected = currentDraft?.let { draft ->
             drafts.firstOrNull { row -> row.sessionId == draft.sessionId } ?: draft
         } ?: drafts.firstOrNull()
@@ -77,6 +84,7 @@ class CommissioningViewModel(
             usbDevices = availableUsbDevices,
             usbPermissionInFlight = permissionInFlight,
             uploadBaseUrl = currentUploadBaseUrl,
+            networkAvailable = online,
             syncInFlight = syncRunning,
             bannerMessage = message,
         )
@@ -88,6 +96,8 @@ class CommissioningViewModel(
 
     init {
         refreshUsbDevices()
+        observeConnectivity()
+        observeDraftsForAutoSync()
     }
 
     fun updateDeviceSerialNumber(value: String) {
@@ -223,7 +233,7 @@ class CommissioningViewModel(
     fun requestUsbPermission() {
         val draft = selectedDraft.value ?: return
         if (draft.selectedUsbDeviceId.isBlank()) {
-            bannerMessage.value = "Najpierw wybierz urządzenie USB."
+            bannerMessage.value = "Najpierw wybierz urzadzenie USB."
             return
         }
         viewModelScope.launch {
@@ -237,9 +247,9 @@ class CommissioningViewModel(
                         selectedUsbDeviceLabel = grantedDevice.displayName,
                     )?.invalidatePackageMetadata()
                 }
-                bannerMessage.value = "Android nadał zgodę na dostęp do urządzenia USB."
+                bannerMessage.value = "Android przyznal zgode na dostep do urzadzenia USB."
             } catch (error: Exception) {
-                bannerMessage.value = error.message ?: "Nie udało się uzyskać zgody USB."
+                bannerMessage.value = error.message ?: "Nie udalo sie uzyskac zgody USB."
             } finally {
                 usbPermissionInFlight.value = false
             }
@@ -278,9 +288,9 @@ class CommissioningViewModel(
                 repository.saveDraft(updatedDraft)
                 selectedDraft.value = updatedDraft
                 bannerMessage.value = if (draft.connectionMode == McuConnectionMode.USB) {
-                    "Połączono z MCU przez USB i zapisano snapshot commissioning."
+                    "Polaczono z MCU przez USB i zapisano snapshot commissioning."
                 } else {
-                    "Połączono z Mock MCU i zapisano snapshot commissioning."
+                    "Polaczono z Mock MCU i zapisano snapshot commissioning."
                 }
             } catch (error: Exception) {
                 val failedDraft = draft.copy(
@@ -289,7 +299,7 @@ class CommissioningViewModel(
                 )
                 repository.saveDraft(failedDraft)
                 selectedDraft.value = failedDraft
-                bannerMessage.value = error.message ?: "Nie udało się połączyć z MCU."
+                bannerMessage.value = error.message ?: "Nie udalo sie polaczyc z MCU."
             }
         }
     }
@@ -397,11 +407,133 @@ class CommissioningViewModel(
     }
 
     fun syncReadyDrafts() {
-        val readyDrafts = uiState.value.drafts.filter { draft -> draft.syncStatus == SessionSyncStatus.READY_TO_SYNC }
-        if (readyDrafts.isEmpty()) {
-            bannerMessage.value = "Brak sesji gotowych do synchronizacji."
+        startSync(trigger = SyncTrigger.MANUAL)
+    }
+
+    fun saveOffline() {
+        val draft = selectedDraft.value ?: return
+        viewModelScope.launch {
+            val updatedDraft = draft.copy(
+                syncStatus = if (draft.syncStatus == SessionSyncStatus.SYNCED) {
+                    SessionSyncStatus.SYNCED
+                } else {
+                    SessionSyncStatus.DRAFT
+                },
+                updatedAtMillis = System.currentTimeMillis(),
+            )
+            repository.saveDraft(updatedDraft)
+            selectedDraft.value = updatedDraft
+            bannerMessage.value = "Draft zapisany lokalnie w Room."
+        }
+    }
+
+    fun markReadyToSync() {
+        val draft = selectedDraft.value ?: return
+        if (!draft.readyToSync) {
+            bannerMessage.value = "Uzupelnij wszystkie kroki checklisty przed kolejka synchronizacji."
             return
         }
+        viewModelScope.launch {
+            val updatedDraft = draft.copy(
+                syncStatus = SessionSyncStatus.READY_TO_SYNC,
+                updatedAtMillis = System.currentTimeMillis(),
+            )
+            repository.saveDraft(updatedDraft)
+            selectedDraft.value = updatedDraft
+            bannerMessage.value = "Sesja jest gotowa do przyszlej synchronizacji do backendu."
+            val otherReadyDrafts = uiState.value.drafts.filter { row ->
+                row.sessionId != updatedDraft.sessionId && row.syncStatus == SessionSyncStatus.READY_TO_SYNC
+            }
+            maybeAutoSyncOnline(
+                trigger = SyncTrigger.AUTO_READY,
+                drafts = listOf(updatedDraft) + otherReadyDrafts,
+            )
+        }
+    }
+
+    fun dismissBanner() {
+        bannerMessage.value = null
+    }
+
+    private fun observeConnectivity() {
+        viewModelScope.launch {
+            connectivityMonitor.isOnline
+                .distinctUntilChanged()
+                .collect { online ->
+                    networkAvailable.value = online
+                    if (!online) {
+                        lastAutoSyncReadySignature = ""
+                    } else {
+                        maybeAutoSyncOnline(
+                            trigger = SyncTrigger.AUTO_NETWORK,
+                            drafts = uiState.value.drafts,
+                        )
+                    }
+                }
+        }
+    }
+
+    private fun observeDraftsForAutoSync() {
+        viewModelScope.launch {
+            repository.observeDrafts().collect { drafts ->
+                maybeAutoSyncOnline(
+                    trigger = SyncTrigger.AUTO_NETWORK,
+                    drafts = drafts,
+                )
+            }
+        }
+    }
+
+    private fun maybeAutoSyncOnline(
+        trigger: SyncTrigger,
+        drafts: List<ServiceSessionDraft>,
+    ) {
+        val readyDrafts = drafts.filter { draft -> draft.syncStatus == SessionSyncStatus.READY_TO_SYNC }
+        val signature = readyDrafts
+            .map { draft -> draft.sessionId }
+            .sorted()
+            .joinToString(separator = "|")
+
+        if (!canAutoSync(networkAvailable.value, syncInFlight.value, readyDrafts.size)) {
+            return
+        }
+        if (signature.isBlank() || signature == lastAutoSyncReadySignature) {
+            return
+        }
+
+        lastAutoSyncReadySignature = signature
+        startSync(
+            trigger = trigger,
+            readyDraftsOverride = readyDrafts,
+        )
+    }
+
+    private fun startSync(
+        trigger: SyncTrigger,
+        readyDraftsOverride: List<ServiceSessionDraft>? = null,
+    ) {
+        val readyDrafts = (readyDraftsOverride ?: uiState.value.drafts.filter { draft ->
+            draft.syncStatus == SessionSyncStatus.READY_TO_SYNC
+        }).distinctBy { draft -> draft.sessionId }
+
+        if (readyDrafts.isEmpty()) {
+            if (trigger == SyncTrigger.MANUAL) {
+                bannerMessage.value = "Brak sesji gotowych do synchronizacji."
+            }
+            return
+        }
+
+        if (syncInFlight.value) {
+            if (trigger == SyncTrigger.MANUAL) {
+                bannerMessage.value = "Synchronizacja commissioning juz trwa."
+            }
+            return
+        }
+
+        if (trigger != SyncTrigger.MANUAL && !canAutoSync(networkAvailable.value, syncInFlight.value, readyDrafts.size)) {
+            return
+        }
+
         viewModelScope.launch {
             syncInFlight.value = true
             try {
@@ -444,53 +576,11 @@ class CommissioningViewModel(
                     }
                 }
 
-                bannerMessage.value = when {
-                    failedCount == 0 -> "Zsynchronizowano $uploadedCount sesji commissioning do backendu."
-                    uploadedCount == 0 -> "Nie udalo sie zsynchronizowac zadnej sesji commissioning."
-                    else -> "Zsynchronizowano $uploadedCount sesji commissioning, bledy: $failedCount."
-                }
+                bannerMessage.value = buildSyncCompletionMessage(trigger, uploadedCount, failedCount)
             } finally {
                 syncInFlight.value = false
             }
         }
-    }
-
-    fun saveOffline() {
-        val draft = selectedDraft.value ?: return
-        viewModelScope.launch {
-            val updatedDraft = draft.copy(
-                syncStatus = if (draft.syncStatus == SessionSyncStatus.SYNCED) {
-                    SessionSyncStatus.SYNCED
-                } else {
-                    SessionSyncStatus.DRAFT
-                },
-                updatedAtMillis = System.currentTimeMillis(),
-            )
-            repository.saveDraft(updatedDraft)
-            selectedDraft.value = updatedDraft
-            bannerMessage.value = "Draft zapisany lokalnie w Room."
-        }
-    }
-
-    fun markReadyToSync() {
-        val draft = selectedDraft.value ?: return
-        if (!draft.readyToSync) {
-            bannerMessage.value = "Uzupełnij wszystkie kroki checklisty przed kolejką synchronizacji."
-            return
-        }
-        viewModelScope.launch {
-            val updatedDraft = draft.copy(
-                syncStatus = SessionSyncStatus.READY_TO_SYNC,
-                updatedAtMillis = System.currentTimeMillis(),
-            )
-            repository.saveDraft(updatedDraft)
-            selectedDraft.value = updatedDraft
-            bannerMessage.value = "Sesja jest gotowa do przyszłej synchronizacji do backendu."
-        }
-    }
-
-    fun dismissBanner() {
-        bannerMessage.value = null
     }
 
     private suspend fun ensurePackageForUpload(
@@ -519,15 +609,62 @@ class CommissioningViewModel(
             mockMcuClient: MockMcuClient,
             usbMcuClient: UsbMcuClient,
             artifactStore: CommissioningArtifactStore,
+            connectivityMonitor: ConnectivityMonitor,
             uploader: ServiceSessionUploader,
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                    CommissioningViewModel(repository, mockMcuClient, usbMcuClient, artifactStore, uploader) as T
+                    CommissioningViewModel(
+                        repository = repository,
+                        mockMcuClient = mockMcuClient,
+                        usbMcuClient = usbMcuClient,
+                        artifactStore = artifactStore,
+                        connectivityMonitor = connectivityMonitor,
+                        uploader = uploader,
+                    ) as T
             }
     }
 }
+
+internal enum class SyncTrigger {
+    MANUAL,
+    AUTO_NETWORK,
+    AUTO_READY,
+}
+
+internal fun canAutoSync(
+    networkAvailable: Boolean,
+    syncInFlight: Boolean,
+    readyDraftCount: Int,
+): Boolean =
+    networkAvailable && !syncInFlight && readyDraftCount > 0
+
+internal fun buildSyncCompletionMessage(
+    trigger: SyncTrigger,
+    uploadedCount: Int,
+    failedCount: Int,
+): String =
+    when (trigger) {
+        SyncTrigger.MANUAL ->
+            when {
+                failedCount == 0 -> "Zsynchronizowano $uploadedCount sesji commissioning do backendu."
+                uploadedCount == 0 -> "Nie udalo sie zsynchronizowac zadnej sesji commissioning."
+                else -> "Zsynchronizowano $uploadedCount sesji commissioning, bledy: $failedCount."
+            }
+        SyncTrigger.AUTO_NETWORK ->
+            when {
+                failedCount == 0 -> "Auto-sync po odzyskaniu lacznosci zsynchronizowal $uploadedCount sesji commissioning."
+                uploadedCount == 0 -> "Auto-sync po odzyskaniu lacznosci nie udal sie dla zadnej sesji commissioning."
+                else -> "Auto-sync po odzyskaniu lacznosci zsynchronizowal $uploadedCount sesji commissioning, bledy: $failedCount."
+            }
+        SyncTrigger.AUTO_READY ->
+            when {
+                failedCount == 0 -> "Auto-sync od razu wyslal $uploadedCount gotowych sesji commissioning."
+                uploadedCount == 0 -> "Auto-sync nie udal sie dla nowo oznaczonych sesji commissioning."
+                else -> "Auto-sync od razu wyslal $uploadedCount gotowych sesji commissioning, bledy: $failedCount."
+            }
+    }
 
 private fun ServiceSessionDraft.invalidatePackageMetadata(): ServiceSessionDraft =
     copy(

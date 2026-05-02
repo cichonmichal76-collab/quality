@@ -39,8 +39,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.servicetrace.mobile.files.PendingCameraCapture
-import com.servicetrace.mobile.model.CommissioningStep
 import com.servicetrace.mobile.model.CommissioningAttachment
+import com.servicetrace.mobile.model.CommissioningStep
 import com.servicetrace.mobile.model.CommissioningStepStatus
 import com.servicetrace.mobile.model.McuConnectionMode
 import com.servicetrace.mobile.model.McuConnectionStatus
@@ -173,6 +173,7 @@ private fun CommissioningScreen(
             SummarySection(
                 drafts = uiState.drafts,
                 uploadBaseUrl = uiState.uploadBaseUrl,
+                networkAvailable = uiState.networkAvailable,
                 syncInFlight = uiState.syncInFlight,
                 onUploadBaseUrlChange = onUploadBaseUrlChange,
                 onSyncReadyDrafts = onSyncReadyDrafts,
@@ -220,6 +221,7 @@ private fun CommissioningScreen(
 private fun SummarySection(
     drafts: List<ServiceSessionDraft>,
     uploadBaseUrl: String,
+    networkAvailable: Boolean,
     syncInFlight: Boolean,
     onUploadBaseUrlChange: (String) -> Unit,
     onSyncReadyDrafts: () -> Unit,
@@ -242,6 +244,8 @@ private fun SummarySection(
                 AssistChip(onClick = {}, label = { Text("Bledy sync: $syncErrorCount") })
                 AssistChip(onClick = {}, label = { Text("PASS: $passCount") })
                 AssistChip(onClick = {}, label = { Text("FAIL: $failCount") })
+                AssistChip(onClick = {}, label = { Text(if (networkAvailable) "Siec: online" else "Siec: offline") })
+                AssistChip(onClick = {}, label = { Text("Auto-sync: aktywny") })
             }
             OutlinedTextField(
                 value = uploadBaseUrl,
@@ -258,7 +262,7 @@ private fun SummarySection(
                 Text(if (syncInFlight) "Synchronizacja w toku..." else "Synchronizuj gotowe sesje")
             }
             Text(
-                "Ten etap zapisuje sesję commissioning lokalnie. Następny krok to zdjęcia, ZIP paczki i upload do /api/service-sessions/upload.",
+                "Aplikacja zapisuje sesje commissioning lokalnie, wysyla gotowe ZIP-y recznie i uruchamia auto-sync po odzyskaniu lacznosci albo po oznaczeniu sesji jako gotowej przy aktywnej sieci.",
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
@@ -280,14 +284,14 @@ private fun NewDraftSection(
                 value = inputs.deviceSerialNumber,
                 onValueChange = onDeviceSerialChange,
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Numer seryjny urządzenia") },
+                label = { Text("Numer seryjny urzadzenia") },
                 singleLine = true,
             )
             OutlinedTextField(
                 value = inputs.deviceType,
                 onValueChange = onDeviceTypeChange,
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Typ urządzenia") },
+                label = { Text("Typ urzadzenia") },
                 singleLine = true,
             )
             OutlinedTextField(
@@ -298,7 +302,7 @@ private fun NewDraftSection(
                 singleLine = true,
             )
             Button(onClick = onCreateDraft, modifier = Modifier.fillMaxWidth()) {
-                Text("Utwórz draft offline")
+                Text("Utworz draft offline")
             }
         }
     }
@@ -316,7 +320,7 @@ private fun DraftListSection(
         if (drafts.isEmpty()) {
             Card {
                 Text(
-                    "Brak lokalnych draftów. Utwórz pierwszą sesję commissioning powyżej.",
+                    "Brak lokalnych draftow. Utworz pierwsza sesje commissioning powyzej.",
                     modifier = Modifier.padding(16.dp),
                 )
             }
@@ -389,7 +393,7 @@ private fun DraftEditorSection(
     if (draft == null) {
         Card {
             Text(
-                "Wybierz draft, aby przejść przez checklistę commissioning i zapisać lokalną sesję.",
+                "Wybierz draft, aby przejsc przez checkliste commissioning i zapisac lokalna sesje.",
                 modifier = Modifier.padding(16.dp),
             )
         }
@@ -432,7 +436,7 @@ private fun DraftEditorSection(
                     value = draft.overallComment,
                     onValueChange = onOverallCommentChange,
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Komentarz ogólny") },
+                    label = { Text("Komentarz ogolny") },
                     minLines = 3,
                 )
                 AttachmentsSection(
@@ -459,7 +463,7 @@ private fun DraftEditorSection(
                     }
                 }
                 Text(
-                    "W tym MVP zapis lokalny obsługuje checklistę, komentarze i metadane sesji. Kolejny krok to ZIP paczki, zdjęcia i realny upload.",
+                    "W tym MVP zapis lokalny obsluguje checkliste, komentarze, paczke ZIP, reczny upload i auto-sync po powrocie sieci.",
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
@@ -661,7 +665,7 @@ private fun LegacyConnectionSectionUnused(
     onConnectToMcu: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Połączenie techniczne", style = MaterialTheme.typography.titleMedium)
+        Text("Polaczenie techniczne", style = MaterialTheme.typography.titleMedium)
         Text("Tryb: ${connectionModeLabel(draft.connectionMode)}")
         Text("Status: ${connectionStatusLabel(draft.connectionStatus)}")
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -677,12 +681,12 @@ private fun LegacyConnectionSectionUnused(
             Text(
                 if (draft.connectionMode == McuConnectionMode.MOCK) {
                     if (draft.connectionStatus == McuConnectionStatus.CONNECTED) {
-                        "Odśwież snapshot Mock MCU"
+                        "Odswiez snapshot Mock MCU"
                     } else {
-                        "Połącz z Mock MCU"
+                        "Polacz z Mock MCU"
                     }
                 } else {
-                    "Połącz przez USB"
+                    "Polacz przez USB"
                 },
             )
         }
@@ -772,9 +776,9 @@ private fun connectionModeLabel(mode: McuConnectionMode): String =
 
 private fun connectionStatusLabel(status: McuConnectionStatus): String =
     when (status) {
-        McuConnectionStatus.DISCONNECTED -> "Rozłączone"
-        McuConnectionStatus.CONNECTED -> "Połączone"
-        McuConnectionStatus.HARDWARE_REQUIRED -> "Wymaga sprzętu lub zgody USB"
+        McuConnectionStatus.DISCONNECTED -> "Rozlaczone"
+        McuConnectionStatus.CONNECTED -> "Polaczone"
+        McuConnectionStatus.HARDWARE_REQUIRED -> "Wymaga sprzetu lub zgody USB"
     }
 
 private fun statusLabel(status: CommissioningStepStatus): String =
