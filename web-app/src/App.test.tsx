@@ -1855,6 +1855,109 @@ describe("App", () => {
     ).toHaveAttribute("href", expect.stringContaining("device_serial=COMP-001"));
   });
 
+  it("copies current dashboard link with active filters", async () => {
+    localStorage.setItem(VIEW_STORAGE_KEY, "components");
+    localStorage.setItem(
+      COMPONENT_FILTERS_STORAGE_KEY,
+      JSON.stringify({
+        device_type: "DEMO-OPS",
+        passes_component_quality_gate: "true",
+        only_blocking: false,
+      }),
+    );
+
+    const writeTextMock = vi.fn(async () => undefined);
+    Object.defineProperty(window.navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: writeTextMock,
+      },
+    });
+
+    const fetchMock = vi.fn(async () => createJsonResponse(componentPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("COMP-001")).toBeInTheDocument();
+    expect(window.location.search).toContain("view=components");
+    expect(window.location.search).toContain("comp_device_type=DEMO-OPS");
+    expect(window.location.search).toContain(
+      "comp_passes_component_quality_gate=true",
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Kopiuj link dashboardu" }),
+    );
+
+    await waitFor(() =>
+      expect(writeTextMock).toHaveBeenCalledWith(window.location.href),
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("Link skopiowany.");
+  });
+
+  it("copies current device page link with the active hash section", async () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/devices/COMP-001?view=components&comp_device_type=DEMO-OPS&comp_sort_by=blocked_components&comp_sort_desc=true&comp_only_blocking=true&comp_limit=100&comp_offset=0&device_type=DEMO-OPS&device_variant=DEFAULT#bom",
+    );
+
+    const writeTextMock = vi.fn(async () => undefined);
+    Object.defineProperty(window.navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: writeTextMock,
+      },
+    });
+
+    const fetchMock = vi.fn((input: string | URL | Request) => {
+      const url = String(input);
+
+      if (
+        url ===
+        "/api/component-quality?device_type=DEMO-OPS&only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=100"
+      ) {
+        return Promise.resolve(createJsonResponse(componentPayload));
+      }
+
+      if (url === "/api/devices/COMP-001/shipment-readiness") {
+        return Promise.resolve(
+          createJsonResponse(componentActionShipmentDetailsPayload),
+        );
+      }
+
+      if (url === "/api/devices/COMP-001/component-quality") {
+        return Promise.resolve(
+          createJsonResponse(componentActionComponentDetailsPayload),
+        );
+      }
+
+      if (url === "/api/devices/COMP-001/shipment-gate-history?limit=10") {
+        return Promise.resolve(createJsonResponse([]));
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", { name: "COMP-001" }),
+    ).toBeInTheDocument();
+    expect(window.location.hash).toBe("#bom");
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Kopiuj link urządzenia" }),
+    );
+
+    await waitFor(() =>
+      expect(writeTextMock).toHaveBeenCalledWith(window.location.href),
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("Link skopiowany.");
+  });
+
   it("shows filtered queue shortcuts on the full device page", async () => {
     window.history.replaceState(
       {},

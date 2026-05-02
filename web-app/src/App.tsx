@@ -255,6 +255,12 @@ interface ActiveFilterChip {
   label: string;
 }
 
+interface CopyFeedbackState {
+  scope: "dashboard" | "device";
+  tone: "success" | "error";
+  message: string;
+}
+
 const SHIPMENT_TEXT_FILTER_KEYS: Array<keyof ShipmentFilters> = [
   "device_type",
   "variant_code",
@@ -386,7 +392,13 @@ export function App() {
   const [selectedAssemblyComponentType, setSelectedAssemblyComponentType] =
     useState("");
   const [assemblyBarcodeValue, setAssemblyBarcodeValue] = useState("");
+  const [copyFeedback, setCopyFeedback] = useState<CopyFeedbackState | null>(
+    null,
+  );
   const [refreshVersion, setRefreshVersion] = useState(0);
+  const copyFeedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const activePath =
     activeView === "shipment" ? "/shipment-readiness" : "/component-quality";
   const activeRequestFilters =
@@ -500,6 +512,33 @@ export function App() {
     setComponentData(null);
   };
 
+  const showCopyFeedback = (
+    scope: CopyFeedbackState["scope"],
+    tone: CopyFeedbackState["tone"],
+    message: string,
+  ) => {
+    if (copyFeedbackTimeoutRef.current !== null) {
+      clearTimeout(copyFeedbackTimeoutRef.current);
+    }
+
+    setCopyFeedback({ scope, tone, message });
+    copyFeedbackTimeoutRef.current = setTimeout(() => {
+      setCopyFeedback((previous) =>
+        previous?.scope === scope ? null : previous,
+      );
+      copyFeedbackTimeoutRef.current = null;
+    }, 2500);
+  };
+
+  const copyCurrentLink = async (scope: CopyFeedbackState["scope"]) => {
+    try {
+      await copyTextToClipboard(window.location.href);
+      showCopyFeedback(scope, "success", "Link skopiowany.");
+    } catch {
+      showCopyFeedback(scope, "error", "Nie udało się skopiować linku.");
+    }
+  };
+
   const selectDevice = (device: {
     device_serial_number: string;
     device_type: string;
@@ -515,6 +554,14 @@ export function App() {
   useEffect(() => {
     localStorage.setItem(API_STORAGE_KEY, apiBaseUrl);
   }, [apiBaseUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (copyFeedbackTimeoutRef.current !== null) {
+        clearTimeout(copyFeedbackTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     localStorage.setItem(VIEW_STORAGE_KEY, activeView);
@@ -1351,19 +1398,51 @@ export function App() {
           <button
             className="ghost-button"
             type="button"
+            onClick={() => {
+              void copyCurrentLink("dashboard");
+            }}
+          >
+            Kopiuj link dashboardu
+          </button>
+          <button
+            className="ghost-button"
+            type="button"
             onClick={resetStoredDashboardState}
           >
             Wyczyść zapisany stan
           </button>
+          {copyFeedback?.scope === "dashboard" ? (
+            <InlineFeedbackBadge
+              message={copyFeedback.message}
+              tone={copyFeedback.tone}
+            />
+          ) : null}
         </section>
       </header>
 
       {isDevicePage && selectedDevice && deviceDetailsViewProps ? (
         <section className="workspace">
           <div className="device-page-bar">
-            <a className="ghost-button button-link" href={dashboardHref}>
-              Wróć do dashboardu
-            </a>
+            <div className="device-page-actions">
+              <a className="ghost-button button-link" href={dashboardHref}>
+                Wróć do dashboardu
+              </a>
+              <button
+                className="ghost-button"
+                type="button"
+                onClick={() => {
+                  void copyCurrentLink("device");
+                }}
+              >
+                Kopiuj link urządzenia
+              </button>
+              {copyFeedback?.scope === "device" ? (
+                <InlineFeedbackBadge
+                  message={copyFeedback.message}
+                  tone={copyFeedback.tone}
+                />
+              ) : null}
+            </div>
             <span className="empty-copy">
               Pełny widok urządzenia zachowuje kontekst filtrów i aktywnej
               kolejki, więc możesz wrócić dokładnie do miejsca, z którego
@@ -3943,6 +4022,23 @@ function BooleanPill({
   );
 }
 
+function InlineFeedbackBadge({
+  message,
+  tone,
+}: {
+  message: string;
+  tone: "success" | "error";
+}) {
+  return (
+    <span
+      className={`inline-feedback-badge state-${tone}`}
+      role={tone === "error" ? "alert" : "status"}
+    >
+      {message}
+    </span>
+  );
+}
+
 function CodePill({ value }: { value: string | boolean | null }) {
   return <span className="pill pill-neutral">{labelForCode(value)}</span>;
 }
@@ -4257,6 +4353,36 @@ function isAbortError(error: unknown): boolean {
     "name" in error &&
     error.name === "AbortError"
   );
+}
+
+async function copyTextToClipboard(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "true");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  textarea.style.pointerEvents = "none";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+
+  try {
+    if (typeof document.execCommand !== "function") {
+      throw new Error("Clipboard API unavailable");
+    }
+
+    const copied = document.execCommand("copy");
+    if (!copied) {
+      throw new Error("Clipboard copy failed");
+    }
+  } finally {
+    document.body.removeChild(textarea);
+  }
 }
 
 function readStoredDashboardMode(): DashboardMode {

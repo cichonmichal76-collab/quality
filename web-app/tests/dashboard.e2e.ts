@@ -81,6 +81,26 @@ test("dashboard paginates shipment and component queues", async ({ page }) => {
   await expect(componentTable.getByText(/CN-E2E-/)).toBeVisible();
 });
 
+test("dashboard copies the current link with active filters", async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.goto("/");
+
+  await expect(page.getByText("API OK")).toBeVisible();
+
+  await page.locator(".filters-card input").first().fill("DEMO-E2E");
+  await page.getByRole("button", { name: "Gotowe", exact: true }).click();
+
+  await page.getByRole("button", { name: "Kopiuj link dashboardu" }).click();
+  await expect(page.getByRole("status")).toContainText("Link skopiowany.");
+
+  const copiedLink = await page.evaluate(async () => navigator.clipboard.readText());
+  expect(copiedLink).toContain("ship_device_type=DEMO-E2E");
+  expect(copiedLink).toContain("ship_only_ready=true");
+});
+
 test("dashboard applies summary filters from shipment and component actions", async ({
   page,
 }) => {
