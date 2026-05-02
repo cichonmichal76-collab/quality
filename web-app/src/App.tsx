@@ -463,6 +463,9 @@ export function App() {
   const selectedShipmentShippableDevices = selectedShipmentDevices.filter(
     (device) => device.production_status === "READY_FOR_SHIPMENT",
   );
+  const selectedShipmentNcrCandidateDevices = selectedShipmentDevices.filter(
+    (device) => device.has_critical_open_ncr && device.critical_open_ncr_ids.length > 0,
+  );
   const hasSelectedAllVisibleShipmentRows =
     visibleShipmentDevices.length > 0 &&
     visibleShipmentDevices.every((device) =>
@@ -868,6 +871,82 @@ export function App() {
       emptySelectionMessage:
         "W zaznaczeniu nie ma urządzeń gotowych do oznaczenia jako wysłane.",
     });
+  };
+
+  const closeSelectedShipmentQueueCriticalNcrs = async () => {
+    if (isShipmentBulkActionLoading) {
+      return;
+    }
+
+    if (!apiBaseUrl.trim()) {
+      setShipmentBulkActionState("error");
+      setShipmentBulkActionError("Podaj bazowy adres API.");
+      setShipmentBulkActionSuccess(null);
+      return;
+    }
+
+    if (selectedShipmentNcrCandidateDevices.length === 0) {
+      setShipmentBulkActionState("error");
+      setShipmentBulkActionError(
+        "W zaznaczeniu nie ma urządzeń z krytycznym NCR urządzenia.",
+      );
+      setShipmentBulkActionSuccess(null);
+      return;
+    }
+
+    setShipmentBulkActionState("loading");
+    setShipmentBulkActionError(null);
+    setShipmentBulkActionSuccess(null);
+
+    let updatedDeviceCount = 0;
+    let updatedNcrCount = 0;
+    const failedSerials: string[] = [];
+
+    for (const device of selectedShipmentNcrCandidateDevices) {
+      try {
+        await Promise.all(
+          device.critical_open_ncr_ids.map((ncrId) =>
+            updateNonconformityStatus(
+              apiBaseUrl.trim(),
+              ncrId,
+              "CLOSED",
+              `Zamknięte zbiorczo z kolejki wysyłki dla ${device.device_serial_number}.`,
+            ),
+          ),
+        );
+        updatedDeviceCount += 1;
+        updatedNcrCount += device.critical_open_ncr_ids.length;
+      } catch {
+        failedSerials.push(device.device_serial_number);
+      }
+    }
+
+    if (updatedDeviceCount > 0) {
+      setRefreshVersion((previous) => previous + 1);
+      setShipmentBulkActionSuccess(
+        `Zamknięto ${formatNumber(
+          updatedNcrCount,
+        )} krytyczne NCR urządzeń w ${formatNumber(updatedDeviceCount)} ${
+          updatedDeviceCount === 1 ? "urządzeniu" : "urządzeniach"
+        }.`,
+      );
+    }
+
+    if (failedSerials.length > 0) {
+      setShipmentBulkActionState("error");
+      setShipmentBulkActionError(
+        `Nie udało się zamknąć NCR dla ${formatNumber(
+          failedSerials.length,
+        )} urządzeń: ${failedSerials.slice(0, 3).join(", ")}${
+          failedSerials.length > 3 ? " i więcej." : "."
+        }`,
+      );
+      setSelectedShipmentSerials(failedSerials);
+      return;
+    }
+
+    setShipmentBulkActionState("loaded");
+    setSelectedShipmentSerials([]);
   };
 
   const closeSelectedComponentQueueCriticalNcrs = async () => {
@@ -2107,6 +2186,9 @@ export function App() {
                 shippableSelectionCount={
                   selectedShipmentShippableDevices.length
                 }
+                shipmentNcrSelectionCount={
+                  selectedShipmentNcrCandidateDevices.length
+                }
                 onToggleShipmentSelection={toggleShipmentSelection}
                 onToggleAllShipmentSelections={
                   toggleAllVisibleShipmentSelections
@@ -2114,6 +2196,9 @@ export function App() {
                 onClearShipmentSelections={clearShipmentSelections}
                 onMarkSelectedReady={markSelectedShipmentDevicesReady}
                 onMarkSelectedShipped={markSelectedShipmentDevicesShipped}
+                onCloseSelectedShipmentNcrs={
+                  closeSelectedShipmentQueueCriticalNcrs
+                }
               />
             </>
           ) : (
@@ -2477,11 +2562,13 @@ function ShipmentDashboard({
   bulkActionSuccess,
   readySelectionCount,
   shippableSelectionCount,
+  shipmentNcrSelectionCount,
   onToggleShipmentSelection,
   onToggleAllShipmentSelections,
   onClearShipmentSelections,
   onMarkSelectedReady,
   onMarkSelectedShipped,
+  onCloseSelectedShipmentNcrs,
 }: {
   data: DeviceShipmentQueue | null;
   isLoading: boolean;
@@ -2501,11 +2588,13 @@ function ShipmentDashboard({
   bulkActionSuccess: string | null;
   readySelectionCount: number;
   shippableSelectionCount: number;
+  shipmentNcrSelectionCount: number;
   onToggleShipmentSelection: (serialNumber: string) => void;
   onToggleAllShipmentSelections: () => void;
   onClearShipmentSelections: () => void;
   onMarkSelectedReady: () => void;
   onMarkSelectedShipped: () => void;
+  onCloseSelectedShipmentNcrs: () => void;
 }) {
   const readyCount = data?.ready_count ?? 0;
   const blockedCount = data?.blocked_count ?? 0;
@@ -2574,8 +2663,10 @@ function ShipmentDashboard({
         actionSuccess={bulkActionSuccess}
         onToggleAll={onToggleAllShipmentSelections}
         onClearSelection={onClearShipmentSelections}
+        shipmentNcrSelectionCount={shipmentNcrSelectionCount}
         onMarkSelectedReady={onMarkSelectedReady}
         onMarkSelectedShipped={onMarkSelectedShipped}
+        onCloseSelectedNcrs={onCloseSelectedShipmentNcrs}
       />
 
       <ShipmentTable
@@ -2830,6 +2921,7 @@ function ShipmentBulkActionsBar({
   selectedCount,
   readySelectionCount,
   shippableSelectionCount,
+  shipmentNcrSelectionCount,
   hasSelectedAllVisibleRows,
   actionState,
   actionError,
@@ -2838,11 +2930,13 @@ function ShipmentBulkActionsBar({
   onClearSelection,
   onMarkSelectedReady,
   onMarkSelectedShipped,
+  onCloseSelectedNcrs,
 }: {
   isLoading: boolean;
   selectedCount: number;
   readySelectionCount: number;
   shippableSelectionCount: number;
+  shipmentNcrSelectionCount: number;
   hasSelectedAllVisibleRows: boolean;
   actionState: LoadState;
   actionError: string | null;
@@ -2851,6 +2945,7 @@ function ShipmentBulkActionsBar({
   onClearSelection: () => void;
   onMarkSelectedReady: () => void;
   onMarkSelectedShipped: () => void;
+  onCloseSelectedNcrs: () => void;
 }) {
   const isActionLoading = actionState === "loading";
 
@@ -2871,6 +2966,7 @@ function ShipmentBulkActionsBar({
           <strong>Zaznaczone: {formatNumber(selectedCount)}</strong>
           <span>Gotowe do oznaczenia: {formatNumber(readySelectionCount)}</span>
           <span>Gotowe do wysłania: {formatNumber(shippableSelectionCount)}</span>
+          <span>Z krytycznym NCR: {formatNumber(shipmentNcrSelectionCount)}</span>
         </div>
       </div>
       <div className="bulk-action-buttons">
@@ -2891,6 +2987,14 @@ function ShipmentBulkActionsBar({
           disabled={shippableSelectionCount === 0 || isLoading || isActionLoading}
         >
           Oznacz wysłane ({formatNumber(shippableSelectionCount)})
+        </button>
+        <button
+          className="ghost-button"
+          type="button"
+          onClick={onCloseSelectedNcrs}
+          disabled={shipmentNcrSelectionCount === 0 || isLoading || isActionLoading}
+        >
+          Zamknij NCR urządzeń ({formatNumber(shipmentNcrSelectionCount)})
         </button>
         <button
           className="ghost-button"

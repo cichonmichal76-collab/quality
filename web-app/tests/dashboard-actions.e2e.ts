@@ -1799,6 +1799,152 @@ test("dashboard marks selected shipment devices ready from bulk actions", async 
   await expect(page.getByRole("checkbox", { name: "Zaznacz BULK-READY-001" })).not.toBeChecked();
 });
 
+test("dashboard closes selected shipment device critical NCRs from bulk actions", async ({
+  page,
+}) => {
+  let ncrClosed = false;
+  let patchRequests = 0;
+
+  const bulkShipmentNcrQueuePayload = {
+    ...shipmentQueuePayload,
+    total_devices: 3,
+    ready_count: 0,
+    blocked_count: 3,
+    returned_count: 3,
+    devices: [
+      {
+        ...shipmentQueuePayload.devices[0],
+        device_serial_number: "BULK-NCR-001",
+        has_critical_open_ncr: true,
+        critical_open_ncr_ids: ["NCR-DEVICE-BULK-001"],
+        primary_blocking_code: "CRITICAL_OPEN_NCR",
+        primary_blocking_message: "Urządzenie ma otwartą krytyczną NCR.",
+        recommended_action: "RESOLVE_CRITICAL_NCR",
+        can_transition_to_ready_for_shipment: false,
+      },
+      {
+        ...shipmentQueuePayload.devices[0],
+        device_serial_number: "BULK-NCR-002",
+        has_critical_open_ncr: true,
+        critical_open_ncr_ids: ["NCR-DEVICE-BULK-002"],
+        primary_blocking_code: "CRITICAL_OPEN_NCR",
+        primary_blocking_message: "Urządzenie ma otwartą krytyczną NCR.",
+        recommended_action: "RESOLVE_CRITICAL_NCR",
+        can_transition_to_ready_for_shipment: false,
+      },
+      {
+        ...shipmentQueuePayload.devices[0],
+        device_serial_number: "BULK-NCR-BLOCK-001",
+        has_critical_open_ncr: false,
+        critical_open_ncr_ids: [],
+        primary_blocking_code: "FINAL_TEST_NOT_PASSED",
+        primary_blocking_message: "Final test jest jeszcze wymagany.",
+        recommended_action: "RUN_FINAL_TEST",
+        can_transition_to_ready_for_shipment: false,
+        final_test_passed: false,
+        production_status: "CREATED",
+      },
+    ],
+  };
+
+  const refreshedBulkShipmentNcrQueuePayload = {
+    ...bulkShipmentNcrQueuePayload,
+    devices: [
+      {
+        ...bulkShipmentNcrQueuePayload.devices[0],
+        has_critical_open_ncr: false,
+        critical_open_ncr_ids: [],
+        primary_blocking_code: null,
+        primary_blocking_message: null,
+        recommended_action: "MARK_READY_FOR_SHIPMENT",
+        can_transition_to_ready_for_shipment: true,
+      },
+      {
+        ...bulkShipmentNcrQueuePayload.devices[1],
+        has_critical_open_ncr: false,
+        critical_open_ncr_ids: [],
+        primary_blocking_code: null,
+        primary_blocking_message: null,
+        recommended_action: "MARK_READY_FOR_SHIPMENT",
+        can_transition_to_ready_for_shipment: true,
+      },
+      bulkShipmentNcrQueuePayload.devices[2],
+    ],
+  };
+
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const path = url.pathname;
+
+    if (path === "/api/shipment-readiness") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(
+          ncrClosed
+            ? refreshedBulkShipmentNcrQueuePayload
+            : bulkShipmentNcrQueuePayload,
+        ),
+      });
+      return;
+    }
+
+    if (
+      (path === "/api/nonconformities/NCR-DEVICE-BULK-001" ||
+        path === "/api/nonconformities/NCR-DEVICE-BULK-002") &&
+      request.method() === "PATCH"
+    ) {
+      patchRequests += 1;
+      const serialNumber = path.includes("NCR-DEVICE-BULK-001")
+        ? "BULK-NCR-001"
+        : "BULK-NCR-002";
+      const ncrId = path.includes("NCR-DEVICE-BULK-001")
+        ? "NCR-DEVICE-BULK-001"
+        : "NCR-DEVICE-BULK-002";
+      expect(request.postDataJSON()).toEqual({
+        status: "CLOSED",
+        corrective_action: `Zamknięte zbiorczo z kolejki wysyłki dla ${serialNumber}.`,
+      });
+      ncrClosed = true;
+
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: `ROW-${ncrId}`,
+          ncr_id: ncrId,
+          status: "CLOSED",
+          corrective_action: `Zamknięte zbiorczo z kolejki wysyłki dla ${serialNumber}.`,
+        }),
+      });
+      return;
+    }
+
+    throw new Error(`Unexpected request: ${request.method()} ${path}`);
+  });
+
+  await page.goto("/");
+
+  await expect(page.getByText("API OK")).toBeVisible();
+  await page
+    .getByRole("checkbox", {
+      name: "Zaznacz wszystkie urządzenia w kolejce wysyłki na stronie",
+    })
+    .check();
+
+  await expect(page.getByText("Zaznaczone: 3")).toBeVisible();
+  await expect(page.getByText("Z krytycznym NCR: 2")).toBeVisible();
+
+  await page.getByRole("button", { name: "Zamknij NCR urządzeń (2)" }).click();
+
+  await expect(
+    page.getByText("Zamknięto 2 krytyczne NCR urządzeń w 2 urządzeniach."),
+  ).toBeVisible();
+  expect(patchRequests).toBe(2);
+  await expect(page.getByRole("checkbox", { name: "Zaznacz BULK-NCR-001" })).not.toBeChecked();
+});
+
 test("dashboard closes selected component critical NCRs from bulk actions", async ({
   page,
 }) => {

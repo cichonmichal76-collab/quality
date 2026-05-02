@@ -40,8 +40,9 @@ włączyć auto-odświeżanie, wybrać interwał odpytywania i podejrzeć znaczn
 ostatniej udanej aktualizacji kolejki.
 
 Kolejka `Wysyłka` wspiera też zaznaczanie wielu wierszy na bieżącej stronie i
-zbiorcze akcje `Oznacz gotowe` oraz `Oznacz wysłane`, jeśli zaznaczone
-urządzenia spełniają warunki odpowiedniego workflow.
+zbiorcze akcje `Oznacz gotowe`, `Oznacz wysłane` oraz zamykanie krytycznych
+`NCR` urządzeń, jeśli zaznaczone urządzenia spełniają warunki odpowiedniego
+workflow.
 
 Kolejka `Komponenty` wspiera też zbiorcze zamykanie krytycznych NCR
 komponentów dla zaznaczonych urządzeń na bieżącej stronie.
