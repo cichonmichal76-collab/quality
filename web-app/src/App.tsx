@@ -171,6 +171,11 @@ type OptionalBooleanString = "" | "true" | "false";
 type DeviceDetailsSectionId =
   (typeof DEVICE_DETAILS_SECTION_LINKS)[number]["id"];
 
+interface DeviceDetailsHashTarget {
+  elementId: string | null;
+  sectionId: DeviceDetailsSectionId | null;
+}
+
 interface ShipmentFilters {
   device_type: string;
   variant_code: string;
@@ -2199,6 +2204,8 @@ function DeviceDetailsDrawer({
               </button>
             </>
           }
+          activeHashTargetId={null}
+          enableRecordDeepLinks={false}
           sectionNavigation={null}
         />
       </aside>
@@ -2212,14 +2219,14 @@ function DeviceDetailsPage({
 }: DeviceDetailsViewProps & {
   devicePageHref: string | null;
 }) {
-  const [activeSectionId, setActiveSectionId] =
-    useState<DeviceDetailsSectionId | null>(() =>
-      readDeviceDetailsSectionHash(window.location.hash),
+  const [activeHashTarget, setActiveHashTarget] =
+    useState<DeviceDetailsHashTarget>(() =>
+      readDeviceDetailsHashTarget(window.location.hash),
     );
 
   useEffect(() => {
     const handleHashChange = () => {
-      setActiveSectionId(readDeviceDetailsSectionHash(window.location.hash));
+      setActiveHashTarget(readDeviceDetailsHashTarget(window.location.hash));
     };
 
     handleHashChange();
@@ -2231,11 +2238,11 @@ function DeviceDetailsPage({
   }, []);
 
   useEffect(() => {
-    if (props.loadState !== "loaded" || activeSectionId === null) {
+    if (props.loadState !== "loaded" || activeHashTarget.elementId === null) {
       return;
     }
 
-    const sectionElement = document.getElementById(activeSectionId);
+    const sectionElement = document.getElementById(activeHashTarget.elementId);
     if (!sectionElement) {
       return;
     }
@@ -2245,7 +2252,7 @@ function DeviceDetailsPage({
         sectionElement.scrollIntoView({ block: "start" });
       }
     });
-  }, [activeSectionId, props.loadState]);
+  }, [activeHashTarget.elementId, props.loadState]);
 
   return (
     <article className="details-page">
@@ -2255,13 +2262,15 @@ function DeviceDetailsPage({
           titleId="device-details-page-title"
           headerEyebrow="Pełny widok urządzenia"
           headerActions={null}
+          activeHashTargetId={activeHashTarget.elementId}
+          enableRecordDeepLinks
           sectionNavigation={
             <nav className="details-section-nav" aria-label="Sekcje urządzenia">
               {DEVICE_DETAILS_SECTION_LINKS.map((section) => (
                 <a
                   key={section.id}
                   className={
-                    activeSectionId === section.id
+                    activeHashTarget.sectionId === section.id
                       ? "details-section-link is-active"
                       : "details-section-link"
                   }
@@ -2314,11 +2323,15 @@ function DeviceDetailsSurface({
   titleId,
   headerEyebrow,
   headerActions,
+  activeHashTargetId,
+  enableRecordDeepLinks,
   sectionNavigation,
 }: DeviceDetailsViewProps & {
   titleId: string;
   headerEyebrow: string;
   headerActions: ReactNode;
+  activeHashTargetId: string | null;
+  enableRecordDeepLinks: boolean;
   sectionNavigation: ReactNode;
 }) {
   const shipment = details?.shipment ?? null;
@@ -2335,6 +2348,13 @@ function DeviceDetailsSurface({
   const componentCriticalNcrIds = Array.from(
     new Set(componentRows.flatMap((item) => item.critical_open_ncr_ids)),
   );
+  const deviceCriticalNcrItems = shipment?.critical_open_ncr_ids.map(String) ?? [];
+  const primaryBlockingComponentAnchorId =
+    component?.primary_blocking_component_serial_number
+      ? buildComponentAnchorId(
+          component.primary_blocking_component_serial_number,
+        )
+      : null;
   const canCompleteAssembly =
     shipment !== null && shipment.recommended_action === "COMPLETE_ASSEMBLY";
   const canMarkReadyForShipment =
@@ -2869,6 +2889,26 @@ function DeviceDetailsSurface({
                 />
               </div>
               <div className="details-stack">
+                <strong>Krytyczne NCR urządzenia</strong>
+                <TagList
+                  items={deviceCriticalNcrItems}
+                  emptyLabel="Brak krytycznych NCR urządzenia."
+                  hrefBuilder={
+                    enableRecordDeepLinks
+                      ? (item) => `#${buildDeviceCriticalNcrAnchorId(item)}`
+                      : undefined
+                  }
+                  idBuilder={
+                    enableRecordDeepLinks
+                      ? (item) => buildDeviceCriticalNcrAnchorId(item)
+                      : undefined
+                  }
+                  isTargeted={(item) =>
+                    activeHashTargetId === buildDeviceCriticalNcrAnchorId(item)
+                  }
+                />
+              </div>
+              <div className="details-stack">
                 <strong>Kontrole bramki</strong>
                 {shipment.blocking_checks && shipment.blocking_checks.length > 0 ? (
                   <div className="detail-inline-grid">
@@ -3011,13 +3051,34 @@ function DeviceDetailsSurface({
                   },
                 ]}
               />
+              {enableRecordDeepLinks && primaryBlockingComponentAnchorId ? (
+                <div className="details-stack">
+                  <strong>Szybkie przejścia</strong>
+                  <a
+                    className="details-record-link"
+                    href={`#${primaryBlockingComponentAnchorId}`}
+                  >
+                    Przejdź do blokującego komponentu
+                  </a>
+                </div>
+              ) : null}
               <div className="details-stack">
                 <strong>Zamontowane komponenty</strong>
                 {componentRows.length > 0 ? (
                   <div className="detail-component-list">
                     {componentRows.map((item) => (
                       <article
-                        className="detail-component-card"
+                        className={
+                          activeHashTargetId ===
+                          buildComponentAnchorId(item.component_serial_number)
+                            ? "detail-component-card is-targeted"
+                            : "detail-component-card"
+                        }
+                        id={
+                          enableRecordDeepLinks
+                            ? buildComponentAnchorId(item.component_serial_number)
+                            : undefined
+                        }
                         key={item.component_serial_number}
                       >
                         <div className="detail-inline-header">
@@ -3036,6 +3097,22 @@ function DeviceDetailsSurface({
                           items={item.critical_open_ncr_ids}
                           emptyLabel="Brak krytycznych NCR."
                           compact
+                          hrefBuilder={
+                            enableRecordDeepLinks
+                              ? (ncrId) =>
+                                  `#${buildComponentCriticalNcrAnchorId(ncrId)}`
+                              : undefined
+                          }
+                          idBuilder={
+                            enableRecordDeepLinks
+                              ? (ncrId) =>
+                                  buildComponentCriticalNcrAnchorId(ncrId)
+                              : undefined
+                          }
+                          isTargeted={(ncrId) =>
+                            activeHashTargetId ===
+                            buildComponentCriticalNcrAnchorId(ncrId)
+                          }
                         />
                       </article>
                     ))}
@@ -3151,10 +3228,16 @@ function TagList({
   items,
   emptyLabel,
   compact = false,
+  hrefBuilder,
+  idBuilder,
+  isTargeted,
 }: {
   items: string[];
   emptyLabel: string;
   compact?: boolean;
+  hrefBuilder?: (item: string) => string;
+  idBuilder?: (item: string) => string;
+  isTargeted?: (item: string) => boolean;
 }) {
   if (items.length === 0) {
     return <p className="empty-copy">{emptyLabel}</p>;
@@ -3162,11 +3245,26 @@ function TagList({
 
   return (
     <div className={`tag-list ${compact ? "is-compact" : ""}`}>
-      {items.map((item) => (
-        <span className="tag-chip" key={item}>
-          {labelForCode(item)}
-        </span>
-      ))}
+      {items.map((item) => {
+        const isActive = isTargeted?.(item) ?? false;
+        const className = isActive ? "tag-chip is-targeted" : "tag-chip";
+        const id = idBuilder?.(item);
+        const label = labelForCode(item);
+
+        if (hrefBuilder) {
+          return (
+            <a className={className} href={hrefBuilder(item)} id={id} key={item}>
+              {label}
+            </a>
+          );
+        }
+
+        return (
+          <span className={className} id={id} key={item}>
+            {label}
+          </span>
+        );
+      })}
     </div>
   );
 }
@@ -4094,9 +4192,7 @@ function readDevicePageSerial(pathname: string): string | null {
   }
 }
 
-function readDeviceDetailsSectionHash(
-  hash: string,
-): DeviceDetailsSectionId | null {
+function readDeviceDetailsSectionHash(hash: string): DeviceDetailsSectionId | null {
   const normalizedHash = hash.startsWith("#") ? hash.slice(1) : hash;
 
   return DEVICE_DETAILS_SECTION_LINKS.some(
@@ -4104,6 +4200,59 @@ function readDeviceDetailsSectionHash(
   )
     ? (normalizedHash as DeviceDetailsSectionId)
     : null;
+}
+
+function readDeviceDetailsHashTarget(hash: string): DeviceDetailsHashTarget {
+  const sectionId = readDeviceDetailsSectionHash(hash);
+
+  if (sectionId !== null) {
+    return { elementId: sectionId, sectionId };
+  }
+
+  const normalizedHash = hash.startsWith("#") ? hash.slice(1) : hash;
+  if (normalizedHash.startsWith("komponent-")) {
+    return {
+      elementId: normalizedHash,
+      sectionId: DEVICE_DETAILS_SECTION_IDS.componentQuality,
+    };
+  }
+
+  if (normalizedHash.startsWith("ncr-urzadzenia-")) {
+    return {
+      elementId: normalizedHash,
+      sectionId: DEVICE_DETAILS_SECTION_IDS.shipmentGate,
+    };
+  }
+
+  if (normalizedHash.startsWith("ncr-komponentu-")) {
+    return {
+      elementId: normalizedHash,
+      sectionId: DEVICE_DETAILS_SECTION_IDS.componentQuality,
+    };
+  }
+
+  return { elementId: null, sectionId: null };
+}
+
+function buildComponentAnchorId(serialNumber: string): string {
+  return `komponent-${toAnchorToken(serialNumber)}`;
+}
+
+function buildDeviceCriticalNcrAnchorId(ncrId: string): string {
+  return `ncr-urzadzenia-${toAnchorToken(ncrId)}`;
+}
+
+function buildComponentCriticalNcrAnchorId(ncrId: string): string {
+  return `ncr-komponentu-${toAnchorToken(ncrId)}`;
+}
+
+function toAnchorToken(value: string): string {
+  const normalizedValue = value
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return normalizedValue === "" ? "pozycja" : normalizedValue;
 }
 
 function writeShipmentFiltersToSearchParams(

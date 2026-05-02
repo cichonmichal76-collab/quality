@@ -21,6 +21,8 @@ Ten sam mechanizm obsługuje też pełny widok szczegółów pod ścieżką
 dashboardu.
 Pełny widok urządzenia wspiera dodatkowo linki do sekcji przez hash URL,
 na przykład `#akcje`, `#bom` albo `#historia-gate`.
+Dorzuciłem też linki do konkretnych rekordów wewnątrz sekcji, na przykład do
+blokującego komponentu albo konkretnego NCR.
 
 Tekstowe filtry są odpytywane z debounce `250 ms`. W trakcie oczekiwania panel
 pokazuje znacznik `Oczekuje na zastosowanie`, a klawisz `Enter` wymusza

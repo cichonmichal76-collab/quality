@@ -61,6 +61,12 @@ test("dashboard opens full device details page and returns to queue context", as
   ).toBeVisible();
   await expect(page.getByRole("link", { name: "Wróć do dashboardu" })).toBeVisible();
 
+  await page.getByRole("link", { name: "Przejdź do blokującego komponentu" }).click();
+  await expect(page).toHaveURL(/#komponent-/);
+  await expect(
+    page.getByRole("link", { name: "Jakość komponentów" }),
+  ).toHaveClass(/is-active/);
+
   await page.getByRole("link", { name: "Historia gate" }).click();
   await expect(page).toHaveURL(/#historia-gate$/);
   await expect(page.getByRole("link", { name: "Historia gate" })).toHaveClass(
