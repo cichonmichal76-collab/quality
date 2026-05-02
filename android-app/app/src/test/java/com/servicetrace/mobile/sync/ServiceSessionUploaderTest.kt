@@ -1,5 +1,6 @@
 package com.servicetrace.mobile.sync
 
+import com.servicetrace.mobile.model.SyncFailureReasonCode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -20,11 +21,23 @@ class ServiceSessionUploaderTest {
         assertTrue(createHttpUploadException(429, "limit").isRetryable)
         assertFalse(createHttpUploadException(422, "bad zip").isRetryable)
         assertFalse(createHttpUploadException(404, "").isRetryable)
+        assertEquals(SyncFailureReasonCode.SERVER_ERROR, createHttpUploadException(500, "").reasonCode)
+        assertEquals(SyncFailureReasonCode.RATE_LIMIT, createHttpUploadException(429, "limit").reasonCode)
+        assertEquals(SyncFailureReasonCode.VALIDATION_ERROR, createHttpUploadException(422, "bad zip").reasonCode)
+        assertEquals(SyncFailureReasonCode.CLIENT_ERROR, createHttpUploadException(404, "").reasonCode)
     }
 
     @Test
     fun `transport upload exception marks connect failures as retryable`() {
         assertTrue(classifyTransportUploadException(ConnectException("offline")).isRetryable)
         assertFalse(classifyTransportUploadException(IllegalStateException("bad package")).isRetryable)
+        assertEquals(
+            SyncFailureReasonCode.NETWORK_CONNECTIVITY,
+            classifyTransportUploadException(ConnectException("offline")).reasonCode,
+        )
+        assertEquals(
+            SyncFailureReasonCode.UNKNOWN,
+            classifyTransportUploadException(IllegalStateException("bad package")).reasonCode,
+        )
     }
 }

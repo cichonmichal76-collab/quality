@@ -1,6 +1,7 @@
 package com.servicetrace.mobile.sync
 
 import com.servicetrace.mobile.model.ServiceSessionDraft
+import com.servicetrace.mobile.model.SyncFailureReasonCode
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -22,6 +23,7 @@ data class ServiceSessionUploadResponse(
 class CommissioningUploadException(
     message: String,
     val isRetryable: Boolean,
+    val reasonCode: SyncFailureReasonCode,
     val statusCode: Int? = null,
     cause: Throwable? = null,
 ) : Exception(message, cause)
@@ -38,6 +40,7 @@ class ServiceSessionUploader(
             throw CommissioningUploadException(
                 message = "Brak lokalnej paczki ZIP dla sesji ${draft.sessionId}.",
                 isRetryable = false,
+                reasonCode = SyncFailureReasonCode.MISSING_PACKAGE,
             )
         }
 
@@ -157,9 +160,17 @@ internal fun createHttpUploadException(
         "Backend odrzucil upload paczki commissioning ($statusCode)."
     }
     val retryable = statusCode == 408 || statusCode == 429 || statusCode >= 500
+    val reasonCode = when {
+        statusCode == 408 -> SyncFailureReasonCode.NETWORK_TIMEOUT
+        statusCode == 429 -> SyncFailureReasonCode.RATE_LIMIT
+        statusCode >= 500 -> SyncFailureReasonCode.SERVER_ERROR
+        statusCode == 400 || statusCode == 409 || statusCode == 422 -> SyncFailureReasonCode.VALIDATION_ERROR
+        else -> SyncFailureReasonCode.CLIENT_ERROR
+    }
     return CommissioningUploadException(
         message = message,
         isRetryable = retryable,
+        reasonCode = reasonCode,
         statusCode = statusCode,
     )
 }
@@ -175,11 +186,17 @@ internal fun classifyTransportUploadException(
         -> CommissioningUploadException(
             message = error.message ?: "Przejsciowy blad polaczenia podczas synchronizacji commissioning.",
             isRetryable = true,
+            reasonCode = if (error is SocketTimeoutException) {
+                SyncFailureReasonCode.NETWORK_TIMEOUT
+            } else {
+                SyncFailureReasonCode.NETWORK_CONNECTIVITY
+            },
             cause = error,
         )
         else -> CommissioningUploadException(
             message = error.message ?: "Nieznany blad synchronizacji commissioning.",
             isRetryable = false,
+            reasonCode = SyncFailureReasonCode.UNKNOWN,
             cause = error,
         )
     }

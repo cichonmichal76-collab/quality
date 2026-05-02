@@ -15,6 +15,18 @@ enum class SessionSyncStatus {
     SYNCED,
 }
 
+enum class SyncFailureReasonCode {
+    NONE,
+    MISSING_PACKAGE,
+    NETWORK_TIMEOUT,
+    NETWORK_CONNECTIVITY,
+    RATE_LIMIT,
+    SERVER_ERROR,
+    VALIDATION_ERROR,
+    CLIENT_ERROR,
+    UNKNOWN,
+}
+
 enum class McuConnectionMode {
     MOCK,
     USB,
@@ -105,6 +117,7 @@ data class ServiceSessionDraft(
     val lastSyncAttemptAtMillis: Long?,
     val lastSyncSuccessAtMillis: Long?,
     val lastSyncErrorMessage: String,
+    val lastSyncFailureCode: SyncFailureReasonCode,
     val lastSyncAutoRetryEligible: Boolean,
     val createdAtMillis: Long,
     val updatedAtMillis: Long,
@@ -192,6 +205,7 @@ object CommissioningDraftFactory {
             lastSyncAttemptAtMillis = null,
             lastSyncSuccessAtMillis = null,
             lastSyncErrorMessage = "",
+            lastSyncFailureCode = SyncFailureReasonCode.NONE,
             lastSyncAutoRetryEligible = true,
             createdAtMillis = nowMillis,
             updatedAtMillis = nowMillis,

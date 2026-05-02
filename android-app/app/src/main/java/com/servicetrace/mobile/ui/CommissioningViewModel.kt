@@ -12,6 +12,7 @@ import com.servicetrace.mobile.model.McuConnectionMode
 import com.servicetrace.mobile.model.McuConnectionStatus
 import com.servicetrace.mobile.model.ServiceSessionDraft
 import com.servicetrace.mobile.model.SessionSyncStatus
+import com.servicetrace.mobile.model.SyncFailureReasonCode
 import com.servicetrace.mobile.model.UsbCandidateDevice
 import com.servicetrace.mobile.mcu.MockMcuClient
 import com.servicetrace.mobile.mcu.UsbMcuClient
@@ -448,6 +449,7 @@ class CommissioningViewModel(
                 } else {
                     SessionSyncStatus.DRAFT
                 },
+                lastSyncFailureCode = SyncFailureReasonCode.NONE,
                 updatedAtMillis = System.currentTimeMillis(),
             )
             repository.saveDraft(updatedDraft)
@@ -469,6 +471,7 @@ class CommissioningViewModel(
                 lastSyncAttemptAtMillis = null,
                 lastSyncSuccessAtMillis = null,
                 lastSyncErrorMessage = "",
+                lastSyncFailureCode = SyncFailureReasonCode.NONE,
                 lastSyncAutoRetryEligible = true,
                 updatedAtMillis = System.currentTimeMillis(),
             )
@@ -706,6 +709,7 @@ private fun ServiceSessionDraft.invalidatePackageMetadata(): ServiceSessionDraft
         lastSyncAttemptAtMillis = null,
         lastSyncSuccessAtMillis = null,
         lastSyncErrorMessage = "",
+        lastSyncFailureCode = SyncFailureReasonCode.NONE,
         lastSyncAutoRetryEligible = true,
         syncStatus = if (syncStatus == SessionSyncStatus.SYNCED) {
             SessionSyncStatus.DRAFT

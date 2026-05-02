@@ -4,6 +4,7 @@ import com.servicetrace.mobile.data.CommissioningRepository
 import com.servicetrace.mobile.files.CommissioningArtifactStore
 import com.servicetrace.mobile.model.ServiceSessionDraft
 import com.servicetrace.mobile.model.SessionSyncStatus
+import com.servicetrace.mobile.model.SyncFailureReasonCode
 import java.io.File
 
 data class CommissioningSyncRunResult(
@@ -46,6 +47,7 @@ class CommissioningSyncRunner(
                     lastSyncAttemptAtMillis = completedAtMillis,
                     lastSyncSuccessAtMillis = completedAtMillis,
                     lastSyncErrorMessage = "",
+                    lastSyncFailureCode = SyncFailureReasonCode.NONE,
                     lastSyncAutoRetryEligible = true,
                     updatedAtMillis = completedAtMillis,
                 )
@@ -62,6 +64,7 @@ class CommissioningSyncRunner(
                     syncAttemptCount = nextAttemptCount,
                     lastSyncAttemptAtMillis = failedAtMillis,
                     lastSyncErrorMessage = uploadError.message ?: "Nieznany blad synchronizacji commissioning.",
+                    lastSyncFailureCode = uploadError.reasonCode,
                     lastSyncAutoRetryEligible = autoRetryEligible,
                     updatedAtMillis = failedAtMillis,
                 )

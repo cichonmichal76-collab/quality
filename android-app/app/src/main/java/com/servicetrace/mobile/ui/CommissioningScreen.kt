@@ -47,6 +47,7 @@ import com.servicetrace.mobile.model.McuConnectionStatus
 import com.servicetrace.mobile.model.ServiceSessionDraft
 import com.servicetrace.mobile.model.SessionOutcome
 import com.servicetrace.mobile.model.SessionSyncStatus
+import com.servicetrace.mobile.model.SyncFailureReasonCode
 import com.servicetrace.mobile.model.UsbCandidateDevice
 import com.servicetrace.mobile.sync.MAX_AUTO_SYNC_RETRY_ATTEMPTS
 import java.time.Instant
@@ -387,6 +388,9 @@ private fun DraftListSection(
                         if (isAutoRetrySuspended(draft)) {
                             AssistChip(onClick = {}, label = { Text("Auto-retry wstrzymany") })
                         }
+                        if (draft.lastSyncFailureCode != SyncFailureReasonCode.NONE) {
+                            AssistChip(onClick = {}, label = { Text("Kod: ${syncFailureReasonLabel(draft.lastSyncFailureCode)}") })
+                        }
                     }
                     if (draft.lastSyncErrorMessage.isNotBlank()) {
                         Text("Ostatni blad sync: ${draft.lastSyncErrorMessage}", style = MaterialTheme.typography.bodySmall)
@@ -583,6 +587,12 @@ private fun SyncStatusSection(
         }
         if (draft.lastSyncErrorMessage.isNotBlank()) {
             Text("Ostatni blad: ${draft.lastSyncErrorMessage}", style = MaterialTheme.typography.bodySmall)
+            if (draft.lastSyncFailureCode != SyncFailureReasonCode.NONE) {
+                Text(
+                    "Kod przyczyny: ${syncFailureReasonLabel(draft.lastSyncFailureCode)}",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
             if (isAutoRetrySuspended(draft)) {
                 Text(
                     "Auto-retry zostal wstrzymany. Uzyj recznej synchronizacji albo popraw sesje i ponownie dodaj ja do kolejki. Limit automatycznych prob: $MAX_AUTO_SYNC_RETRY_ATTEMPTS.",
@@ -829,6 +839,19 @@ private fun statusLabel(status: CommissioningStepStatus): String =
         CommissioningStepStatus.PASS -> "PASS"
         CommissioningStepStatus.FAIL -> "FAIL"
         CommissioningStepStatus.HOLD -> "HOLD"
+    }
+
+private fun syncFailureReasonLabel(reasonCode: SyncFailureReasonCode): String =
+    when (reasonCode) {
+        SyncFailureReasonCode.NONE -> "Brak"
+        SyncFailureReasonCode.MISSING_PACKAGE -> "Brak paczki ZIP"
+        SyncFailureReasonCode.NETWORK_TIMEOUT -> "Timeout sieci"
+        SyncFailureReasonCode.NETWORK_CONNECTIVITY -> "Brak lacznosci"
+        SyncFailureReasonCode.RATE_LIMIT -> "Limit backendu"
+        SyncFailureReasonCode.SERVER_ERROR -> "Blad backendu 5xx"
+        SyncFailureReasonCode.VALIDATION_ERROR -> "Blad walidacji"
+        SyncFailureReasonCode.CLIENT_ERROR -> "Blad klienta 4xx"
+        SyncFailureReasonCode.UNKNOWN -> "Blad nieznany"
     }
 
 private fun isAutoRetrySuspended(draft: ServiceSessionDraft): Boolean =

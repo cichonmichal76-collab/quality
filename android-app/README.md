@@ -19,6 +19,7 @@
 - `WorkManager` z odlozona kolejka synchronizacji dla sesji gotowych offline, takze po zamknieciu ekranu
 - rozroznienie bledow retryable i trwalych, z retry workerem tylko dla bledow przejsciowych
 - limit automatycznych prob syncu i stan eskalacji do recznej interwencji po wyczerpaniu auto-retry
+- zapis `reason code` bledu syncu, np. brak lacznosci, timeout, walidacja albo blad backendu
 - lokalna checklista 5 krokow
 - komentarz ogolny, firmware i bootloader
 - status `DRAFT` / `READY_TO_SYNC`
@@ -53,8 +54,8 @@ Domyslny adres backendu w aplikacji to `http://10.0.2.2:8000/api`, co pasuje do 
 
 1. rozszerzyc snapshoty MCU o dodatkowe artefakty diagnostyczne
 2. rozbudowac worker o upload okresowy albo bardziej agresywne wznowienia po dluzszym offline
-3. rozszerzyc snapshoty syncu o bardziej szczegolowe telemetry / reason codes
-4. dodac eksport lub podglad historii prob syncu per sesja
+3. dodac eksport albo podglad historii prob syncu per sesja
+4. rozbudowac reason codes o telemetry po stronie backendu / upload hash / correlation id
 
 ## Poza zakresem MVP
 

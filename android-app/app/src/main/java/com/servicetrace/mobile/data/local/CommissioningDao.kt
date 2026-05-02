@@ -19,6 +19,7 @@ import com.servicetrace.mobile.model.McuConnectionMode
 import com.servicetrace.mobile.model.McuConnectionStatus
 import com.servicetrace.mobile.model.ServiceSessionDraft
 import com.servicetrace.mobile.model.SessionSyncStatus
+import com.servicetrace.mobile.model.SyncFailureReasonCode
 import kotlinx.coroutines.flow.Flow
 
 @Entity(tableName = "service_session_drafts")
@@ -51,6 +52,7 @@ data class ServiceSessionDraftEntity(
     val lastSyncAttemptAtMillis: Long?,
     val lastSyncSuccessAtMillis: Long?,
     val lastSyncErrorMessage: String,
+    val lastSyncFailureCode: String,
     val lastSyncAutoRetryEligible: Boolean,
     val createdAtMillis: Long,
     val updatedAtMillis: Long,
@@ -153,6 +155,7 @@ fun ServiceSessionDraftWithSteps.toDomain(): ServiceSessionDraft =
         lastSyncAttemptAtMillis = session.lastSyncAttemptAtMillis,
         lastSyncSuccessAtMillis = session.lastSyncSuccessAtMillis,
         lastSyncErrorMessage = session.lastSyncErrorMessage,
+        lastSyncFailureCode = SyncFailureReasonCode.valueOf(session.lastSyncFailureCode),
         lastSyncAutoRetryEligible = session.lastSyncAutoRetryEligible,
         createdAtMillis = session.createdAtMillis,
         updatedAtMillis = session.updatedAtMillis,
@@ -213,6 +216,7 @@ fun ServiceSessionDraft.toLocalEntity(): LocalDraftBundle =
             lastSyncAttemptAtMillis = lastSyncAttemptAtMillis,
             lastSyncSuccessAtMillis = lastSyncSuccessAtMillis,
             lastSyncErrorMessage = lastSyncErrorMessage,
+            lastSyncFailureCode = lastSyncFailureCode.name,
             lastSyncAutoRetryEligible = lastSyncAutoRetryEligible,
             createdAtMillis = createdAtMillis,
             updatedAtMillis = updatedAtMillis,
