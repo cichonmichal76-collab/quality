@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.servicetrace.mobile.data.CommissioningRepository
 import com.servicetrace.mobile.files.CommissioningArtifactStore
+import com.servicetrace.mobile.files.PendingCameraCapture
 import com.servicetrace.mobile.model.CommissioningStepStatus
 import com.servicetrace.mobile.model.McuConnectionMode
 import com.servicetrace.mobile.model.McuConnectionStatus
@@ -291,6 +292,46 @@ class CommissioningViewModel(
                 bannerMessage.value = error.message ?: "Nie udało się połączyć z MCU."
             }
         }
+    }
+
+    fun prepareCameraCapture(): PendingCameraCapture? {
+        val draft = selectedDraft.value ?: run {
+            bannerMessage.value = "Najpierw wybierz lokalny draft commissioning."
+            return null
+        }
+        return runCatching {
+            artifactStore.createPendingCameraCapture(draft.sessionId)
+        }.getOrElse { error ->
+            bannerMessage.value = error.message ?: "Nie udalo sie przygotowac zapisu zdjecia z kamery."
+            null
+        }
+    }
+
+    fun completeCameraCapture(capture: PendingCameraCapture) {
+        viewModelScope.launch {
+            val draft = repository.getDraft(capture.sessionId) ?: run {
+                artifactStore.discardPendingCameraCapture(capture)
+                bannerMessage.value = "Nie znaleziono draftu commissioning dla zapisanego zdjecia."
+                return@launch
+            }
+            try {
+                val attachment = artifactStore.finalizeCameraCapture(capture)
+                val updatedDraft = draft.copy(
+                    attachments = listOf(attachment) + draft.attachments,
+                    updatedAtMillis = System.currentTimeMillis(),
+                ).invalidatePackageMetadata()
+                repository.saveDraft(updatedDraft)
+                selectedDraft.value = updatedDraft
+                bannerMessage.value = "Zdjecie z kamery zapisano lokalnie do sesji commissioning."
+            } catch (error: Exception) {
+                artifactStore.discardPendingCameraCapture(capture)
+                bannerMessage.value = error.message ?: "Nie udalo sie zapisac zdjecia z kamery."
+            }
+        }
+    }
+
+    fun cancelCameraCapture(capture: PendingCameraCapture) {
+        artifactStore.discardPendingCameraCapture(capture)
     }
 
     fun importPhoto(sourceUri: Uri) {

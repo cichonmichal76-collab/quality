@@ -10,7 +10,7 @@
 - krok polaczenia `Mock MCU / USB`
 - snapshot stanu MCU zapisany lokalnie w sesji
 - `UsbMcuClient` oparty o Android USB Host i kontrakt komend zgodny z `final-test-runner`
-- wybor zdjec z galerii do lokalnej sesji commissioning
+- robienie zdjec kamera i wybor zdjec z galerii do lokalnej sesji commissioning
 - generowanie lokalnej paczki ZIP z `manifest.json`, `draft.json`, `snapshot.json`, `checklist.json` i zdjeciami
 - kolejka synchronizacji `READY_TO_SYNC -> SYNCED` do backendu `POST /api/service-sessions/upload`
 - licznik prob synchronizacji i ostatni blad sync per sesja
@@ -24,7 +24,7 @@ Po uruchomieniu aplikacji serwisant moze:
 2. wpisac numer seryjny, typ urzadzenia i identyfikator technika
 3. wybrac tryb polaczenia `Mock MCU` albo `USB`
 4. pobrac lokalny snapshot commissioning z `Mock MCU` albo z realnego urzadzenia USB CDC
-5. dodac zdjecia z galerii jako dowody serwisowe
+5. zrobic zdjecia kamera albo dodac je z galerii jako dowody serwisowe
 6. wygenerowac lokalna paczke ZIP commissioning
 7. przejsc przez checkliste krok po kroku
 8. zapisac wynik lokalnie w `Room`
@@ -46,10 +46,10 @@ Domyslny adres backendu w aplikacji to `http://10.0.2.2:8000/api`, co pasuje do 
 
 ## Nastepny sensowny krok
 
-1. dolozyc realny capture z kamery obok importu z galerii
-2. rozszerzyc snapshoty MCU o dodatkowe artefakty diagnostyczne
-3. zapisac konfiguracje backendu i stan sync bardziej trwale
-4. dodac retry / backoff w tle zamiast tylko recznego ponowienia
+1. rozszerzyc snapshoty MCU o dodatkowe artefakty diagnostyczne
+2. zapisac konfiguracje backendu i stan sync bardziej trwale
+3. dodac retry / backoff w tle zamiast tylko recznego ponowienia
+4. dolozyc automatyczny sync po odzyskaniu lacznosci
 
 ## Poza zakresem MVP
 

@@ -11,7 +11,7 @@ Aktualnie zawiera:
 5. lokalna warstwe `Room`
 6. repozytorium offline i `ViewModel`
 7. `UsbMcuClient` zgodny z USB Host i kontraktem runnera
-8. import zdjec z galerii do lokalnej sesji
+8. capture zdjec z kamery i import z galerii do lokalnej sesji
 9. generator ZIP paczki commissioning
 10. klient uploadu `multipart/form-data` do backendu service sessions
 11. kolejke synchronizacji `READY_TO_SYNC -> SYNCED`
@@ -22,6 +22,6 @@ Domyslny adres backendu dla syncu to `http://10.0.2.2:8000/api`.
 
 Najblizszy sensowny krok:
 
-1. dolozyc realny capture z kamery
-2. rozszerzyc snapshoty i artefakty diagnostyczne
-3. zapisac konfiguracje backendu oraz historie bledow synchronizacji bardziej trwale
+1. rozszerzyc snapshoty i artefakty diagnostyczne
+2. zapisac konfiguracje backendu oraz historie bledow synchronizacji bardziej trwale
+3. dolozyc automatyczny sync po odzyskaniu lacznosci

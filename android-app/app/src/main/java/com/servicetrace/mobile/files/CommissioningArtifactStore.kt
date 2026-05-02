@@ -3,6 +3,7 @@ package com.servicetrace.mobile.files
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import androidx.core.content.FileProvider
 import com.servicetrace.mobile.model.CommissioningAttachment
 import com.servicetrace.mobile.model.CommissioningAttachmentKind
 import com.servicetrace.mobile.model.ServiceSessionDraft
@@ -18,11 +19,20 @@ data class CommissioningPackageResult(
     val entryCount: Int,
 )
 
+data class PendingCameraCapture(
+    val sessionId: String,
+    val outputUri: Uri,
+    val localPath: String,
+    val displayName: String,
+    val createdAtMillis: Long,
+)
+
 class CommissioningArtifactStore(
     context: Context,
     private val nowProvider: () -> Long = { System.currentTimeMillis() },
 ) {
     private val appContext = context.applicationContext
+    private val fileProviderAuthority = "${appContext.packageName}.fileprovider"
 
     fun importPhoto(
         sessionId: String,
@@ -30,7 +40,7 @@ class CommissioningArtifactStore(
     ): CommissioningAttachment {
         val contentResolver = appContext.contentResolver
         val nowMillis = nowProvider()
-        val sessionDir = File(appContext.filesDir, "commissioning/$sessionId/photos").apply { mkdirs() }
+        val sessionDir = ensurePhotoDirectory(sessionId)
         val originalName = resolveDisplayName(sourceUri) ?: "photo-$nowMillis"
         val sanitizedBaseName = sanitizeFileName(originalName.substringBeforeLast('.'))
         val extension = originalName.substringAfterLast('.', missingDelimiterValue = "")
@@ -50,10 +60,10 @@ class CommissioningArtifactStore(
             FileOutputStream(targetFile).use { output ->
                 input.copyTo(output)
             }
-        } ?: throw IllegalStateException("Nie udało się otworzyć źródła obrazu dla commissioning.")
+        } ?: throw IllegalStateException("Nie udalo sie otworzyc zrodla obrazu dla commissioning.")
 
         return CommissioningAttachment(
-            attachmentId = "ATT-${UUID.randomUUID().toString().take(8).uppercase()}",
+            attachmentId = newAttachmentId(),
             kind = CommissioningAttachmentKind.PHOTO,
             displayName = originalName,
             localPath = targetFile.absolutePath,
@@ -61,6 +71,48 @@ class CommissioningArtifactStore(
             sizeBytes = targetFile.length(),
             createdAtMillis = nowMillis,
         )
+    }
+
+    fun createPendingCameraCapture(sessionId: String): PendingCameraCapture {
+        val nowMillis = nowProvider()
+        val sessionDir = ensurePhotoDirectory(sessionId)
+        val targetFile = File(sessionDir, buildCameraPhotoFileName(nowMillis))
+        targetFile.parentFile?.mkdirs()
+        if (targetFile.exists()) {
+            targetFile.delete()
+        }
+        targetFile.createNewFile()
+
+        return PendingCameraCapture(
+            sessionId = sessionId,
+            outputUri = FileProvider.getUriForFile(appContext, fileProviderAuthority, targetFile),
+            localPath = targetFile.absolutePath,
+            displayName = targetFile.name,
+            createdAtMillis = nowMillis,
+        )
+    }
+
+    fun finalizeCameraCapture(capture: PendingCameraCapture): CommissioningAttachment {
+        val targetFile = File(capture.localPath)
+        if (!targetFile.exists() || targetFile.length() <= 0) {
+            throw IllegalStateException("Nie udalo sie zapisac zdjecia z kamery do sesji commissioning.")
+        }
+
+        return CommissioningAttachment(
+            attachmentId = newAttachmentId(),
+            kind = CommissioningAttachmentKind.PHOTO,
+            displayName = capture.displayName,
+            localPath = targetFile.absolutePath,
+            contentType = "image/jpeg",
+            sizeBytes = targetFile.length(),
+            createdAtMillis = capture.createdAtMillis,
+        )
+    }
+
+    fun discardPendingCameraCapture(capture: PendingCameraCapture) {
+        runCatching {
+            File(capture.localPath).takeIf { file -> file.exists() }?.delete()
+        }
     }
 
     fun removeAttachment(attachment: CommissioningAttachment) {
@@ -111,6 +163,12 @@ class CommissioningArtifactStore(
         )
     }
 
+    private fun ensurePhotoDirectory(sessionId: String): File =
+        File(appContext.filesDir, "commissioning/$sessionId/photos").apply { mkdirs() }
+
+    private fun newAttachmentId(): String =
+        "ATT-${UUID.randomUUID().toString().take(8).uppercase()}"
+
     private fun resolveDisplayName(sourceUri: Uri): String? =
         appContext.contentResolver.query(
             sourceUri,
@@ -159,3 +217,6 @@ class CommissioningArtifactStore(
         zip.closeEntry()
     }
 }
+
+internal fun buildCameraPhotoFileName(timestampMillis: Long): String =
+    "camera-$timestampMillis.jpg"

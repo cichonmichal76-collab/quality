@@ -31,11 +31,14 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.servicetrace.mobile.files.PendingCameraCapture
 import com.servicetrace.mobile.model.CommissioningStep
 import com.servicetrace.mobile.model.CommissioningAttachment
 import com.servicetrace.mobile.model.CommissioningStepStatus
@@ -55,10 +58,20 @@ fun CommissioningScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    var pendingCameraCapture by remember { mutableStateOf<PendingCameraCapture?>(null) }
     val photoPickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let { nonNullUri ->
             viewModel.importPhoto(nonNullUri)
         }
+    }
+    val cameraCaptureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        val pendingCapture = pendingCameraCapture ?: return@rememberLauncherForActivityResult
+        if (success) {
+            viewModel.completeCameraCapture(pendingCapture)
+        } else {
+            viewModel.cancelCameraCapture(pendingCapture)
+        }
+        pendingCameraCapture = null
     }
 
     uiState.bannerMessage?.let { message ->
@@ -86,7 +99,14 @@ fun CommissioningScreen(
         onSelectUsbDevice = viewModel::selectUsbDevice,
         onRequestUsbPermission = viewModel::requestUsbPermission,
         onConnectToMcu = viewModel::connectToMcu,
-        onAddPhoto = { photoPickerLauncher.launch("image/*") },
+        onCapturePhoto = {
+            val pendingCapture = viewModel.prepareCameraCapture()
+            if (pendingCapture != null) {
+                pendingCameraCapture = pendingCapture
+                cameraCaptureLauncher.launch(pendingCapture.outputUri)
+            }
+        },
+        onAddPhotoFromGallery = { photoPickerLauncher.launch("image/*") },
         onRemovePhoto = viewModel::removePhoto,
         onBuildPackage = viewModel::buildServicePackage,
         onUploadBaseUrlChange = viewModel::updateUploadBaseUrl,
@@ -116,7 +136,8 @@ private fun CommissioningScreen(
     onSelectUsbDevice: (String) -> Unit,
     onRequestUsbPermission: () -> Unit,
     onConnectToMcu: () -> Unit,
-    onAddPhoto: () -> Unit,
+    onCapturePhoto: () -> Unit,
+    onAddPhotoFromGallery: () -> Unit,
     onRemovePhoto: (String) -> Unit,
     onBuildPackage: () -> Unit,
     onUploadBaseUrlChange: (String) -> Unit,
@@ -183,7 +204,8 @@ private fun CommissioningScreen(
                 onSelectUsbDevice = onSelectUsbDevice,
                 onRequestUsbPermission = onRequestUsbPermission,
                 onConnectToMcu = onConnectToMcu,
-                onAddPhoto = onAddPhoto,
+                onCapturePhoto = onCapturePhoto,
+                onAddPhotoFromGallery = onAddPhotoFromGallery,
                 onRemovePhoto = onRemovePhoto,
                 onBuildPackage = onBuildPackage,
                 onSaveOffline = onSaveOffline,
@@ -357,7 +379,8 @@ private fun DraftEditorSection(
     onSelectUsbDevice: (String) -> Unit,
     onRequestUsbPermission: () -> Unit,
     onConnectToMcu: () -> Unit,
-    onAddPhoto: () -> Unit,
+    onCapturePhoto: () -> Unit,
+    onAddPhotoFromGallery: () -> Unit,
     onRemovePhoto: (String) -> Unit,
     onBuildPackage: () -> Unit,
     onSaveOffline: () -> Unit,
@@ -414,7 +437,8 @@ private fun DraftEditorSection(
                 )
                 AttachmentsSection(
                     draft = draft,
-                    onAddPhoto = onAddPhoto,
+                    onCapturePhoto = onCapturePhoto,
+                    onAddPhotoFromGallery = onAddPhotoFromGallery,
                     onRemovePhoto = onRemovePhoto,
                     onBuildPackage = onBuildPackage,
                 )
@@ -454,20 +478,21 @@ private fun DraftEditorSection(
 @Composable
 private fun AttachmentsSection(
     draft: ServiceSessionDraft,
-    onAddPhoto: () -> Unit,
+    onCapturePhoto: () -> Unit,
+    onAddPhotoFromGallery: () -> Unit,
     onRemovePhoto: (String) -> Unit,
     onBuildPackage: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Dowody serwisowe", style = MaterialTheme.typography.titleMedium)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Button(onClick = onAddPhoto, modifier = Modifier.weight(1f)) {
-                Text("Dodaj zdjecie")
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = onCapturePhoto) {
+                Text("Zrob zdjecie")
             }
-            Button(onClick = onBuildPackage, modifier = Modifier.weight(1f)) {
+            Button(onClick = onAddPhotoFromGallery) {
+                Text("Dodaj z galerii")
+            }
+            Button(onClick = onBuildPackage) {
                 Text("Generuj ZIP")
             }
         }
@@ -480,7 +505,7 @@ private fun AttachmentsSection(
         }
         if (draft.attachments.isEmpty()) {
             Text(
-                "Brak lokalnych zdjec. Dodaj obrazy z galerii, aby dolaczyc je do paczki commissioning.",
+                "Brak lokalnych zdjec. Zrob zdjecie kamera albo dodaj obraz z galerii, aby dolaczyc go do paczki commissioning.",
                 style = MaterialTheme.typography.bodySmall,
             )
         } else {
