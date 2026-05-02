@@ -1,5 +1,9 @@
 package com.servicetrace.mobile.ui
 
+import android.app.Activity
+import android.content.ClipData
+import android.content.Context
+import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalLayoutApi
@@ -36,6 +40,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -62,6 +67,7 @@ fun CommissioningScreen(
     viewModel: CommissioningViewModel,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     var pendingCameraCapture by remember { mutableStateOf<PendingCameraCapture?>(null) }
     val photoPickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
@@ -105,6 +111,11 @@ fun CommissioningScreen(
         onRequestUsbPermission = viewModel::requestUsbPermission,
         onConnectToMcu = viewModel::connectToMcu,
         onExportSyncAudit = viewModel::exportSyncAudit,
+        onShareSyncAudit = {
+            viewModel.prepareSyncAuditShareUri()?.let { shareUri ->
+                shareSyncAuditExport(context, shareUri)
+            }
+        },
         onCapturePhoto = {
             val pendingCapture = viewModel.prepareCameraCapture()
             if (pendingCapture != null) {
@@ -144,6 +155,7 @@ private fun CommissioningScreen(
     onRequestUsbPermission: () -> Unit,
     onConnectToMcu: () -> Unit,
     onExportSyncAudit: (SyncAuditFilter, Boolean) -> Unit,
+    onShareSyncAudit: () -> Unit,
     onCapturePhoto: () -> Unit,
     onAddPhotoFromGallery: () -> Unit,
     onRemovePhoto: (String) -> Unit,
@@ -209,6 +221,7 @@ private fun CommissioningScreen(
                 lastAuditExportRowCount = uiState.lastAuditExportRowCount,
                 onSelectDraft = onSelectDraft,
                 onExportSyncAudit = onExportSyncAudit,
+                onShareSyncAudit = onShareSyncAudit,
             )
             HorizontalDivider()
             DraftEditorSection(
@@ -246,6 +259,7 @@ private fun SyncAuditSection(
     lastAuditExportRowCount: Int,
     onSelectDraft: (String) -> Unit,
     onExportSyncAudit: (SyncAuditFilter, Boolean) -> Unit,
+    onShareSyncAudit: () -> Unit,
 ) {
     var filterName by rememberSaveable { mutableStateOf(SyncAuditFilter.ALL.name) }
     var onlySelectedDraft by rememberSaveable { mutableStateOf(false) }
@@ -306,6 +320,13 @@ private fun SyncAuditSection(
                         modifier = Modifier.weight(1f),
                     ) {
                         Text("Eksportuj JSON audytu")
+                    }
+                    Button(
+                        onClick = onShareSyncAudit,
+                        enabled = lastAuditExportPath != null,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text("Udostepnij ostatni eksport")
                     }
                 }
                 if (lastAuditExportPath != null && lastAuditExportAtMillis != null) {
@@ -1033,6 +1054,23 @@ private fun syncAttemptResultLabel(result: SyncAttemptResult): String =
         SyncAttemptResult.SUCCESS -> "SUCCESS"
         SyncAttemptResult.FAILURE -> "FAILURE"
     }
+
+private fun shareSyncAuditExport(
+    context: Context,
+    shareUri: android.net.Uri,
+) {
+    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+        type = "application/json"
+        putExtra(Intent.EXTRA_STREAM, shareUri)
+        putExtra(Intent.EXTRA_SUBJECT, "ServiceTrace Sync Audit")
+        clipData = ClipData.newUri(context.contentResolver, "service-trace-sync-audit", shareUri)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        if (context !is Activity) {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+    }
+    context.startActivity(Intent.createChooser(shareIntent, "Udostepnij audyt synchronizacji"))
+}
 
 private fun isAutoRetrySuspended(draft: ServiceSessionDraft): Boolean =
     draft.syncStatus == SessionSyncStatus.READY_TO_SYNC &&

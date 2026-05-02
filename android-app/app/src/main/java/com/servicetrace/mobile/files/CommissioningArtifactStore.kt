@@ -184,6 +184,12 @@ class CommissioningArtifactStore(
         )
     }
 
+    fun buildShareUri(localPath: String): Uri {
+        val targetFile = File(localPath)
+        require(targetFile.exists()) { "Nie znaleziono lokalnego pliku eksportu audytu synchronizacji." }
+        return FileProvider.getUriForFile(appContext, fileProviderAuthority, targetFile)
+    }
+
     private fun ensurePhotoDirectory(sessionId: String): File =
         File(appContext.filesDir, "commissioning/$sessionId/photos").apply { mkdirs() }
 

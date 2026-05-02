@@ -490,6 +490,19 @@ class CommissioningViewModel(
         }
     }
 
+    fun prepareSyncAuditShareUri(): Uri? {
+        val exportPath = lastAuditExportPath.value ?: run {
+            bannerMessage.value = "Najpierw wyeksportuj audyt synchronizacji do pliku JSON."
+            return null
+        }
+        return runCatching {
+            artifactStore.buildShareUri(exportPath)
+        }.getOrElse { error ->
+            bannerMessage.value = error.message ?: "Nie udalo sie przygotowac udostepniania audytu synchronizacji."
+            null
+        }
+    }
+
     fun saveOffline() {
         val draft = selectedDraft.value ?: return
         viewModelScope.launch {
