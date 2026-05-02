@@ -6325,6 +6325,23 @@ def test_service_session_upload_list_and_download(tmp_path, monkeypatch):
     assert package_download.status_code == 200
     assert package_download.content == b"service-package-updated"
 
+    audit = client.get(f"/api/audit-events?entity_type=SERVICE_SESSION&entity_id={session_id}")
+    assert audit.status_code == 200
+    audit_rows = audit.json()
+    assert [row["event_type"] for row in audit_rows[:2]] == [
+        "SERVICE_SESSION_PACKAGE_REUPLOADED",
+        "SERVICE_SESSION_PACKAGE_UPLOADED",
+    ]
+    assert audit_rows[0]["result"] == "UPLOADED"
+    assert audit_rows[0]["operator_id"] == "TECH-RETRY"
+    assert audit_rows[0]["payload"]["upload_count"] == 2
+    assert audit_rows[0]["payload"]["client_attempt_id"] == "SYNC-UPLOAD-0002"
+    assert audit_rows[0]["payload"]["client_attempt_number"] == 2
+    assert audit_rows[0]["payload"]["client_trigger_source"] == "AUTO_NETWORK"
+    assert audit_rows[1]["operator_id"] == "TECH-001"
+    assert audit_rows[1]["payload"]["upload_count"] == 1
+    assert audit_rows[1]["payload"]["client_attempt_id"] == "SYNC-UPLOAD-0001"
+
 
 def test_file_upload_and_download(tmp_path, monkeypatch):
     import app.services.files as file_storage
