@@ -89,6 +89,8 @@ fun CommissioningScreen(
         onAddPhoto = { photoPickerLauncher.launch("image/*") },
         onRemovePhoto = viewModel::removePhoto,
         onBuildPackage = viewModel::buildServicePackage,
+        onUploadBaseUrlChange = viewModel::updateUploadBaseUrl,
+        onSyncReadyDrafts = viewModel::syncReadyDrafts,
         onSaveOffline = viewModel::saveOffline,
         onMarkReadyToSync = viewModel::markReadyToSync,
     )
@@ -117,6 +119,8 @@ private fun CommissioningScreen(
     onAddPhoto: () -> Unit,
     onRemovePhoto: (String) -> Unit,
     onBuildPackage: () -> Unit,
+    onUploadBaseUrlChange: (String) -> Unit,
+    onSyncReadyDrafts: () -> Unit,
     onSaveOffline: () -> Unit,
     onMarkReadyToSync: () -> Unit,
 ) {
@@ -145,7 +149,13 @@ private fun CommissioningScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            SummarySection(drafts = uiState.drafts)
+            SummarySection(
+                drafts = uiState.drafts,
+                uploadBaseUrl = uiState.uploadBaseUrl,
+                syncInFlight = uiState.syncInFlight,
+                onUploadBaseUrlChange = onUploadBaseUrlChange,
+                onSyncReadyDrafts = onSyncReadyDrafts,
+            )
             NewDraftSection(
                 inputs = uiState.newDraftInputs,
                 onDeviceSerialChange = onDeviceSerialChange,
@@ -185,10 +195,17 @@ private fun CommissioningScreen(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun SummarySection(drafts: List<ServiceSessionDraft>) {
+private fun SummarySection(
+    drafts: List<ServiceSessionDraft>,
+    uploadBaseUrl: String,
+    syncInFlight: Boolean,
+    onUploadBaseUrlChange: (String) -> Unit,
+    onSyncReadyDrafts: () -> Unit,
+) {
     val readyCount = drafts.count { draft -> draft.syncStatus == SessionSyncStatus.READY_TO_SYNC }
     val passCount = drafts.count { draft -> draft.outcome == SessionOutcome.PASS }
     val failCount = drafts.count { draft -> draft.outcome == SessionOutcome.FAIL }
+    val syncedCount = drafts.count { draft -> draft.syncStatus == SessionSyncStatus.SYNCED }
 
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -196,8 +213,23 @@ private fun SummarySection(drafts: List<ServiceSessionDraft>) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 AssistChip(onClick = {}, label = { Text("Drafty: ${drafts.size}") })
                 AssistChip(onClick = {}, label = { Text("Gotowe do sync: $readyCount") })
+                AssistChip(onClick = {}, label = { Text("Synced: $syncedCount") })
                 AssistChip(onClick = {}, label = { Text("PASS: $passCount") })
                 AssistChip(onClick = {}, label = { Text("FAIL: $failCount") })
+            }
+            OutlinedTextField(
+                value = uploadBaseUrl,
+                onValueChange = onUploadBaseUrlChange,
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Adres backendu do synchronizacji") },
+                singleLine = true,
+            )
+            Button(
+                onClick = onSyncReadyDrafts,
+                enabled = readyCount > 0 && !syncInFlight,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(if (syncInFlight) "Synchronizacja w toku..." else "Synchronizuj gotowe sesje")
             }
             Text(
                 "Ten etap zapisuje sesję commissioning lokalnie. Następny krok to zdjęcia, ZIP paczki i upload do /api/service-sessions/upload.",
@@ -561,7 +593,7 @@ private fun ConnectionSection(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ConnectionSection(
+private fun LegacyConnectionSectionUnused(
     draft: ServiceSessionDraft,
     onConnectionModeChange: (McuConnectionMode) -> Unit,
     onConnectToMcu: () -> Unit,

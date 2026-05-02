@@ -14,6 +14,8 @@ import com.servicetrace.mobile.model.SessionSyncStatus
 import com.servicetrace.mobile.model.UsbCandidateDevice
 import com.servicetrace.mobile.mcu.MockMcuClient
 import com.servicetrace.mobile.mcu.UsbMcuClient
+import com.servicetrace.mobile.sync.ServiceSessionUploader
+import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -34,6 +36,8 @@ data class CommissioningUiState(
     val newDraftInputs: NewDraftInputs = NewDraftInputs(),
     val usbDevices: List<UsbCandidateDevice> = emptyList(),
     val usbPermissionInFlight: Boolean = false,
+    val uploadBaseUrl: String = DEFAULT_UPLOAD_BASE_URL,
+    val syncInFlight: Boolean = false,
     val bannerMessage: String? = null,
 )
 
@@ -42,11 +46,14 @@ class CommissioningViewModel(
     private val mockMcuClient: MockMcuClient,
     private val usbMcuClient: UsbMcuClient,
     private val artifactStore: CommissioningArtifactStore,
+    private val uploader: ServiceSessionUploader,
 ) : ViewModel() {
     private val inputs = MutableStateFlow(NewDraftInputs())
     private val selectedDraft = MutableStateFlow<ServiceSessionDraft?>(null)
     private val usbDevices = MutableStateFlow<List<UsbCandidateDevice>>(emptyList())
     private val usbPermissionInFlight = MutableStateFlow(false)
+    private val uploadBaseUrl = MutableStateFlow(DEFAULT_UPLOAD_BASE_URL)
+    private val syncInFlight = MutableStateFlow(false)
     private val bannerMessage = MutableStateFlow<String?>(null)
 
     val uiState: StateFlow<CommissioningUiState> = combine(
@@ -55,8 +62,10 @@ class CommissioningViewModel(
         selectedDraft,
         usbDevices,
         usbPermissionInFlight,
+        uploadBaseUrl,
+        syncInFlight,
         bannerMessage,
-    ) { drafts, draftInputs, currentDraft, availableUsbDevices, permissionInFlight, message ->
+    ) { drafts, draftInputs, currentDraft, availableUsbDevices, permissionInFlight, currentUploadBaseUrl, syncRunning, message ->
         val selected = currentDraft?.let { draft ->
             drafts.firstOrNull { row -> row.sessionId == draft.sessionId } ?: draft
         } ?: drafts.firstOrNull()
@@ -66,6 +75,8 @@ class CommissioningViewModel(
             newDraftInputs = draftInputs,
             usbDevices = availableUsbDevices,
             usbPermissionInFlight = permissionInFlight,
+            uploadBaseUrl = currentUploadBaseUrl,
+            syncInFlight = syncRunning,
             bannerMessage = message,
         )
     }.stateIn(
@@ -88,6 +99,10 @@ class CommissioningViewModel(
 
     fun updateTechnicianId(value: String) {
         inputs.update { state -> state.copy(technicianId = value) }
+    }
+
+    fun updateUploadBaseUrl(value: String) {
+        uploadBaseUrl.value = value
     }
 
     fun createDraft() {
@@ -340,6 +355,51 @@ class CommissioningViewModel(
         }
     }
 
+    fun syncReadyDrafts() {
+        val readyDrafts = uiState.value.drafts.filter { draft -> draft.syncStatus == SessionSyncStatus.READY_TO_SYNC }
+        if (readyDrafts.isEmpty()) {
+            bannerMessage.value = "Brak sesji gotowych do synchronizacji."
+            return
+        }
+        viewModelScope.launch {
+            syncInFlight.value = true
+            try {
+                var uploadedCount = 0
+                var failedCount = 0
+                val currentBaseUrl = uploadBaseUrl.value
+
+                readyDrafts.forEach { draft ->
+                    try {
+                        val uploadDraft = ensurePackageForUpload(draft)
+                        uploader.upload(currentBaseUrl, uploadDraft)
+                        val syncedDraft = uploadDraft.copy(
+                            syncStatus = SessionSyncStatus.SYNCED,
+                            updatedAtMillis = System.currentTimeMillis(),
+                        )
+                        repository.saveDraft(syncedDraft)
+                        if (selectedDraft.value?.sessionId == syncedDraft.sessionId) {
+                            selectedDraft.value = syncedDraft
+                        }
+                        uploadedCount += 1
+                    } catch (error: Exception) {
+                        failedCount += 1
+                        if (selectedDraft.value?.sessionId == draft.sessionId) {
+                            selectedDraft.value = draft
+                        }
+                    }
+                }
+
+                bannerMessage.value = when {
+                    failedCount == 0 -> "Zsynchronizowano $uploadedCount sesji commissioning do backendu."
+                    uploadedCount == 0 -> "Nie udalo sie zsynchronizowac zadnej sesji commissioning."
+                    else -> "Zsynchronizowano $uploadedCount sesji commissioning, bledy: $failedCount."
+                }
+            } finally {
+                syncInFlight.value = false
+            }
+        }
+    }
+
     fun saveOffline() {
         val draft = selectedDraft.value ?: return
         viewModelScope.launch {
@@ -378,17 +438,38 @@ class CommissioningViewModel(
         bannerMessage.value = null
     }
 
+    private suspend fun ensurePackageForUpload(
+        draft: ServiceSessionDraft,
+    ): ServiceSessionDraft {
+        if (draft.packagePath.isNotBlank() && File(draft.packagePath).exists()) {
+            return draft
+        }
+        val packageResult = artifactStore.buildPackage(draft)
+        val updatedDraft = draft.copy(
+            packagePath = packageResult.zipPath,
+            packageGeneratedAtMillis = packageResult.generatedAtMillis,
+            packageEntryCount = packageResult.entryCount,
+            updatedAtMillis = packageResult.generatedAtMillis,
+        )
+        repository.saveDraft(updatedDraft)
+        if (selectedDraft.value?.sessionId == updatedDraft.sessionId) {
+            selectedDraft.value = updatedDraft
+        }
+        return updatedDraft
+    }
+
     companion object {
         fun factory(
             repository: CommissioningRepository,
             mockMcuClient: MockMcuClient,
             usbMcuClient: UsbMcuClient,
             artifactStore: CommissioningArtifactStore,
+            uploader: ServiceSessionUploader,
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                    CommissioningViewModel(repository, mockMcuClient, usbMcuClient, artifactStore) as T
+                    CommissioningViewModel(repository, mockMcuClient, usbMcuClient, artifactStore, uploader) as T
             }
     }
 }
@@ -398,4 +479,11 @@ private fun ServiceSessionDraft.invalidatePackageMetadata(): ServiceSessionDraft
         packagePath = "",
         packageGeneratedAtMillis = null,
         packageEntryCount = 0,
+        syncStatus = if (syncStatus == SessionSyncStatus.SYNCED) {
+            SessionSyncStatus.DRAFT
+        } else {
+            syncStatus
+        },
     )
+
+private const val DEFAULT_UPLOAD_BASE_URL = "http://10.0.2.2:8000/api"
