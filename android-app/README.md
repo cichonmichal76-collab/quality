@@ -23,6 +23,7 @@
 - lokalna historia prob syncu per sesja z wynikiem, zrodlem uruchomienia i komunikatem
 - historia sukcesow zawiera tez `upload_status`, `package_hash`, identyfikator rekordu backendowego, `upload_correlation_id` i `uploaded_at`
 - pelna sekcja audytu synchronizacji ze wszystkimi probami, filtrem sukcesow / bledow i szybkim przejsciem do draftu
+- eksport aktualnego widoku audytu synchronizacji do lokalnego pliku JSON
 - lokalna checklista 5 krokow
 - komentarz ogolny, firmware i bootloader
 - status `DRAFT` / `READY_TO_SYNC`
@@ -57,7 +58,7 @@ Domyslny adres backendu w aplikacji to `http://10.0.2.2:8000/api`, co pasuje do 
 
 1. rozszerzyc snapshoty MCU o dodatkowe artefakty diagnostyczne
 2. rozbudowac worker o upload okresowy albo bardziej agresywne wznowienia po dluzszym offline
-3. dodac eksport historii prob syncu albo udostepnianie audytu poza telefon
+3. dodac udostepnianie wyeksportowanego audytu poza telefon
 4. rozbudowac backend o szersza telemetry uploadu albo eksport audytu
 
 ## Poza zakresem MVP

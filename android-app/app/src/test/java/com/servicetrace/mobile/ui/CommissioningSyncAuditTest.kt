@@ -6,8 +6,10 @@ import com.servicetrace.mobile.model.SyncAttemptHistoryEntry
 import com.servicetrace.mobile.model.SyncAttemptResult
 import com.servicetrace.mobile.model.SyncAttemptTriggerSource
 import com.servicetrace.mobile.model.SyncFailureReasonCode
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CommissioningSyncAuditTest {
@@ -121,6 +123,48 @@ class CommissioningSyncAuditTest {
             buildBackendSyncSummary(populated),
         )
         assertNull(buildBackendSyncSummary(empty))
+    }
+
+    @Test
+    fun `sync audit json export contains filter scope and backend metadata`() {
+        val rows = buildSyncAuditRows(
+            drafts = listOf(
+                draftWithAttempts(
+                    sessionId = "SVC-JSON",
+                    deviceSerialNumber = "DEV-JSON",
+                    attempts = listOf(
+                        syncAttempt(
+                            attemptId = "sync-json",
+                            attemptedAtMillis = 12_000L,
+                            result = SyncAttemptResult.SUCCESS,
+                            backendServiceSessionId = "svc-db-json",
+                            backendUploadStatus = "UPLOADED",
+                            backendPackageHash = "hash-json",
+                            backendUploadCorrelationId = "SRV-UP-JSON123456",
+                            backendUploadedAtIso = "2026-05-02T11:30:00Z",
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        val json = JSONObject(
+            buildSyncAuditJson(
+                rows = rows,
+                filter = SyncAuditFilter.SUCCESSES,
+                exportedAtMillis = 99_000L,
+                selectedSessionId = "SVC-JSON",
+            ),
+        )
+        val firstRow = json.getJSONArray("rows").getJSONObject(0)
+
+        assertEquals("SUCCESSES", json.getString("filter"))
+        assertEquals("SVC-JSON", json.getString("selected_session_id"))
+        assertEquals(1, json.getInt("entry_count"))
+        assertEquals("svc-db-json", firstRow.getString("backend_service_session_id"))
+        assertEquals("SRV-UP-JSON123456", firstRow.getString("backend_upload_correlation_id"))
+        assertEquals("2026-05-02T11:30:00Z", firstRow.getString("backend_uploaded_at"))
+        assertTrue(firstRow.getBoolean("retryable").not())
     }
 
     private fun draftWithAttempts(

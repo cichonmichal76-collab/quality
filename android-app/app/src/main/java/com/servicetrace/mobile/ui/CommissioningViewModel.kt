@@ -48,6 +48,9 @@ data class CommissioningUiState(
     val autoSyncEnabled: Boolean = true,
     val networkAvailable: Boolean = false,
     val syncInFlight: Boolean = false,
+    val lastAuditExportPath: String? = null,
+    val lastAuditExportAtMillis: Long? = null,
+    val lastAuditExportRowCount: Int = 0,
     val bannerMessage: String? = null,
 )
 
@@ -69,6 +72,9 @@ class CommissioningViewModel(
     private val autoSyncEnabled = MutableStateFlow(syncSettingsStore.current().autoSyncEnabled)
     private val networkAvailable = MutableStateFlow(connectivityMonitor.currentStatus())
     private val syncInFlight = MutableStateFlow(false)
+    private val lastAuditExportPath = MutableStateFlow<String?>(null)
+    private val lastAuditExportAtMillis = MutableStateFlow<Long?>(null)
+    private val lastAuditExportRowCount = MutableStateFlow(0)
     private val bannerMessage = MutableStateFlow<String?>(null)
     private var lastAutoSyncReadySignature: String = ""
 
@@ -82,8 +88,11 @@ class CommissioningViewModel(
         autoSyncEnabled,
         networkAvailable,
         syncInFlight,
+        lastAuditExportPath,
+        lastAuditExportAtMillis,
+        lastAuditExportRowCount,
         bannerMessage,
-    ) { drafts, draftInputs, currentDraft, availableUsbDevices, permissionInFlight, currentUploadBaseUrl, currentAutoSyncEnabled, online, syncRunning, message ->
+    ) { drafts, draftInputs, currentDraft, availableUsbDevices, permissionInFlight, currentUploadBaseUrl, currentAutoSyncEnabled, online, syncRunning, auditExportPath, auditExportAtMillis, auditExportRowCountValue, message ->
         val selected = currentDraft?.let { draft ->
             drafts.firstOrNull { row -> row.sessionId == draft.sessionId } ?: draft
         } ?: drafts.firstOrNull()
@@ -97,6 +106,9 @@ class CommissioningViewModel(
             autoSyncEnabled = currentAutoSyncEnabled,
             networkAvailable = online,
             syncInFlight = syncRunning,
+            lastAuditExportPath = auditExportPath,
+            lastAuditExportAtMillis = auditExportAtMillis,
+            lastAuditExportRowCount = auditExportRowCountValue,
             bannerMessage = message,
         )
     }.stateIn(
@@ -439,6 +451,43 @@ class CommissioningViewModel(
 
     fun syncReadyDrafts() {
         startSync(trigger = SyncTrigger.MANUAL)
+    }
+
+    fun exportSyncAudit(
+        filter: SyncAuditFilter,
+        onlySelectedDraft: Boolean,
+    ) {
+        viewModelScope.launch {
+            val selectedSessionId = if (onlySelectedDraft) selectedDraft.value?.sessionId else null
+            val rows = buildSyncAuditRows(
+                drafts = uiState.value.drafts,
+                filter = filter,
+                onlySessionId = selectedSessionId,
+            )
+            if (rows.isEmpty()) {
+                bannerMessage.value = "Brak wpisow do eksportu audytu synchronizacji."
+                return@launch
+            }
+            try {
+                val exportedAtMillis = System.currentTimeMillis()
+                val json = buildSyncAuditJson(
+                    rows = rows,
+                    filter = filter,
+                    exportedAtMillis = exportedAtMillis,
+                    selectedSessionId = selectedSessionId,
+                )
+                val result = artifactStore.exportSyncAuditReport(
+                    content = json,
+                    rowCount = rows.size,
+                )
+                lastAuditExportPath.value = result.exportPath
+                lastAuditExportAtMillis.value = result.generatedAtMillis
+                lastAuditExportRowCount.value = result.rowCount
+                bannerMessage.value = "Wyeksportowano audyt synchronizacji do JSON."
+            } catch (error: Exception) {
+                bannerMessage.value = error.message ?: "Nie udalo sie wyeksportowac audytu synchronizacji."
+            }
+        }
     }
 
     fun saveOffline() {

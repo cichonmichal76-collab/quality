@@ -27,6 +27,12 @@ data class PendingCameraCapture(
     val createdAtMillis: Long,
 )
 
+data class CommissioningSyncAuditExportResult(
+    val exportPath: String,
+    val generatedAtMillis: Long,
+    val rowCount: Int,
+)
+
 class CommissioningArtifactStore(
     context: Context,
     private val nowProvider: () -> Long = { System.currentTimeMillis() },
@@ -163,6 +169,21 @@ class CommissioningArtifactStore(
         )
     }
 
+    fun exportSyncAuditReport(
+        content: String,
+        rowCount: Int,
+    ): CommissioningSyncAuditExportResult {
+        val nowMillis = nowProvider()
+        val auditDir = File(appContext.filesDir, "commissioning/audit").apply { mkdirs() }
+        val exportFile = File(auditDir, buildSyncAuditExportFileName(nowMillis))
+        exportFile.writeText(content, Charsets.UTF_8)
+        return CommissioningSyncAuditExportResult(
+            exportPath = exportFile.absolutePath,
+            generatedAtMillis = nowMillis,
+            rowCount = rowCount,
+        )
+    }
+
     private fun ensurePhotoDirectory(sessionId: String): File =
         File(appContext.filesDir, "commissioning/$sessionId/photos").apply { mkdirs() }
 
@@ -220,3 +241,6 @@ class CommissioningArtifactStore(
 
 internal fun buildCameraPhotoFileName(timestampMillis: Long): String =
     "camera-$timestampMillis.jpg"
+
+internal fun buildSyncAuditExportFileName(timestampMillis: Long): String =
+    "sync-audit-$timestampMillis.json"

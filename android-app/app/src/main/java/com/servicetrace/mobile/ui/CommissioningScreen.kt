@@ -104,6 +104,7 @@ fun CommissioningScreen(
         onSelectUsbDevice = viewModel::selectUsbDevice,
         onRequestUsbPermission = viewModel::requestUsbPermission,
         onConnectToMcu = viewModel::connectToMcu,
+        onExportSyncAudit = viewModel::exportSyncAudit,
         onCapturePhoto = {
             val pendingCapture = viewModel.prepareCameraCapture()
             if (pendingCapture != null) {
@@ -142,6 +143,7 @@ private fun CommissioningScreen(
     onSelectUsbDevice: (String) -> Unit,
     onRequestUsbPermission: () -> Unit,
     onConnectToMcu: () -> Unit,
+    onExportSyncAudit: (SyncAuditFilter, Boolean) -> Unit,
     onCapturePhoto: () -> Unit,
     onAddPhotoFromGallery: () -> Unit,
     onRemovePhoto: (String) -> Unit,
@@ -202,7 +204,11 @@ private fun CommissioningScreen(
             SyncAuditSection(
                 drafts = uiState.drafts,
                 selectedSessionId = uiState.selectedDraft?.sessionId,
+                lastAuditExportPath = uiState.lastAuditExportPath,
+                lastAuditExportAtMillis = uiState.lastAuditExportAtMillis,
+                lastAuditExportRowCount = uiState.lastAuditExportRowCount,
                 onSelectDraft = onSelectDraft,
+                onExportSyncAudit = onExportSyncAudit,
             )
             HorizontalDivider()
             DraftEditorSection(
@@ -235,7 +241,11 @@ private fun CommissioningScreen(
 private fun SyncAuditSection(
     drafts: List<ServiceSessionDraft>,
     selectedSessionId: String?,
+    lastAuditExportPath: String?,
+    lastAuditExportAtMillis: Long?,
+    lastAuditExportRowCount: Int,
     onSelectDraft: (String) -> Unit,
+    onExportSyncAudit: (SyncAuditFilter, Boolean) -> Unit,
 ) {
     var filterName by rememberSaveable { mutableStateOf(SyncAuditFilter.ALL.name) }
     var onlySelectedDraft by rememberSaveable { mutableStateOf(false) }
@@ -286,6 +296,25 @@ private fun SyncAuditSection(
                     "Pelny audyt pokazuje wszystkie lokalnie zapisane proby syncu wraz ze zrodlem uruchomienia, kodem bledu i metadanymi backendu po sukcesie.",
                     style = MaterialTheme.typography.bodySmall,
                 )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Button(
+                        onClick = { onExportSyncAudit(activeFilter, onlySelectedDraft) },
+                        enabled = filteredRows.isNotEmpty(),
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text("Eksportuj JSON audytu")
+                    }
+                }
+                if (lastAuditExportPath != null && lastAuditExportAtMillis != null) {
+                    Text(
+                        "Ostatni eksport: ${formatTimestamp(lastAuditExportAtMillis)} ($lastAuditExportRowCount wpisow)",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Text(lastAuditExportPath, style = MaterialTheme.typography.bodySmall)
+                }
                 if (filteredRows.isEmpty()) {
                     Text(
                         "Brak wpisow dla aktualnego filtra audytu.",

@@ -3,6 +3,8 @@ package com.servicetrace.mobile.ui
 import com.servicetrace.mobile.model.ServiceSessionDraft
 import com.servicetrace.mobile.model.SyncAttemptHistoryEntry
 import com.servicetrace.mobile.model.SyncAttemptResult
+import org.json.JSONArray
+import org.json.JSONObject
 
 enum class SyncAuditFilter {
     ALL,
@@ -55,6 +57,43 @@ internal fun buildBackendSyncSummary(attempt: SyncAttemptHistoryEntry): String? 
     }
     return if (parts.isEmpty()) null else parts.joinToString(" | ")
 }
+
+internal fun buildSyncAuditJson(
+    rows: List<SyncAuditRow>,
+    filter: SyncAuditFilter,
+    exportedAtMillis: Long,
+    selectedSessionId: String?,
+): String = JSONObject().apply {
+    put("exported_at_millis", exportedAtMillis)
+    put("filter", filter.name)
+    put("selected_session_id", selectedSessionId ?: JSONObject.NULL)
+    put("entry_count", rows.size)
+    put("rows", JSONArray().apply {
+        rows.forEach { row ->
+            put(
+                JSONObject().apply {
+                    put("session_id", row.sessionId)
+                    put("device_serial_number", row.deviceSerialNumber)
+                    put("device_type", row.deviceType)
+                    put("technician_id", row.technicianId)
+                    put("attempt_id", row.attempt.attemptId)
+                    put("attempted_at_millis", row.attempt.attemptedAtMillis)
+                    put("trigger_source", row.attempt.triggerSource.name)
+                    put("result", row.attempt.result.name)
+                    put("failure_code", row.attempt.failureCode.name)
+                    put("message", row.attempt.message)
+                    put("retryable", row.attempt.retryable)
+                    put("attempt_number", row.attempt.attemptNumber)
+                    put("backend_service_session_id", row.attempt.backendServiceSessionId ?: JSONObject.NULL)
+                    put("backend_upload_status", row.attempt.backendUploadStatus ?: JSONObject.NULL)
+                    put("backend_package_hash", row.attempt.backendPackageHash ?: JSONObject.NULL)
+                    put("backend_upload_correlation_id", row.attempt.backendUploadCorrelationId ?: JSONObject.NULL)
+                    put("backend_uploaded_at", row.attempt.backendUploadedAtIso ?: JSONObject.NULL)
+                },
+            )
+        }
+    })
+}.toString(2)
 
 internal fun syncAuditFilterLabel(filter: SyncAuditFilter): String =
     when (filter) {
