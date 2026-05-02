@@ -1192,6 +1192,8 @@ export function App() {
         device: selectedDevice,
         details: deviceDetails,
         queueShortcuts: deviceQueueShortcuts,
+        shipmentFilters,
+        componentFilters,
         loadState: deviceDetailsState,
         errorMessage: deviceDetailsError,
         actionState: deviceActionState,
@@ -2093,6 +2095,8 @@ interface DeviceDetailsViewProps {
   device: DeviceSelection;
   details: DeviceDetailsPayload | null;
   queueShortcuts: DeviceDetailsQueueShortcuts | null;
+  shipmentFilters: ShipmentFilters;
+  componentFilters: ComponentFilters;
   loadState: LoadState;
   errorMessage: string | null;
   actionState: LoadState;
@@ -2314,6 +2318,8 @@ function DeviceDetailsSurface({
   device,
   details,
   queueShortcuts,
+  shipmentFilters,
+  componentFilters,
   loadState,
   errorMessage,
   actionState,
@@ -3187,6 +3193,17 @@ function DeviceDetailsSurface({
                             : null,
                         )}
                       </span>
+                      {enableRecordDeepLinks ? (
+                        <QueueShortcutList
+                          compact
+                          links={buildShipmentHistoryQueueShortcuts({
+                            event,
+                            deviceType,
+                            shipmentFilters,
+                            componentFilters,
+                          })}
+                        />
+                      ) : null}
                     </article>
                   ))}
                 </div>
@@ -3266,11 +3283,17 @@ function InlineListCard({
 
 function QueueShortcutList({
   links,
+  compact = false,
 }: {
   links: QueueShortcutLink[];
+  compact?: boolean;
 }) {
+  if (links.length === 0) {
+    return null;
+  }
+
   return (
-    <div className="details-shortcut-list">
+    <div className={`details-shortcut-list ${compact ? "is-compact" : ""}`}>
       {links.map((link) => (
         <a className="details-queue-link" href={link.href} key={link.href}>
           <strong>{link.label}</strong>
@@ -4410,6 +4433,8 @@ function buildShipmentQueueShortcutHref({
   recommendedAction,
   onlyBlocked,
   onlyReady,
+  productionStatus = "",
+  latestGateResult = "",
 }: {
   deviceType: string;
   shipmentFilters: ShipmentFilters;
@@ -4418,6 +4443,8 @@ function buildShipmentQueueShortcutHref({
   recommendedAction: string;
   onlyBlocked: boolean;
   onlyReady: boolean;
+  productionStatus?: string;
+  latestGateResult?: string;
 }): string {
   return buildDashboardLocationHref({
     pathname: "/",
@@ -4425,8 +4452,10 @@ function buildShipmentQueueShortcutHref({
     shipmentFilters: sanitizeShipmentFilters({
       ...DEFAULT_SHIPMENT_FILTERS,
       device_type: deviceType,
+      production_status: productionStatus,
       primary_blocking_code: primaryBlockingCode,
       recommended_action: recommendedAction,
+      latest_gate_result: latestGateResult,
       only_blocked: onlyBlocked,
       only_ready: onlyReady,
     }),
@@ -4469,6 +4498,66 @@ function dedupeQueueShortcutLinks(
   return Array.from(
     new Map(links.map((link) => [link.href, link])).values(),
   );
+}
+
+function buildShipmentHistoryQueueShortcuts({
+  event,
+  deviceType,
+  shipmentFilters,
+  componentFilters,
+}: {
+  event: AuditEvent;
+  deviceType: string;
+  shipmentFilters: ShipmentFilters;
+  componentFilters: ComponentFilters;
+}): QueueShortcutLink[] {
+  const links: QueueShortcutLink[] = [];
+
+  if (
+    typeof event.result === "string" &&
+    SHIPMENT_GATE_RESULT_OPTIONS.includes(event.result)
+  ) {
+    links.push({
+      href: buildShipmentQueueShortcutHref({
+        deviceType,
+        shipmentFilters,
+        componentFilters,
+        primaryBlockingCode: "",
+        recommendedAction: "",
+        productionStatus: "",
+        latestGateResult: event.result,
+        onlyBlocked: event.result === "BLOCKED",
+        onlyReady: false,
+      }),
+      label: "Pokaż urządzenia z tym samym wynikiem gate",
+      caption: `${labelForCode(event.result)} · ${deviceType}`,
+    });
+  }
+
+  const requestedStatus =
+    typeof event.payload?.requested_status === "string"
+      ? event.payload.requested_status
+      : "";
+
+  if (PRODUCTION_STATUS_OPTIONS.includes(requestedStatus)) {
+    links.push({
+      href: buildShipmentQueueShortcutHref({
+        deviceType,
+        shipmentFilters,
+        componentFilters,
+        primaryBlockingCode: "",
+        recommendedAction: "",
+        productionStatus: requestedStatus,
+        latestGateResult: "",
+        onlyBlocked: false,
+        onlyReady: false,
+      }),
+      label: "Pokaż urządzenia z tym samym żądanym statusem",
+      caption: `${labelForCode(requestedStatus)} · ${deviceType}`,
+    });
+  }
+
+  return dedupeQueueShortcutLinks(links);
 }
 
 function toAnchorToken(value: string): string {

@@ -798,6 +798,10 @@ td span {
   gap: 10px;
 }
 
+.details-shortcut-list.is-compact {
+  gap: 8px;
+}
+
 .detail-inline-card,
 .detail-component-card,
 .detail-history-card {
@@ -892,6 +896,14 @@ td span {
 .details-queue-link span {
   color: var(--muted);
   font-size: 0.88rem;
+}
+
+.details-shortcut-list.is-compact .details-queue-link {
+  padding: 10px 12px;
+}
+
+.details-shortcut-list.is-compact .details-queue-link span {
+  font-size: 0.82rem;
 }
 
 .empty-state {

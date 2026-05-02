@@ -109,6 +109,8 @@ Pełny widok urządzenia zawiera też skróty do gotowych, przefiltrowanych
 kolejek powiązanych z bieżącym problemem, np. do tej samej blokady
 wysyłkowej, tej samej akcji komponentowej albo tego samego typu
 blokującego komponentu.
+Historia shipment gate ma dodatkowo własne skróty do kolejek z tym samym
+wynikiem gate albo tym samym żądanym statusem urządzenia.
 
 ## Walidacja
 
