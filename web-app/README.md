@@ -44,8 +44,9 @@ zbiorcze akcje `Oznacz gotowe`, `Oznacz wysłane` oraz zamykanie krytycznych
 `NCR` urządzeń, jeśli zaznaczone urządzenia spełniają warunki odpowiedniego
 workflow.
 
-Kolejka `Komponenty` wspiera też zbiorcze zamykanie krytycznych NCR
-komponentów dla zaznaczonych urządzeń na bieżącej stronie.
+Kolejka `Komponenty` wspiera też zbiorczy `QC PASS` dla zaznaczonych urządzeń
+z aktywną sesją jakościową oraz zbiorcze zamykanie krytycznych NCR komponentów
+na bieżącej stronie.
 
 Kliknięcie numeru seryjnego w tabeli otwiera drawer szczegółów urządzenia.
 Drawer łączy dane z shipment readiness, component quality i historii shipment

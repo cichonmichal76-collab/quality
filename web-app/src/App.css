@@ -561,6 +561,15 @@ select:focus {
   color: var(--ink);
 }
 
+.bulk-action-session-row {
+  display: grid;
+  gap: 8px;
+}
+
+.bulk-action-field {
+  max-width: 28rem;
+}
+
 .bulk-action-buttons {
   display: flex;
   gap: 10px;

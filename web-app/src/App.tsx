@@ -479,6 +479,11 @@ export function App() {
   const selectedComponentNcrCandidateDevices = selectedComponentDevices.filter(
     (device) => device.primary_quality_status === "CRITICAL_NCR_OPEN",
   );
+  const selectedComponentQcCandidateDevices = selectedComponentDevices.filter(
+    (device) =>
+      device.recommended_action === "RUN_COMPONENT_QC_OR_REWORK" &&
+      device.primary_blocking_component_serial_number !== null,
+  );
   const hasSelectedAllVisibleComponentRows =
     visibleComponentDevices.length > 0 &&
     visibleComponentDevices.every((device) =>
@@ -492,10 +497,14 @@ export function App() {
     deviceDetails?.shipment.recommended_action === "RUN_FINAL_TEST";
   const requiresComponentQcAction =
     deviceDetails?.component.recommended_action === "RUN_COMPONENT_QC_OR_REWORK";
+  const requiresBulkComponentQcActionContext =
+    activeView === "components" && selectedComponentQcCandidateDevices.length > 0;
   const requiresOperatorActionContext =
     requiresCompleteAssemblyAction ||
     requiresFinalTestAction ||
     requiresComponentQcAction;
+  const shouldLoadActionContext =
+    requiresOperatorActionContext || requiresBulkComponentQcActionContext;
   const finalTestSessionOptions = buildActionWorkSessionOptions(
     workSessions,
     operators,
@@ -1044,6 +1053,104 @@ export function App() {
     setSelectedComponentSerials([]);
   };
 
+  const recordSelectedComponentQueueQcPass = async () => {
+    if (isComponentBulkActionLoading) {
+      return;
+    }
+
+    if (!apiBaseUrl.trim()) {
+      setComponentBulkActionState("error");
+      setComponentBulkActionError("Podaj bazowy adres API.");
+      setComponentBulkActionSuccess(null);
+      return;
+    }
+
+    if (!selectedQualitySession) {
+      setComponentBulkActionState("error");
+      setComponentBulkActionError(
+        "Wybierz aktywną sesję jakościową z uprawnioną rolą.",
+      );
+      setComponentBulkActionSuccess(null);
+      return;
+    }
+
+    if (selectedComponentQcCandidateDevices.length === 0) {
+      setComponentBulkActionState("error");
+      setComponentBulkActionError(
+        "W zaznaczeniu nie ma urządzeń gotowych do zbiorczego QC PASS.",
+      );
+      setComponentBulkActionSuccess(null);
+      return;
+    }
+
+    setComponentBulkActionState("loading");
+    setComponentBulkActionError(null);
+    setComponentBulkActionSuccess(null);
+
+    let updatedDeviceCount = 0;
+    const failedSerials: string[] = [];
+
+    for (const device of selectedComponentQcCandidateDevices) {
+      try {
+        const details = await fetchJson<DeviceComponentQuality>(
+          joinApiUrl(
+            apiBaseUrl.trim(),
+            `/devices/${encodeURIComponent(device.device_serial_number)}/component-quality`,
+          ),
+        );
+        const blockingComponent =
+          (details.components ?? []).find(
+            (componentRow) =>
+              componentRow.component_serial_number ===
+              details.primary_blocking_component_serial_number,
+          ) ?? null;
+
+        if (!blockingComponent) {
+          failedSerials.push(device.device_serial_number);
+          continue;
+        }
+
+        const qcRun = await createQcRun(apiBaseUrl.trim(), {
+          run_id: buildClientRunId("QC-WEB", blockingComponent.component_serial_number),
+          device_serial_number: device.device_serial_number,
+          item_serial_number: blockingComponent.component_serial_number,
+          barcode_value: blockingComponent.child_barcode_value,
+          process_stage: "COMPONENT_QC",
+          work_session_id: selectedQualitySession.workSessionId,
+        });
+        await completeQcRun(apiBaseUrl.trim(), qcRun.run_id, "PASS");
+        updatedDeviceCount += 1;
+      } catch {
+        failedSerials.push(device.device_serial_number);
+      }
+    }
+
+    if (updatedDeviceCount > 0) {
+      setRefreshVersion((previous) => previous + 1);
+      setComponentBulkActionSuccess(
+        `Zapisano zbiorczy komponentowy QC PASS dla ${formatNumber(
+          updatedDeviceCount,
+        )} urządzeń.`,
+      );
+    }
+
+    if (failedSerials.length > 0) {
+      setComponentBulkActionState("error");
+      setComponentBulkActionError(
+        `Nie udało się zapisać zbiorczego QC PASS dla ${formatNumber(
+          failedSerials.length,
+        )} urządzeń: ${failedSerials.slice(0, 3).join(", ")}${
+          failedSerials.length > 3 ? " i więcej." : "."
+        }`,
+      );
+      setSelectedComponentSerials(failedSerials);
+      return;
+    }
+
+    setComponentBulkActionState("loaded");
+    setSelectedComponentSerials([]);
+  };
+
   const selectDevice = (device: {
     device_serial_number: string;
     device_type: string;
@@ -1345,7 +1452,10 @@ export function App() {
   }, [apiBaseUrl, refreshVersion, selectedDeviceSerial]);
 
   useEffect(() => {
-    if (!selectedDeviceSerial || !requiresOperatorActionContext) {
+    if (
+      !shouldLoadActionContext ||
+      (!selectedDeviceSerial && !requiresBulkComponentQcActionContext)
+    ) {
       setWorkSessions([]);
       setOperators([]);
       setActionContextState("idle");
@@ -1397,7 +1507,13 @@ export function App() {
       isCurrentRequest = false;
       controller.abort();
     };
-  }, [apiBaseUrl, requiresOperatorActionContext, selectedDeviceSerial]);
+  }, [
+    apiBaseUrl,
+    requiresBulkComponentQcActionContext,
+    requiresOperatorActionContext,
+    selectedDeviceSerial,
+    shouldLoadActionContext,
+  ]);
 
   useEffect(() => {
     if (finalTestSessionOptions.length === 0) {
@@ -2258,11 +2374,24 @@ export function App() {
                 componentNcrSelectionCount={
                   selectedComponentNcrCandidateDevices.length
                 }
+                componentQcSelectionCount={
+                  selectedComponentQcCandidateDevices.length
+                }
+                actionContextState={actionContextState}
+                actionContextError={actionContextError}
+                qualitySessionOptions={qualitySessionOptions}
+                selectedQualitySessionId={
+                  selectedQualitySession?.workSessionId ?? ""
+                }
+                onSelectQualitySession={setSelectedQualitySessionId}
                 onToggleComponentSelection={toggleComponentSelection}
                 onToggleAllComponentSelections={
                   toggleAllVisibleComponentSelections
                 }
                 onClearComponentSelections={clearComponentSelections}
+                onRecordSelectedComponentQcPass={
+                  recordSelectedComponentQueueQcPass
+                }
                 onCloseSelectedComponentNcrs={
                   closeSelectedComponentQueueCriticalNcrs
                 }
@@ -2720,9 +2849,16 @@ function ComponentDashboard({
   bulkActionError,
   bulkActionSuccess,
   componentNcrSelectionCount,
+  componentQcSelectionCount,
+  actionContextState,
+  actionContextError,
+  qualitySessionOptions,
+  selectedQualitySessionId,
+  onSelectQualitySession,
   onToggleComponentSelection,
   onToggleAllComponentSelections,
   onClearComponentSelections,
+  onRecordSelectedComponentQcPass,
   onCloseSelectedComponentNcrs,
 }: {
   data: DeviceComponentQualityQueue | null;
@@ -2742,9 +2878,16 @@ function ComponentDashboard({
   bulkActionError: string | null;
   bulkActionSuccess: string | null;
   componentNcrSelectionCount: number;
+  componentQcSelectionCount: number;
+  actionContextState: LoadState;
+  actionContextError: string | null;
+  qualitySessionOptions: ActionWorkSessionOption[];
+  selectedQualitySessionId: string;
+  onSelectQualitySession: (workSessionId: string) => void;
   onToggleComponentSelection: (serialNumber: string) => void;
   onToggleAllComponentSelections: () => void;
   onClearComponentSelections: () => void;
+  onRecordSelectedComponentQcPass: () => void;
   onCloseSelectedComponentNcrs: () => void;
 }) {
   const totalDevices = data?.total_devices ?? 0;
@@ -2817,6 +2960,13 @@ function ComponentDashboard({
         actionSuccess={bulkActionSuccess}
         onToggleAll={onToggleAllComponentSelections}
         onClearSelection={onClearComponentSelections}
+        componentQcSelectionCount={componentQcSelectionCount}
+        actionContextState={actionContextState}
+        actionContextError={actionContextError}
+        qualitySessionOptions={qualitySessionOptions}
+        selectedQualitySessionId={selectedQualitySessionId}
+        onSelectQualitySession={onSelectQualitySession}
+        onRecordSelectedQcPass={onRecordSelectedComponentQcPass}
         onCloseSelectedNcrs={onCloseSelectedComponentNcrs}
       />
 
@@ -3025,23 +3175,37 @@ function ComponentBulkActionsBar({
   isLoading,
   selectedCount,
   componentNcrSelectionCount,
+  componentQcSelectionCount,
   hasSelectedAllVisibleRows,
   actionState,
   actionError,
   actionSuccess,
+  actionContextState,
+  actionContextError,
+  qualitySessionOptions,
+  selectedQualitySessionId,
   onToggleAll,
+  onSelectQualitySession,
   onClearSelection,
+  onRecordSelectedQcPass,
   onCloseSelectedNcrs,
 }: {
   isLoading: boolean;
   selectedCount: number;
   componentNcrSelectionCount: number;
+  componentQcSelectionCount: number;
   hasSelectedAllVisibleRows: boolean;
   actionState: LoadState;
   actionError: string | null;
   actionSuccess: string | null;
+  actionContextState: LoadState;
+  actionContextError: string | null;
+  qualitySessionOptions: ActionWorkSessionOption[];
+  selectedQualitySessionId: string;
   onToggleAll: () => void;
+  onSelectQualitySession: (workSessionId: string) => void;
   onClearSelection: () => void;
+  onRecordSelectedQcPass: () => void;
   onCloseSelectedNcrs: () => void;
 }) {
   const isActionLoading = actionState === "loading";
@@ -3067,11 +3231,70 @@ function ComponentBulkActionsBar({
           <span>
             Z krytycznym NCR: {formatNumber(componentNcrSelectionCount)}
           </span>
+          <span>
+            Gotowe do QC PASS: {formatNumber(componentQcSelectionCount)}
+          </span>
         </div>
       </div>
+      {componentQcSelectionCount > 0 ? (
+        <div className="bulk-action-session-row">
+          <label className="field bulk-action-field">
+            <span>Sesja QC dla akcji zbiorczej</span>
+            <select
+              value={selectedQualitySessionId}
+              onChange={(event) => onSelectQualitySession(event.target.value)}
+              disabled={
+                isLoading ||
+                isActionLoading ||
+                actionContextState === "loading" ||
+                qualitySessionOptions.length === 0
+              }
+            >
+              {qualitySessionOptions.length === 0 ? (
+                <option value="">
+                  {actionContextState === "loading"
+                    ? "Ładowanie aktywnych sesji..."
+                    : "Brak aktywnej sesji jakościowej"}
+                </option>
+              ) : (
+                qualitySessionOptions.map((session) => (
+                  <option key={session.workSessionId} value={session.workSessionId}>
+                    {session.label}
+                  </option>
+                ))
+              )}
+            </select>
+          </label>
+          {actionContextError ? (
+            <span className="action-hint">{actionContextError}</span>
+          ) : qualitySessionOptions.length === 0 &&
+            actionContextState !== "loading" ? (
+            <span className="action-hint">
+              Brak aktywnej sesji z rolą jakościową. Uruchom sesję
+              `QUALITY_INSPECTOR` albo `QUALITY_MANAGER`.
+            </span>
+          ) : null}
+        </div>
+      ) : null}
       <div className="bulk-action-buttons">
         <button
           className="primary-button"
+          type="button"
+          onClick={onRecordSelectedQcPass}
+          disabled={
+            componentQcSelectionCount === 0 ||
+            isLoading ||
+            isActionLoading ||
+            actionContextState === "loading" ||
+            selectedQualitySessionId === ""
+          }
+        >
+          {isActionLoading
+            ? "Przetwarzam..."
+            : `Zapisz QC PASS (${formatNumber(componentQcSelectionCount)})`}
+        </button>
+        <button
+          className="ghost-button"
           type="button"
           onClick={onCloseSelectedNcrs}
           disabled={
