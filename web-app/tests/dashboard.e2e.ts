@@ -81,6 +81,49 @@ test("dashboard paginates shipment and component queues", async ({ page }) => {
   await expect(componentTable.getByText(/CN-E2E-/)).toBeVisible();
 });
 
+test("dashboard applies summary filters from shipment and component actions", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  await expect(page.getByText("API OK")).toBeVisible();
+
+  await page.locator(".filters-card input").first().fill("DEMO-E2E");
+  const shipmentActions = page
+    .locator(".summary-panel")
+    .filter({ hasText: "Akcje operacyjne" })
+    .first();
+
+  await shipmentActions
+    .getByRole("button", { name: /Uruchom final test/i })
+    .click();
+
+  await expect(page).toHaveURL(/ship_device_type=DEMO-E2E/);
+  await expect(page).toHaveURL(/ship_recommended_action=RUN_FINAL_TEST/);
+  await expect(page).toHaveURL(/ship_only_blocked=true/);
+  await expect(page.locator(".table-card tbody tr")).toHaveCount(1);
+  await expect(page.locator(".table-card")).toContainText(/TEST-E2E-/);
+
+  await page.getByRole("button", { name: "Komponenty" }).click();
+  await page.locator(".filters-card input").first().fill("DEMO-E2E");
+  const componentActions = page
+    .locator(".summary-panel")
+    .filter({ hasText: "Akcje operacyjne" })
+    .first();
+
+  await componentActions
+    .getByRole("button", { name: /Uruchom QC komponentu \/ rework/i })
+    .click();
+
+  await expect(page).toHaveURL(/comp_device_type=DEMO-E2E/);
+  await expect(
+    page,
+  ).toHaveURL(/comp_recommended_action=RUN_COMPONENT_QC_OR_REWORK/);
+  await expect(page).toHaveURL(/comp_only_blocking=true/);
+  await expect(page.locator(".table-card tbody tr")).toHaveCount(1);
+  await expect(page.locator(".table-card")).toContainText(/CQ-E2E-/);
+});
+
 test("dashboard clamps limit filters before calling the API", async ({
   page,
 }) => {

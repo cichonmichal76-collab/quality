@@ -1154,6 +1154,40 @@ export function App() {
     });
   };
 
+  const applyShipmentSummaryFilter = (
+    partialFilters: Partial<ShipmentFilters>,
+  ) => {
+    const nextFilters = sanitizeShipmentFilters({
+      ...DEFAULT_SHIPMENT_FILTERS,
+      device_type: shipmentFilters.device_type,
+      variant_code: shipmentFilters.variant_code,
+      sort_by: shipmentFilters.sort_by,
+      sort_desc: shipmentFilters.sort_desc,
+      limit: shipmentFilters.limit,
+      ...partialFilters,
+      offset: 0,
+    });
+    setShipmentFilters(nextFilters);
+    flushShipmentRequestFilters(nextFilters);
+  };
+
+  const applyComponentSummaryFilter = (
+    partialFilters: Partial<ComponentFilters>,
+  ) => {
+    const nextFilters = {
+      ...DEFAULT_COMPONENT_FILTERS,
+      device_type: componentFilters.device_type,
+      variant_code: componentFilters.variant_code,
+      sort_by: componentFilters.sort_by,
+      sort_desc: componentFilters.sort_desc,
+      limit: componentFilters.limit,
+      ...partialFilters,
+      offset: 0,
+    } as ComponentFilters;
+    setComponentFilters(nextFilters);
+    flushComponentRequestFilters(nextFilters);
+  };
+
   const resetStoredDashboardState = () => {
     localStorage.removeItem(API_STORAGE_KEY);
     localStorage.removeItem(VIEW_STORAGE_KEY);
@@ -1339,6 +1373,25 @@ export function App() {
                 data={shipmentData}
                 isLoading={loadState === "loading"}
                 onPageChange={(offset) => updateShipmentFilter("offset", offset)}
+                onSelectBlockingCode={(code) =>
+                  applyShipmentSummaryFilter({
+                    primary_blocking_code: code,
+                    only_blocked: true,
+                  })
+                }
+                onSelectRecommendedAction={(action) =>
+                  applyShipmentSummaryFilter({
+                    recommended_action: action,
+                    only_blocked: action !== "MARK_READY_FOR_SHIPMENT",
+                    only_ready: action === "MARK_READY_FOR_SHIPMENT",
+                  })
+                }
+                onSelectLatestGateResult={(result) =>
+                  applyShipmentSummaryFilter({
+                    latest_gate_result: result,
+                    only_blocked: result === "BLOCKED",
+                  })
+                }
                 fallbackLimit={shipmentFilters.limit}
                 onSelectDevice={selectDevice}
                 selectedDeviceSerial={selectedDeviceSerial}
@@ -1357,6 +1410,24 @@ export function App() {
                 data={componentData}
                 isLoading={loadState === "loading"}
                 onPageChange={(offset) => updateComponentFilter("offset", offset)}
+                onSelectBlockingComponentType={(componentType) =>
+                  applyComponentSummaryFilter({
+                    blocking_component_type: componentType,
+                    only_blocking: true,
+                  })
+                }
+                onSelectPrimaryQualityStatus={(primaryQualityStatus) =>
+                  applyComponentSummaryFilter({
+                    primary_quality_status: primaryQualityStatus,
+                    only_blocking: primaryQualityStatus !== "PASS",
+                  })
+                }
+                onSelectRecommendedAction={(action) =>
+                  applyComponentSummaryFilter({
+                    recommended_action: action,
+                    only_blocking: action !== "NO_ACTION",
+                  })
+                }
                 fallbackLimit={componentFilters.limit}
                 onSelectDevice={selectDevice}
                 selectedDeviceSerial={selectedDeviceSerial}
@@ -1619,6 +1690,9 @@ function ShipmentDashboard({
   data,
   isLoading,
   onPageChange,
+  onSelectBlockingCode,
+  onSelectRecommendedAction,
+  onSelectLatestGateResult,
   fallbackLimit,
   onSelectDevice,
   selectedDeviceSerial,
@@ -1626,6 +1700,9 @@ function ShipmentDashboard({
   data: DeviceShipmentQueue | null;
   isLoading: boolean;
   onPageChange: (offset: number) => void;
+  onSelectBlockingCode: (code: string) => void;
+  onSelectRecommendedAction: (action: string) => void;
+  onSelectLatestGateResult: (result: string) => void;
   fallbackLimit: number;
   onSelectDevice: (device: DeviceShipmentReadiness) => void;
   selectedDeviceSerial: string | null;
@@ -1664,6 +1741,7 @@ function ShipmentDashboard({
           getKey={(item) => item.code}
           getCount={(item) => item.device_count}
           getCaption={(item) => item.message ?? "Brak opisu blokady"}
+          onSelect={(item) => onSelectBlockingCode(item.code)}
         />
         <SummaryPanel
           title="Akcje operacyjne"
@@ -1671,6 +1749,7 @@ function ShipmentDashboard({
           emptyMessage="Brak akcji"
           getKey={(item) => item.recommended_action}
           getCount={(item) => item.device_count}
+          onSelect={(item) => onSelectRecommendedAction(item.recommended_action)}
         />
         <SummaryPanel
           title="Ostatni shipment gate"
@@ -1678,6 +1757,7 @@ function ShipmentDashboard({
           emptyMessage="Brak historii gate"
           getKey={(item) => item.result}
           getCount={(item) => item.device_count}
+          onSelect={(item) => onSelectLatestGateResult(item.result)}
         />
       </div>
 
@@ -1716,6 +1796,9 @@ function ComponentDashboard({
   data,
   isLoading,
   onPageChange,
+  onSelectBlockingComponentType,
+  onSelectPrimaryQualityStatus,
+  onSelectRecommendedAction,
   fallbackLimit,
   onSelectDevice,
   selectedDeviceSerial,
@@ -1723,6 +1806,9 @@ function ComponentDashboard({
   data: DeviceComponentQualityQueue | null;
   isLoading: boolean;
   onPageChange: (offset: number) => void;
+  onSelectBlockingComponentType: (componentType: string) => void;
+  onSelectPrimaryQualityStatus: (primaryQualityStatus: string) => void;
+  onSelectRecommendedAction: (action: string) => void;
   fallbackLimit: number;
   onSelectDevice: (device: DeviceComponentQuality) => void;
   selectedDeviceSerial: string | null;
@@ -1763,6 +1849,7 @@ function ComponentDashboard({
           getCaption={(item) =>
             `${formatNumber(item.component_count)} komponentów`
           }
+          onSelect={(item) => onSelectBlockingComponentType(item.component_type)}
         />
         <SummaryPanel
           title="Główny status jakości"
@@ -1770,6 +1857,9 @@ function ComponentDashboard({
           emptyMessage="Brak statusów"
           getKey={(item) => item.primary_quality_status}
           getCount={(item) => item.device_count}
+          onSelect={(item) =>
+            onSelectPrimaryQualityStatus(item.primary_quality_status)
+          }
         />
         <SummaryPanel
           title="Akcje operacyjne"
@@ -1777,6 +1867,7 @@ function ComponentDashboard({
           emptyMessage="Brak akcji"
           getKey={(item) => item.recommended_action}
           getCount={(item) => item.device_count}
+          onSelect={(item) => onSelectRecommendedAction(item.recommended_action)}
         />
       </div>
 
@@ -3379,6 +3470,7 @@ function SummaryPanel<Item>({
   getKey,
   getCount,
   getCaption,
+  onSelect,
 }: {
   title: string;
   items: Item[];
@@ -3386,6 +3478,7 @@ function SummaryPanel<Item>({
   getKey: (item: Item) => string | boolean | null;
   getCount: (item: Item) => number;
   getCaption?: (item: Item) => string;
+  onSelect?: (item: Item) => void;
 }) {
   const maxCount = Math.max(1, ...items.map((item) => getCount(item)));
 
@@ -3401,16 +3494,32 @@ function SummaryPanel<Item>({
             const barStyle = {
               "--bar-width": `${Math.round((count / maxCount) * 100)}%`,
             } as CSSProperties;
-
-            return (
-              <article className="summary-item" key={String(getKey(item))}>
+            const content = (
+              <>
                 <div>
                   <strong>{labelForCode(getKey(item))}</strong>
                   {getCaption ? <span>{getCaption(item)}</span> : null}
                 </div>
                 <b>{formatNumber(count)}</b>
                 <span className="summary-bar" style={barStyle} />
-              </article>
+              </>
+            );
+
+            return (
+              onSelect ? (
+                <button
+                  className="summary-item summary-item-action"
+                  key={String(getKey(item))}
+                  type="button"
+                  onClick={() => onSelect(item)}
+                >
+                  {content}
+                </button>
+              ) : (
+                <article className="summary-item" key={String(getKey(item))}>
+                  {content}
+                </article>
+              )
             );
           })}
         </div>

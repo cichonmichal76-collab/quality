@@ -1332,6 +1332,121 @@ describe("App", () => {
     );
   });
 
+  it("filters shipment queue immediately from summary action buttons", async () => {
+    const shipmentSummaryPayload: DeviceShipmentQueue = {
+      ...shipmentPayload,
+      total_devices: 1,
+      ready_count: 0,
+      blocked_count: 1,
+      recommended_action_summary: [
+        {
+          recommended_action: "RUN_FINAL_TEST",
+          device_count: 1,
+        },
+      ],
+      latest_shipment_gate_result_summary: [
+        {
+          result: "BLOCKED",
+          device_count: 1,
+        },
+      ],
+      devices: [
+        {
+          ...shipmentPayload.devices[0],
+          device_serial_number: "TEST-001",
+          production_status: "CREATED",
+          final_test_passed: false,
+          can_transition_to_ready_for_shipment: false,
+          latest_shipment_gate_decision: {
+            event_type: "SHIPMENT_GATE_BLOCKED",
+            result: "BLOCKED",
+            message: "Final test wymagany",
+            recommended_action: "RUN_FINAL_TEST",
+            created_at: "2026-05-01T09:05:00Z",
+          },
+          primary_blocking_code: "FINAL_TEST_NOT_PASSED",
+          primary_blocking_message: "Final test wymagany",
+          recommended_action: "RUN_FINAL_TEST",
+          blocking_reasons: ["Final test wymagany"],
+        },
+      ],
+    };
+    const fetchMock = vi.fn(async () => createJsonResponse(shipmentSummaryPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("TEST-001")).toBeInTheDocument();
+
+    const shipmentActionsPanel = screen
+      .getByText("Akcje operacyjne")
+      .closest("section");
+    expect(shipmentActionsPanel).not.toBeNull();
+
+    fireEvent.click(
+      within(shipmentActionsPanel as HTMLElement).getByRole("button", {
+        name: /Uruchom final test/i,
+      }),
+    );
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/shipment-readiness?recommended_action=RUN_FINAL_TEST&only_blocked=true&sort_by=created_at&sort_desc=true&limit=100",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+  });
+
+  it("filters component queue immediately from summary action buttons", async () => {
+    const componentSummaryPayload: DeviceComponentQualityQueue = {
+      ...componentPayload,
+      recommended_action_summary: [
+        {
+          recommended_action: "RUN_COMPONENT_QC_OR_REWORK",
+          device_count: 1,
+        },
+      ],
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(createJsonResponse(shipmentPayload))
+      .mockResolvedValueOnce(createJsonResponse(componentSummaryPayload))
+      .mockResolvedValueOnce(createJsonResponse(componentSummaryPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Komponenty" }));
+
+    expect(await screen.findByText("COMP-001")).toBeInTheDocument();
+
+    const componentActionsPanel = screen
+      .getByText("Akcje operacyjne")
+      .closest("section");
+    expect(componentActionsPanel).not.toBeNull();
+
+    fireEvent.click(
+      within(componentActionsPanel as HTMLElement).getByRole("button", {
+        name: /Uruchom QC komponentu \/ rework/i,
+      }),
+    );
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/component-quality?recommended_action=RUN_COMPONENT_QC_OR_REWORK&only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=100",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+  });
+
   it("opens device details drawer from shipment queue and renders fetched details", async () => {
     const fetchMock = vi
       .fn()

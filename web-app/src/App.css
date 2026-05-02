@@ -409,6 +409,25 @@ select:focus {
   padding: 11px;
 }
 
+.summary-item-action {
+  width: 100%;
+  cursor: pointer;
+  appearance: none;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+}
+
+.summary-item-action:hover {
+  border-color: rgb(177 133 47 / 70%);
+  transform: translateY(-1px);
+}
+
+.summary-item-action:focus-visible {
+  outline: 2px solid rgb(177 133 47 / 65%);
+  outline-offset: 2px;
+}
+
 .summary-item div {
   display: grid;
   gap: 2px;
