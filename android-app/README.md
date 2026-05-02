@@ -13,6 +13,7 @@
 - wybor zdjec z galerii do lokalnej sesji commissioning
 - generowanie lokalnej paczki ZIP z `manifest.json`, `draft.json`, `snapshot.json`, `checklist.json` i zdjeciami
 - kolejka synchronizacji `READY_TO_SYNC -> SYNCED` do backendu `POST /api/service-sessions/upload`
+- licznik prob synchronizacji i ostatni blad sync per sesja
 - lokalna checklista 5 krokow
 - komentarz ogolny, firmware i bootloader
 - status `DRAFT` / `READY_TO_SYNC`
@@ -29,6 +30,7 @@ Po uruchomieniu aplikacji serwisant moze:
 8. zapisac wynik lokalnie w `Room`
 9. oznaczyc sesje jako gotowa do przyszlej synchronizacji
 10. zsynchronizowac gotowe sesje do backendu po adresie API
+11. sprawdzic ostatni blad lub liczbe prob i ponowic synchronizacje
 
 Domyslny adres backendu w aplikacji to `http://10.0.2.2:8000/api`, co pasuje do emulatora Android. Na fizycznym urzadzeniu trzeba wpisac adres LAN hosta z backendem.
 
@@ -47,7 +49,7 @@ Domyslny adres backendu w aplikacji to `http://10.0.2.2:8000/api`, co pasuje do 
 1. dolozyc realny capture z kamery obok importu z galerii
 2. rozszerzyc snapshoty MCU o dodatkowe artefakty diagnostyczne
 3. zapisac konfiguracje backendu i stan sync bardziej trwale
-4. dodac retry / backoff i historie bledow synchronizacji
+4. dodac retry / backoff w tle zamiast tylko recznego ponowienia
 
 ## Poza zakresem MVP
 

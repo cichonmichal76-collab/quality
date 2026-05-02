@@ -206,6 +206,9 @@ private fun SummarySection(
     val passCount = drafts.count { draft -> draft.outcome == SessionOutcome.PASS }
     val failCount = drafts.count { draft -> draft.outcome == SessionOutcome.FAIL }
     val syncedCount = drafts.count { draft -> draft.syncStatus == SessionSyncStatus.SYNCED }
+    val syncErrorCount = drafts.count { draft ->
+        draft.lastSyncErrorMessage.isNotBlank() && draft.syncStatus != SessionSyncStatus.SYNCED
+    }
 
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -214,6 +217,7 @@ private fun SummarySection(
                 AssistChip(onClick = {}, label = { Text("Drafty: ${drafts.size}") })
                 AssistChip(onClick = {}, label = { Text("Gotowe do sync: $readyCount") })
                 AssistChip(onClick = {}, label = { Text("Synced: $syncedCount") })
+                AssistChip(onClick = {}, label = { Text("Bledy sync: $syncErrorCount") })
                 AssistChip(onClick = {}, label = { Text("PASS: $passCount") })
                 AssistChip(onClick = {}, label = { Text("FAIL: $failCount") })
             }
@@ -321,6 +325,15 @@ private fun DraftListSection(
                         draft.outcome?.let { outcome ->
                             AssistChip(onClick = {}, label = { Text("Wynik: ${outcome.name}") })
                         }
+                        if (draft.syncAttemptCount > 0) {
+                            AssistChip(onClick = {}, label = { Text("Proby sync: ${draft.syncAttemptCount}") })
+                        }
+                    }
+                    if (draft.lastSyncErrorMessage.isNotBlank()) {
+                        Text("Ostatni blad sync: ${draft.lastSyncErrorMessage}", style = MaterialTheme.typography.bodySmall)
+                    }
+                    draft.lastSyncAttemptAtMillis?.let { lastAttemptAtMillis ->
+                        Text("Ostatnia proba sync: ${formatTimestamp(lastAttemptAtMillis)}", style = MaterialTheme.typography.bodySmall)
                     }
                     Text("Aktualizacja: ${formatTimestamp(draft.updatedAtMillis)}")
                 }
@@ -405,6 +418,7 @@ private fun DraftEditorSection(
                     onRemovePhoto = onRemovePhoto,
                     onBuildPackage = onBuildPackage,
                 )
+                SyncStatusSection(draft = draft)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -481,6 +495,29 @@ private fun AttachmentsSection(
                     )
                 }
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SyncStatusSection(
+    draft: ServiceSessionDraft,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Status synchronizacji", style = MaterialTheme.typography.titleMedium)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            AssistChip(onClick = {}, label = { Text(syncLabel(draft.syncStatus)) })
+            AssistChip(onClick = {}, label = { Text("Proby: ${draft.syncAttemptCount}") })
+            draft.lastSyncSuccessAtMillis?.let { successAtMillis ->
+                AssistChip(onClick = {}, label = { Text("Ostatni sukces: ${formatTimestamp(successAtMillis)}") })
+            }
+        }
+        draft.lastSyncAttemptAtMillis?.let { attemptAtMillis ->
+            Text("Ostatnia proba: ${formatTimestamp(attemptAtMillis)}", style = MaterialTheme.typography.bodySmall)
+        }
+        if (draft.lastSyncErrorMessage.isNotBlank()) {
+            Text("Ostatni blad: ${draft.lastSyncErrorMessage}", style = MaterialTheme.typography.bodySmall)
         }
     }
 }

@@ -372,9 +372,14 @@ class CommissioningViewModel(
                     try {
                         val uploadDraft = ensurePackageForUpload(draft)
                         uploader.upload(currentBaseUrl, uploadDraft)
+                        val completedAtMillis = System.currentTimeMillis()
                         val syncedDraft = uploadDraft.copy(
                             syncStatus = SessionSyncStatus.SYNCED,
-                            updatedAtMillis = System.currentTimeMillis(),
+                            syncAttemptCount = uploadDraft.syncAttemptCount + 1,
+                            lastSyncAttemptAtMillis = completedAtMillis,
+                            lastSyncSuccessAtMillis = completedAtMillis,
+                            lastSyncErrorMessage = "",
+                            updatedAtMillis = completedAtMillis,
                         )
                         repository.saveDraft(syncedDraft)
                         if (selectedDraft.value?.sessionId == syncedDraft.sessionId) {
@@ -383,8 +388,17 @@ class CommissioningViewModel(
                         uploadedCount += 1
                     } catch (error: Exception) {
                         failedCount += 1
-                        if (selectedDraft.value?.sessionId == draft.sessionId) {
-                            selectedDraft.value = draft
+                        val failedAtMillis = System.currentTimeMillis()
+                        val failedDraft = draft.copy(
+                            syncStatus = SessionSyncStatus.READY_TO_SYNC,
+                            syncAttemptCount = draft.syncAttemptCount + 1,
+                            lastSyncAttemptAtMillis = failedAtMillis,
+                            lastSyncErrorMessage = error.message ?: "Nieznany blad synchronizacji commissioning.",
+                            updatedAtMillis = failedAtMillis,
+                        )
+                        repository.saveDraft(failedDraft)
+                        if (selectedDraft.value?.sessionId == failedDraft.sessionId) {
+                            selectedDraft.value = failedDraft
                         }
                     }
                 }
@@ -479,6 +493,7 @@ private fun ServiceSessionDraft.invalidatePackageMetadata(): ServiceSessionDraft
         packagePath = "",
         packageGeneratedAtMillis = null,
         packageEntryCount = 0,
+        lastSyncErrorMessage = "",
         syncStatus = if (syncStatus == SessionSyncStatus.SYNCED) {
             SessionSyncStatus.DRAFT
         } else {

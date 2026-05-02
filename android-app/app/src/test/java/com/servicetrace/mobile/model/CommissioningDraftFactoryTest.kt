@@ -27,6 +27,10 @@ class CommissioningDraftFactoryTest {
         assertEquals("", draft.packagePath)
         assertNull(draft.packageGeneratedAtMillis)
         assertEquals(0, draft.packageEntryCount)
+        assertEquals(0, draft.syncAttemptCount)
+        assertNull(draft.lastSyncAttemptAtMillis)
+        assertNull(draft.lastSyncSuccessAtMillis)
+        assertEquals("", draft.lastSyncErrorMessage)
         assertNull(draft.outcome)
         assertFalse(draft.readyToSync)
     }

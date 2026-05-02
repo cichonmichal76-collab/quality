@@ -15,7 +15,8 @@ Aktualnie zawiera:
 9. generator ZIP paczki commissioning
 10. klient uploadu `multipart/form-data` do backendu service sessions
 11. kolejke synchronizacji `READY_TO_SYNC -> SYNCED`
-12. testy JVM dla fabryki draftu, snapshotu, mocka MCU, serializacji paczki i normalizacji adresu API
+12. licznik prob syncu i ostatni blad per sesja
+13. testy JVM dla fabryki draftu, snapshotu, mocka MCU, serializacji paczki i normalizacji adresu API
 
 Domyslny adres backendu dla syncu to `http://10.0.2.2:8000/api`.
 
@@ -23,4 +24,4 @@ Najblizszy sensowny krok:
 
 1. dolozyc realny capture z kamery
 2. rozszerzyc snapshoty i artefakty diagnostyczne
-3. zapisac konfiguracje backendu oraz historie bledow synchronizacji
+3. zapisac konfiguracje backendu oraz historie bledow synchronizacji bardziej trwale
