@@ -1049,6 +1049,13 @@ td span {
   text-underline-offset: 0.18em;
 }
 
+.details-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
 .details-queue-link {
   display: grid;
   gap: 4px;

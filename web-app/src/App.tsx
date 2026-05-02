@@ -9,6 +9,7 @@ import {
   fetchJson,
   joinApiUrl,
   listOperators,
+  listServiceSessions,
   listWorkSessions,
   optionalBoolean,
   scanAssemblyComponent,
@@ -25,6 +26,7 @@ import type {
   DeviceShipmentReadiness,
   LoadState,
   OperatorRead,
+  ServiceSessionRead,
   QueryValue,
   WorkSessionRead,
 } from "./api";
@@ -152,6 +154,7 @@ const DEVICE_DETAILS_SECTION_IDS = {
   shipmentGate: "bramka-wysylki",
   bom: "bom",
   componentQuality: "jakosc-komponentow",
+  serviceSessions: "commissioning-serwis",
   shipmentGateHistory: "historia-gate",
 } as const;
 
@@ -171,6 +174,10 @@ const DEVICE_DETAILS_SECTION_LINKS = [
   {
     id: DEVICE_DETAILS_SECTION_IDS.componentQuality,
     label: "Jakość komponentów",
+  },
+  {
+    id: DEVICE_DETAILS_SECTION_IDS.serviceSessions,
+    label: "Commissioning i serwis",
   },
   {
     id: DEVICE_DETAILS_SECTION_IDS.shipmentGateHistory,
@@ -228,6 +235,7 @@ interface DeviceSelection {
 interface DeviceDetailsPayload {
   shipment: DeviceShipmentReadiness;
   component: DeviceComponentQuality;
+  serviceSessions: ServiceSessionRead[];
   shipmentGateHistory: AuditEvent[];
 }
 
@@ -492,11 +500,11 @@ export function App() {
   const isComponentBulkActionLoading = componentBulkActionState === "loading";
   const selectedDeviceSerial = selectedDevice?.serialNumber ?? null;
   const requiresCompleteAssemblyAction =
-    deviceDetails?.shipment.recommended_action === "COMPLETE_ASSEMBLY";
+    deviceDetails?.shipment?.recommended_action === "COMPLETE_ASSEMBLY";
   const requiresFinalTestAction =
-    deviceDetails?.shipment.recommended_action === "RUN_FINAL_TEST";
+    deviceDetails?.shipment?.recommended_action === "RUN_FINAL_TEST";
   const requiresComponentQcAction =
-    deviceDetails?.component.recommended_action === "RUN_COMPONENT_QC_OR_REWORK";
+    deviceDetails?.component?.recommended_action === "RUN_COMPONENT_QC_OR_REWORK";
   const requiresBulkComponentQcActionContext =
     activeView === "components" && selectedComponentQcCandidateDevices.length > 0;
   const requiresOperatorActionContext =
@@ -555,7 +563,7 @@ export function App() {
       })
     : null;
   const assemblyComponentTypeOptions = buildAssemblyComponentTypeOptions(
-    deviceDetails?.shipment.bom_compliance.component_coverage ?? [],
+    deviceDetails?.shipment?.bom_compliance?.component_coverage ?? [],
   );
   const deviceQueueShortcuts = deviceDetails
     ? buildDeviceDetailsQueueShortcuts({
@@ -1411,6 +1419,17 @@ export function App() {
         apiBaseUrl.trim(),
         `/devices/${encodedSerial}/shipment-gate-history`,
       ) + buildQuery({ limit: 10 });
+    const serviceSessionsPromise = listServiceSessions(
+      apiBaseUrl.trim(),
+      { device_serial_number: selectedDeviceSerial },
+      controller.signal,
+    ).catch((error: unknown) => {
+      if (isAbortError(error)) {
+        throw error;
+      }
+
+      return [] as ServiceSessionRead[];
+    });
 
     setDeviceDetails(null);
     setDeviceDetailsState("loading");
@@ -1419,9 +1438,10 @@ export function App() {
     Promise.all([
       fetchJson<DeviceShipmentReadiness>(shipmentUrl, controller.signal),
       fetchJson<DeviceComponentQuality>(componentUrl, controller.signal),
+      serviceSessionsPromise,
       fetchJson<AuditEvent[]>(historyUrl, controller.signal),
     ])
-      .then(([shipment, component, shipmentGateHistory]) => {
+      .then(([shipment, component, serviceSessions, shipmentGateHistory]) => {
         if (!isCurrentRequest) {
           return;
         }
@@ -1429,6 +1449,7 @@ export function App() {
         setDeviceDetails({
           shipment,
           component,
+          serviceSessions,
           shipmentGateHistory,
         });
         setDeviceDetailsState("loaded");
@@ -1785,10 +1806,10 @@ export function App() {
     }
 
     const blockingComponent =
-      (deviceDetails?.component.components ?? []).find(
+      (deviceDetails?.component?.components ?? []).find(
         (componentRow) =>
           componentRow.component_serial_number ===
-          deviceDetails?.component.primary_blocking_component_serial_number,
+          deviceDetails?.component?.primary_blocking_component_serial_number,
       ) ?? null;
     if (!blockingComponent) {
       setDeviceActionState("error");
@@ -1873,7 +1894,7 @@ export function App() {
 
   const closeSelectedDeviceCriticalNcrs = async () => {
     await closeSelectedNonconformities(
-      deviceDetails?.shipment.critical_open_ncr_ids ?? [],
+      deviceDetails?.shipment?.critical_open_ncr_ids ?? [],
       "urządzenia",
     );
   };
@@ -1881,7 +1902,7 @@ export function App() {
   const closeSelectedComponentCriticalNcrs = async () => {
     const ncrIds = Array.from(
       new Set(
-        (deviceDetails?.component.components ?? []).flatMap(
+        (deviceDetails?.component?.components ?? []).flatMap(
           (component) => component.critical_open_ncr_ids,
         ),
       ),
@@ -2032,6 +2053,7 @@ export function App() {
   const deviceDetailsViewProps = selectedDevice
     ? {
         device: selectedDevice,
+        apiBaseUrl,
         details: deviceDetails,
         queueShortcuts: deviceQueueShortcuts,
         shipmentFilters,
@@ -3598,6 +3620,7 @@ function ComponentTable({
 
 interface DeviceDetailsViewProps {
   device: DeviceSelection;
+  apiBaseUrl: string;
   details: DeviceDetailsPayload | null;
   queueShortcuts: DeviceDetailsQueueShortcuts | null;
   shipmentFilters: ShipmentFilters;
@@ -3636,6 +3659,7 @@ interface DeviceDetailsViewProps {
 
 function DeviceDetailsDrawer({
   device,
+  apiBaseUrl,
   details,
   queueShortcuts,
   shipmentFilters,
@@ -3692,6 +3716,7 @@ function DeviceDetailsDrawer({
       >
         <DeviceDetailsSurface
           device={device}
+          apiBaseUrl={apiBaseUrl}
           details={details}
           queueShortcuts={queueShortcuts}
           shipmentFilters={shipmentFilters}
@@ -3825,6 +3850,7 @@ function DeviceDetailsPage({
 
 function DeviceDetailsSurface({
   device,
+  apiBaseUrl,
   details,
   queueShortcuts,
   shipmentFilters,
@@ -3881,13 +3907,19 @@ function DeviceDetailsSurface({
     shipment?.device_variant_code ||
     component?.device_variant_code ||
     "Brak danych";
-  const bomCoverage = shipment?.bom_compliance.component_coverage ?? [];
+  const bomCompliance = shipment?.bom_compliance ?? null;
+  const bomCoverage = bomCompliance?.component_coverage ?? [];
   const componentRows = component?.components ?? [];
+  const serviceSessions = details?.serviceSessions ?? [];
   const historyRows = details?.shipmentGateHistory ?? [];
+  const shipmentCriticalNcrIds = shipment?.critical_open_ncr_ids ?? [];
+  const shipmentBlockingReasons = shipment?.blocking_reasons ?? [];
+  const shipmentBlockingChecks = shipment?.blocking_checks ?? [];
   const componentCriticalNcrIds = Array.from(
     new Set(componentRows.flatMap((item) => item.critical_open_ncr_ids)),
   );
-  const deviceCriticalNcrItems = shipment?.critical_open_ncr_ids.map(String) ?? [];
+  const deviceCriticalNcrItems = shipmentCriticalNcrIds.map(String);
+  const deviceCriticalNcrCount = shipmentCriticalNcrIds.length;
   const primaryBlockingComponentAnchorId =
     component?.primary_blocking_component_serial_number
       ? buildComponentAnchorId(
@@ -3910,7 +3942,6 @@ function DeviceDetailsSurface({
   const canMarkShipped =
     shipment?.production_status === "READY_FOR_SHIPMENT";
   const isAlreadyShipped = shipment?.production_status === "SHIPPED";
-  const deviceCriticalNcrCount = shipment?.critical_open_ncr_ids.length ?? 0;
   const componentCriticalNcrCount = componentCriticalNcrIds.length;
 
   return (
@@ -3934,7 +3965,7 @@ function DeviceDetailsSurface({
         <section className="details-section">
           <strong>Ładowanie szczegółów urządzenia...</strong>
           <span className="empty-copy">
-            Pobieram bramkę wysyłki, BOM, jakość komponentów i historię gate.
+            Pobieram bramkę wysyłki, BOM, jakość komponentów, sesje serwisowe i historię gate.
           </span>
         </section>
       ) : errorMessage ? (
@@ -4404,8 +4435,8 @@ function DeviceDetailsSurface({
                   {
                     label: "Krytyczne NCR urządzenia",
                     value:
-                      shipment.critical_open_ncr_ids.length > 0
-                        ? shipment.critical_open_ncr_ids.join(", ")
+                      shipmentCriticalNcrIds.length > 0
+                        ? shipmentCriticalNcrIds.join(", ")
                         : "Brak",
                   },
                   {
@@ -4423,7 +4454,7 @@ function DeviceDetailsSurface({
               <div className="details-stack">
                 <strong>Powody blokady</strong>
                 <TagList
-                  items={shipment.blocking_reasons}
+                  items={shipmentBlockingReasons}
                   emptyLabel="Brak aktywnych powodów blokady."
                 />
               </div>
@@ -4457,9 +4488,9 @@ function DeviceDetailsSurface({
               ) : null}
               <div className="details-stack">
                 <strong>Kontrole bramki</strong>
-                {shipment.blocking_checks && shipment.blocking_checks.length > 0 ? (
+                {shipmentBlockingChecks.length > 0 ? (
                   <div className="detail-inline-grid">
-                    {shipment.blocking_checks.map((check) => (
+                    {shipmentBlockingChecks.map((check) => (
                       <article
                         className="detail-inline-card"
                         key={`${check.code}-${check.message ?? ""}`}
@@ -4495,23 +4526,23 @@ function DeviceDetailsSurface({
                 items={[
                   {
                     label: "Przechodzi BOM",
-                    value: labelForCode(shipment.bom_compliance.passes_bom_gate),
+                    value: labelForCode(bomCompliance?.passes_bom_gate ?? null),
                   },
                   {
                     label: "Źródło BOM",
                     value: labelForCode(
-                      shipment.bom_compliance.resolution_source ?? null,
+                      bomCompliance?.resolution_source ?? null,
                     ),
                   },
                   {
                     label: "Wersja BOM",
                     value:
-                      shipment.bom_compliance.resolved_version ?? "Brak danych",
+                      bomCompliance?.resolved_version ?? "Brak danych",
                   },
                   {
                     label: "Status BOM",
                     value: labelForCode(
-                      shipment.bom_compliance.resolved_status ?? null,
+                      bomCompliance?.resolved_status ?? null,
                     ),
                   },
                 ]}
@@ -4519,17 +4550,17 @@ function DeviceDetailsSurface({
               <div className="detail-inline-grid">
                 <InlineListCard
                   title="Brakujące komponenty BOM"
-                  items={shipment.bom_compliance.missing_required_components}
+                  items={bomCompliance?.missing_required_components ?? []}
                   emptyLabel="Brak brakujących komponentów."
                 />
                 <InlineListCard
                   title="Nadmiarowe komponenty BOM"
-                  items={shipment.bom_compliance.over_installed_components}
+                  items={bomCompliance?.over_installed_components ?? []}
                   emptyLabel="Brak nadmiarowych komponentów."
                 />
                 <InlineListCard
                   title="Nieoczekiwane komponenty BOM"
-                  items={shipment.bom_compliance.unexpected_component_types}
+                  items={bomCompliance?.unexpected_component_types ?? []}
                   emptyLabel="Brak nieoczekiwanych komponentów."
                 />
               </div>
@@ -4686,6 +4717,76 @@ function DeviceDetailsSurface({
                   </p>
                 )}
               </div>
+            </DetailsSection>
+
+            <DetailsSection
+              title="Commissioning i serwis"
+              sectionId={DEVICE_DETAILS_SECTION_IDS.serviceSessions}
+            >
+              {serviceSessions.length > 0 ? (
+                <div className="detail-history-list">
+                  {serviceSessions.map((session) => (
+                    <article className="detail-history-card" key={session.session_id}>
+                      <div className="detail-inline-header">
+                        <CodePill value={session.upload_status} />
+                        <CodePill value={session.result} />
+                      </div>
+                      <strong>{session.session_id}</strong>
+                      <p>
+                        Technik: <code>{session.technician_id ?? "Brak danych"}</code>
+                        {" · "}
+                        Uploadów: {formatNumber(session.upload_count)}
+                      </p>
+                      <span>
+                        Ostatni upload: {formatDateTime(session.uploaded_at)}
+                      </span>
+                      <span>
+                        Trigger klienta: {labelForCode(session.client_trigger_source)}
+                        {session.client_attempt_number !== null
+                          ? ` · próba ${formatNumber(session.client_attempt_number)}`
+                          : ""}
+                      </span>
+                      <span>
+                        Firmware / bootloader:{" "}
+                        {session.firmware_version ?? "Brak danych"} /{" "}
+                        {session.bootloader_version ?? "Brak danych"}
+                      </span>
+                      <TagList
+                        items={[
+                          session.device_type ? `Typ: ${session.device_type}` : "",
+                          session.package_hash ? `Hash: ${session.package_hash}` : "",
+                          session.upload_correlation_id
+                            ? `Correlation ID: ${session.upload_correlation_id}`
+                            : "",
+                          session.client_attempt_id
+                            ? `Attempt ID: ${session.client_attempt_id}`
+                            : "",
+                        ].filter((value) => value !== "")}
+                        emptyLabel="Brak dodatkowych metadanych uploadu."
+                        compact
+                      />
+                      <div className="details-inline-actions">
+                        <a
+                          className="details-record-link"
+                          href={buildServiceSessionPackageHref(
+                            apiBaseUrl,
+                            session.session_id,
+                          )}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Pobierz paczkę ZIP
+                        </a>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <p className="empty-copy">
+                  Brak zapisanych sesji commissioning lub serwisowych dla tego
+                  urządzenia.
+                </p>
+              )}
             </DetailsSection>
 
             <DetailsSection
@@ -6132,6 +6233,16 @@ function buildDeviceDetailsPath(serialNumber: string): string {
   return `${DEVICE_DETAILS_PATH_PREFIX}${encodeURIComponent(serialNumber)}`;
 }
 
+function buildServiceSessionPackageHref(
+  apiBaseUrl: string,
+  sessionId: string,
+): string {
+  return joinApiUrl(
+    apiBaseUrl,
+    `/service-sessions/${encodeURIComponent(sessionId)}/package`,
+  );
+}
+
 function readDevicePageSerial(pathname: string): string | null {
   if (!pathname.startsWith(DEVICE_DETAILS_PATH_PREFIX)) {
     return null;
@@ -6258,7 +6369,7 @@ function buildDeviceDetailsQueueShortcuts({
   }
 
   for (const missingComponentType of shipment.bom_compliance
-    .missing_required_components) {
+    ?.missing_required_components ?? []) {
     bomLinks.push({
       href: buildShipmentQueueShortcutHref({
         deviceType,

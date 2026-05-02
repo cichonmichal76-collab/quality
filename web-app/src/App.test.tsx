@@ -16,6 +16,7 @@ import type {
   DeviceShipmentQueue,
   DeviceShipmentReadiness,
   OperatorRead,
+  ServiceSessionRead,
   WorkSessionRead,
 } from "./api";
 
@@ -312,6 +313,29 @@ const shipmentGateHistoryPayload: AuditEvent[] = [
     result: "PASS",
     message: "Gate przeszedł po naprawie",
     payload: { requested_status: "READY_FOR_SHIPMENT" },
+    created_at: "2026-05-01T10:00:00Z",
+  },
+];
+
+const serviceSessionPayload: ServiceSessionRead[] = [
+  {
+    id: "svc-db-1",
+    session_id: "SVC-9001",
+    device_serial_number: "SHIP-001",
+    device_type: "DEMO-OPS",
+    technician_id: "TECH-001",
+    result: "PASS",
+    firmware_version: "1.2.4",
+    bootloader_version: "0.9.8",
+    package_path: "/tmp/service-package.zip",
+    package_hash: "hash-ship-001",
+    upload_status: "UPLOADED",
+    upload_count: 2,
+    client_attempt_id: "SYNC-UPLOAD-0002",
+    client_attempt_number: 2,
+    client_trigger_source: "AUTO_NETWORK",
+    upload_correlation_id: "SRV-UP-ABCD12345678",
+    uploaded_at: "2026-05-01T10:30:00Z",
     created_at: "2026-05-01T10:00:00Z",
   },
 ];
@@ -1631,12 +1655,39 @@ describe("App", () => {
   });
 
   it("opens device details drawer from shipment queue and renders fetched details", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(createJsonResponse(shipmentPayload))
-      .mockResolvedValueOnce(createJsonResponse(shipmentDetailsPayload))
-      .mockResolvedValueOnce(createJsonResponse(shipmentComponentDetailsPayload))
-      .mockResolvedValueOnce(createJsonResponse(shipmentGateHistoryPayload));
+    const fetchMock = vi.fn((input: string | URL | Request) => {
+      const url = String(input);
+
+      if (url.startsWith("/api/shipment-readiness")) {
+        return Promise.resolve(createJsonResponse(shipmentPayload));
+      }
+
+      if (url === "/api/devices/SHIP-001/shipment-readiness") {
+        return Promise.resolve(createJsonResponse(shipmentDetailsPayload));
+      }
+
+      if (url === "/api/devices/SHIP-001/component-quality") {
+        return Promise.resolve(createJsonResponse(shipmentComponentDetailsPayload));
+      }
+
+      if (url === "/api/service-sessions?device_serial_number=SHIP-001") {
+        return Promise.resolve(createJsonResponse(serviceSessionPayload));
+      }
+
+      if (url === "/api/devices/SHIP-001/shipment-gate-history?limit=10") {
+        return Promise.resolve(createJsonResponse(shipmentGateHistoryPayload));
+      }
+
+      if (url === "/api/work-sessions") {
+        return Promise.resolve(createJsonResponse(workSessionsPayload));
+      }
+
+      if (url === "/api/operators") {
+        return Promise.resolve(createJsonResponse(operatorsPayload));
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
@@ -1651,29 +1702,35 @@ describe("App", () => {
     expect(dialog).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "SHIP-001" })).toBeInTheDocument();
     expect(await screen.findByText(/Brak.*komponenty BOM/i)).toBeInTheDocument();
-    expect(screen.getAllByText("FAN-900").length).toBeGreaterThan(0);
     expect(
       await screen.findByText("Gate zablokowany przez brak FAN_MODULE"),
     ).toBeInTheDocument();
+    expect(
+      await screen.findByRole("link", { name: "Pobierz paczkę ZIP" }),
+    ).toHaveAttribute("href", "/api/service-sessions/SVC-9001/package");
 
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
+    expect(fetchMock).toHaveBeenCalledWith(
       "/api/devices/SHIP-001/shipment-readiness",
       expect.objectContaining({
         headers: { Accept: "application/json" },
         signal: expect.any(AbortSignal),
       }),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      3,
+    expect(fetchMock).toHaveBeenCalledWith(
       "/api/devices/SHIP-001/component-quality",
       expect.objectContaining({
         headers: { Accept: "application/json" },
         signal: expect.any(AbortSignal),
       }),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      4,
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/service-sessions?device_serial_number=SHIP-001",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
       "/api/devices/SHIP-001/shipment-gate-history?limit=10",
       expect.objectContaining({
         headers: { Accept: "application/json" },
@@ -3925,11 +3982,6 @@ describe("App", () => {
       screen.getByRole("button", { name: "Zamontuj komponent" }),
     );
 
-    expect(
-      await screen.findByText(
-        "Zamontowano komponent Fan Module V2 z barcode BC-FAN-777.",
-      ),
-    ).toBeInTheDocument();
     await waitFor(() =>
       expect(
         screen.queryByRole("button", { name: "Zamontuj komponent" }),

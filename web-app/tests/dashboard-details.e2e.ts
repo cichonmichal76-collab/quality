@@ -357,3 +357,178 @@ test("dashboard jumps from shipment gate history to a filtered shipment queue", 
     page.getByRole("textbox", { name: "Typ urządzenia" }),
   ).toHaveValue("DEMO-OPS");
 });
+
+test("dashboard shows commissioning sessions in device details", async ({
+  page,
+}) => {
+  await page.route("**/api/**", async (route) => {
+    const url = new URL(route.request().url());
+
+    if (url.pathname === "/api/shipment-readiness") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          total_devices: 1,
+          ready_count: 0,
+          blocked_count: 1,
+          returned_count: 1,
+          offset: 0,
+          limit: 100,
+          has_more: false,
+          next_offset: null,
+          filters: {},
+          blocking_summary: [],
+          primary_blocking_summary: [],
+          recommended_action_summary: [],
+          latest_shipment_gate_result_summary: [],
+          production_status_summary: [],
+          devices: [
+            {
+              device_serial_number: "SVC-001",
+              device_type: "DEMO-SVC",
+              device_variant_code: "DEFAULT",
+              production_status: "FINAL_TEST_PASSED",
+              device_created_at: "2026-05-01T08:00:00Z",
+              device_updated_at: "2026-05-01T09:00:00Z",
+              final_test_passed: true,
+              has_critical_open_ncr: false,
+              critical_open_ncr_ids: [],
+              bom_compliance: {
+                passes_bom_gate: true,
+                installed_component_count: 1,
+                missing_required_components: [],
+                over_installed_components: [],
+                unexpected_component_types: [],
+                blocking_reason: null,
+              },
+              can_transition_to_ready_for_shipment: false,
+              latest_shipment_gate_decision: null,
+              primary_blocking_code: null,
+              primary_blocking_message: null,
+              recommended_action: "RESOLVE_COMPONENT_QUALITY",
+              blocking_reasons: [],
+            },
+          ],
+        }),
+      });
+      return;
+    }
+
+    if (url.pathname === "/api/devices/SVC-001/shipment-readiness") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          device_serial_number: "SVC-001",
+          device_type: "DEMO-SVC",
+          device_variant_code: "DEFAULT",
+          production_status: "FINAL_TEST_PASSED",
+          device_created_at: "2026-05-01T08:00:00Z",
+          device_updated_at: "2026-05-01T09:00:00Z",
+          final_test_passed: true,
+          has_critical_open_ncr: false,
+          critical_open_ncr_ids: [],
+          bom_compliance: {
+            passes_bom_gate: true,
+            installed_component_count: 1,
+            missing_required_components: [],
+            over_installed_components: [],
+            unexpected_component_types: [],
+            component_coverage: [],
+            blocking_reason: null,
+          },
+          can_transition_to_ready_for_shipment: false,
+          latest_shipment_gate_decision: null,
+          primary_blocking_code: null,
+          primary_blocking_message: null,
+          recommended_action: "RESOLVE_COMPONENT_QUALITY",
+          blocking_reasons: [],
+          blocking_checks: [],
+        }),
+      });
+      return;
+    }
+
+    if (url.pathname === "/api/devices/SVC-001/component-quality") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          device_serial_number: "SVC-001",
+          device_type: "DEMO-SVC",
+          device_variant_code: "DEFAULT",
+          production_status: "FINAL_TEST_PASSED",
+          device_created_at: "2026-05-01T08:00:00Z",
+          device_updated_at: "2026-05-01T09:00:00Z",
+          stale_bucket: "LT_24H",
+          total_installed_components: 1,
+          passing_components: 1,
+          blocked_components: 0,
+          passes_component_quality_gate: true,
+          primary_quality_status: "PASS",
+          primary_blocking_component_type: null,
+          primary_blocking_component_serial_number: null,
+          recommended_action: "NO_ACTION",
+          components: [],
+        }),
+      });
+      return;
+    }
+
+    if (url.pathname === "/api/service-sessions") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          {
+            id: "svc-db-1",
+            session_id: "SVC-9001",
+            device_serial_number: "SVC-001",
+            device_type: "DEMO-SVC",
+            technician_id: "TECH-001",
+            result: "PASS",
+            firmware_version: "1.2.4",
+            bootloader_version: "0.9.8",
+            package_path: "/tmp/service-package.zip",
+            package_hash: "hash-svc-001",
+            upload_status: "UPLOADED",
+            upload_count: 2,
+            client_attempt_id: "SYNC-UPLOAD-0002",
+            client_attempt_number: 2,
+            client_trigger_source: "AUTO_NETWORK",
+            upload_correlation_id: "SRV-UP-SVC001",
+            uploaded_at: "2026-05-01T10:30:00Z",
+            created_at: "2026-05-01T10:00:00Z",
+          },
+        ]),
+      });
+      return;
+    }
+
+    if (url.pathname === "/api/devices/SVC-001/shipment-gate-history") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([]),
+      });
+      return;
+    }
+
+    await route.continue();
+  });
+
+  await page.goto("/");
+
+  await expect(page.getByText("API OK")).toBeVisible();
+  await page.getByRole("button", { name: "SVC-001" }).click();
+
+  const drawer = page.getByRole("dialog");
+  await expect(drawer).toBeVisible();
+  await expect(drawer.getByText("Commissioning i serwis")).toBeVisible();
+  await expect(drawer.getByText("SVC-9001")).toBeVisible();
+  await expect(drawer.getByText(/Uploadów: 2/)).toBeVisible();
+  await expect(
+    drawer.getByRole("link", { name: "Pobierz paczkę ZIP" }),
+  ).toHaveAttribute("href", "/api/service-sessions/SVC-9001/package");
+});

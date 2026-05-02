@@ -49,13 +49,14 @@ z aktywną sesją jakościową oraz zbiorcze zamykanie krytycznych NCR komponent
 na bieżącej stronie.
 
 Kliknięcie numeru seryjnego w tabeli otwiera drawer szczegółów urządzenia.
-Drawer łączy dane z shipment readiness, component quality i historii shipment
-gate, żeby od razu pokazać blokady, rekomendowaną akcję, stan BOM oraz
-szczegóły blokujących komponentów. Z drawera można też przejść do pełnej
+Drawer łączy dane z shipment readiness, component quality, commissioning/service
+sessions i historii shipment gate, żeby od razu pokazać blokady,
+rekomendowaną akcję, stan BOM, szczegóły blokujących komponentów oraz
+ostatnie uploady serwisowe. Z drawera można też przejść do pełnej
 strony szczegółów urządzenia, kiedy potrzebny jest stały link albo więcej
 miejsca na pracę. Na pełnej stronie dostępna jest też szybka nawigacja do
-sekcji `Akcje`, `Bramka wysyłki`, `BOM`, `Jakość komponentów` i
-`Historia gate`.
+sekcji `Akcje`, `Bramka wysyłki`, `BOM`, `Jakość komponentów`,
+`Commissioning i serwis` i `Historia gate`.
 
 Drawer nie jest już tylko podglądem. Panel pozwala teraz wykonać sześć
 bezpośrednich kroków operacyjnych:

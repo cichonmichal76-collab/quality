@@ -121,8 +121,15 @@ def upload_service_session(
     return service_session
 
 
-def list_service_sessions(db: Session) -> list[ServiceSession]:
-    return repository.list_service_sessions(db)
+def list_service_sessions(
+    db: Session,
+    *,
+    device_serial_number: str | None = None,
+) -> list[ServiceSession]:
+    return repository.list_service_sessions(
+        db,
+        device_serial_number=device_serial_number,
+    )
 
 
 def get_service_session_or_404(db: Session, session_id: str) -> ServiceSession:

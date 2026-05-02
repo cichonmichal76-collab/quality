@@ -68,6 +68,27 @@ export interface WorkSessionRead {
   ended_at: string | null;
 }
 
+export interface ServiceSessionRead {
+  id: string;
+  session_id: string;
+  device_serial_number: string;
+  device_type: string | null;
+  technician_id: string | null;
+  result: string | null;
+  firmware_version: string | null;
+  bootloader_version: string | null;
+  package_path: string | null;
+  package_hash: string | null;
+  upload_status: string;
+  upload_count: number;
+  client_attempt_id: string | null;
+  client_attempt_number: number | null;
+  client_trigger_source: string | null;
+  upload_correlation_id: string | null;
+  uploaded_at: string | null;
+  created_at: string;
+}
+
 export interface NonconformityRead {
   id: string;
   ncr_id: string;
@@ -495,6 +516,19 @@ export async function listOperators(
 ): Promise<OperatorRead[]> {
   return fetchJson<OperatorRead[]>(
     joinApiUrl(apiBaseUrl, "/operators"),
+    signal,
+  );
+}
+
+export async function listServiceSessions(
+  apiBaseUrl: string,
+  params: {
+    device_serial_number?: string;
+  } = {},
+  signal?: AbortSignal,
+): Promise<ServiceSessionRead[]> {
+  return fetchJson<ServiceSessionRead[]>(
+    joinApiUrl(apiBaseUrl, `/service-sessions${buildQuery(params)}`),
     signal,
   );
 }

@@ -6250,11 +6250,12 @@ def test_service_session_upload_list_and_download(tmp_path, monkeypatch):
     monkeypatch.setattr(file_storage, "STORAGE_DIR", tmp_path)
 
     session_id = unique_id("SVC")
+    primary_device_serial = unique_id("ZSS")
     upload = client.post(
         "/api/service-sessions/upload",
         data={
             "session_id": session_id,
-            "device_serial_number": unique_id("ZSS"),
+            "device_serial_number": primary_device_serial,
             "technician_id": "TECH-001",
             "device_type": "ZSS",
             "result": "PASS",
@@ -6282,7 +6283,7 @@ def test_service_session_upload_list_and_download(tmp_path, monkeypatch):
         "/api/service-sessions/upload",
         data={
             "session_id": session_id,
-            "device_serial_number": unique_id("ZSS"),
+            "device_serial_number": primary_device_serial,
             "technician_id": "TECH-RETRY",
             "device_type": "ZSS-PRO",
             "result": "HOLD",
@@ -6311,6 +6312,27 @@ def test_service_session_upload_list_and_download(tmp_path, monkeypatch):
     listed = client.get("/api/service-sessions")
     assert listed.status_code == 200
     assert any(row["session_id"] == session_id for row in listed.json())
+
+    other_session_id = unique_id("SVC")
+    other_device_serial = unique_id("ZSS")
+    other_upload = client.post(
+        "/api/service-sessions/upload",
+        data={
+            "session_id": other_session_id,
+            "device_serial_number": other_device_serial,
+            "technician_id": "TECH-OTHER",
+            "device_type": "ZSS-LITE",
+            "result": "PASS",
+        },
+        files={"file": ("other-service-package.zip", b"other-service-package", "application/zip")},
+    )
+    assert other_upload.status_code == 200
+
+    filtered = client.get(
+        f"/api/service-sessions?device_serial_number={primary_device_serial}",
+    )
+    assert filtered.status_code == 200
+    assert [row["session_id"] for row in filtered.json()] == [session_id]
 
     fetched = client.get(f"/api/service-sessions/{session_id}")
     assert fetched.status_code == 200

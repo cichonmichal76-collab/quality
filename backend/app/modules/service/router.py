@@ -40,8 +40,14 @@ def upload_service_session(
 
 
 @router.get("/service-sessions", response_model=list[ServiceSessionRead])
-def list_service_sessions(db: Session = Depends(get_db)):
-    return service.list_service_sessions(db)
+def list_service_sessions(
+    device_serial_number: str | None = None,
+    db: Session = Depends(get_db),
+):
+    return service.list_service_sessions(
+        db,
+        device_serial_number=device_serial_number,
+    )
 
 
 @router.get("/service-sessions/{session_id}", response_model=ServiceSessionRead)
