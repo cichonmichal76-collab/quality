@@ -8,6 +8,8 @@ interface CommissioningRepository {
 
     suspend fun getDraft(sessionId: String): ServiceSessionDraft?
 
+    suspend fun listDrafts(): List<ServiceSessionDraft>
+
     suspend fun createDraft(
         deviceSerialNumber: String,
         deviceType: String,

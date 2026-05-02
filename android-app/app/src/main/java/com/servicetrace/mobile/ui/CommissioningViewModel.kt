@@ -15,11 +15,11 @@ import com.servicetrace.mobile.model.SessionSyncStatus
 import com.servicetrace.mobile.model.UsbCandidateDevice
 import com.servicetrace.mobile.mcu.MockMcuClient
 import com.servicetrace.mobile.mcu.UsbMcuClient
+import com.servicetrace.mobile.sync.CommissioningSyncRunner
+import com.servicetrace.mobile.sync.CommissioningSyncWorkScheduler
 import com.servicetrace.mobile.sync.ConnectivityMonitor
 import com.servicetrace.mobile.sync.DEFAULT_COMMISSIONING_UPLOAD_BASE_URL
-import com.servicetrace.mobile.sync.ServiceSessionUploader
 import com.servicetrace.mobile.sync.SyncSettingsStore
-import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -55,7 +55,8 @@ class CommissioningViewModel(
     private val artifactStore: CommissioningArtifactStore,
     private val connectivityMonitor: ConnectivityMonitor,
     private val syncSettingsStore: SyncSettingsStore,
-    private val uploader: ServiceSessionUploader,
+    private val syncRunner: CommissioningSyncRunner,
+    private val syncWorkScheduler: CommissioningSyncWorkScheduler,
 ) : ViewModel() {
     private val inputs = MutableStateFlow(NewDraftInputs())
     private val selectedDraft = MutableStateFlow<ServiceSessionDraft?>(null)
@@ -130,10 +131,15 @@ class CommissioningViewModel(
         syncSettingsStore.updateAutoSyncEnabled(enabled)
         if (!enabled) {
             lastAutoSyncReadySignature = ""
+            syncWorkScheduler.cancelDeferredSync()
         } else {
+            val drafts = uiState.value.drafts
+            if (shouldQueueDeferredSync(enabled, networkAvailable.value, drafts.count { row -> row.syncStatus == SessionSyncStatus.READY_TO_SYNC })) {
+                syncWorkScheduler.enqueueDeferredSync()
+            }
             maybeAutoSyncOnline(
                 trigger = SyncTrigger.AUTO_NETWORK,
-                drafts = uiState.value.drafts,
+                drafts = drafts,
             )
         }
     }
@@ -470,6 +476,9 @@ class CommissioningViewModel(
                 trigger = SyncTrigger.AUTO_READY,
                 drafts = listOf(updatedDraft) + otherReadyDrafts,
             )
+            if (shouldQueueDeferredSync(autoSyncEnabled.value, networkAvailable.value, otherReadyDrafts.size + 1)) {
+                syncWorkScheduler.enqueueDeferredSync()
+            }
         }
     }
 
@@ -484,6 +493,12 @@ class CommissioningViewModel(
                 autoSyncEnabled.value = settings.autoSyncEnabled
                 if (!settings.autoSyncEnabled) {
                     lastAutoSyncReadySignature = ""
+                    syncWorkScheduler.cancelDeferredSync()
+                } else {
+                    val drafts = uiState.value.drafts
+                    if (shouldQueueDeferredSync(settings.autoSyncEnabled, networkAvailable.value, drafts.count { row -> row.syncStatus == SessionSyncStatus.READY_TO_SYNC })) {
+                        syncWorkScheduler.enqueueDeferredSync()
+                    }
                 }
             }
         }
@@ -497,6 +512,12 @@ class CommissioningViewModel(
                     networkAvailable.value = online
                     if (!online) {
                         lastAutoSyncReadySignature = ""
+                        val readyDraftCount = uiState.value.drafts.count { draft ->
+                            draft.syncStatus == SessionSyncStatus.READY_TO_SYNC
+                        }
+                        if (shouldQueueDeferredSync(autoSyncEnabled.value, online, readyDraftCount)) {
+                            syncWorkScheduler.enqueueDeferredSync()
+                        }
                     } else {
                         maybeAutoSyncOnline(
                             trigger = SyncTrigger.AUTO_NETWORK,
@@ -510,6 +531,12 @@ class CommissioningViewModel(
     private fun observeDraftsForAutoSync() {
         viewModelScope.launch {
             repository.observeDrafts().collect { drafts ->
+                val readyDraftCount = drafts.count { draft ->
+                    draft.syncStatus == SessionSyncStatus.READY_TO_SYNC
+                }
+                if (shouldQueueDeferredSync(autoSyncEnabled.value, networkAvailable.value, readyDraftCount)) {
+                    syncWorkScheduler.enqueueDeferredSync()
+                }
                 maybeAutoSyncOnline(
                     trigger = SyncTrigger.AUTO_NETWORK,
                     drafts = drafts,
@@ -571,70 +598,25 @@ class CommissioningViewModel(
         viewModelScope.launch {
             syncInFlight.value = true
             try {
-                var uploadedCount = 0
-                var failedCount = 0
-                val currentBaseUrl = uploadBaseUrl.value
-
-                readyDrafts.forEach { draft ->
-                    try {
-                        val uploadDraft = ensurePackageForUpload(draft)
-                        uploader.upload(currentBaseUrl, uploadDraft)
-                        val completedAtMillis = System.currentTimeMillis()
-                        val syncedDraft = uploadDraft.copy(
-                            syncStatus = SessionSyncStatus.SYNCED,
-                            syncAttemptCount = uploadDraft.syncAttemptCount + 1,
-                            lastSyncAttemptAtMillis = completedAtMillis,
-                            lastSyncSuccessAtMillis = completedAtMillis,
-                            lastSyncErrorMessage = "",
-                            updatedAtMillis = completedAtMillis,
-                        )
-                        repository.saveDraft(syncedDraft)
-                        if (selectedDraft.value?.sessionId == syncedDraft.sessionId) {
-                            selectedDraft.value = syncedDraft
-                        }
-                        uploadedCount += 1
-                    } catch (error: Exception) {
-                        failedCount += 1
-                        val failedAtMillis = System.currentTimeMillis()
-                        val failedDraft = draft.copy(
-                            syncStatus = SessionSyncStatus.READY_TO_SYNC,
-                            syncAttemptCount = draft.syncAttemptCount + 1,
-                            lastSyncAttemptAtMillis = failedAtMillis,
-                            lastSyncErrorMessage = error.message ?: "Nieznany blad synchronizacji commissioning.",
-                            updatedAtMillis = failedAtMillis,
-                        )
-                        repository.saveDraft(failedDraft)
-                        if (selectedDraft.value?.sessionId == failedDraft.sessionId) {
-                            selectedDraft.value = failedDraft
-                        }
+                val result = syncRunner.syncDrafts(
+                    baseUrl = uploadBaseUrl.value,
+                    drafts = readyDrafts,
+                )
+                val currentSelectedDraftId = selectedDraft.value?.sessionId
+                if (currentSelectedDraftId != null) {
+                    result.latestDraftsBySessionId[currentSelectedDraftId]?.let { latestDraft ->
+                        selectedDraft.value = latestDraft
                     }
                 }
-
-                bannerMessage.value = buildSyncCompletionMessage(trigger, uploadedCount, failedCount)
+                bannerMessage.value = buildSyncCompletionMessage(
+                    trigger = trigger,
+                    uploadedCount = result.uploadedCount,
+                    failedCount = result.failedCount,
+                )
             } finally {
                 syncInFlight.value = false
             }
         }
-    }
-
-    private suspend fun ensurePackageForUpload(
-        draft: ServiceSessionDraft,
-    ): ServiceSessionDraft {
-        if (draft.packagePath.isNotBlank() && File(draft.packagePath).exists()) {
-            return draft
-        }
-        val packageResult = artifactStore.buildPackage(draft)
-        val updatedDraft = draft.copy(
-            packagePath = packageResult.zipPath,
-            packageGeneratedAtMillis = packageResult.generatedAtMillis,
-            packageEntryCount = packageResult.entryCount,
-            updatedAtMillis = packageResult.generatedAtMillis,
-        )
-        repository.saveDraft(updatedDraft)
-        if (selectedDraft.value?.sessionId == updatedDraft.sessionId) {
-            selectedDraft.value = updatedDraft
-        }
-        return updatedDraft
     }
 
     companion object {
@@ -645,7 +627,8 @@ class CommissioningViewModel(
             artifactStore: CommissioningArtifactStore,
             connectivityMonitor: ConnectivityMonitor,
             syncSettingsStore: SyncSettingsStore,
-            uploader: ServiceSessionUploader,
+            syncRunner: CommissioningSyncRunner,
+            syncWorkScheduler: CommissioningSyncWorkScheduler,
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
@@ -657,7 +640,8 @@ class CommissioningViewModel(
                         artifactStore = artifactStore,
                         connectivityMonitor = connectivityMonitor,
                         syncSettingsStore = syncSettingsStore,
-                        uploader = uploader,
+                        syncRunner = syncRunner,
+                        syncWorkScheduler = syncWorkScheduler,
                     ) as T
             }
     }
@@ -676,6 +660,13 @@ internal fun canAutoSync(
     readyDraftCount: Int,
 ): Boolean =
     autoSyncEnabled && networkAvailable && !syncInFlight && readyDraftCount > 0
+
+internal fun shouldQueueDeferredSync(
+    autoSyncEnabled: Boolean,
+    networkAvailable: Boolean,
+    readyDraftCount: Int,
+): Boolean =
+    autoSyncEnabled && !networkAvailable && readyDraftCount > 0
 
 internal fun buildSyncCompletionMessage(
     trigger: SyncTrigger,

@@ -17,6 +17,9 @@ class OfflineCommissioningRepository(
     override suspend fun getDraft(sessionId: String): ServiceSessionDraft? =
         dao.getDraft(sessionId)?.toDomain()
 
+    override suspend fun listDrafts(): List<ServiceSessionDraft> =
+        dao.listDrafts().map { row -> row.toDomain() }
+
     override suspend fun createDraft(
         deviceSerialNumber: String,
         deviceType: String,

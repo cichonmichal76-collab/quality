@@ -18,12 +18,13 @@ Aktualnie zawiera:
 12. licznik prob syncu i ostatni blad per sesja
 13. auto-sync po odzyskaniu lacznosci i po oznaczeniu sesji jako gotowej przy aktywnej sieci
 14. trwale ustawienia syncu: adres backendu i wlaczony / wylaczony auto-sync
-15. testy JVM dla fabryki draftu, snapshotu, mocka MCU, serializacji paczki, polityki syncu i normalizacji adresu API
+15. `WorkManager` z odlozonym workerem synchronizacji dla sesji gotowych offline
+16. testy JVM dla fabryki draftu, snapshotu, mocka MCU, serializacji paczki, polityki syncu i normalizacji adresu API
 
 Domyslny adres backendu dla syncu to `http://10.0.2.2:8000/api`.
 
 Najblizszy sensowny krok:
 
 1. rozszerzyc snapshoty i artefakty diagnostyczne
-2. przeniesc auto-sync do pracy w tle poza aktywnym ekranem
-3. dolozyc worker lub harmonogram dla synchronizacji po zamknieciu UI
+2. rozbudowac worker o strategia okresowa albo batch sync dla dluzszego offline
+3. dolozyc klasyfikacje bledow i mocniejszy retry / backoff uploadu

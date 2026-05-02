@@ -12,24 +12,33 @@ import com.servicetrace.mobile.data.local.ServiceTraceMobileDatabase
 import com.servicetrace.mobile.files.CommissioningArtifactStore
 import com.servicetrace.mobile.mcu.MockMcuClient
 import com.servicetrace.mobile.mcu.UsbMcuClient
+import com.servicetrace.mobile.sync.AndroidWorkManagerCommissioningSyncScheduler
 import com.servicetrace.mobile.sync.AndroidConnectivityMonitor
 import com.servicetrace.mobile.sync.ServiceSessionUploader
 import com.servicetrace.mobile.sync.AndroidSharedPreferencesSyncSettingsStore
+import com.servicetrace.mobile.sync.CommissioningSyncRunner
 import com.servicetrace.mobile.ui.CommissioningScreen
 import com.servicetrace.mobile.ui.CommissioningViewModel
 
 class MainActivity : ComponentActivity() {
     private val viewModel: CommissioningViewModel by viewModels {
+        val repository = OfflineCommissioningRepository(
+            dao = ServiceTraceMobileDatabase.build(applicationContext).commissioningDao(),
+        )
+        val artifactStore = CommissioningArtifactStore(applicationContext)
         CommissioningViewModel.factory(
-            repository = OfflineCommissioningRepository(
-                dao = ServiceTraceMobileDatabase.build(applicationContext).commissioningDao(),
-            ),
+            repository = repository,
             mockMcuClient = MockMcuClient(),
             usbMcuClient = UsbMcuClient(applicationContext),
-            artifactStore = CommissioningArtifactStore(applicationContext),
+            artifactStore = artifactStore,
             connectivityMonitor = AndroidConnectivityMonitor(applicationContext),
             syncSettingsStore = AndroidSharedPreferencesSyncSettingsStore(applicationContext),
-            uploader = ServiceSessionUploader(),
+            syncRunner = CommissioningSyncRunner(
+                repository = repository,
+                artifactStore = artifactStore,
+                uploader = ServiceSessionUploader(),
+            ),
+            syncWorkScheduler = AndroidWorkManagerCommissioningSyncScheduler(applicationContext),
         )
     }
 

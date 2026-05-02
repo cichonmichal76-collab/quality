@@ -1,0 +1,82 @@
+package com.servicetrace.mobile.sync
+
+import com.servicetrace.mobile.data.CommissioningRepository
+import com.servicetrace.mobile.files.CommissioningArtifactStore
+import com.servicetrace.mobile.model.ServiceSessionDraft
+import com.servicetrace.mobile.model.SessionSyncStatus
+import java.io.File
+
+data class CommissioningSyncRunResult(
+    val uploadedCount: Int,
+    val failedCount: Int,
+    val latestDraftsBySessionId: Map<String, ServiceSessionDraft>,
+)
+
+class CommissioningSyncRunner(
+    private val repository: CommissioningRepository,
+    private val artifactStore: CommissioningArtifactStore,
+    private val uploader: ServiceSessionUploader,
+) {
+    suspend fun syncDrafts(
+        baseUrl: String,
+        drafts: List<ServiceSessionDraft>,
+    ): CommissioningSyncRunResult {
+        var uploadedCount = 0
+        var failedCount = 0
+        val latestDraftsBySessionId = linkedMapOf<String, ServiceSessionDraft>()
+
+        drafts.distinctBy { draft -> draft.sessionId }.forEach { draft ->
+            try {
+                val uploadDraft = ensurePackageForUpload(draft)
+                uploader.upload(baseUrl, uploadDraft)
+                val completedAtMillis = System.currentTimeMillis()
+                val syncedDraft = uploadDraft.copy(
+                    syncStatus = SessionSyncStatus.SYNCED,
+                    syncAttemptCount = uploadDraft.syncAttemptCount + 1,
+                    lastSyncAttemptAtMillis = completedAtMillis,
+                    lastSyncSuccessAtMillis = completedAtMillis,
+                    lastSyncErrorMessage = "",
+                    updatedAtMillis = completedAtMillis,
+                )
+                repository.saveDraft(syncedDraft)
+                latestDraftsBySessionId[syncedDraft.sessionId] = syncedDraft
+                uploadedCount += 1
+            } catch (error: Exception) {
+                val failedAtMillis = System.currentTimeMillis()
+                val failedDraft = draft.copy(
+                    syncStatus = SessionSyncStatus.READY_TO_SYNC,
+                    syncAttemptCount = draft.syncAttemptCount + 1,
+                    lastSyncAttemptAtMillis = failedAtMillis,
+                    lastSyncErrorMessage = error.message ?: "Nieznany blad synchronizacji commissioning.",
+                    updatedAtMillis = failedAtMillis,
+                )
+                repository.saveDraft(failedDraft)
+                latestDraftsBySessionId[failedDraft.sessionId] = failedDraft
+                failedCount += 1
+            }
+        }
+
+        return CommissioningSyncRunResult(
+            uploadedCount = uploadedCount,
+            failedCount = failedCount,
+            latestDraftsBySessionId = latestDraftsBySessionId.toMap(),
+        )
+    }
+
+    private suspend fun ensurePackageForUpload(
+        draft: ServiceSessionDraft,
+    ): ServiceSessionDraft {
+        if (draft.packagePath.isNotBlank() && File(draft.packagePath).exists()) {
+            return draft
+        }
+        val packageResult = artifactStore.buildPackage(draft)
+        val updatedDraft = draft.copy(
+            packagePath = packageResult.zipPath,
+            packageGeneratedAtMillis = packageResult.generatedAtMillis,
+            packageEntryCount = packageResult.entryCount,
+            updatedAtMillis = packageResult.generatedAtMillis,
+        )
+        repository.saveDraft(updatedDraft)
+        return updatedDraft
+    }
+}

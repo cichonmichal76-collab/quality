@@ -246,6 +246,10 @@ interface CommissioningDao {
     fun observeDrafts(): Flow<List<ServiceSessionDraftWithSteps>>
 
     @Transaction
+    @Query("SELECT * FROM service_session_drafts ORDER BY updatedAtMillis DESC")
+    suspend fun listDrafts(): List<ServiceSessionDraftWithSteps>
+
+    @Transaction
     @Query("SELECT * FROM service_session_drafts WHERE sessionId = :sessionId LIMIT 1")
     suspend fun getDraft(sessionId: String): ServiceSessionDraftWithSteps?
 
