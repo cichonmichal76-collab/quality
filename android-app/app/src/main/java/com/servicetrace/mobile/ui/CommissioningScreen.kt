@@ -41,6 +41,7 @@ import com.servicetrace.mobile.model.McuConnectionStatus
 import com.servicetrace.mobile.model.ServiceSessionDraft
 import com.servicetrace.mobile.model.SessionOutcome
 import com.servicetrace.mobile.model.SessionSyncStatus
+import com.servicetrace.mobile.model.UsbCandidateDevice
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -73,6 +74,9 @@ fun CommissioningScreen(
         onFirmwareVersionChange = viewModel::updateFirmwareVersion,
         onBootloaderVersionChange = viewModel::updateBootloaderVersion,
         onConnectionModeChange = viewModel::updateConnectionMode,
+        onRefreshUsbDevices = viewModel::refreshUsbDevices,
+        onSelectUsbDevice = viewModel::selectUsbDevice,
+        onRequestUsbPermission = viewModel::requestUsbPermission,
         onConnectToMcu = viewModel::connectToMcu,
         onSaveOffline = viewModel::saveOffline,
         onMarkReadyToSync = viewModel::markReadyToSync,
@@ -95,6 +99,9 @@ private fun CommissioningScreen(
     onFirmwareVersionChange: (String) -> Unit,
     onBootloaderVersionChange: (String) -> Unit,
     onConnectionModeChange: (McuConnectionMode) -> Unit,
+    onRefreshUsbDevices: () -> Unit,
+    onSelectUsbDevice: (String) -> Unit,
+    onRequestUsbPermission: () -> Unit,
     onConnectToMcu: () -> Unit,
     onSaveOffline: () -> Unit,
     onMarkReadyToSync: () -> Unit,
@@ -146,6 +153,11 @@ private fun CommissioningScreen(
                 onFirmwareVersionChange = onFirmwareVersionChange,
                 onBootloaderVersionChange = onBootloaderVersionChange,
                 onConnectionModeChange = onConnectionModeChange,
+                usbDevices = uiState.usbDevices,
+                usbPermissionInFlight = uiState.usbPermissionInFlight,
+                onRefreshUsbDevices = onRefreshUsbDevices,
+                onSelectUsbDevice = onSelectUsbDevice,
+                onRequestUsbPermission = onRequestUsbPermission,
                 onConnectToMcu = onConnectToMcu,
                 onSaveOffline = onSaveOffline,
                 onMarkReadyToSync = onMarkReadyToSync,
@@ -277,6 +289,11 @@ private fun DraftEditorSection(
     onFirmwareVersionChange: (String) -> Unit,
     onBootloaderVersionChange: (String) -> Unit,
     onConnectionModeChange: (McuConnectionMode) -> Unit,
+    usbDevices: List<UsbCandidateDevice>,
+    usbPermissionInFlight: Boolean,
+    onRefreshUsbDevices: () -> Unit,
+    onSelectUsbDevice: (String) -> Unit,
+    onRequestUsbPermission: () -> Unit,
     onConnectToMcu: () -> Unit,
     onSaveOffline: () -> Unit,
     onMarkReadyToSync: () -> Unit,
@@ -301,7 +318,12 @@ private fun DraftEditorSection(
                 Text("Aktualny wynik: ${draft.outcome?.name ?: "W trakcie"}")
                 ConnectionSection(
                     draft = draft,
+                    usbDevices = usbDevices,
+                    usbPermissionInFlight = usbPermissionInFlight,
                     onConnectionModeChange = onConnectionModeChange,
+                    onRefreshUsbDevices = onRefreshUsbDevices,
+                    onSelectUsbDevice = onSelectUsbDevice,
+                    onRequestUsbPermission = onRequestUsbPermission,
                     onConnectToMcu = onConnectToMcu,
                 )
                 OutlinedTextField(
@@ -352,6 +374,112 @@ private fun DraftEditorSection(
                 onStatusChange = onStepStatusChange,
                 onNoteChange = onStepNoteChange,
             )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ConnectionSection(
+    draft: ServiceSessionDraft,
+    usbDevices: List<UsbCandidateDevice>,
+    usbPermissionInFlight: Boolean,
+    onConnectionModeChange: (McuConnectionMode) -> Unit,
+    onRefreshUsbDevices: () -> Unit,
+    onSelectUsbDevice: (String) -> Unit,
+    onRequestUsbPermission: () -> Unit,
+    onConnectToMcu: () -> Unit,
+) {
+    val selectedUsbDevice = usbDevices.firstOrNull { device -> device.deviceId == draft.selectedUsbDeviceId }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Polaczenie techniczne", style = MaterialTheme.typography.titleMedium)
+        Text("Tryb: ${connectionModeLabel(draft.connectionMode)}")
+        Text("Status: ${connectionStatusLabel(draft.connectionStatus)}")
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            McuConnectionMode.entries.forEach { mode ->
+                FilterChip(
+                    selected = draft.connectionMode == mode,
+                    onClick = { onConnectionModeChange(mode) },
+                    label = { Text(connectionModeLabel(mode)) },
+                )
+            }
+        }
+        if (draft.connectionMode == McuConnectionMode.USB) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Button(
+                    onClick = onRefreshUsbDevices,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("Odswiez USB")
+                }
+                Button(
+                    onClick = onRequestUsbPermission,
+                    enabled = selectedUsbDevice != null && !usbPermissionInFlight,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(if (usbPermissionInFlight) "Prosba o zgode..." else "Nadaj zgode USB")
+                }
+            }
+            if (usbDevices.isEmpty()) {
+                Text(
+                    "Nie wykryto urzadzen USB z kanalem bulk IN/OUT. Podlacz MCU i odswiez liste.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            } else {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    usbDevices.forEach { device ->
+                        val permissionLabel = if (device.hasPermission) "zgoda" else "brak zgody"
+                        FilterChip(
+                            selected = draft.selectedUsbDeviceId == device.deviceId,
+                            onClick = { onSelectUsbDevice(device.deviceId) },
+                            label = { Text("${device.displayName} [$permissionLabel]") },
+                        )
+                    }
+                }
+            }
+            selectedUsbDevice?.let { device ->
+                Text("Wybrane USB: ${device.displayName}", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        Button(onClick = onConnectToMcu, modifier = Modifier.fillMaxWidth()) {
+            Text(
+                if (draft.connectionMode == McuConnectionMode.MOCK) {
+                    if (draft.connectionStatus == McuConnectionStatus.CONNECTED) {
+                        "Odswiez snapshot Mock MCU"
+                    } else {
+                        "Polacz z Mock MCU"
+                    }
+                } else {
+                    "Polacz z wybranym USB"
+                },
+            )
+        }
+        if (draft.snapshotCapturedAtMillis != null) {
+            Text("Snapshot: ${formatTimestamp(draft.snapshotCapturedAtMillis)}")
+        }
+        if (draft.echoedSerialNumber.isNotBlank()) {
+            Text("Serial z MCU: ${draft.echoedSerialNumber}")
+        }
+        if (draft.usbLinkStatus.isNotBlank()) {
+            Text("Link: ${draft.usbLinkStatus}")
+        }
+        if (draft.mainboardStatus.isNotBlank()) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                AssistChip(onClick = {}, label = { Text("Mainboard: ${draft.mainboardStatus}") })
+                AssistChip(onClick = {}, label = { Text("Induction: ${draft.inductionBoardStatus}") })
+                AssistChip(onClick = {}, label = { Text("HMI: ${draft.hmiStatus}") })
+                AssistChip(onClick = {}, label = { Text("Watchdog: ${draft.watchdogStatus}") })
+            }
+        }
+        if (draft.logExcerpt.isNotBlank()) {
+            Text(draft.logExcerpt, style = MaterialTheme.typography.bodySmall)
         }
     }
 }

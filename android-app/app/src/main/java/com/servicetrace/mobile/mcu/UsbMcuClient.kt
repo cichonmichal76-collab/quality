@@ -1,37 +1,120 @@
 package com.servicetrace.mobile.mcu
 
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.hardware.usb.UsbConstants
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbDeviceConnection
 import android.hardware.usb.UsbEndpoint
 import android.hardware.usb.UsbInterface
 import android.hardware.usb.UsbManager
+import android.os.Build
 import com.servicetrace.mobile.model.McuConnectionMode
 import com.servicetrace.mobile.model.McuConnectionSnapshot
+import com.servicetrace.mobile.model.UsbCandidateDevice
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 class UsbMcuClient(
     context: Context,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
-    private val usbManager = context.getSystemService(UsbManager::class.java)
+    private val appContext = context.applicationContext
+    private val usbManager = appContext.getSystemService(UsbManager::class.java)
+
+    fun listCandidateDevices(): List<UsbCandidateDevice> {
+        val manager = usbManager ?: return emptyList()
+        return manager.deviceList.values
+            .filter { device -> findDataInterface(device) != null }
+            .sortedBy { device -> device.deviceName }
+            .map { device ->
+                UsbCandidateDevice(
+                    deviceId = device.deviceName,
+                    displayName = buildDisplayName(device),
+                    vendorId = device.vendorId,
+                    productId = device.productId,
+                    hasPermission = manager.hasPermission(device),
+                )
+            }
+    }
+
+    suspend fun requestPermission(deviceId: String): UsbCandidateDevice {
+        val manager = usbManager ?: throw UsbMcuException("Brak dostępu do Android UsbManager.")
+        val device = manager.deviceList.values.firstOrNull { candidate -> candidate.deviceName == deviceId }
+            ?: throw UsbMcuException("Wybrane urządzenie USB nie jest już dostępne.")
+
+        if (manager.hasPermission(device)) {
+            return toCandidateDevice(manager, device)
+        }
+
+        return suspendCancellableCoroutine { continuation ->
+            val receiver = object : BroadcastReceiver() {
+                override fun onReceive(context: Context?, intent: Intent?) {
+                    if (intent?.action != ACTION_USB_PERMISSION || continuation.isCompleted) {
+                        return
+                    }
+                    val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
+                    val returnedDevice = getUsbDeviceFromIntent(intent)
+                    if (returnedDevice?.deviceName != deviceId) {
+                        return
+                    }
+                    runCatching { appContext.unregisterReceiver(this) }
+                    if (granted) {
+                        continuation.resume(toCandidateDevice(manager, returnedDevice))
+                    } else {
+                        continuation.resumeWithException(
+                            UsbMcuException("Android odrzucił zgodę na dostęp do urządzenia USB ${returnedDevice.deviceName}."),
+                        )
+                    }
+                }
+            }
+
+            registerPermissionReceiver(receiver)
+            continuation.invokeOnCancellation {
+                runCatching { appContext.unregisterReceiver(receiver) }
+            }
+
+            val permissionIntent = PendingIntent.getBroadcast(
+                appContext,
+                device.deviceId,
+                Intent(ACTION_USB_PERMISSION).setPackage(appContext.packageName),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            manager.requestPermission(device, permissionIntent)
+        }
+    }
 
     suspend fun connect(
         deviceSerialNumber: String,
         deviceType: String,
+        selectedDeviceId: String?,
     ): McuConnectionSnapshot = withContext(ioDispatcher) {
         val manager = usbManager ?: throw UsbMcuException("Brak dostępu do Android UsbManager.")
-        val device = findCandidateDevice(manager)
-            ?: throw UsbMcuException("Nie znaleziono urządzenia USB z kanałem danych bulk IN/OUT.")
+        val device = when {
+            selectedDeviceId.isNullOrBlank() -> {
+                val candidates = manager.deviceList.values.filter { candidate -> findDataInterface(candidate) != null }
+                when (candidates.size) {
+                    0 -> throw UsbMcuException("Nie znaleziono urządzenia USB z kanałem danych bulk IN/OUT.")
+                    1 -> candidates.first()
+                    else -> throw UsbMcuException("Wybierz konkretne urządzenie USB przed połączeniem z MCU.")
+                }
+            }
+            else -> manager.deviceList.values.firstOrNull { candidate -> candidate.deviceName == selectedDeviceId }
+                ?: throw UsbMcuException("Wybrane urządzenie USB nie jest już dostępne.")
+        }
 
         if (!manager.hasPermission(device)) {
             throw UsbMcuException(
-                "Brak zgody Androida na urządzenie USB ${device.deviceName}. " +
+                "Brak zgody Androida na urządzenie USB ${buildDisplayName(device)}. " +
                     "Nadaj uprawnienie i spróbuj ponownie.",
             )
         }
@@ -44,7 +127,7 @@ class UsbMcuClient(
             ?: throw UsbMcuException("Brak endpointu OUT dla interfejsu USB.")
 
         val connection = manager.openDevice(device)
-            ?: throw UsbMcuException("Nie udało się otworzyć urządzenia USB ${device.deviceName}.")
+            ?: throw UsbMcuException("Nie udało się otworzyć urządzenia USB ${buildDisplayName(device)}.")
 
         try {
             if (!connection.claimInterface(usbInterface, true)) {
@@ -72,7 +155,7 @@ class UsbMcuClient(
                 status = jsonObjectToMap(status),
                 errors = jsonArrayToStrings(errors.optJSONArray("errors")),
                 logs = jsonLogsToStrings(logs.optJSONArray("logs")),
-                linkStatus = "USB CDC LINK ACTIVE (${device.deviceName})",
+                linkStatus = "USB CDC LINK ACTIVE (${buildDisplayName(device)})",
                 capturedAtMillis = System.currentTimeMillis(),
             )
         } finally {
@@ -109,8 +192,7 @@ class UsbMcuClient(
             throw UsbMcuException("Brak odpowiedzi MCU dla komendy $command.")
         }
 
-        val rawResponse = responseBuffer
-            .let { buffer -> String(buffer, 0, bytesRead, Charsets.UTF_8) }
+        val rawResponse = String(responseBuffer, 0, bytesRead, Charsets.UTF_8)
             .lineSequence()
             .firstOrNull { line -> line.isNotBlank() }
             ?.trim()
@@ -123,8 +205,46 @@ class UsbMcuClient(
         }
     }
 
-    private fun findCandidateDevice(manager: UsbManager): UsbDevice? =
-        manager.deviceList.values.firstOrNull { device -> findDataInterface(device) != null }
+    private fun registerPermissionReceiver(receiver: BroadcastReceiver) {
+        val filter = IntentFilter(ACTION_USB_PERMISSION)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            appContext.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            appContext.registerReceiver(receiver, filter)
+        }
+    }
+
+    private fun getUsbDeviceFromIntent(intent: Intent): UsbDevice? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+        }
+
+    private fun toCandidateDevice(
+        manager: UsbManager,
+        device: UsbDevice,
+    ): UsbCandidateDevice = UsbCandidateDevice(
+        deviceId = device.deviceName,
+        displayName = buildDisplayName(device),
+        vendorId = device.vendorId,
+        productId = device.productId,
+        hasPermission = manager.hasPermission(device),
+    )
+
+    private fun buildDisplayName(device: UsbDevice): String {
+        val manufacturer = device.manufacturerName?.takeIf { value -> value.isNotBlank() }
+        val product = device.productName?.takeIf { value -> value.isNotBlank() }
+        val identity = listOfNotNull(manufacturer, product).joinToString(" ")
+        val vendorProduct = "VID:${device.vendorId} PID:${device.productId}"
+        return if (identity.isNotBlank()) {
+            "$identity ($vendorProduct)"
+        } else {
+            "${device.deviceName} ($vendorProduct)"
+        }
+    }
 
     private fun findDataInterface(device: UsbDevice): UsbInterface? {
         for (index in 0 until device.interfaceCount) {
@@ -188,6 +308,7 @@ class UsbMcuClient(
         }
 
     companion object {
+        private const val ACTION_USB_PERMISSION = "com.servicetrace.mobile.USB_PERMISSION"
         private const val WRITE_TIMEOUT_MILLIS = 1_000
         private const val READ_TIMEOUT_MILLIS = 2_000
         private const val READ_BUFFER_SIZE = 4_096

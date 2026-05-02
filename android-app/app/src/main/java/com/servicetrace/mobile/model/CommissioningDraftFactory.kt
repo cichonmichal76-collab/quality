@@ -46,6 +46,14 @@ data class McuConnectionSnapshot(
     val capturedAtMillis: Long,
 )
 
+data class UsbCandidateDevice(
+    val deviceId: String,
+    val displayName: String,
+    val vendorId: Int,
+    val productId: Int,
+    val hasPermission: Boolean,
+)
+
 data class CommissioningStep(
     val stepCode: String,
     val title: String,
@@ -65,6 +73,8 @@ data class ServiceSessionDraft(
     val bootloaderVersion: String,
     val connectionMode: McuConnectionMode,
     val connectionStatus: McuConnectionStatus,
+    val selectedUsbDeviceId: String,
+    val selectedUsbDeviceLabel: String,
     val echoedSerialNumber: String,
     val mainboardStatus: String,
     val inductionBoardStatus: String,
@@ -141,6 +151,8 @@ object CommissioningDraftFactory {
             bootloaderVersion = "",
             connectionMode = McuConnectionMode.MOCK,
             connectionStatus = McuConnectionStatus.DISCONNECTED,
+            selectedUsbDeviceId = "",
+            selectedUsbDeviceLabel = "",
             echoedSerialNumber = "",
             mainboardStatus = "",
             inductionBoardStatus = "",

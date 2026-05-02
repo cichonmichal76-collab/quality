@@ -10,7 +10,7 @@ import androidx.room.RoomDatabase
         ServiceSessionDraftEntity::class,
         CommissioningStepEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 abstract class ServiceTraceMobileDatabase : RoomDatabase() {

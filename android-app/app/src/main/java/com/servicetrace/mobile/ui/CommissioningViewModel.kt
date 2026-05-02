@@ -9,6 +9,7 @@ import com.servicetrace.mobile.model.McuConnectionMode
 import com.servicetrace.mobile.model.McuConnectionStatus
 import com.servicetrace.mobile.model.ServiceSessionDraft
 import com.servicetrace.mobile.model.SessionSyncStatus
+import com.servicetrace.mobile.model.UsbCandidateDevice
 import com.servicetrace.mobile.mcu.MockMcuClient
 import com.servicetrace.mobile.mcu.UsbMcuClient
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,6 +30,8 @@ data class CommissioningUiState(
     val drafts: List<ServiceSessionDraft> = emptyList(),
     val selectedDraft: ServiceSessionDraft? = null,
     val newDraftInputs: NewDraftInputs = NewDraftInputs(),
+    val usbDevices: List<UsbCandidateDevice> = emptyList(),
+    val usbPermissionInFlight: Boolean = false,
     val bannerMessage: String? = null,
 )
 
@@ -39,14 +42,18 @@ class CommissioningViewModel(
 ) : ViewModel() {
     private val inputs = MutableStateFlow(NewDraftInputs())
     private val selectedDraft = MutableStateFlow<ServiceSessionDraft?>(null)
+    private val usbDevices = MutableStateFlow<List<UsbCandidateDevice>>(emptyList())
+    private val usbPermissionInFlight = MutableStateFlow(false)
     private val bannerMessage = MutableStateFlow<String?>(null)
 
     val uiState: StateFlow<CommissioningUiState> = combine(
         repository.observeDrafts(),
         inputs,
         selectedDraft,
+        usbDevices,
+        usbPermissionInFlight,
         bannerMessage,
-    ) { drafts, draftInputs, currentDraft, message ->
+    ) { drafts, draftInputs, currentDraft, availableUsbDevices, permissionInFlight, message ->
         val selected = currentDraft?.let { draft ->
             drafts.firstOrNull { row -> row.sessionId == draft.sessionId } ?: draft
         } ?: drafts.firstOrNull()
@@ -54,6 +61,8 @@ class CommissioningViewModel(
             drafts = drafts,
             selectedDraft = selected,
             newDraftInputs = draftInputs,
+            usbDevices = availableUsbDevices,
+            usbPermissionInFlight = permissionInFlight,
             bannerMessage = message,
         )
     }.stateIn(
@@ -61,6 +70,10 @@ class CommissioningViewModel(
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = CommissioningUiState(),
     )
+
+    init {
+        refreshUsbDevices()
+    }
 
     fun updateDeviceSerialNumber(value: String) {
         inputs.update { state -> state.copy(deviceSerialNumber = value) }
@@ -147,6 +160,71 @@ class CommissioningViewModel(
                 snapshotCapturedAtMillis = null,
             )
         }
+        if (mode == McuConnectionMode.USB) {
+            refreshUsbDevices()
+        }
+    }
+
+    fun refreshUsbDevices() {
+        usbDevices.value = usbMcuClient.listCandidateDevices()
+        val availableIds = usbDevices.value.map { device -> device.deviceId }.toSet()
+        selectedDraft.update { draft ->
+            draft?.let {
+                if (
+                    it.connectionMode == McuConnectionMode.USB &&
+                    it.selectedUsbDeviceId.isNotBlank() &&
+                    it.selectedUsbDeviceId !in availableIds
+                ) {
+                    it.copy(
+                        selectedUsbDeviceId = "",
+                        selectedUsbDeviceLabel = "",
+                    )
+                } else {
+                    it
+                }
+            }
+        }
+    }
+
+    fun selectUsbDevice(deviceId: String) {
+        val selectedDevice = usbDevices.value.firstOrNull { device -> device.deviceId == deviceId } ?: return
+        selectedDraft.update { draft ->
+            draft?.copy(
+                selectedUsbDeviceId = selectedDevice.deviceId,
+                selectedUsbDeviceLabel = selectedDevice.displayName,
+                connectionStatus = McuConnectionStatus.DISCONNECTED,
+                echoedSerialNumber = "",
+                usbLinkStatus = "",
+                logExcerpt = "",
+                snapshotCapturedAtMillis = null,
+            )
+        }
+    }
+
+    fun requestUsbPermission() {
+        val draft = selectedDraft.value ?: return
+        if (draft.selectedUsbDeviceId.isBlank()) {
+            bannerMessage.value = "Najpierw wybierz urządzenie USB."
+            return
+        }
+        viewModelScope.launch {
+            usbPermissionInFlight.value = true
+            try {
+                val grantedDevice = usbMcuClient.requestPermission(draft.selectedUsbDeviceId)
+                usbDevices.value = usbMcuClient.listCandidateDevices()
+                selectedDraft.update { currentDraft ->
+                    currentDraft?.copy(
+                        selectedUsbDeviceId = grantedDevice.deviceId,
+                        selectedUsbDeviceLabel = grantedDevice.displayName,
+                    )
+                }
+                bannerMessage.value = "Android nadał zgodę na dostęp do urządzenia USB."
+            } catch (error: Exception) {
+                bannerMessage.value = error.message ?: "Nie udało się uzyskać zgody USB."
+            } finally {
+                usbPermissionInFlight.value = false
+            }
+        }
     }
 
     fun connectToMcu() {
@@ -161,6 +239,7 @@ class CommissioningViewModel(
                     McuConnectionMode.USB -> usbMcuClient.connect(
                         deviceSerialNumber = draft.deviceSerialNumber,
                         deviceType = draft.deviceType,
+                        selectedDeviceId = draft.selectedUsbDeviceId,
                     )
                 }
                 val updatedDraft = draft.copy(
