@@ -7,14 +7,24 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.DataOutputStream
 import java.io.File
+import java.net.ConnectException
 import java.net.HttpURLConnection
+import java.net.SocketTimeoutException
 import java.net.URL
+import java.net.UnknownHostException
 
 data class ServiceSessionUploadResponse(
     val sessionId: String,
     val uploadStatus: String,
     val packageHash: String?,
 )
+
+class CommissioningUploadException(
+    message: String,
+    val isRetryable: Boolean,
+    val statusCode: Int? = null,
+    cause: Throwable? = null,
+) : Exception(message, cause)
 
 class ServiceSessionUploader(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
@@ -25,58 +35,61 @@ class ServiceSessionUploader(
     ): ServiceSessionUploadResponse = withContext(ioDispatcher) {
         val packageFile = File(draft.packagePath)
         if (!packageFile.exists()) {
-            throw IllegalStateException("Brak lokalnej paczki ZIP dla sesji ${draft.sessionId}.")
+            throw CommissioningUploadException(
+                message = "Brak lokalnej paczki ZIP dla sesji ${draft.sessionId}.",
+                isRetryable = false,
+            )
         }
 
         val normalizedBaseUrl = normalizeApiBaseUrl(baseUrl)
         val boundary = "----ServiceTraceBoundary${System.currentTimeMillis()}"
-        val connection = (URL("$normalizedBaseUrl/service-sessions/upload").openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"
-            doInput = true
-            doOutput = true
-            useCaches = false
-            connectTimeout = CONNECT_TIMEOUT_MILLIS
-            readTimeout = READ_TIMEOUT_MILLIS
-            setRequestProperty("Accept", "application/json")
-            setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
-        }
+        try {
+            val connection = (URL("$normalizedBaseUrl/service-sessions/upload").openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                doInput = true
+                doOutput = true
+                useCaches = false
+                connectTimeout = CONNECT_TIMEOUT_MILLIS
+                readTimeout = READ_TIMEOUT_MILLIS
+                setRequestProperty("Accept", "application/json")
+                setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+            }
 
-        DataOutputStream(connection.outputStream).use { output ->
-            writeField(output, boundary, "session_id", draft.sessionId)
-            writeField(output, boundary, "device_serial_number", draft.deviceSerialNumber)
-            writeField(output, boundary, "technician_id", draft.technicianId)
-            writeOptionalField(output, boundary, "device_type", draft.deviceType)
-            writeOptionalField(output, boundary, "result", draft.outcome?.name)
-            writeOptionalField(output, boundary, "firmware_version", draft.firmwareVersion)
-            writeOptionalField(output, boundary, "bootloader_version", draft.bootloaderVersion)
-            writeFile(output, boundary, "file", packageFile, "application/zip")
-            output.writeBytes("--$boundary--\r\n")
-            output.flush()
-        }
+            DataOutputStream(connection.outputStream).use { output ->
+                writeField(output, boundary, "session_id", draft.sessionId)
+                writeField(output, boundary, "device_serial_number", draft.deviceSerialNumber)
+                writeField(output, boundary, "technician_id", draft.technicianId)
+                writeOptionalField(output, boundary, "device_type", draft.deviceType)
+                writeOptionalField(output, boundary, "result", draft.outcome?.name)
+                writeOptionalField(output, boundary, "firmware_version", draft.firmwareVersion)
+                writeOptionalField(output, boundary, "bootloader_version", draft.bootloaderVersion)
+                writeFile(output, boundary, "file", packageFile, "application/zip")
+                output.writeBytes("--$boundary--\r\n")
+                output.flush()
+            }
 
-        val statusCode = connection.responseCode
-        val responseText = runCatching {
-            val stream = if (statusCode in 200..299) connection.inputStream else connection.errorStream
-            stream?.bufferedReader(Charsets.UTF_8)?.use { reader -> reader.readText() }.orEmpty()
-        }.getOrDefault("")
+            val statusCode = connection.responseCode
+            val responseText = runCatching {
+                val stream = if (statusCode in 200..299) connection.inputStream else connection.errorStream
+                stream?.bufferedReader(Charsets.UTF_8)?.use { reader -> reader.readText() }.orEmpty()
+            }.getOrDefault("")
 
-        if (statusCode !in 200..299) {
-            val detail = runCatching {
-                JSONObject(responseText).optString("detail")
-            }.getOrNull().orEmpty()
-            throw IllegalStateException(
-                detail.ifBlank {
-                    "Backend odrzucil upload paczki commissioning (${connection.responseCode})."
-                },
+            if (statusCode !in 200..299) {
+                val detail = runCatching {
+                    JSONObject(responseText).optString("detail")
+                }.getOrNull().orEmpty()
+                throw createHttpUploadException(statusCode, detail)
+            }
+
+            val payload = JSONObject(responseText.ifBlank { "{}" })
+            ServiceSessionUploadResponse(
+                sessionId = payload.optString("session_id", draft.sessionId),
+                uploadStatus = payload.optString("upload_status", "UPLOADED"),
+                packageHash = payload.optString("package_hash").takeIf { value -> value.isNotBlank() },
             )
+        } catch (error: Exception) {
+            throw classifyTransportUploadException(error)
         }
-
-        val payload = JSONObject(responseText.ifBlank { "{}" })
-        ServiceSessionUploadResponse(
-            sessionId = payload.optString("session_id", draft.sessionId),
-            uploadStatus = payload.optString("upload_status", "UPLOADED"),
-            packageHash = payload.optString("package_hash").takeIf { value -> value.isNotBlank() },
-        )
     }
 
     private fun writeOptionalField(
@@ -135,3 +148,38 @@ internal fun normalizeApiBaseUrl(baseUrl: String): String {
         "$trimmed/api"
     }
 }
+
+internal fun createHttpUploadException(
+    statusCode: Int,
+    detail: String,
+): CommissioningUploadException {
+    val message = detail.ifBlank {
+        "Backend odrzucil upload paczki commissioning ($statusCode)."
+    }
+    val retryable = statusCode == 408 || statusCode == 429 || statusCode >= 500
+    return CommissioningUploadException(
+        message = message,
+        isRetryable = retryable,
+        statusCode = statusCode,
+    )
+}
+
+internal fun classifyTransportUploadException(
+    error: Exception,
+): CommissioningUploadException =
+    when (error) {
+        is CommissioningUploadException -> error
+        is SocketTimeoutException,
+        is ConnectException,
+        is UnknownHostException,
+        -> CommissioningUploadException(
+            message = error.message ?: "Przejsciowy blad polaczenia podczas synchronizacji commissioning.",
+            isRetryable = true,
+            cause = error,
+        )
+        else -> CommissioningUploadException(
+            message = error.message ?: "Nieznany blad synchronizacji commissioning.",
+            isRetryable = false,
+            cause = error,
+        )
+    }

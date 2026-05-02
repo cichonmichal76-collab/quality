@@ -34,10 +34,14 @@ class CommissioningSyncWorker(
             artifactStore = CommissioningArtifactStore(applicationContext),
             uploader = ServiceSessionUploader(),
         )
-        runner.syncDrafts(
+        val result = runner.syncDrafts(
             baseUrl = syncSettings.uploadBaseUrl,
             drafts = readyDrafts,
         )
-        return Result.success()
+        return if (result.retryableFailedCount > 0) {
+            Result.retry()
+        } else {
+            Result.success()
+        }
     }
 }

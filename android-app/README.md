@@ -17,6 +17,7 @@
 - auto-sync po odzyskaniu lacznosci albo po oznaczeniu sesji jako gotowej przy aktywnej sieci
 - trwale zapamietywanie adresu backendu i przelacznika auto-sync
 - `WorkManager` z odlozona kolejka synchronizacji dla sesji gotowych offline, takze po zamknieciu ekranu
+- rozroznienie bledow retryable i trwalych, z retry workerem tylko dla bledow przejsciowych
 - lokalna checklista 5 krokow
 - komentarz ogolny, firmware i bootloader
 - status `DRAFT` / `READY_TO_SYNC`
@@ -50,9 +51,9 @@ Domyslny adres backendu w aplikacji to `http://10.0.2.2:8000/api`, co pasuje do 
 ## Nastepny sensowny krok
 
 1. rozszerzyc snapshoty MCU o dodatkowe artefakty diagnostyczne
-2. dodac retry / backoff w tle zamiast tylko recznego ponowienia
-3. rozbudowac worker o upload okresowy albo bardziej agresywne wznowienia po dluzszym offline
-4. rozszerzyc sync o klasyfikacje bledow i osobna polityke retry
+2. rozbudowac worker o upload okresowy albo bardziej agresywne wznowienia po dluzszym offline
+3. dodac limity lub eskalacje po wielu nieudanych probach retryable
+4. rozszerzyc snapshoty syncu o bardziej szczegolowe telemetry / reason codes
 
 ## Poza zakresem MVP
 

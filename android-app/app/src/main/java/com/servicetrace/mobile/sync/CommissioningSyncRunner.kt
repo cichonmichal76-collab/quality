@@ -9,6 +9,7 @@ import java.io.File
 data class CommissioningSyncRunResult(
     val uploadedCount: Int,
     val failedCount: Int,
+    val retryableFailedCount: Int,
     val latestDraftsBySessionId: Map<String, ServiceSessionDraft>,
 )
 
@@ -23,6 +24,7 @@ class CommissioningSyncRunner(
     ): CommissioningSyncRunResult {
         var uploadedCount = 0
         var failedCount = 0
+        var retryableFailedCount = 0
         val latestDraftsBySessionId = linkedMapOf<String, ServiceSessionDraft>()
 
         drafts.distinctBy { draft -> draft.sessionId }.forEach { draft ->
@@ -42,23 +44,28 @@ class CommissioningSyncRunner(
                 latestDraftsBySessionId[syncedDraft.sessionId] = syncedDraft
                 uploadedCount += 1
             } catch (error: Exception) {
+                val uploadError = classifyTransportUploadException(error)
                 val failedAtMillis = System.currentTimeMillis()
                 val failedDraft = draft.copy(
                     syncStatus = SessionSyncStatus.READY_TO_SYNC,
                     syncAttemptCount = draft.syncAttemptCount + 1,
                     lastSyncAttemptAtMillis = failedAtMillis,
-                    lastSyncErrorMessage = error.message ?: "Nieznany blad synchronizacji commissioning.",
+                    lastSyncErrorMessage = uploadError.message ?: "Nieznany blad synchronizacji commissioning.",
                     updatedAtMillis = failedAtMillis,
                 )
                 repository.saveDraft(failedDraft)
                 latestDraftsBySessionId[failedDraft.sessionId] = failedDraft
                 failedCount += 1
+                if (uploadError.isRetryable) {
+                    retryableFailedCount += 1
+                }
             }
         }
 
         return CommissioningSyncRunResult(
             uploadedCount = uploadedCount,
             failedCount = failedCount,
+            retryableFailedCount = retryableFailedCount,
             latestDraftsBySessionId = latestDraftsBySessionId.toMap(),
         )
     }
