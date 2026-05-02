@@ -191,6 +191,15 @@ const operatorsPayload = [
     created_at: "2026-05-01T07:50:00Z",
   },
   {
+    id: "OP-ROW-PROD-001",
+    operator_id: "OP-PROD-001",
+    full_name: "Production Operator",
+    role: "PRODUCTION_OPERATOR",
+    rfid_uid_hash: "RFID-PROD-001",
+    is_active: true,
+    created_at: "2026-05-01T07:45:00Z",
+  },
+  {
     id: "OP-ROW-QA-001",
     operator_id: "OP-QA-001",
     full_name: "Quality Inspector",
@@ -210,6 +219,16 @@ const workSessionsPayload = [
     machine_id: "FT-MC-01",
     status: "ACTIVE",
     started_at: "2026-05-01T08:00:00Z",
+    ended_at: null,
+  },
+  {
+    id: "WS-ROW-PROD-001",
+    work_session_id: "WS-PROD-001",
+    operator_id: "OP-PROD-001",
+    workstation_id: "PR-ST-01",
+    machine_id: "PR-MC-01",
+    status: "ACTIVE",
+    started_at: "2026-05-01T07:55:00Z",
     ended_at: null,
   },
   {
@@ -553,6 +572,249 @@ const componentActionAfterPassComponentDetailsPayload = {
         }
       : component,
   ),
+};
+
+const shipmentAssemblyQueuePayload = {
+  ...shipmentQueuePayload,
+  ready_count: 0,
+  blocked_count: 1,
+  recommended_action_summary: [
+    { recommended_action: "COMPLETE_ASSEMBLY", device_count: 1 },
+  ],
+  latest_shipment_gate_result_summary: [
+    { result: "BLOCKED", device_count: 1 },
+  ],
+  devices: [
+    {
+      ...shipmentQueuePayload.devices[0],
+      device_serial_number: "ASM-001",
+      production_status: "FINAL_TEST_PASSED",
+      device_updated_at: "2026-05-02T08:10:00Z",
+      final_test_passed: true,
+      has_critical_open_ncr: false,
+      critical_open_ncr_ids: [],
+      bom_compliance: {
+        passes_bom_gate: false,
+        installed_component_count: 1,
+        missing_required_components: ["FAN_MODULE"],
+        over_installed_components: [],
+        unexpected_component_types: [],
+        blocking_reason: "Brak FAN_MODULE",
+      },
+      can_transition_to_ready_for_shipment: false,
+      latest_shipment_gate_decision: {
+        event_type: "SHIPMENT_GATE_BLOCKED",
+        result: "BLOCKED",
+        message: "Brakuje FAN_MODULE",
+        recommended_action: "COMPLETE_ASSEMBLY",
+        created_at: "2026-05-02T08:10:00Z",
+      },
+      primary_blocking_code: "BOM_REQUIRED_COMPONENTS_MISSING",
+      primary_blocking_message: "Brakuje FAN_MODULE",
+      recommended_action: "COMPLETE_ASSEMBLY",
+      blocking_reasons: ["FAN_MODULE"],
+      blocking_checks: [
+        {
+          code: "BOM_REQUIRED_COMPONENTS_MISSING",
+          is_blocking: true,
+          message: "Brak wymaganego komponentu FAN_MODULE",
+          details: ["FAN_MODULE"],
+        },
+      ],
+    },
+  ],
+};
+
+const shipmentAssemblyDetailsPayload = {
+  ...shipmentAssemblyQueuePayload.devices[0],
+  bom_compliance: {
+    device_serial_number: "ASM-001",
+    device_type: "DEMO-OPS",
+    device_variant_code: "DEFAULT",
+    production_status: "FINAL_TEST_PASSED",
+    resolution_source: "BOUND_TEMPLATE",
+    resolved_template_id: "BOM-01",
+    resolved_variant_code: "DEFAULT",
+    resolved_version: "1.2",
+    resolved_status: "ACTIVE",
+    resolved_is_active: true,
+    resolved_is_effective_now: true,
+    is_bom_resolved: true,
+    passes_bom_gate: false,
+    installed_component_count: 1,
+    missing_required_components: ["FAN_MODULE"],
+    over_installed_components: [],
+    unexpected_component_types: [],
+    component_coverage: [
+      {
+        component_type: "CONTROL_PCB",
+        substitution_group: null,
+        allowed_component_types: null,
+        required_quantity: 1,
+        installed_quantity: 1,
+        is_required: true,
+        status: "PASS",
+      },
+      {
+        component_type: "FAN_MODULE",
+        substitution_group: "AIRFLOW",
+        allowed_component_types: ["FAN_MODULE", "FAN_MODULE_V2"],
+        required_quantity: 1,
+        installed_quantity: 0,
+        is_required: true,
+        status: "MISSING",
+      },
+    ],
+    blocking_reason: "Brak FAN_MODULE",
+  },
+};
+
+const componentAssemblyDetailsPayload = {
+  device_serial_number: "ASM-001",
+  device_type: "DEMO-OPS",
+  device_variant_code: "DEFAULT",
+  production_status: "FINAL_TEST_PASSED",
+  device_created_at: "2026-05-02T07:30:00Z",
+  device_updated_at: "2026-05-02T08:10:00Z",
+  stale_bucket: "LT_24H",
+  total_installed_components: 1,
+  passing_components: 1,
+  blocked_components: 0,
+  passes_component_quality_gate: true,
+  primary_quality_status: "PASS",
+  primary_blocking_component_type: null,
+  primary_blocking_component_serial_number: null,
+  recommended_action: "NO_ACTION",
+  components: [
+    {
+      component_serial_number: "CTRL-ASM-001",
+      component_type: "CONTROL_PCB",
+      child_barcode_value: "BC-CTRL-ASM-001",
+      installed_at: "2026-05-02T07:50:00Z",
+      installed_by: "OP-PROD-001",
+      workstation_id: "PR-ST-01",
+      bom_template_id: "BOM-01",
+      bom_version: "1.2",
+      component_qc_passed: true,
+      has_critical_open_ncr: false,
+      critical_open_ncr_ids: [],
+      blocks_shipment: false,
+      quality_status: "PASS",
+    },
+  ],
+};
+
+const shipmentAssemblyAfterQueuePayload = {
+  ...shipmentQueuePayload,
+  ready_count: 1,
+  blocked_count: 0,
+  recommended_action_summary: [
+    { recommended_action: "MARK_READY_FOR_SHIPMENT", device_count: 1 },
+  ],
+  latest_shipment_gate_result_summary: [
+    { result: "PASS", device_count: 1 },
+  ],
+  devices: [
+    {
+      ...shipmentQueuePayload.devices[0],
+      device_serial_number: "ASM-001",
+      production_status: "FINAL_TEST_PASSED",
+      device_updated_at: "2026-05-02T08:20:00Z",
+      final_test_passed: true,
+      has_critical_open_ncr: false,
+      critical_open_ncr_ids: [],
+      bom_compliance: {
+        passes_bom_gate: true,
+        installed_component_count: 2,
+        missing_required_components: [],
+        over_installed_components: [],
+        unexpected_component_types: [],
+        blocking_reason: null,
+      },
+      can_transition_to_ready_for_shipment: true,
+      latest_shipment_gate_decision: {
+        event_type: "SHIPMENT_GATE_PASSED",
+        result: "PASS",
+        message: "Montaż BOM domknięty",
+        recommended_action: "MARK_READY_FOR_SHIPMENT",
+        created_at: "2026-05-02T08:20:00Z",
+      },
+      primary_blocking_code: null,
+      primary_blocking_message: null,
+      recommended_action: "MARK_READY_FOR_SHIPMENT",
+      blocking_reasons: [],
+      blocking_checks: [],
+    },
+  ],
+};
+
+const shipmentAssemblyAfterDetailsPayload = {
+  ...shipmentAssemblyAfterQueuePayload.devices[0],
+  bom_compliance: {
+    device_serial_number: "ASM-001",
+    device_type: "DEMO-OPS",
+    device_variant_code: "DEFAULT",
+    production_status: "FINAL_TEST_PASSED",
+    resolution_source: "BOUND_TEMPLATE",
+    resolved_template_id: "BOM-01",
+    resolved_variant_code: "DEFAULT",
+    resolved_version: "1.2",
+    resolved_status: "ACTIVE",
+    resolved_is_active: true,
+    resolved_is_effective_now: true,
+    is_bom_resolved: true,
+    passes_bom_gate: true,
+    installed_component_count: 2,
+    missing_required_components: [],
+    over_installed_components: [],
+    unexpected_component_types: [],
+    component_coverage: [
+      {
+        component_type: "CONTROL_PCB",
+        substitution_group: null,
+        allowed_component_types: null,
+        required_quantity: 1,
+        installed_quantity: 1,
+        is_required: true,
+        status: "PASS",
+      },
+      {
+        component_type: "FAN_MODULE",
+        substitution_group: "AIRFLOW",
+        allowed_component_types: ["FAN_MODULE", "FAN_MODULE_V2"],
+        required_quantity: 1,
+        installed_quantity: 1,
+        is_required: true,
+        status: "PASS",
+      },
+    ],
+    blocking_reason: null,
+  },
+};
+
+const componentAssemblyAfterDetailsPayload = {
+  ...componentAssemblyDetailsPayload,
+  device_updated_at: "2026-05-02T08:20:00Z",
+  total_installed_components: 2,
+  passing_components: 2,
+  components: [
+    ...componentAssemblyDetailsPayload.components,
+    {
+      component_serial_number: "FAN-777",
+      component_type: "FAN_MODULE",
+      child_barcode_value: "BC-FAN-777",
+      installed_at: "2026-05-02T08:20:00Z",
+      installed_by: "OP-PROD-001",
+      workstation_id: "PR-ST-01",
+      bom_template_id: "BOM-01",
+      bom_version: "1.2",
+      component_qc_passed: true,
+      has_critical_open_ncr: false,
+      critical_open_ncr_ids: [],
+      blocks_shipment: false,
+      quality_status: "PASS",
+    },
+  ],
 };
 
 test("dashboard marks device ready for shipment from the details drawer", async ({
@@ -962,6 +1224,151 @@ test("dashboard records final test PASS from the details drawer", async ({
   await expect(drawer.getByText("Zapisano final test PASS.")).toBeVisible();
   await expect(
     drawer.getByRole("button", { name: "Zapisz final test PASS" }),
+  ).toHaveCount(0);
+  expect(postRequests).toBe(1);
+});
+
+test("dashboard completes assembly from the details drawer", async ({
+  page,
+}) => {
+  let assemblyCompleted = false;
+  let postRequests = 0;
+
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const path = url.pathname;
+
+    if (path === "/api/shipment-readiness") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(
+          assemblyCompleted
+            ? shipmentAssemblyAfterQueuePayload
+            : shipmentAssemblyQueuePayload,
+        ),
+      });
+      return;
+    }
+
+    if (path === "/api/devices/ASM-001/shipment-readiness") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(
+          assemblyCompleted
+            ? shipmentAssemblyAfterDetailsPayload
+            : shipmentAssemblyDetailsPayload,
+        ),
+      });
+      return;
+    }
+
+    if (path === "/api/devices/ASM-001/component-quality") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(
+          assemblyCompleted
+            ? componentAssemblyAfterDetailsPayload
+            : componentAssemblyDetailsPayload,
+        ),
+      });
+      return;
+    }
+
+    if (path === "/api/devices/ASM-001/shipment-gate-history") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([]),
+      });
+      return;
+    }
+
+    if (path === "/api/work-sessions") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(workSessionsPayload),
+      });
+      return;
+    }
+
+    if (path === "/api/operators") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(operatorsPayload),
+      });
+      return;
+    }
+
+    if (
+      path === "/api/devices/ASM-001/assembly/scan-component" &&
+      request.method() === "POST"
+    ) {
+      postRequests += 1;
+      const payload = request.postDataJSON() as {
+        child_barcode_value: string;
+        component_type: string;
+        installed_by: string;
+        workstation_id: string;
+        work_session_id: string;
+      };
+
+      expect(payload.child_barcode_value).toBe("BC-FAN-777");
+      expect(payload.component_type).toBe("FAN_MODULE_V2");
+      expect(payload.installed_by).toBe("OP-PROD-001");
+      expect(payload.workstation_id).toBe("PR-ST-01");
+      expect(payload.work_session_id).toBe("WS-PROD-001");
+      assemblyCompleted = true;
+
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: "ASM-LINK-001",
+          parent_device_serial_number: "ASM-001",
+          child_item_serial_number: "FAN-777",
+          child_barcode_value: "BC-FAN-777",
+          component_type: "FAN_MODULE_V2",
+          installed_by: "OP-PROD-001",
+          installed_at: "2026-05-02T08:20:00Z",
+          workstation_id: "PR-ST-01",
+          scan_event_id: "SCAN-001",
+          bom_template_id: "BOM-01",
+          bom_version: "1.2",
+          status: "INSTALLED",
+        }),
+      });
+      return;
+    }
+
+    throw new Error(`Unexpected request: ${request.method()} ${path}`);
+  });
+
+  await page.goto("/");
+
+  await expect(page.getByText("API OK")).toBeVisible();
+  await page.getByRole("button", { name: "ASM-001" }).click();
+
+  const drawer = page.getByRole("dialog");
+  await expect(drawer.getByLabel("Sesja montażu")).toHaveValue("WS-PROD-001");
+  await expect(drawer.getByLabel("Typ komponentu")).toHaveValue("FAN_MODULE");
+
+  await drawer.getByLabel("Typ komponentu").selectOption("FAN_MODULE_V2");
+  await drawer.getByLabel("Barcode komponentu").fill("BC-FAN-777");
+  await drawer.getByRole("button", { name: "Zamontuj komponent" }).click();
+
+  await expect(
+    drawer.getByText(
+      "Zamontowano komponent Fan Module V2 z barcode BC-FAN-777.",
+    ),
+  ).toBeVisible();
+  await expect(
+    drawer.getByRole("button", { name: "Zamontuj komponent" }),
   ).toHaveCount(0);
   expect(postRequests).toBe(1);
 });

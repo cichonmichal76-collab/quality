@@ -11,10 +11,12 @@ import {
   listOperators,
   listWorkSessions,
   optionalBoolean,
+  scanAssemblyComponent,
   updateDeviceStatus,
   updateNonconformityStatus,
 } from "./api";
 import type {
+  DeviceBomComponentCoverage,
   AuditEvent,
   DashboardMode,
   DeviceComponentQuality,
@@ -41,6 +43,8 @@ const SHIPMENT_FILTERS_STORAGE_KEY = "servicetrace.web.shipmentFilters";
 const COMPONENT_FILTERS_STORAGE_KEY = "servicetrace.web.componentFilters";
 const FINAL_TEST_SESSION_STORAGE_KEY =
   "servicetrace.web.finalTestWorkSessionId";
+const PRODUCTION_SESSION_STORAGE_KEY =
+  "servicetrace.web.productionWorkSessionId";
 const QUALITY_SESSION_STORAGE_KEY =
   "servicetrace.web.qualityWorkSessionId";
 const DEFAULT_API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
@@ -49,6 +53,11 @@ const FINAL_TEST_ALLOWED_ROLES = new Set([
   "ADMIN",
   "FINAL_TEST_OPERATOR",
   "QUALITY_MANAGER",
+]);
+const PRODUCTION_ACTION_ALLOWED_ROLES = new Set([
+  "ADMIN",
+  "PRODUCTION_OPERATOR",
+  "QUALITY_INSPECTOR",
 ]);
 const QUALITY_ACTION_ALLOWED_ROLES = new Set([
   "ADMIN",
@@ -283,9 +292,14 @@ export function App() {
   );
   const [selectedFinalTestSessionId, setSelectedFinalTestSessionId] =
     useState(() => localStorage.getItem(FINAL_TEST_SESSION_STORAGE_KEY) ?? "");
+  const [selectedProductionSessionId, setSelectedProductionSessionId] =
+    useState(() => localStorage.getItem(PRODUCTION_SESSION_STORAGE_KEY) ?? "");
   const [selectedQualitySessionId, setSelectedQualitySessionId] = useState(
     () => localStorage.getItem(QUALITY_SESSION_STORAGE_KEY) ?? "",
   );
+  const [selectedAssemblyComponentType, setSelectedAssemblyComponentType] =
+    useState("");
+  const [assemblyBarcodeValue, setAssemblyBarcodeValue] = useState("");
   const [refreshVersion, setRefreshVersion] = useState(0);
   const activePath =
     activeView === "shipment" ? "/shipment-readiness" : "/component-quality";
@@ -294,16 +308,25 @@ export function App() {
       ? shipmentRequestFilters
       : componentRequestFilters;
   const selectedDeviceSerial = selectedDevice?.serialNumber ?? null;
+  const requiresCompleteAssemblyAction =
+    deviceDetails?.shipment.recommended_action === "COMPLETE_ASSEMBLY";
   const requiresFinalTestAction =
     deviceDetails?.shipment.recommended_action === "RUN_FINAL_TEST";
   const requiresComponentQcAction =
     deviceDetails?.component.recommended_action === "RUN_COMPONENT_QC_OR_REWORK";
   const requiresOperatorActionContext =
-    requiresFinalTestAction || requiresComponentQcAction;
+    requiresCompleteAssemblyAction ||
+    requiresFinalTestAction ||
+    requiresComponentQcAction;
   const finalTestSessionOptions = buildActionWorkSessionOptions(
     workSessions,
     operators,
     FINAL_TEST_ALLOWED_ROLES,
+  );
+  const productionSessionOptions = buildActionWorkSessionOptions(
+    workSessions,
+    operators,
+    PRODUCTION_ACTION_ALLOWED_ROLES,
   );
   const qualitySessionOptions = buildActionWorkSessionOptions(
     workSessions,
@@ -316,12 +339,21 @@ export function App() {
     ) ??
     finalTestSessionOptions[0] ??
     null;
+  const selectedProductionSession =
+    productionSessionOptions.find(
+      (session) => session.workSessionId === selectedProductionSessionId,
+    ) ??
+    productionSessionOptions[0] ??
+    null;
   const selectedQualitySession =
     qualitySessionOptions.find(
       (session) => session.workSessionId === selectedQualitySessionId,
     ) ??
     qualitySessionOptions[0] ??
     null;
+  const assemblyComponentTypeOptions = buildAssemblyComponentTypeOptions(
+    deviceDetails?.shipment.bom_compliance.component_coverage ?? [],
+  );
 
   const clearActiveViewData = (view: DashboardMode) => {
     if (view === "shipment") {
@@ -377,6 +409,18 @@ export function App() {
 
     localStorage.removeItem(FINAL_TEST_SESSION_STORAGE_KEY);
   }, [selectedFinalTestSessionId]);
+
+  useEffect(() => {
+    if (selectedProductionSessionId) {
+      localStorage.setItem(
+        PRODUCTION_SESSION_STORAGE_KEY,
+        selectedProductionSessionId,
+      );
+      return;
+    }
+
+    localStorage.removeItem(PRODUCTION_SESSION_STORAGE_KEY);
+  }, [selectedProductionSessionId]);
 
   useEffect(() => {
     if (selectedQualitySessionId) {
@@ -590,6 +634,22 @@ export function App() {
   }, [finalTestSessionOptions, selectedFinalTestSessionId]);
 
   useEffect(() => {
+    if (productionSessionOptions.length === 0) {
+      if (selectedProductionSessionId !== "") {
+        setSelectedProductionSessionId("");
+      }
+      return;
+    }
+
+    const isSelectedSessionAvailable = productionSessionOptions.some(
+      (session) => session.workSessionId === selectedProductionSessionId,
+    );
+    if (!isSelectedSessionAvailable) {
+      setSelectedProductionSessionId(productionSessionOptions[0].workSessionId);
+    }
+  }, [productionSessionOptions, selectedProductionSessionId]);
+
+  useEffect(() => {
     if (qualitySessionOptions.length === 0) {
       if (selectedQualitySessionId !== "") {
         setSelectedQualitySessionId("");
@@ -609,7 +669,21 @@ export function App() {
     setDeviceActionState("idle");
     setDeviceActionError(null);
     setDeviceActionSuccess(null);
+    setAssemblyBarcodeValue("");
   }, [selectedDeviceSerial]);
+
+  useEffect(() => {
+    if (assemblyComponentTypeOptions.length === 0) {
+      if (selectedAssemblyComponentType !== "") {
+        setSelectedAssemblyComponentType("");
+      }
+      return;
+    }
+
+    if (!assemblyComponentTypeOptions.includes(selectedAssemblyComponentType)) {
+      setSelectedAssemblyComponentType(assemblyComponentTypeOptions[0]);
+    }
+  }, [assemblyComponentTypeOptions, selectedAssemblyComponentType]);
 
   const updateSelectedDeviceProductionStatus = async (
     productionStatus: string,
@@ -659,6 +733,70 @@ export function App() {
       "SHIPPED",
       "Urządzenie oznaczone jako wysłane.",
     );
+  };
+
+  const completeSelectedAssembly = async () => {
+    if (!selectedDeviceSerial || deviceActionState === "loading") {
+      return;
+    }
+
+    if (!apiBaseUrl.trim()) {
+      setDeviceActionState("error");
+      setDeviceActionError("Podaj bazowy adres API.");
+      setDeviceActionSuccess(null);
+      return;
+    }
+
+    if (!selectedProductionSession) {
+      setDeviceActionState("error");
+      setDeviceActionError(
+        "Wybierz aktywną sesję montażową z uprawnioną rolą.",
+      );
+      setDeviceActionSuccess(null);
+      return;
+    }
+
+    if (!selectedAssemblyComponentType) {
+      setDeviceActionState("error");
+      setDeviceActionError("Wybierz typ komponentu do montażu.");
+      setDeviceActionSuccess(null);
+      return;
+    }
+
+    const normalizedBarcode = assemblyBarcodeValue.trim();
+    if (normalizedBarcode === "") {
+      setDeviceActionState("error");
+      setDeviceActionError("Podaj barcode komponentu do montażu.");
+      setDeviceActionSuccess(null);
+      return;
+    }
+
+    setDeviceActionState("loading");
+    setDeviceActionError(null);
+    setDeviceActionSuccess(null);
+
+    try {
+      await scanAssemblyComponent(apiBaseUrl.trim(), selectedDeviceSerial, {
+        child_barcode_value: normalizedBarcode,
+        component_type: selectedAssemblyComponentType,
+        installed_by: selectedProductionSession.operatorId,
+        workstation_id: selectedProductionSession.workstationId,
+        work_session_id: selectedProductionSession.workSessionId,
+      });
+      setDeviceActionState("loaded");
+      setDeviceActionSuccess(
+        `Zamontowano komponent ${labelForCode(
+          selectedAssemblyComponentType,
+        )} z barcode ${normalizedBarcode}.`,
+      );
+      setAssemblyBarcodeValue("");
+      setRefreshVersion((previous) => previous + 1);
+    } catch (error: unknown) {
+      setDeviceActionState("error");
+      setDeviceActionError(
+        error instanceof Error ? error.message : String(error),
+      );
+    }
   };
 
   const recordSelectedDeviceFinalTest = async (result: "PASS" | "FAIL") => {
@@ -890,7 +1028,10 @@ export function App() {
     setShipmentFilters(DEFAULT_SHIPMENT_FILTERS);
     setComponentFilters(DEFAULT_COMPONENT_FILTERS);
     setSelectedFinalTestSessionId("");
+    setSelectedProductionSessionId("");
     setSelectedQualitySessionId("");
+    setSelectedAssemblyComponentType("");
+    setAssemblyBarcodeValue("");
     setSelectedDevice(null);
     setDeviceDetails(null);
     setDeviceDetailsState("idle");
@@ -1033,11 +1174,22 @@ export function App() {
             finalTestSessionOptions={finalTestSessionOptions}
             selectedFinalTestSessionId={selectedFinalTestSession?.workSessionId ?? ""}
             onSelectFinalTestSession={setSelectedFinalTestSessionId}
+            productionSessionOptions={productionSessionOptions}
+            selectedProductionSessionId={
+              selectedProductionSession?.workSessionId ?? ""
+            }
+            onSelectProductionSession={setSelectedProductionSessionId}
+            assemblyComponentTypeOptions={assemblyComponentTypeOptions}
+            selectedAssemblyComponentType={selectedAssemblyComponentType}
+            onSelectAssemblyComponentType={setSelectedAssemblyComponentType}
+            assemblyBarcodeValue={assemblyBarcodeValue}
+            onChangeAssemblyBarcode={setAssemblyBarcodeValue}
             qualitySessionOptions={qualitySessionOptions}
             selectedQualitySessionId={selectedQualitySession?.workSessionId ?? ""}
             onSelectQualitySession={setSelectedQualitySessionId}
             onMarkReadyForShipment={markSelectedDeviceReadyForShipment}
             onMarkShipped={markSelectedDeviceShipped}
+            onCompleteAssembly={completeSelectedAssembly}
             onRecordFinalTestPass={() => recordSelectedDeviceFinalTest("PASS")}
             onRecordFinalTestFail={() => recordSelectedDeviceFinalTest("FAIL")}
             onRecordComponentQcPass={() => recordSelectedComponentQc("PASS")}
@@ -1783,11 +1935,20 @@ function DeviceDetailsDrawer({
   finalTestSessionOptions,
   selectedFinalTestSessionId,
   onSelectFinalTestSession,
+  productionSessionOptions,
+  selectedProductionSessionId,
+  onSelectProductionSession,
+  assemblyComponentTypeOptions,
+  selectedAssemblyComponentType,
+  onSelectAssemblyComponentType,
+  assemblyBarcodeValue,
+  onChangeAssemblyBarcode,
   qualitySessionOptions,
   selectedQualitySessionId,
   onSelectQualitySession,
   onMarkReadyForShipment,
   onMarkShipped,
+  onCompleteAssembly,
   onRecordFinalTestPass,
   onRecordFinalTestFail,
   onRecordComponentQcPass,
@@ -1808,11 +1969,20 @@ function DeviceDetailsDrawer({
   finalTestSessionOptions: ActionWorkSessionOption[];
   selectedFinalTestSessionId: string;
   onSelectFinalTestSession: (workSessionId: string) => void;
+  productionSessionOptions: ActionWorkSessionOption[];
+  selectedProductionSessionId: string;
+  onSelectProductionSession: (workSessionId: string) => void;
+  assemblyComponentTypeOptions: string[];
+  selectedAssemblyComponentType: string;
+  onSelectAssemblyComponentType: (componentType: string) => void;
+  assemblyBarcodeValue: string;
+  onChangeAssemblyBarcode: (barcodeValue: string) => void;
   qualitySessionOptions: ActionWorkSessionOption[];
   selectedQualitySessionId: string;
   onSelectQualitySession: (workSessionId: string) => void;
   onMarkReadyForShipment: () => void;
   onMarkShipped: () => void;
+  onCompleteAssembly: () => void;
   onRecordFinalTestPass: () => void;
   onRecordFinalTestFail: () => void;
   onRecordComponentQcPass: () => void;
@@ -1829,6 +1999,8 @@ function DeviceDetailsDrawer({
   const componentCriticalNcrIds = Array.from(
     new Set(componentRows.flatMap((item) => item.critical_open_ncr_ids)),
   );
+  const canCompleteAssembly =
+    shipment !== null && shipment.recommended_action === "COMPLETE_ASSEMBLY";
   const canMarkReadyForShipment =
     shipment !== null &&
     shipment.production_status !== "READY_FOR_SHIPMENT" &&
@@ -1973,6 +2145,125 @@ function DeviceDetailsDrawer({
                     {actionState === "loading"
                       ? "Oznaczam..."
                       : "Oznacz jako wysłane"}
+                  </button>
+                </div>
+              ) : canCompleteAssembly ? (
+                <div className="action-row">
+                  <div className="action-copy">
+                    <strong>Urządzenie wymaga domknięcia montażu.</strong>
+                    <span>
+                      Wybierz aktywną sesję montażową, typ brakującego
+                      komponentu i zeskanowany barcode. Panel wykona od razu
+                      <code> scan-component </code>
+                      dla bieżącego urządzenia.
+                    </span>
+                    <label className="field action-field">
+                      <span>Sesja montażu</span>
+                      <select
+                        value={selectedProductionSessionId}
+                        onChange={(event) =>
+                          onSelectProductionSession(event.target.value)
+                        }
+                        disabled={
+                          actionState === "loading" ||
+                          actionContextState === "loading" ||
+                          productionSessionOptions.length === 0
+                        }
+                      >
+                        {productionSessionOptions.length === 0 ? (
+                          <option value="">
+                            {actionContextState === "loading"
+                              ? "Ładowanie aktywnych sesji..."
+                              : "Brak aktywnej sesji montażowej"}
+                          </option>
+                        ) : (
+                          productionSessionOptions.map((session) => (
+                            <option
+                              key={session.workSessionId}
+                              value={session.workSessionId}
+                            >
+                              {session.label}
+                            </option>
+                          ))
+                        )}
+                      </select>
+                    </label>
+                    <label className="field action-field">
+                      <span>Typ komponentu</span>
+                      <select
+                        value={selectedAssemblyComponentType}
+                        onChange={(event) =>
+                          onSelectAssemblyComponentType(event.target.value)
+                        }
+                        disabled={
+                          actionState === "loading" ||
+                          assemblyComponentTypeOptions.length === 0
+                        }
+                      >
+                        {assemblyComponentTypeOptions.length === 0 ? (
+                          <option value="">
+                            Brak brakujących komponentów BOM do montażu
+                          </option>
+                        ) : (
+                          assemblyComponentTypeOptions.map((componentType) => (
+                            <option key={componentType} value={componentType}>
+                              {labelForCode(componentType)}
+                            </option>
+                          ))
+                        )}
+                      </select>
+                    </label>
+                    <label className="field action-field">
+                      <span>Barcode komponentu</span>
+                      <input
+                        value={assemblyBarcodeValue}
+                        onChange={(event) =>
+                          onChangeAssemblyBarcode(event.target.value)
+                        }
+                        onKeyDown={(event) => {
+                          if (event.key !== "Enter") {
+                            return;
+                          }
+
+                          event.preventDefault();
+                          onCompleteAssembly();
+                        }}
+                        disabled={actionState === "loading"}
+                        placeholder="np. BC-FAN-777"
+                        spellCheck={false}
+                      />
+                    </label>
+                    {actionContextError ? (
+                      <span className="action-hint">{actionContextError}</span>
+                    ) : productionSessionOptions.length === 0 &&
+                      actionContextState !== "loading" ? (
+                      <span className="action-hint">
+                        Brak aktywnej sesji z rolą montażową. Uruchom sesję
+                        `PRODUCTION_OPERATOR`, `QUALITY_INSPECTOR` albo `ADMIN`.
+                      </span>
+                    ) : assemblyComponentTypeOptions.length === 0 ? (
+                      <span className="action-hint">
+                        Drawer nie widzi już brakującego komponentu BOM do
+                        montażu. Odśwież szczegóły albo sprawdź, czy blocker nie
+                        zmienił się na inny workflow.
+                      </span>
+                    ) : null}
+                  </div>
+                  <button
+                    className="primary-button action-button"
+                    type="button"
+                    onClick={onCompleteAssembly}
+                    disabled={
+                      actionState === "loading" ||
+                      actionContextState === "loading" ||
+                      selectedProductionSessionId === "" ||
+                      selectedAssemblyComponentType === "" ||
+                      assemblyBarcodeValue.trim() === ""
+                    }
+                  >
+                    {actionState === "loading"
+                      ? "Montuję..."
+                      : "Zamontuj komponent"}
                   </button>
                 </div>
               ) : canRecordFinalTest ? (
@@ -2639,6 +2930,35 @@ function buildActionWorkSessionOptions(
       };
     })
     .filter((session): session is ActionWorkSessionOption => session !== null);
+}
+
+function buildAssemblyComponentTypeOptions(
+  componentCoverage: DeviceBomComponentCoverage[],
+): string[] {
+  const options: string[] = [];
+
+  for (const coverageRow of componentCoverage) {
+    if (
+      !coverageRow.is_required ||
+      coverageRow.installed_quantity >= coverageRow.required_quantity
+    ) {
+      continue;
+    }
+
+    const allowedComponentTypes =
+      coverageRow.allowed_component_types &&
+      coverageRow.allowed_component_types.length > 0
+        ? coverageRow.allowed_component_types
+        : [coverageRow.component_type];
+
+    for (const componentType of allowedComponentTypes) {
+      if (!options.includes(componentType)) {
+        options.push(componentType);
+      }
+    }
+  }
+
+  return options;
 }
 
 function formatOperatorRole(role: string): string {

@@ -9,6 +9,7 @@ import {
   listOperators,
   listWorkSessions,
   optionalBoolean,
+  scanAssemblyComponent,
   updateDeviceStatus,
   updateNonconformityStatus,
 } from "./api";
@@ -337,6 +338,58 @@ describe("completeQcRun", () => {
           "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
         },
         body: "result=FAIL",
+      }),
+    );
+  });
+});
+
+describe("scanAssemblyComponent", () => {
+  it("wysyła POST montujący komponent z kontekstem sesji produkcyjnej", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => ({
+        id: "ASM-LINK-001",
+        parent_device_serial_number: "ASM-001",
+        child_item_serial_number: "FAN-777",
+        child_barcode_value: "BC-FAN-777",
+        component_type: "FAN_MODULE",
+        installed_by: "OP-PROD-001",
+        installed_at: "2026-05-02T08:30:00Z",
+        workstation_id: "PR-ST-01",
+        scan_event_id: "SCAN-001",
+        bom_template_id: "BOM-01",
+        bom_version: "1.2",
+        status: "INSTALLED",
+      }),
+    } satisfies Partial<Response>);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const payload = await scanAssemblyComponent("/api", "ASM-001", {
+      child_barcode_value: "BC-FAN-777",
+      component_type: "FAN_MODULE",
+      installed_by: "OP-PROD-001",
+      workstation_id: "PR-ST-01",
+      work_session_id: "WS-PROD-001",
+    });
+
+    expect(payload.status).toBe("INSTALLED");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/devices/ASM-001/assembly/scan-component",
+      expect.objectContaining({
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          child_barcode_value: "BC-FAN-777",
+          component_type: "FAN_MODULE",
+          installed_by: "OP-PROD-001",
+          workstation_id: "PR-ST-01",
+          work_session_id: "WS-PROD-001",
+        }),
       }),
     );
   });

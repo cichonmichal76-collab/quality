@@ -22,13 +22,19 @@ Drawer łączy dane z shipment readiness, component quality i historii shipment
 gate, żeby od razu pokazać blokady, rekomendowaną akcję, stan BOM oraz
 szczegóły blokujących komponentów.
 
-Drawer nie jest już tylko podglądem. Panel pozwala teraz wykonać pięć
+Drawer nie jest już tylko podglądem. Panel pozwala teraz wykonać sześć
 bezpośrednie kroki operacyjne:
 - `Oznacz gotowe do wysyłki` dla urządzeń, które przechodzą shipment gate
 - `Oznacz jako wysłane` dla urządzeń już gotowych do wysyłki
+- `Zamontuj komponent` dla urządzeń z rekomendacją `COMPLETE_ASSEMBLY`
 - `Zamknij krytyczne NCR` dla blokujących NCR urządzenia albo komponentów
 - `Zapisz final test PASS/FAIL` dla urządzeń z rekomendacją `RUN_FINAL_TEST`
 - `Zapisz komponentowy QC PASS/FAIL` dla urządzeń z rekomendacją `RUN_COMPONENT_QC_OR_REWORK`
+
+Akcja montażu korzysta z aktywnej sesji operatora o roli `PRODUCTION_OPERATOR`,
+`QUALITY_INSPECTOR` albo `ADMIN`. Drawer sam podpowiada brakujące typy komponentów
+na podstawie `component_coverage` z BOM i wysyła `scan-component` dla wybranego
+barcode.
 
 Akcja final test korzysta z aktywnej sesji operatora o roli `FINAL_TEST_OPERATOR`,
 `QUALITY_MANAGER` albo `ADMIN`. Panel sam pobiera aktywne sesje z backendu
@@ -99,5 +105,6 @@ npm run e2e
 odtworzenie aktywnej zakładki i filtrów po przeładowaniu strony, reset
 zapisanego stanu do wartości domyślnych, otwarcie drawera szczegółów
 urządzenia z kolejki komponentów oraz mockowane scenariusze wykonania akcji
-`Oznacz gotowe do wysyłki`, `Oznacz jako wysłane`, `Zamknij krytyczne NCR`
-oraz `Zapisz final test PASS` i `Zapisz komponentowy QC PASS`.
+`Oznacz gotowe do wysyłki`, `Oznacz jako wysłane`, `Zamontuj komponent`,
+`Zamknij krytyczne NCR` oraz `Zapisz final test PASS` i
+`Zapisz komponentowy QC PASS`.

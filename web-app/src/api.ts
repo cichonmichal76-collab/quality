@@ -273,6 +273,29 @@ export interface QcRunRead extends QcRunCreatePayload {
   ended_at: string | null;
 }
 
+export interface AssemblyScanPayload {
+  child_barcode_value: string;
+  component_type: string;
+  installed_by?: string;
+  workstation_id?: string;
+  work_session_id?: string;
+}
+
+export interface AssemblyLinkRead {
+  id: string;
+  parent_device_serial_number: string;
+  child_item_serial_number: string;
+  child_barcode_value: string;
+  component_type: string;
+  installed_by: string | null;
+  installed_at: string;
+  workstation_id: string | null;
+  scan_event_id: string | null;
+  bom_template_id: string | null;
+  bom_version: string | null;
+  status: string;
+}
+
 export interface DeviceComponentQualityQueue {
   total_devices: number;
   devices_with_issues: number;
@@ -509,6 +532,22 @@ export async function completeQcRun(
   return postForm<QcRunRead>(
     joinApiUrl(apiBaseUrl, `/qc-runs/${encodeURIComponent(runId)}/complete`),
     { result },
+    signal,
+  );
+}
+
+export async function scanAssemblyComponent(
+  apiBaseUrl: string,
+  serialNumber: string,
+  payload: AssemblyScanPayload,
+  signal?: AbortSignal,
+): Promise<AssemblyLinkRead> {
+  return postJson<AssemblyLinkRead>(
+    joinApiUrl(
+      apiBaseUrl,
+      `/devices/${encodeURIComponent(serialNumber)}/assembly/scan-component`,
+    ),
+    payload,
     signal,
   );
 }
