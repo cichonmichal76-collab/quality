@@ -8,10 +8,11 @@ import org.junit.Test
 class CommissioningSyncPolicyTest {
     @Test
     fun `auto sync requires online network no running sync and ready drafts`() {
-        assertTrue(canAutoSync(networkAvailable = true, syncInFlight = false, readyDraftCount = 1))
-        assertFalse(canAutoSync(networkAvailable = false, syncInFlight = false, readyDraftCount = 1))
-        assertFalse(canAutoSync(networkAvailable = true, syncInFlight = true, readyDraftCount = 1))
-        assertFalse(canAutoSync(networkAvailable = true, syncInFlight = false, readyDraftCount = 0))
+        assertTrue(canAutoSync(autoSyncEnabled = true, networkAvailable = true, syncInFlight = false, readyDraftCount = 1))
+        assertFalse(canAutoSync(autoSyncEnabled = false, networkAvailable = true, syncInFlight = false, readyDraftCount = 1))
+        assertFalse(canAutoSync(autoSyncEnabled = true, networkAvailable = false, syncInFlight = false, readyDraftCount = 1))
+        assertFalse(canAutoSync(autoSyncEnabled = true, networkAvailable = true, syncInFlight = true, readyDraftCount = 1))
+        assertFalse(canAutoSync(autoSyncEnabled = true, networkAvailable = true, syncInFlight = false, readyDraftCount = 0))
     }
 
     @Test

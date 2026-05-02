@@ -110,6 +110,7 @@ fun CommissioningScreen(
         onRemovePhoto = viewModel::removePhoto,
         onBuildPackage = viewModel::buildServicePackage,
         onUploadBaseUrlChange = viewModel::updateUploadBaseUrl,
+        onAutoSyncEnabledChange = viewModel::updateAutoSyncEnabled,
         onSyncReadyDrafts = viewModel::syncReadyDrafts,
         onSaveOffline = viewModel::saveOffline,
         onMarkReadyToSync = viewModel::markReadyToSync,
@@ -141,6 +142,7 @@ private fun CommissioningScreen(
     onRemovePhoto: (String) -> Unit,
     onBuildPackage: () -> Unit,
     onUploadBaseUrlChange: (String) -> Unit,
+    onAutoSyncEnabledChange: (Boolean) -> Unit,
     onSyncReadyDrafts: () -> Unit,
     onSaveOffline: () -> Unit,
     onMarkReadyToSync: () -> Unit,
@@ -173,9 +175,11 @@ private fun CommissioningScreen(
             SummarySection(
                 drafts = uiState.drafts,
                 uploadBaseUrl = uiState.uploadBaseUrl,
+                autoSyncEnabled = uiState.autoSyncEnabled,
                 networkAvailable = uiState.networkAvailable,
                 syncInFlight = uiState.syncInFlight,
                 onUploadBaseUrlChange = onUploadBaseUrlChange,
+                onAutoSyncEnabledChange = onAutoSyncEnabledChange,
                 onSyncReadyDrafts = onSyncReadyDrafts,
             )
             NewDraftSection(
@@ -221,9 +225,11 @@ private fun CommissioningScreen(
 private fun SummarySection(
     drafts: List<ServiceSessionDraft>,
     uploadBaseUrl: String,
+    autoSyncEnabled: Boolean,
     networkAvailable: Boolean,
     syncInFlight: Boolean,
     onUploadBaseUrlChange: (String) -> Unit,
+    onAutoSyncEnabledChange: (Boolean) -> Unit,
     onSyncReadyDrafts: () -> Unit,
 ) {
     val readyCount = drafts.count { draft -> draft.syncStatus == SessionSyncStatus.READY_TO_SYNC }
@@ -245,7 +251,11 @@ private fun SummarySection(
                 AssistChip(onClick = {}, label = { Text("PASS: $passCount") })
                 AssistChip(onClick = {}, label = { Text("FAIL: $failCount") })
                 AssistChip(onClick = {}, label = { Text(if (networkAvailable) "Siec: online" else "Siec: offline") })
-                AssistChip(onClick = {}, label = { Text("Auto-sync: aktywny") })
+                FilterChip(
+                    selected = autoSyncEnabled,
+                    onClick = { onAutoSyncEnabledChange(!autoSyncEnabled) },
+                    label = { Text(if (autoSyncEnabled) "Auto-sync: wlaczony" else "Auto-sync: wylaczony") },
+                )
             }
             OutlinedTextField(
                 value = uploadBaseUrl,
@@ -254,15 +264,26 @@ private fun SummarySection(
                 label = { Text("Adres backendu do synchronizacji") },
                 singleLine = true,
             )
-            Button(
-                onClick = onSyncReadyDrafts,
-                enabled = readyCount > 0 && !syncInFlight,
+            Row(
                 modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(if (syncInFlight) "Synchronizacja w toku..." else "Synchronizuj gotowe sesje")
+                Button(
+                    onClick = onSyncReadyDrafts,
+                    enabled = readyCount > 0 && !syncInFlight,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(if (syncInFlight) "Synchronizacja w toku..." else "Synchronizuj gotowe sesje")
+                }
+                Button(
+                    onClick = { onAutoSyncEnabledChange(!autoSyncEnabled) },
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(if (autoSyncEnabled) "Wylacz auto-sync" else "Wlacz auto-sync")
+                }
             }
             Text(
-                "Aplikacja zapisuje sesje commissioning lokalnie, wysyla gotowe ZIP-y recznie i uruchamia auto-sync po odzyskaniu lacznosci albo po oznaczeniu sesji jako gotowej przy aktywnej sieci.",
+                "Aplikacja zapisuje sesje commissioning lokalnie, trwale pamieta adres backendu i ustawienie auto-sync oraz moze wysylac gotowe ZIP-y recznie albo automatycznie po odzyskaniu lacznosci.",
                 style = MaterialTheme.typography.bodyMedium,
             )
         }

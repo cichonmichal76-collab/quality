@@ -16,7 +16,9 @@ import com.servicetrace.mobile.model.UsbCandidateDevice
 import com.servicetrace.mobile.mcu.MockMcuClient
 import com.servicetrace.mobile.mcu.UsbMcuClient
 import com.servicetrace.mobile.sync.ConnectivityMonitor
+import com.servicetrace.mobile.sync.DEFAULT_COMMISSIONING_UPLOAD_BASE_URL
 import com.servicetrace.mobile.sync.ServiceSessionUploader
+import com.servicetrace.mobile.sync.SyncSettingsStore
 import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -39,7 +41,8 @@ data class CommissioningUiState(
     val newDraftInputs: NewDraftInputs = NewDraftInputs(),
     val usbDevices: List<UsbCandidateDevice> = emptyList(),
     val usbPermissionInFlight: Boolean = false,
-    val uploadBaseUrl: String = DEFAULT_UPLOAD_BASE_URL,
+    val uploadBaseUrl: String = DEFAULT_COMMISSIONING_UPLOAD_BASE_URL,
+    val autoSyncEnabled: Boolean = true,
     val networkAvailable: Boolean = false,
     val syncInFlight: Boolean = false,
     val bannerMessage: String? = null,
@@ -51,13 +54,15 @@ class CommissioningViewModel(
     private val usbMcuClient: UsbMcuClient,
     private val artifactStore: CommissioningArtifactStore,
     private val connectivityMonitor: ConnectivityMonitor,
+    private val syncSettingsStore: SyncSettingsStore,
     private val uploader: ServiceSessionUploader,
 ) : ViewModel() {
     private val inputs = MutableStateFlow(NewDraftInputs())
     private val selectedDraft = MutableStateFlow<ServiceSessionDraft?>(null)
     private val usbDevices = MutableStateFlow<List<UsbCandidateDevice>>(emptyList())
     private val usbPermissionInFlight = MutableStateFlow(false)
-    private val uploadBaseUrl = MutableStateFlow(DEFAULT_UPLOAD_BASE_URL)
+    private val uploadBaseUrl = MutableStateFlow(syncSettingsStore.current().uploadBaseUrl)
+    private val autoSyncEnabled = MutableStateFlow(syncSettingsStore.current().autoSyncEnabled)
     private val networkAvailable = MutableStateFlow(connectivityMonitor.currentStatus())
     private val syncInFlight = MutableStateFlow(false)
     private val bannerMessage = MutableStateFlow<String?>(null)
@@ -70,10 +75,11 @@ class CommissioningViewModel(
         usbDevices,
         usbPermissionInFlight,
         uploadBaseUrl,
+        autoSyncEnabled,
         networkAvailable,
         syncInFlight,
         bannerMessage,
-    ) { drafts, draftInputs, currentDraft, availableUsbDevices, permissionInFlight, currentUploadBaseUrl, online, syncRunning, message ->
+    ) { drafts, draftInputs, currentDraft, availableUsbDevices, permissionInFlight, currentUploadBaseUrl, currentAutoSyncEnabled, online, syncRunning, message ->
         val selected = currentDraft?.let { draft ->
             drafts.firstOrNull { row -> row.sessionId == draft.sessionId } ?: draft
         } ?: drafts.firstOrNull()
@@ -84,6 +90,7 @@ class CommissioningViewModel(
             usbDevices = availableUsbDevices,
             usbPermissionInFlight = permissionInFlight,
             uploadBaseUrl = currentUploadBaseUrl,
+            autoSyncEnabled = currentAutoSyncEnabled,
             networkAvailable = online,
             syncInFlight = syncRunning,
             bannerMessage = message,
@@ -96,6 +103,7 @@ class CommissioningViewModel(
 
     init {
         refreshUsbDevices()
+        observeSyncSettings()
         observeConnectivity()
         observeDraftsForAutoSync()
     }
@@ -114,6 +122,20 @@ class CommissioningViewModel(
 
     fun updateUploadBaseUrl(value: String) {
         uploadBaseUrl.value = value
+        syncSettingsStore.updateUploadBaseUrl(value)
+    }
+
+    fun updateAutoSyncEnabled(enabled: Boolean) {
+        autoSyncEnabled.value = enabled
+        syncSettingsStore.updateAutoSyncEnabled(enabled)
+        if (!enabled) {
+            lastAutoSyncReadySignature = ""
+        } else {
+            maybeAutoSyncOnline(
+                trigger = SyncTrigger.AUTO_NETWORK,
+                drafts = uiState.value.drafts,
+            )
+        }
     }
 
     fun createDraft() {
@@ -455,6 +477,18 @@ class CommissioningViewModel(
         bannerMessage.value = null
     }
 
+    private fun observeSyncSettings() {
+        viewModelScope.launch {
+            syncSettingsStore.settings.collect { settings ->
+                uploadBaseUrl.value = settings.uploadBaseUrl
+                autoSyncEnabled.value = settings.autoSyncEnabled
+                if (!settings.autoSyncEnabled) {
+                    lastAutoSyncReadySignature = ""
+                }
+            }
+        }
+    }
+
     private fun observeConnectivity() {
         viewModelScope.launch {
             connectivityMonitor.isOnline
@@ -494,7 +528,7 @@ class CommissioningViewModel(
             .sorted()
             .joinToString(separator = "|")
 
-        if (!canAutoSync(networkAvailable.value, syncInFlight.value, readyDrafts.size)) {
+        if (!canAutoSync(autoSyncEnabled.value, networkAvailable.value, syncInFlight.value, readyDrafts.size)) {
             return
         }
         if (signature.isBlank() || signature == lastAutoSyncReadySignature) {
@@ -530,7 +564,7 @@ class CommissioningViewModel(
             return
         }
 
-        if (trigger != SyncTrigger.MANUAL && !canAutoSync(networkAvailable.value, syncInFlight.value, readyDrafts.size)) {
+        if (trigger != SyncTrigger.MANUAL && !canAutoSync(autoSyncEnabled.value, networkAvailable.value, syncInFlight.value, readyDrafts.size)) {
             return
         }
 
@@ -610,6 +644,7 @@ class CommissioningViewModel(
             usbMcuClient: UsbMcuClient,
             artifactStore: CommissioningArtifactStore,
             connectivityMonitor: ConnectivityMonitor,
+            syncSettingsStore: SyncSettingsStore,
             uploader: ServiceSessionUploader,
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
@@ -621,6 +656,7 @@ class CommissioningViewModel(
                         usbMcuClient = usbMcuClient,
                         artifactStore = artifactStore,
                         connectivityMonitor = connectivityMonitor,
+                        syncSettingsStore = syncSettingsStore,
                         uploader = uploader,
                     ) as T
             }
@@ -634,11 +670,12 @@ internal enum class SyncTrigger {
 }
 
 internal fun canAutoSync(
+    autoSyncEnabled: Boolean,
     networkAvailable: Boolean,
     syncInFlight: Boolean,
     readyDraftCount: Int,
 ): Boolean =
-    networkAvailable && !syncInFlight && readyDraftCount > 0
+    autoSyncEnabled && networkAvailable && !syncInFlight && readyDraftCount > 0
 
 internal fun buildSyncCompletionMessage(
     trigger: SyncTrigger,
@@ -678,5 +715,3 @@ private fun ServiceSessionDraft.invalidatePackageMetadata(): ServiceSessionDraft
             syncStatus
         },
     )
-
-private const val DEFAULT_UPLOAD_BASE_URL = "http://10.0.2.2:8000/api"

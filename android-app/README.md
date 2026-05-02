@@ -15,6 +15,7 @@
 - kolejka synchronizacji `READY_TO_SYNC -> SYNCED` do backendu `POST /api/service-sessions/upload`
 - licznik prob synchronizacji i ostatni blad sync per sesja
 - auto-sync po odzyskaniu lacznosci albo po oznaczeniu sesji jako gotowej przy aktywnej sieci
+- trwale zapamietywanie adresu backendu i przelacznika auto-sync
 - lokalna checklista 5 krokow
 - komentarz ogolny, firmware i bootloader
 - status `DRAFT` / `READY_TO_SYNC`
@@ -48,9 +49,9 @@ Domyslny adres backendu w aplikacji to `http://10.0.2.2:8000/api`, co pasuje do 
 ## Nastepny sensowny krok
 
 1. rozszerzyc snapshoty MCU o dodatkowe artefakty diagnostyczne
-2. zapisac konfiguracje backendu i stan sync bardziej trwale
-3. dodac retry / backoff w tle zamiast tylko recznego ponowienia
-4. przeniesc auto-sync do pracy w tle poza aktywnym ekranem
+2. dodac retry / backoff w tle zamiast tylko recznego ponowienia
+3. przeniesc auto-sync do pracy w tle poza aktywnym ekranem
+4. dolozyc worker okresowy lub on-demand dla synchronizacji po zamknieciu ekranu
 
 ## Poza zakresem MVP
 
