@@ -101,6 +101,101 @@ test("dashboard copies the current link with active filters", async ({
   expect(copiedLink).toContain("ship_only_ready=true");
 });
 
+test("dashboard auto-refreshes the active queue", async ({ page }) => {
+  let shipmentRequestCount = 0;
+  const baseShipmentPayload = {
+    total_devices: 1,
+    ready_count: 1,
+    blocked_count: 0,
+    returned_count: 1,
+    offset: 0,
+    limit: 100,
+    has_more: false,
+    next_offset: null,
+    filters: {},
+    blocking_summary: [],
+    primary_blocking_summary: [],
+    recommended_action_summary: [
+      {
+        recommended_action: "MARK_READY_FOR_SHIPMENT",
+        device_count: 1,
+      },
+    ],
+    latest_shipment_gate_result_summary: [
+      {
+        result: "PASS",
+        device_count: 1,
+      },
+    ],
+    production_status_summary: [
+      {
+        production_status: "FINAL_TEST_PASSED",
+        device_count: 1,
+      },
+    ],
+  };
+
+  await page.route("**/api/shipment-readiness**", async (route) => {
+    shipmentRequestCount += 1;
+    const serialNumber =
+      shipmentRequestCount <= 2 ? "SHIP-AUTO-001" : "SHIP-AUTO-002";
+
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ...baseShipmentPayload,
+        devices: [
+          {
+            device_serial_number: serialNumber,
+            device_type: "DEMO-AUTO",
+            device_variant_code: "DEFAULT",
+            production_status: "FINAL_TEST_PASSED",
+            device_created_at: "2026-05-01T08:00:00Z",
+            device_updated_at: "2026-05-01T09:00:00Z",
+            final_test_passed: true,
+            has_critical_open_ncr: false,
+            critical_open_ncr_ids: [],
+            bom_compliance: {
+              passes_bom_gate: true,
+              installed_component_count: 1,
+              missing_required_components: [],
+              over_installed_components: [],
+              unexpected_component_types: [],
+              blocking_reason: null,
+            },
+            can_transition_to_ready_for_shipment: true,
+            latest_shipment_gate_decision: {
+              event_type: "SHIPMENT_GATE_PASSED",
+              result: "PASS",
+              message: "Ready",
+              recommended_action: "MARK_READY_FOR_SHIPMENT",
+              created_at: "2026-05-01T09:05:00Z",
+            },
+            primary_blocking_code: null,
+            primary_blocking_message: null,
+            recommended_action: "MARK_READY_FOR_SHIPMENT",
+            blocking_reasons: [],
+          },
+        ],
+      }),
+    });
+  });
+
+  await page.goto("/");
+
+  await expect(page.getByText("API OK")).toBeVisible();
+  await expect(page.locator(".table-card")).toContainText("SHIP-AUTO-001");
+
+  await page.getByLabel("Auto-odświeżanie").check();
+  await page.getByLabel("Interwał auto-odświeżania").selectOption("5000");
+  await expect(page.getByText("Auto: co 5 s")).toBeVisible();
+
+  await page.waitForTimeout(5200);
+
+  await expect(page.locator(".table-card")).toContainText("SHIP-AUTO-002");
+});
+
 test("dashboard applies summary filters from shipment and component actions", async ({
   page,
 }) => {

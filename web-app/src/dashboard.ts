@@ -104,3 +104,14 @@ export function percentage(part: number, total: number): string {
 
   return `${Math.round((part / total) * 100)}%`;
 }
+
+export function formatDurationLabel(durationMs: number): string {
+  const seconds = Math.round(durationMs / 1000);
+
+  if (seconds < 60) {
+    return `${seconds} s`;
+  }
+
+  const minutes = Math.round(seconds / 60);
+  return `${minutes} min`;
+}

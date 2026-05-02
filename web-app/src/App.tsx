@@ -30,6 +30,7 @@ import type {
 } from "./api";
 import {
   formatDateTime,
+  formatDurationLabel,
   formatNumber,
   labelForCode,
   percentage,
@@ -41,6 +42,10 @@ const API_STORAGE_KEY = "servicetrace.web.apiBaseUrl";
 const VIEW_STORAGE_KEY = "servicetrace.web.activeView";
 const SHIPMENT_FILTERS_STORAGE_KEY = "servicetrace.web.shipmentFilters";
 const COMPONENT_FILTERS_STORAGE_KEY = "servicetrace.web.componentFilters";
+const AUTO_REFRESH_ENABLED_STORAGE_KEY =
+  "servicetrace.web.autoRefreshEnabled";
+const AUTO_REFRESH_INTERVAL_STORAGE_KEY =
+  "servicetrace.web.autoRefreshIntervalMs";
 const FINAL_TEST_SESSION_STORAGE_KEY =
   "servicetrace.web.finalTestWorkSessionId";
 const PRODUCTION_SESSION_STORAGE_KEY =
@@ -107,6 +112,8 @@ const COMPONENT_STATUS_OPTIONS = [
 
 const COMPONENT_STALE_OPTIONS = ["LT_24H", "D1_TO_D3", "D3_TO_D7", "GT_7D"];
 const SHIPMENT_GATE_RESULT_OPTIONS = ["PASS", "BLOCKED", "NONE"];
+const AUTO_REFRESH_INTERVAL_OPTIONS = [5000, 15000, 30000, 60000];
+const DEFAULT_AUTO_REFRESH_INTERVAL_MS = 30000;
 
 const SHIPMENT_SORT_OPTIONS = [
   "created_at",
@@ -314,6 +321,12 @@ export function App() {
   const [apiBaseUrl, setApiBaseUrl] = useState(() => {
     return localStorage.getItem(API_STORAGE_KEY) ?? DEFAULT_API_BASE_URL;
   });
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(() => {
+    return readStoredAutoRefreshEnabled();
+  });
+  const [autoRefreshIntervalMs, setAutoRefreshIntervalMs] = useState(() => {
+    return readStoredAutoRefreshIntervalMs();
+  });
   const [shipmentFilters, setShipmentFilters] = useState(() => {
     return readShipmentFiltersFromUrl(
       dashboardUrlState.searchParams,
@@ -395,6 +408,9 @@ export function App() {
   const [copyFeedback, setCopyFeedback] = useState<CopyFeedbackState | null>(
     null,
   );
+  const [lastSuccessfulRefreshAt, setLastSuccessfulRefreshAt] = useState<
+    string | null
+  >(null);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const copyFeedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
@@ -556,6 +572,20 @@ export function App() {
   }, [apiBaseUrl]);
 
   useEffect(() => {
+    localStorage.setItem(
+      AUTO_REFRESH_ENABLED_STORAGE_KEY,
+      String(autoRefreshEnabled),
+    );
+  }, [autoRefreshEnabled]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      AUTO_REFRESH_INTERVAL_STORAGE_KEY,
+      String(autoRefreshIntervalMs),
+    );
+  }, [autoRefreshIntervalMs]);
+
+  useEffect(() => {
     return () => {
       if (copyFeedbackTimeoutRef.current !== null) {
         clearTimeout(copyFeedbackTimeoutRef.current);
@@ -635,6 +665,24 @@ export function App() {
   }, [selectedQualitySessionId]);
 
   useEffect(() => {
+    if (!autoRefreshEnabled || !apiBaseUrl.trim()) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "hidden") {
+        return;
+      }
+
+      setRefreshVersion((value) => value + 1);
+    }, autoRefreshIntervalMs);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [apiBaseUrl, autoRefreshEnabled, autoRefreshIntervalMs]);
+
+  useEffect(() => {
     if (!apiBaseUrl.trim()) {
       clearActiveViewData(activeView);
       setLoadState("error");
@@ -667,6 +715,7 @@ export function App() {
         } else {
           setComponentData(payload as DeviceComponentQualityQueue);
         }
+        setLastSuccessfulRefreshAt(new Date().toISOString());
         setLoadState("loaded");
       })
       .catch((error: unknown) => {
@@ -1287,12 +1336,16 @@ export function App() {
     localStorage.removeItem(VIEW_STORAGE_KEY);
     localStorage.removeItem(SHIPMENT_FILTERS_STORAGE_KEY);
     localStorage.removeItem(COMPONENT_FILTERS_STORAGE_KEY);
+    localStorage.removeItem(AUTO_REFRESH_ENABLED_STORAGE_KEY);
+    localStorage.removeItem(AUTO_REFRESH_INTERVAL_STORAGE_KEY);
     localStorage.removeItem(FINAL_TEST_SESSION_STORAGE_KEY);
     localStorage.removeItem(QUALITY_SESSION_STORAGE_KEY);
 
     flushShipmentRequestFilters(DEFAULT_SHIPMENT_FILTERS);
     flushComponentRequestFilters(DEFAULT_COMPONENT_FILTERS);
     setApiBaseUrl(DEFAULT_API_BASE_URL);
+    setAutoRefreshEnabled(false);
+    setAutoRefreshIntervalMs(DEFAULT_AUTO_REFRESH_INTERVAL_MS);
     setActiveView("shipment");
     setShipmentFilters(DEFAULT_SHIPMENT_FILTERS);
     setComponentFilters(DEFAULT_COMPONENT_FILTERS);
@@ -1385,6 +1438,32 @@ export function App() {
               spellCheck={false}
             />
           </label>
+          <label className="switch-field control-switch">
+            <input
+              checked={autoRefreshEnabled}
+              type="checkbox"
+              onChange={(event) => setAutoRefreshEnabled(event.target.checked)}
+            />
+            <span>Auto-odświeżanie</span>
+          </label>
+          <label className="api-field">
+            <span>Interwał auto-odświeżania</span>
+            <select
+              disabled={!autoRefreshEnabled}
+              value={String(autoRefreshIntervalMs)}
+              onChange={(event) =>
+                setAutoRefreshIntervalMs(
+                  sanitizeAutoRefreshIntervalMs(Number(event.target.value)),
+                )
+              }
+            >
+              {AUTO_REFRESH_INTERVAL_OPTIONS.map((intervalMs) => (
+                <option key={intervalMs} value={intervalMs}>
+                  {formatDurationLabel(intervalMs)}
+                </option>
+              ))}
+            </select>
+          </label>
           <button
             className="primary-button"
             type="button"
@@ -1417,6 +1496,20 @@ export function App() {
               tone={copyFeedback.tone}
             />
           ) : null}
+          <div className="refresh-meta">
+            <span>
+              Ostatnia aktualizacja:{" "}
+              {lastSuccessfulRefreshAt
+                ? formatDateTime(lastSuccessfulRefreshAt)
+                : "Brak danych"}
+            </span>
+            <span>
+              Auto:{" "}
+              {autoRefreshEnabled
+                ? `co ${formatDurationLabel(autoRefreshIntervalMs)}`
+                : "wyłączone"}
+            </span>
+          </div>
         </section>
       </header>
 
@@ -5378,6 +5471,12 @@ function clampOffset(value: number): number {
   return Math.max(Math.trunc(value), 0);
 }
 
+function sanitizeAutoRefreshIntervalMs(value: number): number {
+  return AUTO_REFRESH_INTERVAL_OPTIONS.includes(value)
+    ? value
+    : DEFAULT_AUTO_REFRESH_INTERVAL_MS;
+}
+
 function useDebouncedRequestFilters<T extends object>(
   filters: T,
   textKeys: Array<keyof T>,
@@ -5445,4 +5544,14 @@ function useDebouncedRequestFilters<T extends object>(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function readStoredAutoRefreshEnabled(): boolean {
+  return localStorage.getItem(AUTO_REFRESH_ENABLED_STORAGE_KEY) === "true";
+}
+
+function readStoredAutoRefreshIntervalMs(): number {
+  return sanitizeAutoRefreshIntervalMs(
+    Number(localStorage.getItem(AUTO_REFRESH_INTERVAL_STORAGE_KEY)),
+  );
 }

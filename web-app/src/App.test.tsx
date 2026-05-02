@@ -23,6 +23,10 @@ const API_STORAGE_KEY = "servicetrace.web.apiBaseUrl";
 const VIEW_STORAGE_KEY = "servicetrace.web.activeView";
 const SHIPMENT_FILTERS_STORAGE_KEY = "servicetrace.web.shipmentFilters";
 const COMPONENT_FILTERS_STORAGE_KEY = "servicetrace.web.componentFilters";
+const AUTO_REFRESH_ENABLED_STORAGE_KEY =
+  "servicetrace.web.autoRefreshEnabled";
+const AUTO_REFRESH_INTERVAL_STORAGE_KEY =
+  "servicetrace.web.autoRefreshIntervalMs";
 
 const shipmentPayload: DeviceShipmentQueue = {
   total_devices: 1,
@@ -3421,6 +3425,47 @@ describe("App", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it("auto-refreshes the active queue when enabled", async () => {
+    vi.useFakeTimers();
+    localStorage.setItem(AUTO_REFRESH_ENABLED_STORAGE_KEY, "true");
+    localStorage.setItem(AUTO_REFRESH_INTERVAL_STORAGE_KEY, "5000");
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(createJsonResponse(shipmentPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(
+      screen.getByRole("checkbox", { name: /Auto-od/i }),
+    ).toBeChecked();
+    expect(
+      screen.getByRole("combobox", { name: /Interwa/i }),
+    ).toHaveValue("5000");
+    expect(screen.getByText(/Ostatnia aktualizacja:/)).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      vi.advanceTimersByTime(5000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/shipment-readiness?sort_by=created_at&sort_desc=true&limit=100",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+  });
+
   it("flushes pending shipment text filters on Enter", async () => {
     vi.useFakeTimers();
 
@@ -3811,6 +3856,8 @@ describe("App", () => {
   it("clears saved dashboard state back to defaults", async () => {
     localStorage.setItem(API_STORAGE_KEY, "http://localhost:9100/api");
     localStorage.setItem(VIEW_STORAGE_KEY, "components");
+    localStorage.setItem(AUTO_REFRESH_ENABLED_STORAGE_KEY, "true");
+    localStorage.setItem(AUTO_REFRESH_INTERVAL_STORAGE_KEY, "60000");
     localStorage.setItem(
       COMPONENT_FILTERS_STORAGE_KEY,
       JSON.stringify({
@@ -3830,12 +3877,28 @@ describe("App", () => {
 
     expect(await screen.findByText("COMP-001")).toBeInTheDocument();
     expect(screen.getByDisplayValue("http://localhost:9100/api")).toBeInTheDocument();
+    expect(
+      screen.getByRole("checkbox", { name: /Auto-od/i }),
+    ).toBeChecked();
+    expect(
+      screen.getByRole("combobox", { name: /Interwa/i }),
+    ).toHaveValue(
+      "60000",
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Wyczyść zapisany stan" }));
 
     expect(await screen.findByText("SHIP-001")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Wysyłka" })).toHaveClass("is-active");
     expect(screen.getByDisplayValue("/api")).toBeInTheDocument();
+    expect(
+      screen.getByRole("checkbox", { name: /Auto-od/i }),
+    ).not.toBeChecked();
+    expect(
+      screen.getByRole("combobox", { name: /Interwa/i }),
+    ).toHaveValue(
+      "30000",
+    );
     expect(screen.getByLabelText("Typ urządzenia")).toHaveValue("");
     expect(screen.getByLabelText("Limit")).toHaveValue(100);
 
@@ -3844,6 +3907,16 @@ describe("App", () => {
     );
     await waitFor(() =>
       expect(localStorage.getItem(VIEW_STORAGE_KEY)).toBe("shipment"),
+    );
+    await waitFor(() =>
+      expect(localStorage.getItem(AUTO_REFRESH_ENABLED_STORAGE_KEY)).toBe(
+        "false",
+      ),
+    );
+    await waitFor(() =>
+      expect(localStorage.getItem(AUTO_REFRESH_INTERVAL_STORAGE_KEY)).toBe(
+        "30000",
+      ),
     );
     await waitFor(() =>
       expect(localStorage.getItem(COMPONENT_FILTERS_STORAGE_KEY)).toBe(

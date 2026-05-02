@@ -103,6 +103,17 @@ button {
   background: rgb(255 255 255 / 72%);
 }
 
+.control-switch {
+  margin-top: 0;
+}
+
+.refresh-meta {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
 .api-field,
 .field {
   display: grid;

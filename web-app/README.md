@@ -36,6 +36,8 @@ każdy taki chip można zdjąć osobno bez resetowania całego panelu.
 Panel pozwala też skopiować dokładny link do bieżącego widoku dashboardu,
 a na pełnej stronie urządzenia również link do konkretnego urządzenia wraz
 z aktywną sekcją `#hash`.
+Do monitoringu na żywo można włączyć auto-odświeżanie, wybrać interwał
+odpytywania i podejrzeć znacznik ostatniej udanej aktualizacji kolejki.
 
 Kliknięcie numeru seryjnego w tabeli otwiera drawer szczegółów urządzenia.
 Drawer łączy dane z shipment readiness, component quality i historii shipment
@@ -144,6 +146,7 @@ urządzenia z kolejki komponentów, przejście z sekcji `BOM` do przefiltrowanej
 kolejki wysyłki, klikane presety filtrów z kart podsumowań i metryk oraz
 zdejmowanie pojedynczych chipów aktywnych filtrów, a także
 kopiowanie linku bieżącego widoku do schowka,
+auto-odświeżanie aktywnej kolejki,
 mockowane scenariusze wykonania akcji
 `Oznacz gotowe do wysyłki`, `Oznacz jako wysłane`, `Zamontuj komponent`,
 `Zamknij krytyczne NCR` oraz `Zapisz final test PASS` i

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { humanizeCode, labelForCode, percentage } from "./dashboard";
+import {
+  formatDurationLabel,
+  humanizeCode,
+  labelForCode,
+  percentage,
+} from "./dashboard";
 
 describe("labelForCode", () => {
   it("tłumaczy kluczowe kody operacyjne", () => {
@@ -18,6 +23,14 @@ describe("labelForCode", () => {
     expect(labelForCode("true")).toBe("Tak");
     expect(labelForCode("false")).toBe("Nie");
     expect(labelForCode(null)).toBe("Brak danych");
+  });
+});
+
+describe("formatDurationLabel", () => {
+  it("formatuje sekundy i minuty dla auto-odświeżania", () => {
+    expect(formatDurationLabel(5000)).toBe("5 s");
+    expect(formatDurationLabel(30000)).toBe("30 s");
+    expect(formatDurationLabel(60000)).toBe("1 min");
   });
 });
 
