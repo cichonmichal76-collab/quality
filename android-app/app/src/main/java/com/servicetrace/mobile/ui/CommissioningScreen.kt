@@ -48,6 +48,7 @@ import com.servicetrace.mobile.model.ServiceSessionDraft
 import com.servicetrace.mobile.model.SessionOutcome
 import com.servicetrace.mobile.model.SessionSyncStatus
 import com.servicetrace.mobile.model.UsbCandidateDevice
+import com.servicetrace.mobile.sync.MAX_AUTO_SYNC_RETRY_ATTEMPTS
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -233,6 +234,7 @@ private fun SummarySection(
     onSyncReadyDrafts: () -> Unit,
 ) {
     val readyCount = drafts.count { draft -> draft.syncStatus == SessionSyncStatus.READY_TO_SYNC }
+    val blockedAutoRetryCount = drafts.count { draft -> isAutoRetrySuspended(draft) }
     val passCount = drafts.count { draft -> draft.outcome == SessionOutcome.PASS }
     val failCount = drafts.count { draft -> draft.outcome == SessionOutcome.FAIL }
     val syncedCount = drafts.count { draft -> draft.syncStatus == SessionSyncStatus.SYNCED }
@@ -248,6 +250,7 @@ private fun SummarySection(
                 AssistChip(onClick = {}, label = { Text("Gotowe do sync: $readyCount") })
                 AssistChip(onClick = {}, label = { Text("Synced: $syncedCount") })
                 AssistChip(onClick = {}, label = { Text("Bledy sync: $syncErrorCount") })
+                AssistChip(onClick = {}, label = { Text("Auto-retry wstrzymane: $blockedAutoRetryCount") })
                 AssistChip(onClick = {}, label = { Text("PASS: $passCount") })
                 AssistChip(onClick = {}, label = { Text("FAIL: $failCount") })
                 AssistChip(onClick = {}, label = { Text(if (networkAvailable) "Siec: online" else "Siec: offline") })
@@ -286,6 +289,12 @@ private fun SummarySection(
                 "Aplikacja zapisuje sesje commissioning lokalnie, trwale pamieta adres backendu i ustawienie auto-sync oraz moze wysylac gotowe ZIP-y recznie albo automatycznie po odzyskaniu lacznosci.",
                 style = MaterialTheme.typography.bodyMedium,
             )
+            if (blockedAutoRetryCount > 0) {
+                Text(
+                    "Czesc sesji wymaga recznej interwencji: auto-retry zostal wstrzymany po bledzie trwalym albo po limicie prob.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
         }
     }
 }
@@ -374,6 +383,9 @@ private fun DraftListSection(
                         }
                         if (draft.syncAttemptCount > 0) {
                             AssistChip(onClick = {}, label = { Text("Proby sync: ${draft.syncAttemptCount}") })
+                        }
+                        if (isAutoRetrySuspended(draft)) {
+                            AssistChip(onClick = {}, label = { Text("Auto-retry wstrzymany") })
                         }
                     }
                     if (draft.lastSyncErrorMessage.isNotBlank()) {
@@ -559,6 +571,9 @@ private fun SyncStatusSection(
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             AssistChip(onClick = {}, label = { Text(syncLabel(draft.syncStatus)) })
             AssistChip(onClick = {}, label = { Text("Proby: ${draft.syncAttemptCount}") })
+            if (isAutoRetrySuspended(draft)) {
+                AssistChip(onClick = {}, label = { Text("Auto-retry wstrzymany") })
+            }
             draft.lastSyncSuccessAtMillis?.let { successAtMillis ->
                 AssistChip(onClick = {}, label = { Text("Ostatni sukces: ${formatTimestamp(successAtMillis)}") })
             }
@@ -568,6 +583,12 @@ private fun SyncStatusSection(
         }
         if (draft.lastSyncErrorMessage.isNotBlank()) {
             Text("Ostatni blad: ${draft.lastSyncErrorMessage}", style = MaterialTheme.typography.bodySmall)
+            if (isAutoRetrySuspended(draft)) {
+                Text(
+                    "Auto-retry zostal wstrzymany. Uzyj recznej synchronizacji albo popraw sesje i ponownie dodaj ja do kolejki. Limit automatycznych prob: $MAX_AUTO_SYNC_RETRY_ATTEMPTS.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
         }
     }
 }
@@ -809,3 +830,8 @@ private fun statusLabel(status: CommissioningStepStatus): String =
         CommissioningStepStatus.FAIL -> "FAIL"
         CommissioningStepStatus.HOLD -> "HOLD"
     }
+
+private fun isAutoRetrySuspended(draft: ServiceSessionDraft): Boolean =
+    draft.syncStatus == SessionSyncStatus.READY_TO_SYNC &&
+        draft.lastSyncErrorMessage.isNotBlank() &&
+        !draft.lastSyncAutoRetryEligible

@@ -6,7 +6,6 @@ import androidx.work.WorkerParameters
 import com.servicetrace.mobile.data.OfflineCommissioningRepository
 import com.servicetrace.mobile.data.local.ServiceTraceMobileDatabase
 import com.servicetrace.mobile.files.CommissioningArtifactStore
-import com.servicetrace.mobile.model.SessionSyncStatus
 
 class CommissioningSyncWorker(
     appContext: Context,
@@ -22,9 +21,7 @@ class CommissioningSyncWorker(
         val repository = OfflineCommissioningRepository(
             dao = ServiceTraceMobileDatabase.build(applicationContext).commissioningDao(),
         )
-        val readyDrafts = repository.listDrafts().filter { draft ->
-            draft.syncStatus == SessionSyncStatus.READY_TO_SYNC
-        }
+        val readyDrafts = repository.listDrafts().filter(::shouldAutoRetrySync)
         if (readyDrafts.isEmpty()) {
             return Result.success()
         }

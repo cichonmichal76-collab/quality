@@ -20,6 +20,7 @@ import com.servicetrace.mobile.sync.CommissioningSyncWorkScheduler
 import com.servicetrace.mobile.sync.ConnectivityMonitor
 import com.servicetrace.mobile.sync.DEFAULT_COMMISSIONING_UPLOAD_BASE_URL
 import com.servicetrace.mobile.sync.SyncSettingsStore
+import com.servicetrace.mobile.sync.shouldAutoRetrySync
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -134,7 +135,7 @@ class CommissioningViewModel(
             syncWorkScheduler.cancelDeferredSync()
         } else {
             val drafts = uiState.value.drafts
-            if (shouldQueueDeferredSync(enabled, networkAvailable.value, drafts.count { row -> row.syncStatus == SessionSyncStatus.READY_TO_SYNC })) {
+            if (shouldQueueDeferredSync(enabled, networkAvailable.value, drafts.count(::shouldAutoRetrySync))) {
                 syncWorkScheduler.enqueueDeferredSync()
             }
             maybeAutoSyncOnline(
@@ -464,6 +465,11 @@ class CommissioningViewModel(
         viewModelScope.launch {
             val updatedDraft = draft.copy(
                 syncStatus = SessionSyncStatus.READY_TO_SYNC,
+                syncAttemptCount = 0,
+                lastSyncAttemptAtMillis = null,
+                lastSyncSuccessAtMillis = null,
+                lastSyncErrorMessage = "",
+                lastSyncAutoRetryEligible = true,
                 updatedAtMillis = System.currentTimeMillis(),
             )
             repository.saveDraft(updatedDraft)
@@ -476,7 +482,8 @@ class CommissioningViewModel(
                 trigger = SyncTrigger.AUTO_READY,
                 drafts = listOf(updatedDraft) + otherReadyDrafts,
             )
-            if (shouldQueueDeferredSync(autoSyncEnabled.value, networkAvailable.value, otherReadyDrafts.size + 1)) {
+            val autoRetryReadyCount = (listOf(updatedDraft) + otherReadyDrafts).count(::shouldAutoRetrySync)
+            if (shouldQueueDeferredSync(autoSyncEnabled.value, networkAvailable.value, autoRetryReadyCount)) {
                 syncWorkScheduler.enqueueDeferredSync()
             }
         }
@@ -496,7 +503,7 @@ class CommissioningViewModel(
                     syncWorkScheduler.cancelDeferredSync()
                 } else {
                     val drafts = uiState.value.drafts
-                    if (shouldQueueDeferredSync(settings.autoSyncEnabled, networkAvailable.value, drafts.count { row -> row.syncStatus == SessionSyncStatus.READY_TO_SYNC })) {
+                    if (shouldQueueDeferredSync(settings.autoSyncEnabled, networkAvailable.value, drafts.count(::shouldAutoRetrySync))) {
                         syncWorkScheduler.enqueueDeferredSync()
                     }
                 }
@@ -512,9 +519,7 @@ class CommissioningViewModel(
                     networkAvailable.value = online
                     if (!online) {
                         lastAutoSyncReadySignature = ""
-                        val readyDraftCount = uiState.value.drafts.count { draft ->
-                            draft.syncStatus == SessionSyncStatus.READY_TO_SYNC
-                        }
+                        val readyDraftCount = uiState.value.drafts.count(::shouldAutoRetrySync)
                         if (shouldQueueDeferredSync(autoSyncEnabled.value, online, readyDraftCount)) {
                             syncWorkScheduler.enqueueDeferredSync()
                         }
@@ -531,9 +536,7 @@ class CommissioningViewModel(
     private fun observeDraftsForAutoSync() {
         viewModelScope.launch {
             repository.observeDrafts().collect { drafts ->
-                val readyDraftCount = drafts.count { draft ->
-                    draft.syncStatus == SessionSyncStatus.READY_TO_SYNC
-                }
+                val readyDraftCount = drafts.count(::shouldAutoRetrySync)
                 if (shouldQueueDeferredSync(autoSyncEnabled.value, networkAvailable.value, readyDraftCount)) {
                     syncWorkScheduler.enqueueDeferredSync()
                 }
@@ -549,7 +552,7 @@ class CommissioningViewModel(
         trigger: SyncTrigger,
         drafts: List<ServiceSessionDraft>,
     ) {
-        val readyDrafts = drafts.filter { draft -> draft.syncStatus == SessionSyncStatus.READY_TO_SYNC }
+        val readyDrafts = drafts.filter(::shouldAutoRetrySync)
         val signature = readyDrafts
             .map { draft -> draft.sessionId }
             .sorted()
@@ -699,7 +702,11 @@ private fun ServiceSessionDraft.invalidatePackageMetadata(): ServiceSessionDraft
         packagePath = "",
         packageGeneratedAtMillis = null,
         packageEntryCount = 0,
+        syncAttemptCount = 0,
+        lastSyncAttemptAtMillis = null,
+        lastSyncSuccessAtMillis = null,
         lastSyncErrorMessage = "",
+        lastSyncAutoRetryEligible = true,
         syncStatus = if (syncStatus == SessionSyncStatus.SYNCED) {
             SessionSyncStatus.DRAFT
         } else {

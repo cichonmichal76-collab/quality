@@ -1,5 +1,7 @@
 package com.servicetrace.mobile.sync
 
+import com.servicetrace.mobile.model.CommissioningDraftFactory
+import com.servicetrace.mobile.model.SessionSyncStatus
 import com.servicetrace.mobile.ui.shouldQueueDeferredSync
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -36,5 +38,32 @@ class CommissioningSyncWorkSchedulerTest {
                 readyDraftCount = 0,
             ),
         )
+    }
+
+    @Test
+    fun `auto retry sync stops after permanent failure or exhausted attempts`() {
+        val baseline = CommissioningDraftFactory.create(
+            deviceSerialNumber = "ZSS-1001",
+            deviceType = "ZSS",
+            technicianId = "TECH-01",
+        )
+        val retryableDraft = baseline.copy(
+            syncStatus = SessionSyncStatus.READY_TO_SYNC,
+            syncAttemptCount = 1,
+            lastSyncErrorMessage = "offline",
+            lastSyncAutoRetryEligible = true,
+        )
+        val permanentDraft = retryableDraft.copy(
+            lastSyncAutoRetryEligible = false,
+        )
+        val cleanReadyDraft = baseline.copy(
+            syncStatus = SessionSyncStatus.READY_TO_SYNC,
+            lastSyncErrorMessage = "",
+            lastSyncAutoRetryEligible = true,
+        )
+
+        assertTrue(shouldAutoRetrySync(cleanReadyDraft))
+        assertTrue(shouldAutoRetrySync(retryableDraft))
+        assertFalse(shouldAutoRetrySync(permanentDraft))
     }
 }

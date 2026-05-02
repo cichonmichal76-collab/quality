@@ -20,7 +20,8 @@ Aktualnie zawiera:
 14. trwale ustawienia syncu: adres backendu i wlaczony / wylaczony auto-sync
 15. `WorkManager` z odlozonym workerem synchronizacji dla sesji gotowych offline
 16. retry worker tylko dla bledow przejsciowych typu transport / 5xx / 429
-17. testy JVM dla fabryki draftu, snapshotu, mocka MCU, serializacji paczki, polityki syncu i normalizacji adresu API
+17. limit auto-retry i czytelny stan `wymaga recznej interwencji` po wyczerpaniu prob
+18. testy JVM dla fabryki draftu, snapshotu, mocka MCU, serializacji paczki, polityki syncu i normalizacji adresu API
 
 Domyslny adres backendu dla syncu to `http://10.0.2.2:8000/api`.
 
@@ -28,4 +29,4 @@ Najblizszy sensowny krok:
 
 1. rozszerzyc snapshoty i artefakty diagnostyczne
 2. rozbudowac worker o strategia okresowa albo batch sync dla dluzszego offline
-3. dolozyc limity prob, eskalacje i czytelniejsze reason codes dla sync failures
+3. dolozyc czytelniejsze reason codes i telemetry dla sync failures

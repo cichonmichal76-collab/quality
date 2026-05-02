@@ -51,6 +51,7 @@ data class ServiceSessionDraftEntity(
     val lastSyncAttemptAtMillis: Long?,
     val lastSyncSuccessAtMillis: Long?,
     val lastSyncErrorMessage: String,
+    val lastSyncAutoRetryEligible: Boolean,
     val createdAtMillis: Long,
     val updatedAtMillis: Long,
 )
@@ -152,6 +153,7 @@ fun ServiceSessionDraftWithSteps.toDomain(): ServiceSessionDraft =
         lastSyncAttemptAtMillis = session.lastSyncAttemptAtMillis,
         lastSyncSuccessAtMillis = session.lastSyncSuccessAtMillis,
         lastSyncErrorMessage = session.lastSyncErrorMessage,
+        lastSyncAutoRetryEligible = session.lastSyncAutoRetryEligible,
         createdAtMillis = session.createdAtMillis,
         updatedAtMillis = session.updatedAtMillis,
         attachments = attachments
@@ -211,6 +213,7 @@ fun ServiceSessionDraft.toLocalEntity(): LocalDraftBundle =
             lastSyncAttemptAtMillis = lastSyncAttemptAtMillis,
             lastSyncSuccessAtMillis = lastSyncSuccessAtMillis,
             lastSyncErrorMessage = lastSyncErrorMessage,
+            lastSyncAutoRetryEligible = lastSyncAutoRetryEligible,
             createdAtMillis = createdAtMillis,
             updatedAtMillis = updatedAtMillis,
         ),

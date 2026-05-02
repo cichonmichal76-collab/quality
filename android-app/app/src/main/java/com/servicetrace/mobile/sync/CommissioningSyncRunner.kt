@@ -13,6 +13,14 @@ data class CommissioningSyncRunResult(
     val latestDraftsBySessionId: Map<String, ServiceSessionDraft>,
 )
 
+const val MAX_AUTO_SYNC_RETRY_ATTEMPTS = 3
+
+fun shouldAutoRetrySync(
+    draft: ServiceSessionDraft,
+): Boolean =
+    draft.syncStatus == SessionSyncStatus.READY_TO_SYNC &&
+        (draft.lastSyncErrorMessage.isBlank() || draft.lastSyncAutoRetryEligible)
+
 class CommissioningSyncRunner(
     private val repository: CommissioningRepository,
     private val artifactStore: CommissioningArtifactStore,
@@ -38,6 +46,7 @@ class CommissioningSyncRunner(
                     lastSyncAttemptAtMillis = completedAtMillis,
                     lastSyncSuccessAtMillis = completedAtMillis,
                     lastSyncErrorMessage = "",
+                    lastSyncAutoRetryEligible = true,
                     updatedAtMillis = completedAtMillis,
                 )
                 repository.saveDraft(syncedDraft)
@@ -46,11 +55,14 @@ class CommissioningSyncRunner(
             } catch (error: Exception) {
                 val uploadError = classifyTransportUploadException(error)
                 val failedAtMillis = System.currentTimeMillis()
+                val nextAttemptCount = draft.syncAttemptCount + 1
+                val autoRetryEligible = uploadError.isRetryable && nextAttemptCount < MAX_AUTO_SYNC_RETRY_ATTEMPTS
                 val failedDraft = draft.copy(
                     syncStatus = SessionSyncStatus.READY_TO_SYNC,
-                    syncAttemptCount = draft.syncAttemptCount + 1,
+                    syncAttemptCount = nextAttemptCount,
                     lastSyncAttemptAtMillis = failedAtMillis,
                     lastSyncErrorMessage = uploadError.message ?: "Nieznany blad synchronizacji commissioning.",
+                    lastSyncAutoRetryEligible = autoRetryEligible,
                     updatedAtMillis = failedAtMillis,
                 )
                 repository.saveDraft(failedDraft)
