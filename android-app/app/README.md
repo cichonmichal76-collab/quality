@@ -24,7 +24,8 @@ Aktualnie zawiera:
 18. trwaly `reason code` bledu syncu zapisany w draftcie i pokazany w UI
 19. lokalna historia prob syncu per sesja z triggerem i wynikiem
 20. historia sukcesu z metadanymi backendu: `upload_status`, `package_hash`, `id`
-21. testy JVM dla fabryki draftu, snapshotu, mocka MCU, serializacji paczki, polityki syncu i normalizacji adresu API
+21. pelna sekcja audytu synchronizacji z filtrem sukcesow / bledow i szybkim przejsciem do draftu
+22. testy JVM dla fabryki draftu, snapshotu, mocka MCU, serializacji paczki, polityki syncu i normalizacji adresu API
 
 Domyslny adres backendu dla syncu to `http://10.0.2.2:8000/api`.
 
@@ -32,4 +33,4 @@ Najblizszy sensowny krok:
 
 1. rozszerzyc snapshoty i artefakty diagnostyczne
 2. rozbudowac worker o strategia okresowa albo batch sync dla dluzszego offline
-3. dolozyc jawne correlation id po stronie backendu i ewentualny ekran audytu historii syncu
+3. dolozyc jawne correlation id po stronie backendu i eksport / udostepnianie audytu syncu

@@ -33,6 +33,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -198,6 +199,11 @@ private fun CommissioningScreen(
                 selectedSessionId = uiState.selectedDraft?.sessionId,
                 onSelectDraft = onSelectDraft,
             )
+            SyncAuditSection(
+                drafts = uiState.drafts,
+                selectedSessionId = uiState.selectedDraft?.sessionId,
+                onSelectDraft = onSelectDraft,
+            )
             HorizontalDivider()
             DraftEditorSection(
                 draft = uiState.selectedDraft,
@@ -220,6 +226,115 @@ private fun CommissioningScreen(
                 onSaveOffline = onSaveOffline,
                 onMarkReadyToSync = onMarkReadyToSync,
             )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SyncAuditSection(
+    drafts: List<ServiceSessionDraft>,
+    selectedSessionId: String?,
+    onSelectDraft: (String) -> Unit,
+) {
+    var filterName by rememberSaveable { mutableStateOf(SyncAuditFilter.ALL.name) }
+    var onlySelectedDraft by rememberSaveable { mutableStateOf(false) }
+    val activeFilter = SyncAuditFilter.valueOf(filterName)
+    val allRows = remember(drafts) { buildSyncAuditRows(drafts) }
+    val filteredRows = remember(drafts, filterName, onlySelectedDraft, selectedSessionId) {
+        buildSyncAuditRows(
+            drafts = drafts,
+            filter = activeFilter,
+            onlySessionId = if (onlySelectedDraft) selectedSessionId else null,
+        )
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Audyt synchronizacji", style = MaterialTheme.typography.titleMedium)
+        Card {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SyncAuditFilter.entries.forEach { filter ->
+                        val filterCount = when (filter) {
+                            SyncAuditFilter.ALL -> allRows.size
+                            SyncAuditFilter.FAILURES -> allRows.count { row -> row.attempt.result == SyncAttemptResult.FAILURE }
+                            SyncAuditFilter.SUCCESSES -> allRows.count { row -> row.attempt.result == SyncAttemptResult.SUCCESS }
+                        }
+                        FilterChip(
+                            selected = activeFilter == filter,
+                            onClick = { filterName = filter.name },
+                            label = { Text("${syncAuditFilterLabel(filter)}: $filterCount") },
+                        )
+                    }
+                    if (selectedSessionId != null) {
+                        FilterChip(
+                            selected = onlySelectedDraft,
+                            onClick = { onlySelectedDraft = !onlySelectedDraft },
+                            label = {
+                                Text(
+                                    if (onlySelectedDraft) {
+                                        "Tylko wybrany draft"
+                                    } else {
+                                        "Wszystkie drafty"
+                                    },
+                                )
+                            },
+                        )
+                    }
+                }
+                Text(
+                    "Pelny audyt pokazuje wszystkie lokalnie zapisane proby syncu wraz ze zrodlem uruchomienia, kodem bledu i metadanymi backendu po sukcesie.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                if (filteredRows.isEmpty()) {
+                    Text(
+                        "Brak wpisow dla aktualnego filtra audytu.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                } else {
+                    filteredRows.forEach { row ->
+                        val selected = row.sessionId == selectedSessionId
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onSelectDraft(row.sessionId) },
+                            colors = if (selected) {
+                                CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
+                            } else {
+                                CardDefaults.cardColors()
+                            },
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(
+                                    "${row.deviceSerialNumber} - ${row.deviceType}",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Text("Sesja: ${row.sessionId} | Technik: ${row.technicianId}", style = MaterialTheme.typography.bodySmall)
+                                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    AssistChip(onClick = {}, label = { Text(syncAttemptResultLabel(row.attempt.result)) })
+                                    AssistChip(onClick = {}, label = { Text(syncAttemptTriggerLabel(row.attempt.triggerSource)) })
+                                    AssistChip(onClick = {}, label = { Text("Proba: ${row.attempt.attemptNumber}") })
+                                    if (selected) {
+                                        AssistChip(onClick = {}, label = { Text("Wybrany draft") })
+                                    }
+                                }
+                                Text(formatTimestamp(row.attempt.attemptedAtMillis), style = MaterialTheme.typography.bodySmall)
+                                if (row.attempt.failureCode != SyncFailureReasonCode.NONE) {
+                                    Text(
+                                        "Kod: ${syncFailureReasonLabel(row.attempt.failureCode)} | ${row.attempt.message}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                } else {
+                                    buildBackendSyncSummary(row.attempt)?.let { backendSummary ->
+                                        Text(backendSummary, style = MaterialTheme.typography.bodySmall)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -889,15 +1004,6 @@ private fun syncAttemptResultLabel(result: SyncAttemptResult): String =
         SyncAttemptResult.SUCCESS -> "SUCCESS"
         SyncAttemptResult.FAILURE -> "FAILURE"
     }
-
-private fun buildBackendSyncSummary(attempt: SyncAttemptHistoryEntry): String? {
-    val parts = buildList {
-        attempt.backendUploadStatus?.let { value -> add("Status backendu: $value") }
-        attempt.backendServiceSessionId?.let { value -> add("ID backendu: $value") }
-        attempt.backendPackageHash?.let { value -> add("Hash paczki: $value") }
-    }
-    return if (parts.isEmpty()) null else parts.joinToString(" | ")
-}
 
 private fun isAutoRetrySuspended(draft: ServiceSessionDraft): Boolean =
     draft.syncStatus == SessionSyncStatus.READY_TO_SYNC &&
