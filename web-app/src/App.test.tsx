@@ -1561,6 +1561,80 @@ describe("App", () => {
     ).toHaveAttribute("href", expect.stringContaining("device_serial=COMP-001"));
   });
 
+  it("shows filtered queue shortcuts on the full device page", async () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/devices/COMP-001?view=components&comp_device_type=DEMO-OPS&comp_sort_by=blocked_components&comp_sort_desc=true&comp_only_blocking=true&comp_limit=100&comp_offset=0&device_type=DEMO-OPS&device_variant=DEFAULT",
+    );
+
+    const fetchMock = vi.fn((input: string | URL | Request) => {
+      const url = String(input);
+
+      if (
+        url ===
+        "/api/component-quality?device_type=DEMO-OPS&only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=100"
+      ) {
+        return Promise.resolve(createJsonResponse(componentPayload));
+      }
+
+      if (url === "/api/devices/COMP-001/shipment-readiness") {
+        return Promise.resolve(
+          createJsonResponse(componentActionShipmentDetailsPayload),
+        );
+      }
+
+      if (url === "/api/devices/COMP-001/component-quality") {
+        return Promise.resolve(
+          createJsonResponse(componentActionComponentDetailsPayload),
+        );
+      }
+
+      if (url === "/api/devices/COMP-001/shipment-gate-history?limit=10") {
+        return Promise.resolve(createJsonResponse([]));
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", { name: "COMP-001" }),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("link", {
+        name: /Pokaż podobne blokady w kolejce wysyłki/,
+      }),
+    ).toHaveAttribute(
+      "href",
+      "/?view=shipment&ship_sort_by=created_at&ship_sort_desc=true&ship_limit=100&ship_offset=0&ship_only_blocked=true&ship_only_ready=false&ship_device_type=DEMO-OPS&ship_primary_blocking_code=COMPONENT_QC_NOT_PASSED&comp_sort_by=blocked_components&comp_sort_desc=true&comp_limit=100&comp_offset=0&comp_only_blocking=true&comp_device_type=DEMO-OPS",
+    );
+    expect(
+      screen.getByRole("link", {
+        name: /Pokaż podobne blokady w kolejce komponentów/,
+      }),
+    ).toHaveAttribute(
+      "href",
+      "/?view=components&ship_sort_by=created_at&ship_sort_desc=true&ship_limit=100&ship_offset=0&ship_only_blocked=false&ship_only_ready=false&comp_sort_by=blocked_components&comp_sort_desc=true&comp_limit=100&comp_offset=0&comp_only_blocking=true&comp_device_type=DEMO-OPS&comp_blocking_component_type=FAN_MODULE",
+    );
+    expect(
+      screen.getByRole("link", {
+        name: /Pokaż tę samą akcję w kolejce komponentów/,
+      }),
+    ).toHaveAttribute(
+      "href",
+      expect.stringContaining("comp_recommended_action=RUN_COMPONENT_QC_OR_REWORK"),
+    );
+    expect(
+      screen.getByRole("link", {
+        name: /Pokaż tę samą akcję w kolejce komponentów/,
+      }),
+    ).not.toHaveAttribute("href", expect.stringContaining("device_serial="));
+  });
+
   it("highlights active section for direct device page hash links", async () => {
     window.history.replaceState(
       {},

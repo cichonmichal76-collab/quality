@@ -793,6 +793,11 @@ td span {
   gap: 10px;
 }
 
+.details-shortcut-list {
+  display: grid;
+  gap: 10px;
+}
+
 .detail-inline-card,
 .detail-component-card,
 .detail-history-card {
@@ -862,6 +867,31 @@ td span {
   text-decoration: underline;
   text-decoration-color: rgb(23 79 71 / 28%);
   text-underline-offset: 0.18em;
+}
+
+.details-queue-link {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgb(255 250 240 / 92%);
+  color: inherit;
+  padding: 12px 14px;
+  text-decoration: none;
+}
+
+.details-queue-link:hover {
+  border-color: rgb(34 107 95 / 26%);
+  background: rgb(34 107 95 / 7%);
+}
+
+.details-queue-link strong {
+  color: var(--accent-strong);
+}
+
+.details-queue-link span {
+  color: var(--muted);
+  font-size: 0.88rem;
 }
 
 .empty-state {

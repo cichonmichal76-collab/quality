@@ -105,6 +105,11 @@ backend pod `http://127.0.0.1:8000`.
   główny status jakości, rekomendowane akcje, tabela urządzeń z
   komponentami blokującymi, drawer szczegółów urządzenia i paginacja wyników.
 
+Pełny widok urządzenia zawiera też skróty do gotowych, przefiltrowanych
+kolejek powiązanych z bieżącym problemem, np. do tej samej blokady
+wysyłkowej, tej samej akcji komponentowej albo tego samego typu
+blokującego komponentu.
+
 ## Walidacja
 
 ```bash

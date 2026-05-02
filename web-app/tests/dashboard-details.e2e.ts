@@ -90,3 +90,38 @@ test("dashboard opens full device details page and returns to queue context", as
   await expect(page).toHaveURL(/device_serial=CQ-E2E-/);
   await expect(page.getByRole("dialog")).toBeVisible();
 });
+
+test("dashboard jumps from full device page to a filtered related queue", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  await expect(page.getByText("API OK")).toBeVisible();
+
+  await page.getByRole("button", { name: "Komponenty" }).click();
+  await page.locator(".filters-card input").first().fill("DEMO-E2E");
+  await page.getByRole("button", { name: /CQ-E2E-/ }).click();
+
+  const drawer = page.getByRole("dialog");
+  await expect(drawer).toBeVisible();
+
+  await drawer.getByRole("link", { name: "Pełna strona" }).click();
+
+  await expect(page).toHaveURL(/\/devices\/CQ-E2E-/);
+  await page
+    .getByRole("link", { name: /Pokaż podobne blokady w kolejce komponentów/ })
+    .click();
+
+  await expect(page).toHaveURL(/\/\?view=components/);
+  await expect(page).toHaveURL(/comp_device_type=DEMO-E2E/);
+  await expect(page).toHaveURL(/comp_blocking_component_type=FAN_MODULE/);
+  await expect(page).not.toHaveURL(/device_serial=/);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Komponenty" })).toHaveClass(
+    /is-active/,
+  );
+  await expect(page.getByLabel("Typ urządzenia")).toHaveValue("DEMO-E2E");
+  await expect(
+    page.getByRole("textbox", { name: "Typ blokującego komponentu" }),
+  ).toHaveValue("FAN_MODULE");
+});

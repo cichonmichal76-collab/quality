@@ -228,6 +228,17 @@ interface ActionWorkSessionOption {
   label: string;
 }
 
+interface QueueShortcutLink {
+  href: string;
+  label: string;
+  caption: string;
+}
+
+interface DeviceDetailsQueueShortcuts {
+  shipment: QueueShortcutLink[];
+  component: QueueShortcutLink[];
+}
+
 interface DashboardUrlState {
   activeView: DashboardMode | null;
   hasShipmentFilters: boolean;
@@ -436,6 +447,14 @@ export function App() {
   const assemblyComponentTypeOptions = buildAssemblyComponentTypeOptions(
     deviceDetails?.shipment.bom_compliance.component_coverage ?? [],
   );
+  const deviceQueueShortcuts = deviceDetails
+    ? buildDeviceDetailsQueueShortcuts({
+        shipment: deviceDetails.shipment,
+        component: deviceDetails.component,
+        shipmentFilters,
+        componentFilters,
+      })
+    : null;
 
   const clearActiveViewData = (view: DashboardMode) => {
     if (view === "shipment") {
@@ -1172,6 +1191,7 @@ export function App() {
     ? {
         device: selectedDevice,
         details: deviceDetails,
+        queueShortcuts: deviceQueueShortcuts,
         loadState: deviceDetailsState,
         errorMessage: deviceDetailsError,
         actionState: deviceActionState,
@@ -2072,6 +2092,7 @@ function ComponentTable({
 interface DeviceDetailsViewProps {
   device: DeviceSelection;
   details: DeviceDetailsPayload | null;
+  queueShortcuts: DeviceDetailsQueueShortcuts | null;
   loadState: LoadState;
   errorMessage: string | null;
   actionState: LoadState;
@@ -2107,6 +2128,7 @@ interface DeviceDetailsViewProps {
 function DeviceDetailsDrawer({
   device,
   details,
+  queueShortcuts,
   loadState,
   errorMessage,
   actionState,
@@ -2160,6 +2182,7 @@ function DeviceDetailsDrawer({
         <DeviceDetailsSurface
           device={device}
           details={details}
+          queueShortcuts={queueShortcuts}
           loadState={loadState}
           errorMessage={errorMessage}
           actionState={actionState}
@@ -2290,6 +2313,7 @@ function DeviceDetailsPage({
 function DeviceDetailsSurface({
   device,
   details,
+  queueShortcuts,
   loadState,
   errorMessage,
   actionState,
@@ -2908,6 +2932,14 @@ function DeviceDetailsSurface({
                   }
                 />
               </div>
+              {enableRecordDeepLinks &&
+              queueShortcuts &&
+              queueShortcuts.shipment.length > 0 ? (
+                <div className="details-stack">
+                  <strong>Powiązane kolejki</strong>
+                  <QueueShortcutList links={queueShortcuts.shipment} />
+                </div>
+              ) : null}
               <div className="details-stack">
                 <strong>Kontrole bramki</strong>
                 {shipment.blocking_checks && shipment.blocking_checks.length > 0 ? (
@@ -3060,6 +3092,14 @@ function DeviceDetailsSurface({
                   >
                     Przejdź do blokującego komponentu
                   </a>
+                </div>
+              ) : null}
+              {enableRecordDeepLinks &&
+              queueShortcuts &&
+              queueShortcuts.component.length > 0 ? (
+                <div className="details-stack">
+                  <strong>Powiązane kolejki</strong>
+                  <QueueShortcutList links={queueShortcuts.component} />
                 </div>
               ) : null}
               <div className="details-stack">
@@ -3221,6 +3261,23 @@ function InlineListCard({
       <strong>{title}</strong>
       <TagList items={items} emptyLabel={emptyLabel} compact />
     </article>
+  );
+}
+
+function QueueShortcutList({
+  links,
+}: {
+  links: QueueShortcutLink[];
+}) {
+  return (
+    <div className="details-shortcut-list">
+      {links.map((link) => (
+        <a className="details-queue-link" href={link.href} key={link.href}>
+          <strong>{link.label}</strong>
+          <span>{link.caption}</span>
+        </a>
+      ))}
+    </div>
   );
 }
 
@@ -4244,6 +4301,174 @@ function buildDeviceCriticalNcrAnchorId(ncrId: string): string {
 
 function buildComponentCriticalNcrAnchorId(ncrId: string): string {
   return `ncr-komponentu-${toAnchorToken(ncrId)}`;
+}
+
+function buildDeviceDetailsQueueShortcuts({
+  shipment,
+  component,
+  shipmentFilters,
+  componentFilters,
+}: {
+  shipment: DeviceShipmentReadiness;
+  component: DeviceComponentQuality;
+  shipmentFilters: ShipmentFilters;
+  componentFilters: ComponentFilters;
+}): DeviceDetailsQueueShortcuts | null {
+  const deviceType = shipment.device_type || component.device_type;
+  const shipmentLinks: QueueShortcutLink[] = [];
+  const componentLinks: QueueShortcutLink[] = [];
+
+  if (shipment.primary_blocking_code) {
+    shipmentLinks.push({
+      href: buildShipmentQueueShortcutHref({
+        deviceType,
+        shipmentFilters,
+        componentFilters,
+        primaryBlockingCode: shipment.primary_blocking_code,
+        recommendedAction: "",
+        onlyBlocked: true,
+        onlyReady: false,
+      }),
+      label: "Pokaż podobne blokady w kolejce wysyłki",
+      caption: `${labelForCode(shipment.primary_blocking_code)} · ${deviceType}`,
+    });
+  }
+
+  if (shipment.recommended_action) {
+    const readyAction =
+      shipment.recommended_action === "MARK_READY_FOR_SHIPMENT";
+
+    shipmentLinks.push({
+      href: buildShipmentQueueShortcutHref({
+        deviceType,
+        shipmentFilters,
+        componentFilters,
+        primaryBlockingCode: "",
+        recommendedAction: shipment.recommended_action,
+        onlyBlocked: !readyAction,
+        onlyReady: readyAction,
+      }),
+      label: "Pokaż tę samą akcję w kolejce wysyłki",
+      caption: `${labelForCode(shipment.recommended_action)} · ${deviceType}`,
+    });
+  }
+
+  if (component.primary_blocking_component_type) {
+    componentLinks.push({
+      href: buildComponentQueueShortcutHref({
+        deviceType,
+        shipmentFilters,
+        componentFilters,
+        blockingComponentType: component.primary_blocking_component_type,
+        recommendedAction: "",
+      }),
+      label: "Pokaż podobne blokady w kolejce komponentów",
+      caption:
+        `${labelForCode(component.primary_blocking_component_type)} · ${deviceType}`,
+    });
+  }
+
+  if (
+    component.recommended_action &&
+    component.recommended_action !== "NO_ACTION"
+  ) {
+    componentLinks.push({
+      href: buildComponentQueueShortcutHref({
+        deviceType,
+        shipmentFilters,
+        componentFilters,
+        blockingComponentType: "",
+        recommendedAction: component.recommended_action,
+      }),
+      label: "Pokaż tę samą akcję w kolejce komponentów",
+      caption:
+        `${labelForCode(component.recommended_action)} · ${deviceType}`,
+    });
+  }
+
+  const dedupedShipmentLinks = dedupeQueueShortcutLinks(shipmentLinks);
+  const dedupedComponentLinks = dedupeQueueShortcutLinks(componentLinks);
+
+  if (
+    dedupedShipmentLinks.length === 0 &&
+    dedupedComponentLinks.length === 0
+  ) {
+    return null;
+  }
+
+  return {
+    shipment: dedupedShipmentLinks,
+    component: dedupedComponentLinks,
+  };
+}
+
+function buildShipmentQueueShortcutHref({
+  deviceType,
+  shipmentFilters,
+  componentFilters,
+  primaryBlockingCode,
+  recommendedAction,
+  onlyBlocked,
+  onlyReady,
+}: {
+  deviceType: string;
+  shipmentFilters: ShipmentFilters;
+  componentFilters: ComponentFilters;
+  primaryBlockingCode: string;
+  recommendedAction: string;
+  onlyBlocked: boolean;
+  onlyReady: boolean;
+}): string {
+  return buildDashboardLocationHref({
+    pathname: "/",
+    activeView: "shipment",
+    shipmentFilters: sanitizeShipmentFilters({
+      ...DEFAULT_SHIPMENT_FILTERS,
+      device_type: deviceType,
+      primary_blocking_code: primaryBlockingCode,
+      recommended_action: recommendedAction,
+      only_blocked: onlyBlocked,
+      only_ready: onlyReady,
+    }),
+    componentFilters,
+    selectedDevice: null,
+  });
+}
+
+function buildComponentQueueShortcutHref({
+  deviceType,
+  shipmentFilters,
+  componentFilters,
+  blockingComponentType,
+  recommendedAction,
+}: {
+  deviceType: string;
+  shipmentFilters: ShipmentFilters;
+  componentFilters: ComponentFilters;
+  blockingComponentType: string;
+  recommendedAction: string;
+}): string {
+  return buildDashboardLocationHref({
+    pathname: "/",
+    activeView: "components",
+    shipmentFilters,
+    componentFilters: {
+      ...DEFAULT_COMPONENT_FILTERS,
+      device_type: deviceType,
+      blocking_component_type: blockingComponentType,
+      recommended_action: recommendedAction,
+      only_blocking: true,
+    },
+    selectedDevice: null,
+  });
+}
+
+function dedupeQueueShortcutLinks(
+  links: QueueShortcutLink[],
+): QueueShortcutLink[] {
+  return Array.from(
+    new Map(links.map((link) => [link.href, link])).values(),
+  );
 }
 
 function toAnchorToken(value: string): string {
