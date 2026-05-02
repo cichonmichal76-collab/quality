@@ -125,6 +125,32 @@ const componentDetailsPayload = {
   ],
 };
 
+const shipmentReadyQueuePayload = {
+  ...shipmentQueuePayload,
+  production_status_summary: [
+    { production_status: "READY_FOR_SHIPMENT", device_count: 1 },
+  ],
+  devices: [
+    {
+      ...shipmentQueuePayload.devices[0],
+      production_status: "READY_FOR_SHIPMENT",
+      device_updated_at: "2026-05-01T10:15:00Z",
+    },
+  ],
+};
+
+const shipmentShippedQueuePayload = {
+  ...shipmentQueuePayload,
+  production_status_summary: [{ production_status: "SHIPPED", device_count: 1 }],
+  devices: [
+    {
+      ...shipmentQueuePayload.devices[0],
+      production_status: "SHIPPED",
+      device_updated_at: "2026-05-01T11:00:00Z",
+    },
+  ],
+};
+
 test("dashboard marks device ready for shipment from the details drawer", async ({
   page,
 }) => {
@@ -142,19 +168,7 @@ test("dashboard marks device ready for shipment from the details drawer", async 
         contentType: "application/json",
         body: JSON.stringify(
           markedReady
-            ? {
-                ...shipmentQueuePayload,
-                production_status_summary: [
-                  { production_status: "READY_FOR_SHIPMENT", device_count: 1 },
-                ],
-                devices: [
-                  {
-                    ...shipmentQueuePayload.devices[0],
-                    production_status: "READY_FOR_SHIPMENT",
-                    device_updated_at: "2026-05-01T10:15:00Z",
-                  },
-                ],
-              }
+            ? shipmentReadyQueuePayload
             : shipmentQueuePayload,
         ),
       });
@@ -270,6 +284,152 @@ test("dashboard marks device ready for shipment from the details drawer", async 
   ).toBeVisible();
   await expect(
     drawer.getByRole("button", { name: "Oznacz gotowe do wysyłki" }),
+  ).toHaveCount(0);
+  expect(patchRequests).toBe(1);
+});
+
+test("dashboard marks ready device as shipped from the details drawer", async ({
+  page,
+}) => {
+  let shipped = false;
+  let patchRequests = 0;
+
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const path = url.pathname;
+
+    if (path === "/api/shipment-readiness") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(
+          shipped ? shipmentShippedQueuePayload : shipmentReadyQueuePayload,
+        ),
+      });
+      return;
+    }
+
+    if (path === "/api/devices/SHIP-001/shipment-readiness") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ...shipmentDetailsPayload,
+          production_status: shipped ? "SHIPPED" : "READY_FOR_SHIPMENT",
+          device_updated_at: shipped
+            ? "2026-05-01T11:00:00Z"
+            : "2026-05-01T10:15:00Z",
+          latest_shipment_gate_decision: {
+            event_type: "SHIPMENT_GATE_PASSED",
+            result: "PASS",
+            message: "Shipment gate passed",
+            recommended_action: "MARK_READY_FOR_SHIPMENT",
+            created_at: "2026-05-01T10:15:00Z",
+          },
+        }),
+      });
+      return;
+    }
+
+    if (path === "/api/devices/SHIP-001/component-quality") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(componentDetailsPayload),
+      });
+      return;
+    }
+
+    if (path === "/api/devices/SHIP-001/shipment-gate-history") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(
+          shipped
+            ? [
+                {
+                  id: "AUD-4",
+                  event_type: "DEVICE_STATUS_UPDATED",
+                  entity_type: "DEVICE",
+                  entity_id: "SHIP-001",
+                  work_session_id: null,
+                  operator_id: null,
+                  workstation_id: null,
+                  machine_id: null,
+                  result: "SHIPPED",
+                  message: "Device marked as shipped",
+                  payload: { requested_status: "SHIPPED" },
+                  created_at: "2026-05-01T11:00:00Z",
+                },
+              ]
+            : [
+                {
+                  id: "AUD-3",
+                  event_type: "SHIPMENT_GATE_PASSED",
+                  entity_type: "DEVICE",
+                  entity_id: "SHIP-001",
+                  work_session_id: "WS-12",
+                  operator_id: "OP-12",
+                  workstation_id: "ST-12",
+                  machine_id: null,
+                  result: "PASS",
+                  message: "Shipment gate passed",
+                  payload: { requested_status: "READY_FOR_SHIPMENT" },
+                  created_at: "2026-05-01T10:15:00Z",
+                },
+              ],
+        ),
+      });
+      return;
+    }
+
+    if (path === "/api/devices/SHIP-001/status" && request.method() === "PATCH") {
+      patchRequests += 1;
+      expect(request.postDataJSON()).toEqual({
+        production_status: "SHIPPED",
+      });
+      shipped = true;
+
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: "DEV-001",
+          device_serial_number: "SHIP-001",
+          device_type: "DEMO-OPS",
+          variant_code: "DEFAULT",
+          hardware_version: null,
+          firmware_version: null,
+          bootloader_version: null,
+          created_by: null,
+          production_status: "SHIPPED",
+          created_at: "2026-05-01T08:00:00Z",
+          updated_at: "2026-05-01T11:00:00Z",
+        }),
+      });
+      return;
+    }
+
+    throw new Error(`Unexpected request: ${request.method()} ${path}`);
+  });
+
+  await page.goto("/");
+
+  await expect(page.getByText("API OK")).toBeVisible();
+  await page.getByRole("button", { name: "SHIP-001" }).click();
+
+  const drawer = page.getByRole("dialog");
+  const actionButton = drawer.getByRole("button", {
+    name: "Oznacz jako wysłane",
+  });
+  await expect(actionButton).toBeVisible();
+
+  await actionButton.click();
+
+  await expect(drawer.getByText("Urządzenie oznaczone jako wysłane.")).toBeVisible();
+  await expect(
+    drawer.getByRole("button", { name: "Oznacz jako wysłane" }),
   ).toHaveCount(0);
   expect(patchRequests).toBe(1);
 });

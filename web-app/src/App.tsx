@@ -429,7 +429,10 @@ export function App() {
     setDeviceActionSuccess(null);
   }, [selectedDeviceSerial]);
 
-  const markSelectedDeviceReadyForShipment = async () => {
+  const updateSelectedDeviceProductionStatus = async (
+    productionStatus: string,
+    successMessage: string,
+  ) => {
     if (!selectedDeviceSerial || deviceActionState === "loading") {
       return;
     }
@@ -449,10 +452,10 @@ export function App() {
       await updateDeviceStatus(
         apiBaseUrl.trim(),
         selectedDeviceSerial,
-        "READY_FOR_SHIPMENT",
+        productionStatus,
       );
       setDeviceActionState("loaded");
-      setDeviceActionSuccess("Urządzenie oznaczone jako gotowe do wysyłki.");
+      setDeviceActionSuccess(successMessage);
       setRefreshVersion((previous) => previous + 1);
     } catch (error: unknown) {
       setDeviceActionState("error");
@@ -460,6 +463,20 @@ export function App() {
         error instanceof Error ? error.message : String(error),
       );
     }
+  };
+
+  const markSelectedDeviceReadyForShipment = async () => {
+    await updateSelectedDeviceProductionStatus(
+      "READY_FOR_SHIPMENT",
+      "Urządzenie oznaczone jako gotowe do wysyłki.",
+    );
+  };
+
+  const markSelectedDeviceShipped = async () => {
+    await updateSelectedDeviceProductionStatus(
+      "SHIPPED",
+      "Urządzenie oznaczone jako wysłane.",
+    );
   };
 
   const updateShipmentFilter = <Key extends keyof ShipmentFilters>(
@@ -653,6 +670,7 @@ export function App() {
             actionErrorMessage={deviceActionError}
             actionSuccessMessage={deviceActionSuccess}
             onMarkReadyForShipment={markSelectedDeviceReadyForShipment}
+            onMarkShipped={markSelectedDeviceShipped}
             onClose={() => setSelectedDevice(null)}
           />
         ) : null}
@@ -1388,6 +1406,7 @@ function DeviceDetailsDrawer({
   actionErrorMessage,
   actionSuccessMessage,
   onMarkReadyForShipment,
+  onMarkShipped,
   onClose,
 }: {
   device: DeviceSelection;
@@ -1398,6 +1417,7 @@ function DeviceDetailsDrawer({
   actionErrorMessage: string | null;
   actionSuccessMessage: string | null;
   onMarkReadyForShipment: () => void;
+  onMarkShipped: () => void;
   onClose: () => void;
 }) {
   const shipment = details?.shipment ?? null;
@@ -1410,8 +1430,9 @@ function DeviceDetailsDrawer({
     shipment.production_status !== "READY_FOR_SHIPMENT" &&
     shipment.can_transition_to_ready_for_shipment &&
     shipment.recommended_action === "MARK_READY_FOR_SHIPMENT";
-  const isAlreadyReadyForShipment =
+  const canMarkShipped =
     shipment?.production_status === "READY_FOR_SHIPMENT";
+  const isAlreadyShipped = shipment?.production_status === "SHIPPED";
 
   return (
     <>
@@ -1522,16 +1543,34 @@ function DeviceDetailsDrawer({
                       : "Oznacz gotowe do wysyłki"}
                   </button>
                 </div>
-              ) : isAlreadyReadyForShipment ? (
-                actionSuccessMessage ? null : (
+              ) : canMarkShipped ? (
+                <div className="action-row">
+                  <div className="action-copy">
+                    <strong>Urządzenie jest gotowe do wysyłki.</strong>
+                    <span>
+                      Ostatni krok możesz zamknąć bezpośrednio tutaj, nadając
+                      status <code>SHIPPED</code>.
+                    </span>
+                  </div>
+                  <button
+                    className="primary-button action-button"
+                    type="button"
+                    onClick={onMarkShipped}
+                    disabled={actionState === "loading"}
+                  >
+                    {actionState === "loading"
+                      ? "Oznaczam..."
+                      : "Oznacz jako wysłane"}
+                  </button>
+                </div>
+              ) : isAlreadyShipped ? (
                 <div className="action-banner action-banner-success">
-                  <strong>Urządzenie ma już status gotowe do wysyłki.</strong>
+                  <strong>Urządzenie ma już status wysłane.</strong>
                   <span>
-                    Drawer pozostaje miejscem do podglądu BOM, jakości komponentów
-                    i historii shipment gate.
+                    Dashboard zachowuje tu pełną historię gate i kontekst jakości,
+                    ale ten etap operacyjny jest już zamknięty.
                   </span>
                 </div>
-                )
               ) : (
                 <div className="action-banner">
                   <strong>

@@ -433,6 +433,54 @@ const shipmentGateHistoryReadyPayload: AuditEvent[] = [
   ...shipmentGateHistoryPayload,
 ];
 
+const shipmentShippedQueuePayload: DeviceShipmentQueue = {
+  ...shipmentPayload,
+  production_status_summary: [
+    {
+      production_status: "SHIPPED",
+      device_count: 1,
+    },
+  ],
+  devices: [
+    {
+      ...shipmentPayload.devices[0],
+      production_status: "SHIPPED",
+      device_updated_at: "2026-05-01T11:00:00Z",
+    },
+  ],
+};
+
+const shipmentDetailsShippedPayload: DeviceShipmentReadiness = {
+  ...shipmentActionDetailsPayload,
+  production_status: "SHIPPED",
+  device_updated_at: "2026-05-01T11:00:00Z",
+  latest_shipment_gate_decision: {
+    event_type: "SHIPMENT_GATE_PASSED",
+    result: "PASS",
+    message: "Shipment gate passed",
+    recommended_action: "MARK_READY_FOR_SHIPMENT",
+    created_at: "2026-05-01T10:15:00Z",
+  },
+};
+
+const shipmentGateHistoryShippedPayload: AuditEvent[] = [
+  {
+    id: "AUD-4",
+    event_type: "DEVICE_STATUS_UPDATED",
+    entity_type: "DEVICE",
+    entity_id: "SHIP-001",
+    work_session_id: null,
+    operator_id: null,
+    workstation_id: null,
+    machine_id: null,
+    result: "SHIPPED",
+    message: "Device marked as shipped",
+    payload: { requested_status: "SHIPPED" },
+    created_at: "2026-05-01T11:00:00Z",
+  },
+  ...shipmentGateHistoryReadyPayload,
+];
+
 const paginatedShipmentPageOnePayload: DeviceShipmentQueue = {
   ...shipmentPayload,
   total_devices: 3,
@@ -855,6 +903,95 @@ describe("App", () => {
     expect(
       screen.getByRole("button", { name: "Oznacz gotowe do wysyłki" }),
     ).toBeEnabled();
+  });
+
+  it("marks ready device as shipped from the details drawer", async () => {
+    let shipped = false;
+    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+
+      if (url.startsWith("/api/shipment-readiness")) {
+        return Promise.resolve(
+          createJsonResponse(shipped ? shipmentShippedQueuePayload : shipmentReadyQueuePayload),
+        );
+      }
+
+      if (url === "/api/devices/SHIP-001/shipment-readiness") {
+        return Promise.resolve(
+          createJsonResponse(
+            shipped ? shipmentDetailsShippedPayload : shipmentDetailsReadyPayload,
+          ),
+        );
+      }
+
+      if (url === "/api/devices/SHIP-001/component-quality") {
+        return Promise.resolve(
+          createJsonResponse(shipmentActionComponentDetailsPayload),
+        );
+      }
+
+      if (url === "/api/devices/SHIP-001/shipment-gate-history?limit=10") {
+        return Promise.resolve(
+          createJsonResponse(
+            shipped ? shipmentGateHistoryShippedPayload : shipmentGateHistoryReadyPayload,
+          ),
+        );
+      }
+
+      if (url === "/api/devices/SHIP-001/status" && method === "PATCH") {
+        shipped = true;
+        return Promise.resolve(
+          createJsonResponse({
+            id: "DEV-001",
+            device_serial_number: "SHIP-001",
+            device_type: "DEMO-OPS",
+            variant_code: "DEFAULT",
+            hardware_version: null,
+            firmware_version: null,
+            bootloader_version: null,
+            created_by: null,
+            production_status: "SHIPPED",
+            created_at: "2026-05-01T08:00:00Z",
+            updated_at: "2026-05-01T11:00:00Z",
+          }),
+        );
+      }
+
+      throw new Error(`Unexpected request: ${method} ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "SHIP-001" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Oznacz jako wysłane" }),
+    );
+
+    expect(
+      await screen.findByText("Urządzenie oznaczone jako wysłane."),
+    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/devices/SHIP-001/status",
+        expect.objectContaining({
+          method: "PATCH",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ production_status: "SHIPPED" }),
+        }),
+      );
+    });
+    expect(
+      screen.queryByRole("button", { name: "Oznacz jako wysłane" }),
+    ).not.toBeInTheDocument();
   });
 
   it("loads last active view from localStorage and persists tab changes", async () => {
