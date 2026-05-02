@@ -39,6 +39,10 @@ całą przefiltrowaną kolejkę do pliku `CSV`. Do monitoringu na żywo można
 włączyć auto-odświeżanie, wybrać interwał odpytywania i podejrzeć znacznik
 ostatniej udanej aktualizacji kolejki.
 
+Kolejka `Wysyłka` wspiera też zaznaczanie wielu wierszy na bieżącej stronie i
+zbiorcze akcje `Oznacz gotowe` oraz `Oznacz wysłane`, jeśli zaznaczone
+urządzenia spełniają warunki odpowiedniego workflow.
+
 Kliknięcie numeru seryjnego w tabeli otwiera drawer szczegółów urządzenia.
 Drawer łączy dane z shipment readiness, component quality i historii shipment
 gate, żeby od razu pokazać blokady, rekomendowaną akcję, stan BOM oraz

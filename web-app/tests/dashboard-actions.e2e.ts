@@ -1664,3 +1664,137 @@ test("dashboard closes device critical NCRs from the details drawer", async ({
   ).toHaveCount(0);
   expect(patchRequests).toBe(1);
 });
+
+test("dashboard marks selected shipment devices ready from bulk actions", async ({
+  page,
+}) => {
+  let readyMarked = false;
+  let patchRequests = 0;
+
+  const bulkShipmentQueuePayload = {
+    ...shipmentQueuePayload,
+    total_devices: 3,
+    ready_count: 0,
+    blocked_count: 3,
+    returned_count: 3,
+    devices: [
+      {
+        ...shipmentQueuePayload.devices[0],
+        device_serial_number: "BULK-READY-001",
+        can_transition_to_ready_for_shipment: true,
+        recommended_action: "MARK_READY_FOR_SHIPMENT",
+        production_status: "FINAL_TEST_PASSED",
+      },
+      {
+        ...shipmentQueuePayload.devices[0],
+        device_serial_number: "BULK-READY-002",
+        can_transition_to_ready_for_shipment: true,
+        recommended_action: "MARK_READY_FOR_SHIPMENT",
+        production_status: "FINAL_TEST_PASSED",
+      },
+      {
+        ...shipmentQueuePayload.devices[0],
+        device_serial_number: "BULK-BLOCK-001",
+        can_transition_to_ready_for_shipment: false,
+        recommended_action: "RUN_FINAL_TEST",
+        primary_blocking_code: "FINAL_TEST_NOT_PASSED",
+        primary_blocking_message: "Final test jest jeszcze wymagany.",
+        production_status: "CREATED",
+        final_test_passed: false,
+      },
+    ],
+  };
+
+  const refreshedBulkShipmentQueuePayload = {
+    ...bulkShipmentQueuePayload,
+    ready_count: 2,
+    blocked_count: 1,
+    devices: [
+      {
+        ...bulkShipmentQueuePayload.devices[0],
+        production_status: "READY_FOR_SHIPMENT",
+      },
+      {
+        ...bulkShipmentQueuePayload.devices[1],
+        production_status: "READY_FOR_SHIPMENT",
+      },
+      bulkShipmentQueuePayload.devices[2],
+    ],
+  };
+
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const path = url.pathname;
+
+    if (path === "/api/shipment-readiness") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(
+          readyMarked
+            ? refreshedBulkShipmentQueuePayload
+            : bulkShipmentQueuePayload,
+        ),
+      });
+      return;
+    }
+
+    if (
+      (path === "/api/devices/BULK-READY-001/status" ||
+        path === "/api/devices/BULK-READY-002/status") &&
+      request.method() === "PATCH"
+    ) {
+      patchRequests += 1;
+      expect(request.postDataJSON()).toEqual({
+        production_status: "READY_FOR_SHIPMENT",
+      });
+      readyMarked = true;
+
+      const serialNumber = path.includes("BULK-READY-001")
+        ? "BULK-READY-001"
+        : "BULK-READY-002";
+
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: `DEV-${serialNumber}`,
+          device_serial_number: serialNumber,
+          device_type: "DEMO-OPS",
+          variant_code: "DEFAULT",
+          hardware_version: null,
+          firmware_version: null,
+          bootloader_version: null,
+          created_by: null,
+          production_status: "READY_FOR_SHIPMENT",
+          created_at: "2026-05-01T08:00:00Z",
+          updated_at: "2026-05-01T10:15:00Z",
+        }),
+      });
+      return;
+    }
+
+    throw new Error(`Unexpected request: ${request.method()} ${path}`);
+  });
+
+  await page.goto("/");
+
+  await expect(page.getByText("API OK")).toBeVisible();
+  await page
+    .getByRole("checkbox", {
+      name: "Zaznacz wszystkie urządzenia w kolejce wysyłki na stronie",
+    })
+    .check();
+
+  await expect(page.getByText("Zaznaczone: 3")).toBeVisible();
+  await expect(page.getByText("Gotowe do oznaczenia: 2")).toBeVisible();
+
+  await page.getByRole("button", { name: "Oznacz gotowe (2)" }).click();
+
+  await expect(
+    page.getByText("Oznaczono jako gotowe do wysyłki 2 urządzeń."),
+  ).toBeVisible();
+  expect(patchRequests).toBe(2);
+  await expect(page.getByRole("checkbox", { name: "Zaznacz BULK-READY-001" })).not.toBeChecked();
+});

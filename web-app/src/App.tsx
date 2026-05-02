@@ -417,6 +417,17 @@ export function App() {
   >(null);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [csvExportState, setCsvExportState] = useState<LoadState>("idle");
+  const [selectedShipmentSerials, setSelectedShipmentSerials] = useState<string[]>(
+    [],
+  );
+  const [shipmentBulkActionState, setShipmentBulkActionState] =
+    useState<LoadState>("idle");
+  const [shipmentBulkActionError, setShipmentBulkActionError] = useState<
+    string | null
+  >(null);
+  const [shipmentBulkActionSuccess, setShipmentBulkActionSuccess] = useState<
+    string | null
+  >(null);
   const copyFeedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
@@ -431,6 +442,22 @@ export function App() {
       ? Boolean(shipmentData && shipmentData.devices.length > 0)
       : Boolean(componentData && componentData.devices.length > 0);
   const isExportingCsv = csvExportState === "loading";
+  const visibleShipmentDevices = shipmentData?.devices ?? [];
+  const selectedShipmentDevices = visibleShipmentDevices.filter((device) =>
+    selectedShipmentSerials.includes(device.device_serial_number),
+  );
+  const selectedShipmentReadyDevices = selectedShipmentDevices.filter(
+    (device) => device.can_transition_to_ready_for_shipment,
+  );
+  const selectedShipmentShippableDevices = selectedShipmentDevices.filter(
+    (device) => device.production_status === "READY_FOR_SHIPMENT",
+  );
+  const hasSelectedAllVisibleShipmentRows =
+    visibleShipmentDevices.length > 0 &&
+    visibleShipmentDevices.every((device) =>
+      selectedShipmentSerials.includes(device.device_serial_number),
+    );
+  const isShipmentBulkActionLoading = shipmentBulkActionState === "loading";
   const selectedDeviceSerial = selectedDevice?.serialNumber ?? null;
   const requiresCompleteAssemblyAction =
     deviceDetails?.shipment.recommended_action === "COMPLETE_ASSEMBLY";
@@ -565,6 +592,12 @@ export function App() {
     }
   };
 
+  const resetShipmentBulkActionFeedback = () => {
+    setShipmentBulkActionState("idle");
+    setShipmentBulkActionError(null);
+    setShipmentBulkActionSuccess(null);
+  };
+
   const exportActiveQueueCsv = async () => {
     if (!apiBaseUrl.trim()) {
       showCopyFeedback("dashboard", "error", "Podaj bazowy adres API.");
@@ -648,6 +681,133 @@ export function App() {
     }
   };
 
+  const toggleShipmentSelection = (serialNumber: string) => {
+    resetShipmentBulkActionFeedback();
+    setSelectedShipmentSerials((previous) =>
+      previous.includes(serialNumber)
+        ? previous.filter((serial) => serial !== serialNumber)
+        : [...previous, serialNumber],
+    );
+  };
+
+  const toggleAllVisibleShipmentSelections = () => {
+    resetShipmentBulkActionFeedback();
+    setSelectedShipmentSerials((previous) => {
+      const visibleSerials = visibleShipmentDevices.map(
+        (device) => device.device_serial_number,
+      );
+      const hasSelectedAllVisibleRows =
+        visibleSerials.length > 0 &&
+        visibleSerials.every((serial) => previous.includes(serial));
+
+      if (hasSelectedAllVisibleRows) {
+        return previous.filter((serial) => !visibleSerials.includes(serial));
+      }
+
+      return Array.from(new Set([...previous, ...visibleSerials]));
+    });
+  };
+
+  const clearShipmentSelections = () => {
+    resetShipmentBulkActionFeedback();
+    setSelectedShipmentSerials([]);
+  };
+
+  const runShipmentBulkStatusUpdate = async ({
+    devices,
+    targetStatus,
+    successMessage,
+    emptySelectionMessage,
+  }: {
+    devices: DeviceShipmentReadiness[];
+    targetStatus: "READY_FOR_SHIPMENT" | "SHIPPED";
+    successMessage: (updatedCount: number) => string;
+    emptySelectionMessage: string;
+  }) => {
+    if (isShipmentBulkActionLoading) {
+      return;
+    }
+
+    if (!apiBaseUrl.trim()) {
+      setShipmentBulkActionState("error");
+      setShipmentBulkActionError("Podaj bazowy adres API.");
+      setShipmentBulkActionSuccess(null);
+      return;
+    }
+
+    if (devices.length === 0) {
+      setShipmentBulkActionState("error");
+      setShipmentBulkActionError(emptySelectionMessage);
+      setShipmentBulkActionSuccess(null);
+      return;
+    }
+
+    setShipmentBulkActionState("loading");
+    setShipmentBulkActionError(null);
+    setShipmentBulkActionSuccess(null);
+
+    let updatedCount = 0;
+    const failedSerials: string[] = [];
+
+    for (const device of devices) {
+      try {
+        await updateDeviceStatus(
+          apiBaseUrl.trim(),
+          device.device_serial_number,
+          targetStatus,
+        );
+        updatedCount += 1;
+      } catch {
+        failedSerials.push(device.device_serial_number);
+      }
+    }
+
+    if (updatedCount > 0) {
+      setRefreshVersion((previous) => previous + 1);
+      setShipmentBulkActionSuccess(successMessage(updatedCount));
+    }
+
+    if (failedSerials.length > 0) {
+      setShipmentBulkActionState("error");
+      setShipmentBulkActionError(
+        `Nie udało się zaktualizować ${formatNumber(
+          failedSerials.length,
+        )} urządzeń: ${failedSerials.slice(0, 3).join(", ")}${
+          failedSerials.length > 3 ? " i więcej." : "."
+        }`,
+      );
+      setSelectedShipmentSerials(failedSerials);
+      return;
+    }
+
+    setShipmentBulkActionState("loaded");
+    setSelectedShipmentSerials([]);
+  };
+
+  const markSelectedShipmentDevicesReady = async () => {
+    await runShipmentBulkStatusUpdate({
+      devices: selectedShipmentReadyDevices,
+      targetStatus: "READY_FOR_SHIPMENT",
+      successMessage: (updatedCount) =>
+        `Oznaczono jako gotowe do wysyłki ${formatNumber(
+          updatedCount,
+        )} urządzeń.`,
+      emptySelectionMessage:
+        "W zaznaczeniu nie ma urządzeń gotowych do oznaczenia jako gotowe do wysyłki.",
+    });
+  };
+
+  const markSelectedShipmentDevicesShipped = async () => {
+    await runShipmentBulkStatusUpdate({
+      devices: selectedShipmentShippableDevices,
+      targetStatus: "SHIPPED",
+      successMessage: (updatedCount) =>
+        `Oznaczono jako wysłane ${formatNumber(updatedCount)} urządzeń.`,
+      emptySelectionMessage:
+        "W zaznaczeniu nie ma urządzeń gotowych do oznaczenia jako wysłane.",
+    });
+  };
+
   const selectDevice = (device: {
     device_serial_number: string;
     device_type: string;
@@ -685,6 +845,28 @@ export function App() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    const visibleSerials = new Set(
+      visibleShipmentDevices.map((device) => device.device_serial_number),
+    );
+
+    setSelectedShipmentSerials((previous) => {
+      const next = previous.filter((serial) => visibleSerials.has(serial));
+      return next.length === previous.length ? previous : next;
+    });
+  }, [visibleShipmentDevices]);
+
+  useEffect(() => {
+    if (activeView === "shipment") {
+      return;
+    }
+
+    setSelectedShipmentSerials([]);
+    setShipmentBulkActionState("idle");
+    setShipmentBulkActionError(null);
+    setShipmentBulkActionSuccess(null);
+  }, [activeView]);
 
   useEffect(() => {
     localStorage.setItem(VIEW_STORAGE_KEY, activeView);
@@ -1447,6 +1629,10 @@ export function App() {
     setSelectedQualitySessionId("");
     setSelectedAssemblyComponentType("");
     setAssemblyBarcodeValue("");
+    setSelectedShipmentSerials([]);
+    setShipmentBulkActionState("idle");
+    setShipmentBulkActionError(null);
+    setShipmentBulkActionSuccess(null);
 
     if (!isDevicePage) {
       setSelectedDevice(null);
@@ -1727,6 +1913,24 @@ export function App() {
                 fallbackLimit={shipmentFilters.limit}
                 onSelectDevice={selectDevice}
                 selectedDeviceSerial={selectedDeviceSerial}
+                selectedShipmentSerials={selectedShipmentSerials}
+                hasSelectedAllVisibleShipmentRows={
+                  hasSelectedAllVisibleShipmentRows
+                }
+                bulkActionState={shipmentBulkActionState}
+                bulkActionError={shipmentBulkActionError}
+                bulkActionSuccess={shipmentBulkActionSuccess}
+                readySelectionCount={selectedShipmentReadyDevices.length}
+                shippableSelectionCount={
+                  selectedShipmentShippableDevices.length
+                }
+                onToggleShipmentSelection={toggleShipmentSelection}
+                onToggleAllShipmentSelections={
+                  toggleAllVisibleShipmentSelections
+                }
+                onClearShipmentSelections={clearShipmentSelections}
+                onMarkSelectedReady={markSelectedShipmentDevicesReady}
+                onMarkSelectedShipped={markSelectedShipmentDevicesShipped}
               />
             </>
           ) : (
@@ -2065,6 +2269,18 @@ function ShipmentDashboard({
   fallbackLimit,
   onSelectDevice,
   selectedDeviceSerial,
+  selectedShipmentSerials,
+  hasSelectedAllVisibleShipmentRows,
+  bulkActionState,
+  bulkActionError,
+  bulkActionSuccess,
+  readySelectionCount,
+  shippableSelectionCount,
+  onToggleShipmentSelection,
+  onToggleAllShipmentSelections,
+  onClearShipmentSelections,
+  onMarkSelectedReady,
+  onMarkSelectedShipped,
 }: {
   data: DeviceShipmentQueue | null;
   isLoading: boolean;
@@ -2077,6 +2293,18 @@ function ShipmentDashboard({
   fallbackLimit: number;
   onSelectDevice: (device: DeviceShipmentReadiness) => void;
   selectedDeviceSerial: string | null;
+  selectedShipmentSerials: string[];
+  hasSelectedAllVisibleShipmentRows: boolean;
+  bulkActionState: LoadState;
+  bulkActionError: string | null;
+  bulkActionSuccess: string | null;
+  readySelectionCount: number;
+  shippableSelectionCount: number;
+  onToggleShipmentSelection: (serialNumber: string) => void;
+  onToggleAllShipmentSelections: () => void;
+  onClearShipmentSelections: () => void;
+  onMarkSelectedReady: () => void;
+  onMarkSelectedShipped: () => void;
 }) {
   const readyCount = data?.ready_count ?? 0;
   const blockedCount = data?.blocked_count ?? 0;
@@ -2134,11 +2362,28 @@ function ShipmentDashboard({
         />
       </div>
 
+      <ShipmentBulkActionsBar
+        isLoading={isLoading}
+        selectedCount={selectedShipmentSerials.length}
+        readySelectionCount={readySelectionCount}
+        shippableSelectionCount={shippableSelectionCount}
+        hasSelectedAllVisibleRows={hasSelectedAllVisibleShipmentRows}
+        actionState={bulkActionState}
+        actionError={bulkActionError}
+        actionSuccess={bulkActionSuccess}
+        onToggleAll={onToggleAllShipmentSelections}
+        onClearSelection={onClearShipmentSelections}
+        onMarkSelectedReady={onMarkSelectedReady}
+        onMarkSelectedShipped={onMarkSelectedShipped}
+      />
+
       <ShipmentTable
         devices={data?.devices ?? []}
         isLoading={isLoading}
         onSelectDevice={onSelectDevice}
         selectedDeviceSerial={selectedDeviceSerial}
+        selectedShipmentSerials={selectedShipmentSerials}
+        onToggleShipmentSelection={onToggleShipmentSelection}
       />
       <PaginationBar
         label="kolejki wysyłki"
@@ -2344,16 +2589,112 @@ function PaginationBar({
   );
 }
 
+function ShipmentBulkActionsBar({
+  isLoading,
+  selectedCount,
+  readySelectionCount,
+  shippableSelectionCount,
+  hasSelectedAllVisibleRows,
+  actionState,
+  actionError,
+  actionSuccess,
+  onToggleAll,
+  onClearSelection,
+  onMarkSelectedReady,
+  onMarkSelectedShipped,
+}: {
+  isLoading: boolean;
+  selectedCount: number;
+  readySelectionCount: number;
+  shippableSelectionCount: number;
+  hasSelectedAllVisibleRows: boolean;
+  actionState: LoadState;
+  actionError: string | null;
+  actionSuccess: string | null;
+  onToggleAll: () => void;
+  onClearSelection: () => void;
+  onMarkSelectedReady: () => void;
+  onMarkSelectedShipped: () => void;
+}) {
+  const isActionLoading = actionState === "loading";
+
+  return (
+    <section className="bulk-action-bar" aria-label="Akcje zbiorcze kolejki wysyłki">
+      <div className="bulk-action-meta">
+        <label className="switch-field bulk-select-toggle">
+          <input
+            aria-label="Zaznacz wszystkie urządzenia w kolejce wysyłki na stronie"
+            checked={hasSelectedAllVisibleRows}
+            type="checkbox"
+            onChange={onToggleAll}
+            disabled={isLoading || isActionLoading}
+          />
+          <span>Zaznacz wszystko na stronie</span>
+        </label>
+        <div className="bulk-action-counts">
+          <strong>Zaznaczone: {formatNumber(selectedCount)}</strong>
+          <span>Gotowe do oznaczenia: {formatNumber(readySelectionCount)}</span>
+          <span>Gotowe do wysłania: {formatNumber(shippableSelectionCount)}</span>
+        </div>
+      </div>
+      <div className="bulk-action-buttons">
+        <button
+          className="primary-button"
+          type="button"
+          onClick={onMarkSelectedReady}
+          disabled={readySelectionCount === 0 || isLoading || isActionLoading}
+        >
+          {isActionLoading
+            ? "Przetwarzam..."
+            : `Oznacz gotowe (${formatNumber(readySelectionCount)})`}
+        </button>
+        <button
+          className="ghost-button"
+          type="button"
+          onClick={onMarkSelectedShipped}
+          disabled={shippableSelectionCount === 0 || isLoading || isActionLoading}
+        >
+          Oznacz wysłane ({formatNumber(shippableSelectionCount)})
+        </button>
+        <button
+          className="ghost-button"
+          type="button"
+          onClick={onClearSelection}
+          disabled={selectedCount === 0 || isLoading || isActionLoading}
+        >
+          Wyczyść zaznaczenie
+        </button>
+      </div>
+      {actionSuccess ? (
+        <div className="action-banner action-banner-success" role="status">
+          <strong>Akcja zbiorcza wykonana.</strong>
+          <span>{actionSuccess}</span>
+        </div>
+      ) : null}
+      {actionError ? (
+        <div className="error-banner" role="alert">
+          <strong>Nie udało się wykonać akcji zbiorczej.</strong>
+          <span>{actionError}</span>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 function ShipmentTable({
   devices,
   isLoading,
   onSelectDevice,
   selectedDeviceSerial,
+  selectedShipmentSerials,
+  onToggleShipmentSelection,
 }: {
   devices: DeviceShipmentReadiness[];
   isLoading: boolean;
   onSelectDevice: (device: DeviceShipmentReadiness) => void;
   selectedDeviceSerial: string | null;
+  selectedShipmentSerials: string[];
+  onToggleShipmentSelection: (serialNumber: string) => void;
 }) {
   if (devices.length === 0) {
     return <EmptyTable isLoading={isLoading} label="Brak urządzeń w kolejce." />;
@@ -2372,6 +2713,7 @@ function ShipmentTable({
         <table>
           <thead>
             <tr>
+              <th>Wybór</th>
               <th>Serial</th>
               <th>Typ / wariant</th>
               <th>Status</th>
@@ -2387,12 +2729,26 @@ function ShipmentTable({
             {devices.map((device) => {
               const isSelected =
                 selectedDeviceSerial === device.device_serial_number;
+              const isChecked = selectedShipmentSerials.includes(
+                device.device_serial_number,
+              );
 
               return (
               <tr
                 key={device.device_serial_number}
                 className={isSelected ? "table-row-selected" : undefined}
               >
+                <td className="selection-cell">
+                  <input
+                    aria-label={`Zaznacz ${device.device_serial_number}`}
+                    checked={isChecked}
+                    type="checkbox"
+                    onChange={() =>
+                      onToggleShipmentSelection(device.device_serial_number)
+                    }
+                    disabled={isLoading}
+                  />
+                </td>
                 <td className="serial-cell">
                   <button
                     className={`row-link ${isSelected ? "is-selected" : ""}`}

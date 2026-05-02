@@ -527,6 +527,47 @@ select:focus {
   overflow-x: auto;
 }
 
+.bulk-action-bar {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgb(255 250 240 / 88%);
+  padding: 14px 16px;
+}
+
+.bulk-action-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.bulk-select-toggle {
+  margin: 0;
+}
+
+.bulk-action-counts {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.bulk-action-counts strong {
+  color: var(--ink);
+}
+
+.bulk-action-buttons {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 table {
   width: 100%;
   min-width: 1160px;
@@ -563,6 +604,16 @@ td span {
 .serial-cell {
   font-family: "Cascadia Mono", "Consolas", monospace;
   font-weight: 800;
+}
+
+.selection-cell {
+  width: 48px;
+}
+
+.selection-cell input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
 }
 
 .table-row-selected td {
@@ -1167,6 +1218,18 @@ td span {
   }
 
   .action-buttons {
+    width: 100%;
+  }
+
+  .bulk-action-meta,
+  .bulk-action-counts,
+  .bulk-action-buttons {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .bulk-action-buttons .primary-button,
+  .bulk-action-buttons .ghost-button {
     width: 100%;
   }
 

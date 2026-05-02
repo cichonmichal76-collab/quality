@@ -2128,6 +2128,275 @@ describe("App", () => {
     );
   });
 
+  it("marks selected shipment devices ready from bulk actions", async () => {
+    let readyMarked = false;
+    const initialQueuePayload: DeviceShipmentQueue = {
+      ...shipmentPayload,
+      total_devices: 3,
+      ready_count: 0,
+      blocked_count: 3,
+      returned_count: 3,
+      devices: [
+        {
+          ...shipmentPayload.devices[0],
+          device_serial_number: "BULK-READY-001",
+          can_transition_to_ready_for_shipment: true,
+          recommended_action: "MARK_READY_FOR_SHIPMENT",
+          production_status: "FINAL_TEST_PASSED",
+        },
+        {
+          ...shipmentPayload.devices[0],
+          device_serial_number: "BULK-READY-002",
+          can_transition_to_ready_for_shipment: true,
+          recommended_action: "MARK_READY_FOR_SHIPMENT",
+          production_status: "FINAL_TEST_PASSED",
+        },
+        {
+          ...shipmentPayload.devices[0],
+          device_serial_number: "BULK-BLOCK-001",
+          can_transition_to_ready_for_shipment: false,
+          recommended_action: "RUN_FINAL_TEST",
+          primary_blocking_code: "FINAL_TEST_NOT_PASSED",
+          primary_blocking_message: "Final test jest jeszcze wymagany.",
+          production_status: "CREATED",
+          final_test_passed: false,
+        },
+      ],
+    };
+    const refreshedQueuePayload: DeviceShipmentQueue = {
+      ...initialQueuePayload,
+      ready_count: 2,
+      blocked_count: 1,
+      devices: [
+        {
+          ...initialQueuePayload.devices[0],
+          production_status: "READY_FOR_SHIPMENT",
+        },
+        {
+          ...initialQueuePayload.devices[1],
+          production_status: "READY_FOR_SHIPMENT",
+        },
+        initialQueuePayload.devices[2],
+      ],
+    };
+
+    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+
+      if (url.startsWith("/api/shipment-readiness")) {
+        return Promise.resolve(
+          createJsonResponse(readyMarked ? refreshedQueuePayload : initialQueuePayload),
+        );
+      }
+
+      if (
+        (url === "/api/devices/BULK-READY-001/status" ||
+          url === "/api/devices/BULK-READY-002/status") &&
+        method === "PATCH"
+      ) {
+        readyMarked = true;
+        const serialNumber = url.includes("BULK-READY-001")
+          ? "BULK-READY-001"
+          : "BULK-READY-002";
+        return Promise.resolve(
+          createJsonResponse({
+            id: `DEV-${serialNumber}`,
+            device_serial_number: serialNumber,
+            device_type: "DEMO-OPS",
+            variant_code: "DEFAULT",
+            hardware_version: null,
+            firmware_version: null,
+            bootloader_version: null,
+            created_by: null,
+            production_status: "READY_FOR_SHIPMENT",
+            created_at: "2026-05-01T08:00:00Z",
+            updated_at: "2026-05-01T10:15:00Z",
+          }),
+        );
+      }
+
+      throw new Error(`Unexpected request: ${method} ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("BULK-READY-001")).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: "Zaznacz wszystkie urządzenia w kolejce wysyłki na stronie",
+      }),
+    );
+
+    expect(screen.getByText("Zaznaczone: 3")).toBeInTheDocument();
+    expect(screen.getByText("Gotowe do oznaczenia: 2")).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Oznacz gotowe (2)" }),
+    );
+
+    expect(
+      await screen.findByText("Oznaczono jako gotowe do wysyłki 2 urządzeń."),
+    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/devices/BULK-READY-001/status",
+        expect.objectContaining({
+          method: "PATCH",
+          body: JSON.stringify({ production_status: "READY_FOR_SHIPMENT" }),
+        }),
+      );
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/devices/BULK-READY-002/status",
+        expect.objectContaining({
+          method: "PATCH",
+          body: JSON.stringify({ production_status: "READY_FOR_SHIPMENT" }),
+        }),
+      );
+    });
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "/api/devices/BULK-BLOCK-001/status",
+      expect.anything(),
+    );
+    await waitFor(() => {
+      expect(
+        screen.getByRole("checkbox", {
+          name: "Zaznacz BULK-READY-001",
+        }),
+      ).not.toBeChecked();
+    });
+  });
+
+  it("marks selected ready shipment devices as shipped from bulk actions", async () => {
+    let shipped = false;
+    const initialQueuePayload: DeviceShipmentQueue = {
+      ...shipmentPayload,
+      total_devices: 3,
+      ready_count: 2,
+      blocked_count: 1,
+      returned_count: 3,
+      devices: [
+        {
+          ...shipmentPayload.devices[0],
+          device_serial_number: "BULK-SHIP-001",
+          can_transition_to_ready_for_shipment: false,
+          production_status: "READY_FOR_SHIPMENT",
+        },
+        {
+          ...shipmentPayload.devices[0],
+          device_serial_number: "BULK-SHIP-002",
+          can_transition_to_ready_for_shipment: false,
+          production_status: "READY_FOR_SHIPMENT",
+        },
+        {
+          ...shipmentPayload.devices[0],
+          device_serial_number: "BULK-SHIP-BLOCK-001",
+          can_transition_to_ready_for_shipment: false,
+          production_status: "CREATED",
+          recommended_action: "RUN_FINAL_TEST",
+        },
+      ],
+    };
+    const refreshedQueuePayload: DeviceShipmentQueue = {
+      ...initialQueuePayload,
+      ready_count: 0,
+      blocked_count: 1,
+      devices: [
+        {
+          ...initialQueuePayload.devices[0],
+          production_status: "SHIPPED",
+        },
+        {
+          ...initialQueuePayload.devices[1],
+          production_status: "SHIPPED",
+        },
+        initialQueuePayload.devices[2],
+      ],
+    };
+
+    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+
+      if (url.startsWith("/api/shipment-readiness")) {
+        return Promise.resolve(
+          createJsonResponse(shipped ? refreshedQueuePayload : initialQueuePayload),
+        );
+      }
+
+      if (
+        (url === "/api/devices/BULK-SHIP-001/status" ||
+          url === "/api/devices/BULK-SHIP-002/status") &&
+        method === "PATCH"
+      ) {
+        shipped = true;
+        const serialNumber = url.includes("BULK-SHIP-001")
+          ? "BULK-SHIP-001"
+          : "BULK-SHIP-002";
+        return Promise.resolve(
+          createJsonResponse({
+            id: `DEV-${serialNumber}`,
+            device_serial_number: serialNumber,
+            device_type: "DEMO-OPS",
+            variant_code: "DEFAULT",
+            hardware_version: null,
+            firmware_version: null,
+            bootloader_version: null,
+            created_by: null,
+            production_status: "SHIPPED",
+            created_at: "2026-05-01T08:00:00Z",
+            updated_at: "2026-05-01T11:15:00Z",
+          }),
+        );
+      }
+
+      throw new Error(`Unexpected request: ${method} ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("BULK-SHIP-001")).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: "Zaznacz wszystkie urządzenia w kolejce wysyłki na stronie",
+      }),
+    );
+
+    expect(screen.getByText("Gotowe do wysłania: 2")).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Oznacz wysłane (2)" }),
+    );
+
+    expect(
+      await screen.findByText("Oznaczono jako wysłane 2 urządzeń."),
+    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/devices/BULK-SHIP-001/status",
+        expect.objectContaining({
+          method: "PATCH",
+          body: JSON.stringify({ production_status: "SHIPPED" }),
+        }),
+      );
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/devices/BULK-SHIP-002/status",
+        expect.objectContaining({
+          method: "PATCH",
+          body: JSON.stringify({ production_status: "SHIPPED" }),
+        }),
+      );
+    });
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "/api/devices/BULK-SHIP-BLOCK-001/status",
+      expect.anything(),
+    );
+  });
+
   it("copies current device page link with the active hash section", async () => {
     window.history.replaceState(
       {},
