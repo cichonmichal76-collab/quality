@@ -47,6 +47,21 @@ export interface DeviceRead {
   updated_at: string;
 }
 
+export interface NonconformityRead {
+  id: string;
+  ncr_id: string;
+  device_serial_number: string | null;
+  component_serial_number: string | null;
+  process_stage: string | null;
+  description: string;
+  severity: string;
+  detected_by: string | null;
+  corrective_action: string | null;
+  status: string;
+  detected_at: string;
+  closed_at: string | null;
+}
+
 export interface DeviceBomComponentCoverage {
   component_type: string;
   substitution_group: string | null;
@@ -333,6 +348,23 @@ export async function updateDeviceStatus(
   return patchJson<DeviceRead>(
     joinApiUrl(apiBaseUrl, `/devices/${encodeURIComponent(serialNumber)}/status`),
     { production_status: productionStatus },
+    signal,
+  );
+}
+
+export async function updateNonconformityStatus(
+  apiBaseUrl: string,
+  ncrId: string,
+  status: string,
+  correctiveAction?: string,
+  signal?: AbortSignal,
+): Promise<NonconformityRead> {
+  return patchJson<NonconformityRead>(
+    joinApiUrl(apiBaseUrl, `/nonconformities/${encodeURIComponent(ncrId)}`),
+    {
+      status,
+      ...(correctiveAction ? { corrective_action: correctiveAction } : {}),
+    },
     signal,
   );
 }

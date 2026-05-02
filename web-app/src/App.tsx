@@ -7,6 +7,7 @@ import {
   joinApiUrl,
   optionalBoolean,
   updateDeviceStatus,
+  updateNonconformityStatus,
 } from "./api";
 import type {
   AuditEvent,
@@ -479,6 +480,67 @@ export function App() {
     );
   };
 
+  const closeSelectedNonconformities = async (
+    ncrIds: string[],
+    scopeLabel: string,
+  ) => {
+    if (ncrIds.length === 0 || deviceActionState === "loading") {
+      return;
+    }
+
+    if (!apiBaseUrl.trim()) {
+      setDeviceActionState("error");
+      setDeviceActionError("Podaj bazowy adres API.");
+      setDeviceActionSuccess(null);
+      return;
+    }
+
+    setDeviceActionState("loading");
+    setDeviceActionError(null);
+    setDeviceActionSuccess(null);
+
+    try {
+      await Promise.all(
+        ncrIds.map((ncrId) =>
+          updateNonconformityStatus(
+            apiBaseUrl.trim(),
+            ncrId,
+            "CLOSED",
+            `Zamknięte z panelu operacyjnego dla ${selectedDeviceSerial}.`,
+          ),
+        ),
+      );
+      setDeviceActionState("loaded");
+      setDeviceActionSuccess(
+        `Zamknięto ${formatNumber(ncrIds.length)} krytyczne NCR ${scopeLabel}.`,
+      );
+      setRefreshVersion((previous) => previous + 1);
+    } catch (error: unknown) {
+      setDeviceActionState("error");
+      setDeviceActionError(
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  };
+
+  const closeSelectedDeviceCriticalNcrs = async () => {
+    await closeSelectedNonconformities(
+      deviceDetails?.shipment.critical_open_ncr_ids ?? [],
+      "urządzenia",
+    );
+  };
+
+  const closeSelectedComponentCriticalNcrs = async () => {
+    const ncrIds = Array.from(
+      new Set(
+        (deviceDetails?.component.components ?? []).flatMap(
+          (component) => component.critical_open_ncr_ids,
+        ),
+      ),
+    );
+    await closeSelectedNonconformities(ncrIds, "komponentów");
+  };
+
   const updateShipmentFilter = <Key extends keyof ShipmentFilters>(
     key: Key,
     value: ShipmentFilters[Key],
@@ -671,6 +733,8 @@ export function App() {
             actionSuccessMessage={deviceActionSuccess}
             onMarkReadyForShipment={markSelectedDeviceReadyForShipment}
             onMarkShipped={markSelectedDeviceShipped}
+            onCloseDeviceCriticalNcrs={closeSelectedDeviceCriticalNcrs}
+            onCloseComponentCriticalNcrs={closeSelectedComponentCriticalNcrs}
             onClose={() => setSelectedDevice(null)}
           />
         ) : null}
@@ -1407,6 +1471,8 @@ function DeviceDetailsDrawer({
   actionSuccessMessage,
   onMarkReadyForShipment,
   onMarkShipped,
+  onCloseDeviceCriticalNcrs,
+  onCloseComponentCriticalNcrs,
   onClose,
 }: {
   device: DeviceSelection;
@@ -1418,6 +1484,8 @@ function DeviceDetailsDrawer({
   actionSuccessMessage: string | null;
   onMarkReadyForShipment: () => void;
   onMarkShipped: () => void;
+  onCloseDeviceCriticalNcrs: () => void;
+  onCloseComponentCriticalNcrs: () => void;
   onClose: () => void;
 }) {
   const shipment = details?.shipment ?? null;
@@ -1425,6 +1493,9 @@ function DeviceDetailsDrawer({
   const bomCoverage = shipment?.bom_compliance.component_coverage ?? [];
   const componentRows = component?.components ?? [];
   const historyRows = details?.shipmentGateHistory ?? [];
+  const componentCriticalNcrIds = Array.from(
+    new Set(componentRows.flatMap((item) => item.critical_open_ncr_ids)),
+  );
   const canMarkReadyForShipment =
     shipment !== null &&
     shipment.production_status !== "READY_FOR_SHIPMENT" &&
@@ -1433,6 +1504,8 @@ function DeviceDetailsDrawer({
   const canMarkShipped =
     shipment?.production_status === "READY_FOR_SHIPMENT";
   const isAlreadyShipped = shipment?.production_status === "SHIPPED";
+  const deviceCriticalNcrCount = shipment?.critical_open_ncr_ids.length ?? 0;
+  const componentCriticalNcrCount = componentCriticalNcrIds.length;
 
   return (
     <>
@@ -1574,7 +1647,7 @@ function DeviceDetailsDrawer({
               ) : (
                 <div className="action-banner">
                   <strong>
-                    Ten panel obsługuje już pierwszą akcję bezpośrednią.
+                    Ten panel obsługuje już bezpośrednie akcje operacyjne.
                   </strong>
                   <span>
                     Obecna rekomendacja to{" "}
@@ -1584,6 +1657,49 @@ function DeviceDetailsDrawer({
                   </span>
                 </div>
               )}
+              {deviceCriticalNcrCount > 0 ? (
+                <div className="action-row">
+                  <div className="action-copy">
+                    <strong>Aktywne krytyczne NCR urządzenia.</strong>
+                    <span>
+                      Możesz zamknąć {formatNumber(deviceCriticalNcrCount)} blokujące
+                      NCR bezpośrednio z dashboardu i od razu odświeżyć shipment
+                      gate.
+                    </span>
+                  </div>
+                  <button
+                    className="ghost-button action-button"
+                    type="button"
+                    onClick={onCloseDeviceCriticalNcrs}
+                    disabled={actionState === "loading"}
+                  >
+                    {actionState === "loading"
+                      ? "Zamykam..."
+                      : "Zamknij krytyczne NCR urządzenia"}
+                  </button>
+                </div>
+              ) : null}
+              {componentCriticalNcrCount > 0 ? (
+                <div className="action-row">
+                  <div className="action-copy">
+                    <strong>Aktywne krytyczne NCR komponentów.</strong>
+                    <span>
+                      Możesz zamknąć {formatNumber(componentCriticalNcrCount)} NCR
+                      blokujące komponenty i natychmiast przeliczyć stan jakości.
+                    </span>
+                  </div>
+                  <button
+                    className="ghost-button action-button"
+                    type="button"
+                    onClick={onCloseComponentCriticalNcrs}
+                    disabled={actionState === "loading"}
+                  >
+                    {actionState === "loading"
+                      ? "Zamykam..."
+                      : "Zamknij krytyczne NCR komponentów"}
+                  </button>
+                </div>
+              ) : null}
             </DetailsSection>
 
             <DetailsSection title="Bramka wysyłki">

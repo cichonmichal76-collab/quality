@@ -90,6 +90,35 @@ const shipmentDetailsPayload = {
   },
 };
 
+const shipmentDetailsWithDeviceNcrPayload = {
+  ...shipmentDetailsPayload,
+  has_critical_open_ncr: true,
+  critical_open_ncr_ids: ["NCR-DEVICE-001"],
+  recommended_action: "RESOLVE_CRITICAL_NCR",
+  blocking_reasons: ["CRITICAL_OPEN_NCR"],
+  primary_blocking_code: "CRITICAL_OPEN_NCR",
+  primary_blocking_message: "Urządzenie ma otwartą krytyczną NCR",
+  blocking_checks: [
+    {
+      code: "CRITICAL_OPEN_NCR",
+      is_blocking: true,
+      message: "Urządzenie ma otwartą krytyczną NCR",
+      details: ["NCR-DEVICE-001"],
+    },
+  ],
+};
+
+const shipmentDetailsWithoutDeviceNcrPayload = {
+  ...shipmentDetailsWithDeviceNcrPayload,
+  has_critical_open_ncr: false,
+  critical_open_ncr_ids: [],
+  recommended_action: "MARK_READY_FOR_SHIPMENT",
+  blocking_reasons: [],
+  primary_blocking_code: null,
+  primary_blocking_message: null,
+  blocking_checks: [],
+};
+
 const componentDetailsPayload = {
   device_serial_number: "SHIP-001",
   device_type: "DEMO-OPS",
@@ -430,6 +459,114 @@ test("dashboard marks ready device as shipped from the details drawer", async ({
   await expect(drawer.getByText("Urządzenie oznaczone jako wysłane.")).toBeVisible();
   await expect(
     drawer.getByRole("button", { name: "Oznacz jako wysłane" }),
+  ).toHaveCount(0);
+  expect(patchRequests).toBe(1);
+});
+
+test("dashboard closes device critical NCRs from the details drawer", async ({
+  page,
+}) => {
+  let deviceNcrClosed = false;
+  let patchRequests = 0;
+
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const path = url.pathname;
+
+    if (path === "/api/shipment-readiness") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(shipmentQueuePayload),
+      });
+      return;
+    }
+
+    if (path === "/api/devices/SHIP-001/shipment-readiness") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(
+          deviceNcrClosed
+            ? shipmentDetailsWithoutDeviceNcrPayload
+            : shipmentDetailsWithDeviceNcrPayload,
+        ),
+      });
+      return;
+    }
+
+    if (path === "/api/devices/SHIP-001/component-quality") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(componentDetailsPayload),
+      });
+      return;
+    }
+
+    if (path === "/api/devices/SHIP-001/shipment-gate-history") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([]),
+      });
+      return;
+    }
+
+    if (
+      path === "/api/nonconformities/NCR-DEVICE-001" &&
+      request.method() === "PATCH"
+    ) {
+      patchRequests += 1;
+      expect(request.postDataJSON()).toEqual({
+        status: "CLOSED",
+        corrective_action: "Zamknięte z panelu operacyjnego dla SHIP-001.",
+      });
+      deviceNcrClosed = true;
+
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: "NCR-ROW-001",
+          ncr_id: "NCR-DEVICE-001",
+          device_serial_number: "SHIP-001",
+          component_serial_number: null,
+          process_stage: "FINAL_TEST",
+          description: "Otwarte NCR urządzenia",
+          severity: "CRITICAL",
+          detected_by: "OP-10",
+          corrective_action: "Zamknięte z panelu operacyjnego dla SHIP-001.",
+          status: "CLOSED",
+          detected_at: "2026-05-01T09:10:00Z",
+          closed_at: "2026-05-01T09:45:00Z",
+        }),
+      });
+      return;
+    }
+
+    throw new Error(`Unexpected request: ${request.method()} ${path}`);
+  });
+
+  await page.goto("/");
+
+  await expect(page.getByText("API OK")).toBeVisible();
+  await page.getByRole("button", { name: "SHIP-001" }).click();
+
+  const drawer = page.getByRole("dialog");
+  const actionButton = drawer.getByRole("button", {
+    name: "Zamknij krytyczne NCR urządzenia",
+  });
+  await expect(actionButton).toBeVisible();
+
+  await actionButton.click();
+
+  await expect(
+    drawer.getByText("Zamknięto 1 krytyczne NCR urządzenia."),
+  ).toBeVisible();
+  await expect(
+    drawer.getByRole("button", { name: "Zamknij krytyczne NCR urządzenia" }),
   ).toHaveCount(0);
   expect(patchRequests).toBe(1);
 });

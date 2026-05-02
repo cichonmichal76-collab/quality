@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { buildQuery, joinApiUrl, optionalBoolean, updateDeviceStatus } from "./api";
+import {
+  buildQuery,
+  joinApiUrl,
+  optionalBoolean,
+  updateDeviceStatus,
+  updateNonconformityStatus,
+} from "./api";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -100,5 +106,44 @@ describe("updateDeviceStatus", () => {
     await expect(
       updateDeviceStatus("/api", "SHIP-001", "READY_FOR_SHIPMENT"),
     ).rejects.toThrow("API 400 Bad Request: Open critical NCR blocks shipment");
+  });
+});
+
+describe("updateNonconformityStatus", () => {
+  it("wysyła PATCH zamykający NCR z corrective_action", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => ({
+        ncr_id: "NCR-001",
+        status: "CLOSED",
+        corrective_action: "Zamknięte z panelu operacyjnego.",
+      }),
+    } satisfies Partial<Response>);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const payload = await updateNonconformityStatus(
+      "/api",
+      "NCR-001",
+      "CLOSED",
+      "Zamknięte z panelu operacyjnego.",
+    );
+
+    expect(payload.status).toBe("CLOSED");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/nonconformities/NCR-001",
+      expect.objectContaining({
+        method: "PATCH",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          status: "CLOSED",
+          corrective_action: "Zamknięte z panelu operacyjnego.",
+        }),
+      }),
+    );
   });
 });

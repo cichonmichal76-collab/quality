@@ -433,6 +433,39 @@ const shipmentGateHistoryReadyPayload: AuditEvent[] = [
   ...shipmentGateHistoryPayload,
 ];
 
+const shipmentDetailsWithoutDeviceNcrPayload: DeviceShipmentReadiness = {
+  ...shipmentDetailsPayload,
+  has_critical_open_ncr: false,
+  critical_open_ncr_ids: [],
+  blocking_reasons: ["FAN_MODULE"],
+  blocking_checks: [
+    {
+      code: "BOM_REQUIRED_COMPONENTS_MISSING",
+      is_blocking: true,
+      message: "Brak wymaganego komponentu FAN_MODULE",
+      details: ["FAN_MODULE"],
+    },
+  ],
+};
+
+const shipmentComponentDetailsWithoutNcrPayload: DeviceComponentQuality = {
+  ...shipmentComponentDetailsPayload,
+  primary_quality_status: "QC_NOT_PASSED",
+  primary_blocking_component_type: "FAN_MODULE",
+  primary_blocking_component_serial_number: "FAN-900",
+  recommended_action: "RUN_COMPONENT_QC_OR_REWORK",
+  components: shipmentComponentDetailsPayload.components?.map((component) =>
+    component.component_serial_number === "FAN-900"
+      ? {
+          ...component,
+          has_critical_open_ncr: false,
+          critical_open_ncr_ids: [],
+          quality_status: "QC_NOT_PASSED",
+        }
+      : component,
+  ),
+};
+
 const shipmentShippedQueuePayload: DeviceShipmentQueue = {
   ...shipmentPayload,
   production_status_summary: [
@@ -991,6 +1024,192 @@ describe("App", () => {
     });
     expect(
       screen.queryByRole("button", { name: "Oznacz jako wysłane" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("closes device critical NCRs from the details drawer", async () => {
+    let deviceNcrClosed = false;
+    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+
+      if (url.startsWith("/api/shipment-readiness")) {
+        return Promise.resolve(createJsonResponse(shipmentPayload));
+      }
+
+      if (url === "/api/devices/SHIP-001/shipment-readiness") {
+        return Promise.resolve(
+          createJsonResponse(
+            deviceNcrClosed
+              ? shipmentDetailsWithoutDeviceNcrPayload
+              : shipmentDetailsPayload,
+          ),
+        );
+      }
+
+      if (url === "/api/devices/SHIP-001/component-quality") {
+        return Promise.resolve(
+          createJsonResponse(shipmentComponentDetailsPayload),
+        );
+      }
+
+      if (url === "/api/devices/SHIP-001/shipment-gate-history?limit=10") {
+        return Promise.resolve(createJsonResponse(shipmentGateHistoryPayload));
+      }
+
+      if (url === "/api/nonconformities/NCR-DEVICE-001" && method === "PATCH") {
+        deviceNcrClosed = true;
+        return Promise.resolve(
+          createJsonResponse({
+            id: "NCR-ROW-001",
+            ncr_id: "NCR-DEVICE-001",
+            device_serial_number: "SHIP-001",
+            component_serial_number: null,
+            process_stage: "FINAL_TEST",
+            description: "Otwarte NCR urządzenia",
+            severity: "CRITICAL",
+            detected_by: "OP-10",
+            corrective_action: "Zamknięte z panelu operacyjnego dla SHIP-001.",
+            status: "CLOSED",
+            detected_at: "2026-05-01T09:10:00Z",
+            closed_at: "2026-05-01T09:45:00Z",
+          }),
+        );
+      }
+
+      throw new Error(`Unexpected request: ${method} ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "SHIP-001" }));
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Zamknij krytyczne NCR urządzenia",
+      }),
+    );
+
+    expect(
+      await screen.findByText("Zamknięto 1 krytyczne NCR urządzenia."),
+    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/nonconformities/NCR-DEVICE-001",
+        expect.objectContaining({
+          method: "PATCH",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            status: "CLOSED",
+            corrective_action:
+              "Zamknięte z panelu operacyjnego dla SHIP-001.",
+          }),
+        }),
+      );
+    });
+    expect(
+      screen.queryByRole("button", {
+        name: "Zamknij krytyczne NCR urządzenia",
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("closes component critical NCRs from the details drawer", async () => {
+    let componentNcrClosed = false;
+    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+
+      if (url.startsWith("/api/shipment-readiness")) {
+        return Promise.resolve(createJsonResponse(shipmentPayload));
+      }
+
+      if (url === "/api/devices/SHIP-001/shipment-readiness") {
+        return Promise.resolve(createJsonResponse(shipmentActionDetailsPayload));
+      }
+
+      if (url === "/api/devices/SHIP-001/component-quality") {
+        return Promise.resolve(
+          createJsonResponse(
+            componentNcrClosed
+              ? shipmentComponentDetailsWithoutNcrPayload
+              : shipmentComponentDetailsPayload,
+          ),
+        );
+      }
+
+      if (url === "/api/devices/SHIP-001/shipment-gate-history?limit=10") {
+        return Promise.resolve(createJsonResponse(shipmentGateHistoryPayload));
+      }
+
+      if (url === "/api/nonconformities/NCR-COMP-001" && method === "PATCH") {
+        componentNcrClosed = true;
+        return Promise.resolve(
+          createJsonResponse({
+            id: "NCR-ROW-002",
+            ncr_id: "NCR-COMP-001",
+            device_serial_number: "SHIP-001",
+            component_serial_number: "FAN-900",
+            process_stage: "COMPONENT_QC",
+            description: "Otwarte NCR komponentu",
+            severity: "CRITICAL",
+            detected_by: "OP-20",
+            corrective_action: "Zamknięte z panelu operacyjnego dla SHIP-001.",
+            status: "CLOSED",
+            detected_at: "2026-05-01T09:12:00Z",
+            closed_at: "2026-05-01T09:46:00Z",
+          }),
+        );
+      }
+
+      throw new Error(`Unexpected request: ${method} ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "SHIP-001" }));
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Zamknij krytyczne NCR komponentów",
+      }),
+    );
+
+    expect(
+      await screen.findByText("Zamknięto 1 krytyczne NCR komponentów."),
+    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/nonconformities/NCR-COMP-001",
+        expect.objectContaining({
+          method: "PATCH",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            status: "CLOSED",
+            corrective_action:
+              "Zamknięte z panelu operacyjnego dla SHIP-001.",
+          }),
+        }),
+      );
+    });
+    expect(
+      screen.queryByRole("button", {
+        name: "Zamknij krytyczne NCR komponentów",
+      }),
     ).not.toBeInTheDocument();
   });
 
