@@ -9,8 +9,9 @@ import androidx.room.RoomDatabase
     entities = [
         ServiceSessionDraftEntity::class,
         CommissioningStepEntity::class,
+        CommissioningAttachmentEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 abstract class ServiceTraceMobileDatabase : RoomDatabase() {

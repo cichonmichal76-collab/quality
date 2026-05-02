@@ -1,5 +1,7 @@
 package com.servicetrace.mobile.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalLayoutApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -35,6 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.servicetrace.mobile.model.CommissioningStep
+import com.servicetrace.mobile.model.CommissioningAttachment
 import com.servicetrace.mobile.model.CommissioningStepStatus
 import com.servicetrace.mobile.model.McuConnectionMode
 import com.servicetrace.mobile.model.McuConnectionStatus
@@ -52,6 +55,11 @@ fun CommissioningScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val photoPickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { nonNullUri ->
+            viewModel.importPhoto(nonNullUri)
+        }
+    }
 
     uiState.bannerMessage?.let { message ->
         LaunchedEffect(message) {
@@ -78,6 +86,9 @@ fun CommissioningScreen(
         onSelectUsbDevice = viewModel::selectUsbDevice,
         onRequestUsbPermission = viewModel::requestUsbPermission,
         onConnectToMcu = viewModel::connectToMcu,
+        onAddPhoto = { photoPickerLauncher.launch("image/*") },
+        onRemovePhoto = viewModel::removePhoto,
+        onBuildPackage = viewModel::buildServicePackage,
         onSaveOffline = viewModel::saveOffline,
         onMarkReadyToSync = viewModel::markReadyToSync,
     )
@@ -103,6 +114,9 @@ private fun CommissioningScreen(
     onSelectUsbDevice: (String) -> Unit,
     onRequestUsbPermission: () -> Unit,
     onConnectToMcu: () -> Unit,
+    onAddPhoto: () -> Unit,
+    onRemovePhoto: (String) -> Unit,
+    onBuildPackage: () -> Unit,
     onSaveOffline: () -> Unit,
     onMarkReadyToSync: () -> Unit,
 ) {
@@ -159,6 +173,9 @@ private fun CommissioningScreen(
                 onSelectUsbDevice = onSelectUsbDevice,
                 onRequestUsbPermission = onRequestUsbPermission,
                 onConnectToMcu = onConnectToMcu,
+                onAddPhoto = onAddPhoto,
+                onRemovePhoto = onRemovePhoto,
+                onBuildPackage = onBuildPackage,
                 onSaveOffline = onSaveOffline,
                 onMarkReadyToSync = onMarkReadyToSync,
             )
@@ -295,6 +312,9 @@ private fun DraftEditorSection(
     onSelectUsbDevice: (String) -> Unit,
     onRequestUsbPermission: () -> Unit,
     onConnectToMcu: () -> Unit,
+    onAddPhoto: () -> Unit,
+    onRemovePhoto: (String) -> Unit,
+    onBuildPackage: () -> Unit,
     onSaveOffline: () -> Unit,
     onMarkReadyToSync: () -> Unit,
 ) {
@@ -347,6 +367,12 @@ private fun DraftEditorSection(
                     label = { Text("Komentarz ogólny") },
                     minLines = 3,
                 )
+                AttachmentsSection(
+                    draft = draft,
+                    onAddPhoto = onAddPhoto,
+                    onRemovePhoto = onRemovePhoto,
+                    onBuildPackage = onBuildPackage,
+                )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -374,6 +400,55 @@ private fun DraftEditorSection(
                 onStatusChange = onStepStatusChange,
                 onNoteChange = onStepNoteChange,
             )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AttachmentsSection(
+    draft: ServiceSessionDraft,
+    onAddPhoto: () -> Unit,
+    onRemovePhoto: (String) -> Unit,
+    onBuildPackage: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Dowody serwisowe", style = MaterialTheme.typography.titleMedium)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Button(onClick = onAddPhoto, modifier = Modifier.weight(1f)) {
+                Text("Dodaj zdjecie")
+            }
+            Button(onClick = onBuildPackage, modifier = Modifier.weight(1f)) {
+                Text("Generuj ZIP")
+            }
+        }
+        if (draft.packageGeneratedAtMillis != null && draft.packagePath.isNotBlank()) {
+            Text(
+                "ZIP: ${formatTimestamp(draft.packageGeneratedAtMillis)} (${draft.packageEntryCount} wpisow)",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text(draft.packagePath, style = MaterialTheme.typography.bodySmall)
+        }
+        if (draft.attachments.isEmpty()) {
+            Text(
+                "Brak lokalnych zdjec. Dodaj obrazy z galerii, aby dolaczyc je do paczki commissioning.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        } else {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                draft.attachments.forEach { attachment ->
+                    AttachmentChip(
+                        attachment = attachment,
+                        onRemovePhoto = onRemovePhoto,
+                    )
+                }
+            }
         }
     }
 }
@@ -538,6 +613,18 @@ private fun ConnectionSection(
             Text(draft.logExcerpt, style = MaterialTheme.typography.bodySmall)
         }
     }
+}
+
+@Composable
+private fun AttachmentChip(
+    attachment: CommissioningAttachment,
+    onRemovePhoto: (String) -> Unit,
+) {
+    FilterChip(
+        selected = false,
+        onClick = { onRemovePhoto(attachment.attachmentId) },
+        label = { Text("${attachment.displayName} (${attachment.sizeBytes} B) usun") },
+    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)

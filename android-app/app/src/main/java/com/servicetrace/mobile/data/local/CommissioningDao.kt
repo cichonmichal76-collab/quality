@@ -12,6 +12,8 @@ import androidx.room.Query
 import androidx.room.Relation
 import androidx.room.Transaction
 import com.servicetrace.mobile.model.CommissioningStep
+import com.servicetrace.mobile.model.CommissioningAttachment
+import com.servicetrace.mobile.model.CommissioningAttachmentKind
 import com.servicetrace.mobile.model.CommissioningStepStatus
 import com.servicetrace.mobile.model.McuConnectionMode
 import com.servicetrace.mobile.model.McuConnectionStatus
@@ -41,6 +43,9 @@ data class ServiceSessionDraftEntity(
     val usbLinkStatus: String,
     val logExcerpt: String,
     val snapshotCapturedAtMillis: Long?,
+    val packagePath: String,
+    val packageGeneratedAtMillis: Long?,
+    val packageEntryCount: Int,
     val syncStatus: String,
     val createdAtMillis: Long,
     val updatedAtMillis: Long,
@@ -69,6 +74,30 @@ data class CommissioningStepEntity(
     val stepOrder: Int,
 )
 
+@Entity(
+    tableName = "commissioning_attachments",
+    primaryKeys = ["sessionId", "attachmentId"],
+    indices = [Index("sessionId")],
+    foreignKeys = [
+        ForeignKey(
+            entity = ServiceSessionDraftEntity::class,
+            parentColumns = ["sessionId"],
+            childColumns = ["sessionId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+)
+data class CommissioningAttachmentEntity(
+    val sessionId: String,
+    val attachmentId: String,
+    val kind: String,
+    val displayName: String,
+    val localPath: String,
+    val contentType: String,
+    val sizeBytes: Long,
+    val createdAtMillis: Long,
+)
+
 data class ServiceSessionDraftWithSteps(
     @Embedded
     val session: ServiceSessionDraftEntity,
@@ -77,11 +106,17 @@ data class ServiceSessionDraftWithSteps(
         entityColumn = "sessionId",
     )
     val steps: List<CommissioningStepEntity>,
+    @Relation(
+        parentColumn = "sessionId",
+        entityColumn = "sessionId",
+    )
+    val attachments: List<CommissioningAttachmentEntity>,
 )
 
 data class LocalDraftBundle(
     val session: ServiceSessionDraftEntity,
     val steps: List<CommissioningStepEntity>,
+    val attachments: List<CommissioningAttachmentEntity>,
 )
 
 fun ServiceSessionDraftWithSteps.toDomain(): ServiceSessionDraft =
@@ -105,9 +140,25 @@ fun ServiceSessionDraftWithSteps.toDomain(): ServiceSessionDraft =
         usbLinkStatus = session.usbLinkStatus,
         logExcerpt = session.logExcerpt,
         snapshotCapturedAtMillis = session.snapshotCapturedAtMillis,
+        packagePath = session.packagePath,
+        packageGeneratedAtMillis = session.packageGeneratedAtMillis,
+        packageEntryCount = session.packageEntryCount,
         syncStatus = SessionSyncStatus.valueOf(session.syncStatus),
         createdAtMillis = session.createdAtMillis,
         updatedAtMillis = session.updatedAtMillis,
+        attachments = attachments
+            .sortedByDescending { row -> row.createdAtMillis }
+            .map { row ->
+                CommissioningAttachment(
+                    attachmentId = row.attachmentId,
+                    kind = CommissioningAttachmentKind.valueOf(row.kind),
+                    displayName = row.displayName,
+                    localPath = row.localPath,
+                    contentType = row.contentType,
+                    sizeBytes = row.sizeBytes,
+                    createdAtMillis = row.createdAtMillis,
+                )
+            },
         steps = steps
             .sortedBy { row -> row.stepOrder }
             .map { row ->
@@ -144,10 +195,25 @@ fun ServiceSessionDraft.toLocalEntity(): LocalDraftBundle =
             usbLinkStatus = usbLinkStatus,
             logExcerpt = logExcerpt,
             snapshotCapturedAtMillis = snapshotCapturedAtMillis,
+            packagePath = packagePath,
+            packageGeneratedAtMillis = packageGeneratedAtMillis,
+            packageEntryCount = packageEntryCount,
             syncStatus = syncStatus.name,
             createdAtMillis = createdAtMillis,
             updatedAtMillis = updatedAtMillis,
         ),
+        attachments = attachments.map { attachment ->
+            CommissioningAttachmentEntity(
+                sessionId = sessionId,
+                attachmentId = attachment.attachmentId,
+                kind = attachment.kind.name,
+                displayName = attachment.displayName,
+                localPath = attachment.localPath,
+                contentType = attachment.contentType,
+                sizeBytes = attachment.sizeBytes,
+                createdAtMillis = attachment.createdAtMillis,
+            )
+        },
         steps = steps.map { step ->
             CommissioningStepEntity(
                 sessionId = sessionId,
@@ -177,13 +243,21 @@ interface CommissioningDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertSteps(steps: List<CommissioningStepEntity>)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAttachments(attachments: List<CommissioningAttachmentEntity>)
+
     @Query("DELETE FROM commissioning_steps WHERE sessionId = :sessionId")
     suspend fun deleteStepsForSession(sessionId: String)
+
+    @Query("DELETE FROM commissioning_attachments WHERE sessionId = :sessionId")
+    suspend fun deleteAttachmentsForSession(sessionId: String)
 
     @Transaction
     suspend fun upsertDraft(bundle: LocalDraftBundle) {
         upsertSession(bundle.session)
         deleteStepsForSession(bundle.session.sessionId)
+        deleteAttachmentsForSession(bundle.session.sessionId)
         upsertSteps(bundle.steps)
+        upsertAttachments(bundle.attachments)
     }
 }

@@ -9,6 +9,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import com.servicetrace.mobile.data.OfflineCommissioningRepository
 import com.servicetrace.mobile.data.local.ServiceTraceMobileDatabase
+import com.servicetrace.mobile.files.CommissioningArtifactStore
 import com.servicetrace.mobile.mcu.MockMcuClient
 import com.servicetrace.mobile.mcu.UsbMcuClient
 import com.servicetrace.mobile.ui.CommissioningScreen
@@ -22,6 +23,7 @@ class MainActivity : ComponentActivity() {
             ),
             mockMcuClient = MockMcuClient(),
             usbMcuClient = UsbMcuClient(applicationContext),
+            artifactStore = CommissioningArtifactStore(applicationContext),
         )
     }
 

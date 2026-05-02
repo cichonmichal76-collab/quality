@@ -1,49 +1,54 @@
 # Android App - ServiceTrace Mobile
 
-`android-app/` ma już pierwszy działający slice commissioning offline zgodny z PRD.
+`android-app/` ma juz pierwszy dzialajacy slice commissioning offline zgodny z PRD.
 
-## Co działa teraz
+## Co dziala teraz
 
 - Kotlin + Jetpack Compose
 - lokalna baza `Room`
 - ekran tworzenia draftu sesji commissioning
-- krok połączenia `Mock MCU / USB`
+- krok polaczenia `Mock MCU / USB`
 - snapshot stanu MCU zapisany lokalnie w sesji
 - `UsbMcuClient` oparty o Android USB Host i kontrakt komend zgodny z `final-test-runner`
-- lokalna checklista 5 kroków
-- komentarz ogólny, firmware i bootloader
+- wybor zdjec z galerii do lokalnej sesji commissioning
+- generowanie lokalnej paczki ZIP z `manifest.json`, `draft.json`, `snapshot.json`, `checklist.json` i zdjeciami
+- lokalna checklista 5 krokow
+- komentarz ogolny, firmware i bootloader
 - status `DRAFT` / `READY_TO_SYNC`
 
-Po uruchomieniu aplikacji serwisant może:
+Po uruchomieniu aplikacji serwisant moze:
 
-1. utworzyć lokalną sesję commissioning
-2. wpisać numer seryjny, typ urządzenia i identyfikator technika
-3. wybrać tryb połączenia `Mock MCU` albo `USB`
-4. pobrać lokalny snapshot commissioning z `Mock MCU` albo z realnego urządzenia USB CDC
-5. przejść przez checklistę krok po kroku
-6. zapisać wynik lokalnie w `Room`
-7. oznaczyć sesję jako gotową do przyszłej synchronizacji
+1. utworzyc lokalna sesje commissioning
+2. wpisac numer seryjny, typ urzadzenia i identyfikator technika
+3. wybrac tryb polaczenia `Mock MCU` albo `USB`
+4. pobrac lokalny snapshot commissioning z `Mock MCU` albo z realnego urzadzenia USB CDC
+5. dodac zdjecia z galerii jako dowody serwisowe
+6. wygenerowac lokalna paczke ZIP commissioning
+7. przejsc przez checkliste krok po kroku
+8. zapisac wynik lokalnie w `Room`
+9. oznaczyc sesje jako gotowa do przyszlej synchronizacji
 
 ## Struktura MVP mobile
 
 - `app/src/main/java/com/servicetrace/mobile/MainActivity.kt`
 - `app/src/main/java/com/servicetrace/mobile/ui/CommissioningScreen.kt`
 - `app/src/main/java/com/servicetrace/mobile/ui/CommissioningViewModel.kt`
+- `app/src/main/java/com/servicetrace/mobile/files/`
 - `app/src/main/java/com/servicetrace/mobile/data/`
 - `app/src/main/java/com/servicetrace/mobile/data/local/`
 - `app/src/main/java/com/servicetrace/mobile/model/`
 
-## Następny sensowny krok
+## Nastepny sensowny krok
 
-1. dodać workflow nadawania zgody Androida na USB i selekcję konkretnego urządzenia
-2. zapisywać zdjęcia i rozszerzone snapshoty MCU do lokalnej sesji
-3. generować paczkę ZIP
-4. dodać kolejkę uploadu do backendu `POST /api/service-sessions/upload`
+1. dolozyc realny capture z kamery obok importu z galerii
+2. rozszerzyc snapshoty MCU o dodatkowe artefakty diagnostyczne
+3. dodac kolejke uploadu do backendu `POST /api/service-sessions/upload`
+4. zsynchronizowac status `SYNCED` po udanym uploadzie
 
 ## Poza zakresem MVP
 
 - Wi-Fi
 - Bluetooth
 - firmware update
-- sterowanie urządzeniem
+- sterowanie urzadzeniem
 - AI

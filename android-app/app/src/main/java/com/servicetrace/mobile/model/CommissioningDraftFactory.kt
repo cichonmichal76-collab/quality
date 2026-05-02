@@ -54,6 +54,20 @@ data class UsbCandidateDevice(
     val hasPermission: Boolean,
 )
 
+enum class CommissioningAttachmentKind {
+    PHOTO,
+}
+
+data class CommissioningAttachment(
+    val attachmentId: String,
+    val kind: CommissioningAttachmentKind,
+    val displayName: String,
+    val localPath: String,
+    val contentType: String,
+    val sizeBytes: Long,
+    val createdAtMillis: Long,
+)
+
 data class CommissioningStep(
     val stepCode: String,
     val title: String,
@@ -83,9 +97,13 @@ data class ServiceSessionDraft(
     val usbLinkStatus: String,
     val logExcerpt: String,
     val snapshotCapturedAtMillis: Long?,
+    val packagePath: String,
+    val packageGeneratedAtMillis: Long?,
+    val packageEntryCount: Int,
     val syncStatus: SessionSyncStatus,
     val createdAtMillis: Long,
     val updatedAtMillis: Long,
+    val attachments: List<CommissioningAttachment>,
     val steps: List<CommissioningStep>,
 ) {
     val outcome: SessionOutcome?
@@ -161,9 +179,13 @@ object CommissioningDraftFactory {
             usbLinkStatus = "",
             logExcerpt = "",
             snapshotCapturedAtMillis = null,
+            packagePath = "",
+            packageGeneratedAtMillis = null,
+            packageEntryCount = 0,
             syncStatus = SessionSyncStatus.DRAFT,
             createdAtMillis = nowMillis,
             updatedAtMillis = nowMillis,
+            attachments = emptyList(),
             steps = templates.mapIndexed { index, template ->
                 CommissioningStep(
                     stepCode = template.stepCode,

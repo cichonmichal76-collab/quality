@@ -1,9 +1,11 @@
 package com.servicetrace.mobile.ui
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.servicetrace.mobile.data.CommissioningRepository
+import com.servicetrace.mobile.files.CommissioningArtifactStore
 import com.servicetrace.mobile.model.CommissioningStepStatus
 import com.servicetrace.mobile.model.McuConnectionMode
 import com.servicetrace.mobile.model.McuConnectionStatus
@@ -39,6 +41,7 @@ class CommissioningViewModel(
     private val repository: CommissioningRepository,
     private val mockMcuClient: MockMcuClient,
     private val usbMcuClient: UsbMcuClient,
+    private val artifactStore: CommissioningArtifactStore,
 ) : ViewModel() {
     private val inputs = MutableStateFlow(NewDraftInputs())
     private val selectedDraft = MutableStateFlow<ServiceSessionDraft?>(null)
@@ -117,7 +120,7 @@ class CommissioningViewModel(
                 steps = draft.steps.map { step ->
                     if (step.stepCode == stepCode) step.copy(status = status) else step
                 },
-            )
+            )?.invalidatePackageMetadata()
         }
     }
 
@@ -127,20 +130,20 @@ class CommissioningViewModel(
                 steps = draft.steps.map { step ->
                     if (step.stepCode == stepCode) step.copy(note = note) else step
                 },
-            )
+            )?.invalidatePackageMetadata()
         }
     }
 
     fun updateOverallComment(comment: String) {
-        selectedDraft.update { draft -> draft?.copy(overallComment = comment) }
+        selectedDraft.update { draft -> draft?.copy(overallComment = comment)?.invalidatePackageMetadata() }
     }
 
     fun updateFirmwareVersion(value: String) {
-        selectedDraft.update { draft -> draft?.copy(firmwareVersion = value) }
+        selectedDraft.update { draft -> draft?.copy(firmwareVersion = value)?.invalidatePackageMetadata() }
     }
 
     fun updateBootloaderVersion(value: String) {
-        selectedDraft.update { draft -> draft?.copy(bootloaderVersion = value) }
+        selectedDraft.update { draft -> draft?.copy(bootloaderVersion = value)?.invalidatePackageMetadata() }
     }
 
     fun updateConnectionMode(mode: McuConnectionMode) {
@@ -158,7 +161,7 @@ class CommissioningViewModel(
                 usbLinkStatus = "",
                 logExcerpt = "",
                 snapshotCapturedAtMillis = null,
-            )
+            )?.invalidatePackageMetadata()
         }
         if (mode == McuConnectionMode.USB) {
             refreshUsbDevices()
@@ -178,7 +181,7 @@ class CommissioningViewModel(
                     it.copy(
                         selectedUsbDeviceId = "",
                         selectedUsbDeviceLabel = "",
-                    )
+                    ).invalidatePackageMetadata()
                 } else {
                     it
                 }
@@ -197,7 +200,7 @@ class CommissioningViewModel(
                 usbLinkStatus = "",
                 logExcerpt = "",
                 snapshotCapturedAtMillis = null,
-            )
+            )?.invalidatePackageMetadata()
         }
     }
 
@@ -216,7 +219,7 @@ class CommissioningViewModel(
                     currentDraft?.copy(
                         selectedUsbDeviceId = grantedDevice.deviceId,
                         selectedUsbDeviceLabel = grantedDevice.displayName,
-                    )
+                    )?.invalidatePackageMetadata()
                 }
                 bannerMessage.value = "Android nadał zgodę na dostęp do urządzenia USB."
             } catch (error: Exception) {
@@ -255,7 +258,7 @@ class CommissioningViewModel(
                     logExcerpt = snapshot.logExcerpt,
                     snapshotCapturedAtMillis = snapshot.capturedAtMillis,
                     updatedAtMillis = snapshot.capturedAtMillis,
-                )
+                ).invalidatePackageMetadata()
                 repository.saveDraft(updatedDraft)
                 selectedDraft.value = updatedDraft
                 bannerMessage.value = if (draft.connectionMode == McuConnectionMode.USB) {
@@ -271,6 +274,68 @@ class CommissioningViewModel(
                 repository.saveDraft(failedDraft)
                 selectedDraft.value = failedDraft
                 bannerMessage.value = error.message ?: "Nie udało się połączyć z MCU."
+            }
+        }
+    }
+
+    fun importPhoto(sourceUri: Uri) {
+        val draft = selectedDraft.value ?: run {
+            bannerMessage.value = "Najpierw wybierz lokalny draft commissioning."
+            return
+        }
+        viewModelScope.launch {
+            try {
+                val attachment = artifactStore.importPhoto(
+                    sessionId = draft.sessionId,
+                    sourceUri = sourceUri,
+                )
+                val updatedDraft = draft.copy(
+                    attachments = listOf(attachment) + draft.attachments,
+                    updatedAtMillis = System.currentTimeMillis(),
+                ).invalidatePackageMetadata()
+                repository.saveDraft(updatedDraft)
+                selectedDraft.value = updatedDraft
+                bannerMessage.value = "Zdjecie zapisano lokalnie do sesji commissioning."
+            } catch (error: Exception) {
+                bannerMessage.value = error.message ?: "Nie udalo sie dodac zdjecia do sesji."
+            }
+        }
+    }
+
+    fun removePhoto(attachmentId: String) {
+        val draft = selectedDraft.value ?: return
+        val attachment = draft.attachments.firstOrNull { row -> row.attachmentId == attachmentId } ?: return
+        viewModelScope.launch {
+            artifactStore.removeAttachment(attachment)
+            val updatedDraft = draft.copy(
+                attachments = draft.attachments.filterNot { row -> row.attachmentId == attachmentId },
+                updatedAtMillis = System.currentTimeMillis(),
+            ).invalidatePackageMetadata()
+            repository.saveDraft(updatedDraft)
+            selectedDraft.value = updatedDraft
+            bannerMessage.value = "Usunieto lokalne zdjecie z sesji commissioning."
+        }
+    }
+
+    fun buildServicePackage() {
+        val draft = selectedDraft.value ?: run {
+            bannerMessage.value = "Najpierw wybierz lokalny draft commissioning."
+            return
+        }
+        viewModelScope.launch {
+            try {
+                val packageResult = artifactStore.buildPackage(draft)
+                val updatedDraft = draft.copy(
+                    packagePath = packageResult.zipPath,
+                    packageGeneratedAtMillis = packageResult.generatedAtMillis,
+                    packageEntryCount = packageResult.entryCount,
+                    updatedAtMillis = packageResult.generatedAtMillis,
+                )
+                repository.saveDraft(updatedDraft)
+                selectedDraft.value = updatedDraft
+                bannerMessage.value = "Wygenerowano lokalna paczke ZIP commissioning."
+            } catch (error: Exception) {
+                bannerMessage.value = error.message ?: "Nie udalo sie zbudowac paczki ZIP commissioning."
             }
         }
     }
@@ -318,11 +383,19 @@ class CommissioningViewModel(
             repository: CommissioningRepository,
             mockMcuClient: MockMcuClient,
             usbMcuClient: UsbMcuClient,
+            artifactStore: CommissioningArtifactStore,
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                    CommissioningViewModel(repository, mockMcuClient, usbMcuClient) as T
+                    CommissioningViewModel(repository, mockMcuClient, usbMcuClient, artifactStore) as T
             }
     }
 }
+
+private fun ServiceSessionDraft.invalidatePackageMetadata(): ServiceSessionDraft =
+    copy(
+        packagePath = "",
+        packageGeneratedAtMillis = null,
+        packageEntryCount = 0,
+    )

@@ -23,6 +23,10 @@ class CommissioningDraftFactoryTest {
         assertTrue(draft.steps.all { step -> step.status == CommissioningStepStatus.TODO })
         assertEquals(McuConnectionMode.MOCK, draft.connectionMode)
         assertEquals(McuConnectionStatus.DISCONNECTED, draft.connectionStatus)
+        assertTrue(draft.attachments.isEmpty())
+        assertEquals("", draft.packagePath)
+        assertNull(draft.packageGeneratedAtMillis)
+        assertEquals(0, draft.packageEntryCount)
         assertNull(draft.outcome)
         assertFalse(draft.readyToSync)
     }
