@@ -638,6 +638,10 @@ class ServiceSessionRead(BaseModel):
     package_path: str | None = None
     package_hash: str | None = None
     upload_status: str
+    upload_count: int
+    client_attempt_id: str | None = None
+    client_attempt_number: int | None = None
+    client_trigger_source: str | None = None
     upload_correlation_id: str | None = None
     uploaded_at: datetime | None = None
     created_at: datetime

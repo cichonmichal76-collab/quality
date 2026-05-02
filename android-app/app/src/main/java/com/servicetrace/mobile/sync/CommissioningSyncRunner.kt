@@ -42,12 +42,22 @@ class CommissioningSyncRunner(
         val latestDraftsBySessionId = linkedMapOf<String, ServiceSessionDraft>()
 
         drafts.distinctBy { draft -> draft.sessionId }.forEach { draft ->
+            var workingDraft = draft
+            val attemptNumber = draft.syncAttemptCount + 1
+            val attemptId = generateSyncAttemptId()
             try {
-                val uploadDraft = ensurePackageForUpload(draft)
-                val uploadResponse = uploader.upload(baseUrl, uploadDraft)
+                workingDraft = ensurePackageForUpload(draft)
+                val uploadResponse = uploader.upload(
+                    baseUrl = baseUrl,
+                    draft = workingDraft,
+                    attemptMetadata = SyncUploadAttemptMetadata(
+                        attemptId = attemptId,
+                        attemptNumber = attemptNumber,
+                        triggerSource = triggerSource,
+                    ),
+                )
                 val completedAtMillis = System.currentTimeMillis()
-                val attemptNumber = uploadDraft.syncAttemptCount + 1
-                val syncedDraft = uploadDraft.copy(
+                val syncedDraft = workingDraft.copy(
                     syncStatus = SessionSyncStatus.SYNCED,
                     syncAttemptCount = attemptNumber,
                     lastSyncAttemptAtMillis = completedAtMillis,
@@ -58,6 +68,7 @@ class CommissioningSyncRunner(
                     updatedAtMillis = completedAtMillis,
                     syncAttempts = listOf(
                         createSyncAttemptHistoryEntry(
+                            attemptId = attemptId,
                             attemptedAtMillis = completedAtMillis,
                             triggerSource = triggerSource,
                             result = SyncAttemptResult.SUCCESS,
@@ -67,11 +78,12 @@ class CommissioningSyncRunner(
                             attemptNumber = attemptNumber,
                             backendServiceSessionId = uploadResponse.backendServiceSessionId,
                             backendUploadStatus = uploadResponse.uploadStatus,
+                            backendUploadCount = uploadResponse.uploadCount,
                             backendPackageHash = uploadResponse.packageHash,
                             backendUploadCorrelationId = uploadResponse.uploadCorrelationId,
                             backendUploadedAtIso = uploadResponse.uploadedAtIso,
                         ),
-                    ) + uploadDraft.syncAttempts,
+                    ) + workingDraft.syncAttempts,
                 )
                 repository.saveDraft(syncedDraft)
                 latestDraftsBySessionId[syncedDraft.sessionId] = syncedDraft
@@ -79,11 +91,10 @@ class CommissioningSyncRunner(
             } catch (error: Exception) {
                 val uploadError = classifyTransportUploadException(error)
                 val failedAtMillis = System.currentTimeMillis()
-                val nextAttemptCount = draft.syncAttemptCount + 1
-                val autoRetryEligible = uploadError.isRetryable && nextAttemptCount < MAX_AUTO_SYNC_RETRY_ATTEMPTS
-                val failedDraft = draft.copy(
+                val autoRetryEligible = uploadError.isRetryable && attemptNumber < MAX_AUTO_SYNC_RETRY_ATTEMPTS
+                val failedDraft = workingDraft.copy(
                     syncStatus = SessionSyncStatus.READY_TO_SYNC,
-                    syncAttemptCount = nextAttemptCount,
+                    syncAttemptCount = attemptNumber,
                     lastSyncAttemptAtMillis = failedAtMillis,
                     lastSyncErrorMessage = uploadError.message ?: "Nieznany blad synchronizacji commissioning.",
                     lastSyncFailureCode = uploadError.reasonCode,
@@ -91,20 +102,22 @@ class CommissioningSyncRunner(
                     updatedAtMillis = failedAtMillis,
                     syncAttempts = listOf(
                         createSyncAttemptHistoryEntry(
+                            attemptId = attemptId,
                             attemptedAtMillis = failedAtMillis,
                             triggerSource = triggerSource,
                             result = SyncAttemptResult.FAILURE,
                             failureCode = uploadError.reasonCode,
                             message = uploadError.message ?: "Nieznany blad synchronizacji commissioning.",
                             retryable = uploadError.isRetryable,
-                            attemptNumber = nextAttemptCount,
+                            attemptNumber = attemptNumber,
                             backendServiceSessionId = null,
                             backendUploadStatus = null,
+                            backendUploadCount = null,
                             backendPackageHash = null,
                             backendUploadCorrelationId = null,
                             backendUploadedAtIso = null,
                         ),
-                    ) + draft.syncAttempts,
+                    ) + workingDraft.syncAttempts,
                 )
                 repository.saveDraft(failedDraft)
                 latestDraftsBySessionId[failedDraft.sessionId] = failedDraft
@@ -142,6 +155,7 @@ class CommissioningSyncRunner(
 }
 
 private fun createSyncAttemptHistoryEntry(
+    attemptId: String,
     attemptedAtMillis: Long,
     triggerSource: SyncAttemptTriggerSource,
     result: SyncAttemptResult,
@@ -151,12 +165,13 @@ private fun createSyncAttemptHistoryEntry(
     attemptNumber: Int,
     backendServiceSessionId: String?,
     backendUploadStatus: String?,
+    backendUploadCount: Int?,
     backendPackageHash: String?,
     backendUploadCorrelationId: String?,
     backendUploadedAtIso: String?,
 ): SyncAttemptHistoryEntry =
     SyncAttemptHistoryEntry(
-        attemptId = "SYNC-${UUID.randomUUID().toString().take(8).uppercase()}",
+        attemptId = attemptId,
         attemptedAtMillis = attemptedAtMillis,
         triggerSource = triggerSource,
         result = result,
@@ -166,7 +181,11 @@ private fun createSyncAttemptHistoryEntry(
         attemptNumber = attemptNumber,
         backendServiceSessionId = backendServiceSessionId,
         backendUploadStatus = backendUploadStatus,
+        backendUploadCount = backendUploadCount,
         backendPackageHash = backendPackageHash,
         backendUploadCorrelationId = backendUploadCorrelationId,
         backendUploadedAtIso = backendUploadedAtIso,
     )
+
+private fun generateSyncAttemptId(): String =
+    "SYNC-${UUID.randomUUID().toString().take(8).uppercase()}"

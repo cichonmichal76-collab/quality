@@ -112,6 +112,7 @@ data class SyncAttemptHistoryEntry(
     val attemptNumber: Int,
     val backendServiceSessionId: String?,
     val backendUploadStatus: String?,
+    val backendUploadCount: Int?,
     val backendPackageHash: String?,
     val backendUploadCorrelationId: String?,
     val backendUploadedAtIso: String?,

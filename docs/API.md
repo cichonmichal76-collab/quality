@@ -59,7 +59,7 @@ PATCH /api/devices/{serial_number}/status
 POST /api/qc-runs
 POST /api/final-tests
 POST /api/service-sessions/upload
-  -> odpowiedz zawiera takze `upload_status`, `package_hash`, `upload_correlation_id`, `uploaded_at`
+  -> odpowiedz zawiera takze `upload_status`, `upload_count`, `package_hash`, `upload_correlation_id`, `uploaded_at`, `client_attempt_id`, `client_attempt_number`, `client_trigger_source`
 POST /api/nonconformities
 POST /api/files/upload
 ```

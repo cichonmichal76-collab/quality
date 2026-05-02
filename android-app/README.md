@@ -21,7 +21,7 @@
 - limit automatycznych prob syncu i stan eskalacji do recznej interwencji po wyczerpaniu auto-retry
 - zapis `reason code` bledu syncu, np. brak lacznosci, timeout, walidacja albo blad backendu
 - lokalna historia prob syncu per sesja z wynikiem, zrodlem uruchomienia i komunikatem
-- historia sukcesow zawiera tez `upload_status`, `package_hash`, identyfikator rekordu backendowego, `upload_correlation_id` i `uploaded_at`
+- historia sukcesow zawiera tez `upload_status`, `upload_count`, `package_hash`, identyfikator rekordu backendowego, `upload_correlation_id`, `uploaded_at` oraz echo prob klienta
 - pelna sekcja audytu synchronizacji ze wszystkimi probami, filtrem sukcesow / bledow i szybkim przejsciem do draftu
 - eksport aktualnego widoku audytu synchronizacji do lokalnego pliku JSON
 - udostepnianie ostatniego eksportu audytu synchronizacji poza aplikacje

@@ -2,6 +2,7 @@ package com.servicetrace.mobile.sync
 
 import com.servicetrace.mobile.model.ServiceSessionDraft
 import com.servicetrace.mobile.model.SyncFailureReasonCode
+import com.servicetrace.mobile.model.SyncAttemptTriggerSource
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -18,9 +19,19 @@ data class ServiceSessionUploadResponse(
     val backendServiceSessionId: String?,
     val sessionId: String,
     val uploadStatus: String,
+    val uploadCount: Int?,
+    val clientAttemptId: String?,
+    val clientAttemptNumber: Int?,
+    val clientTriggerSource: String?,
     val packageHash: String?,
     val uploadCorrelationId: String?,
     val uploadedAtIso: String?,
+)
+
+data class SyncUploadAttemptMetadata(
+    val attemptId: String,
+    val attemptNumber: Int,
+    val triggerSource: SyncAttemptTriggerSource,
 )
 
 class CommissioningUploadException(
@@ -37,6 +48,7 @@ class ServiceSessionUploader(
     suspend fun upload(
         baseUrl: String,
         draft: ServiceSessionDraft,
+        attemptMetadata: SyncUploadAttemptMetadata,
     ): ServiceSessionUploadResponse = withContext(ioDispatcher) {
         val packageFile = File(draft.packagePath)
         if (!packageFile.exists()) {
@@ -69,6 +81,9 @@ class ServiceSessionUploader(
                 writeOptionalField(output, boundary, "result", draft.outcome?.name)
                 writeOptionalField(output, boundary, "firmware_version", draft.firmwareVersion)
                 writeOptionalField(output, boundary, "bootloader_version", draft.bootloaderVersion)
+                writeField(output, boundary, "client_attempt_id", attemptMetadata.attemptId)
+                writeField(output, boundary, "client_attempt_number", attemptMetadata.attemptNumber.toString())
+                writeField(output, boundary, "client_trigger_source", attemptMetadata.triggerSource.name)
                 writeFile(output, boundary, "file", packageFile, "application/zip")
                 output.writeBytes("--$boundary--\r\n")
                 output.flush()
@@ -92,6 +107,14 @@ class ServiceSessionUploader(
                 backendServiceSessionId = payload.optString("id").takeIf { value -> value.isNotBlank() },
                 sessionId = payload.optString("session_id", draft.sessionId),
                 uploadStatus = payload.optString("upload_status", "UPLOADED"),
+                uploadCount = payload.optInt("upload_count").takeIf {
+                    payload.has("upload_count") && !payload.isNull("upload_count")
+                },
+                clientAttemptId = payload.optString("client_attempt_id").takeIf { value -> value.isNotBlank() },
+                clientAttemptNumber = payload.optInt("client_attempt_number").takeIf {
+                    payload.has("client_attempt_number") && !payload.isNull("client_attempt_number")
+                },
+                clientTriggerSource = payload.optString("client_trigger_source").takeIf { value -> value.isNotBlank() },
                 packageHash = payload.optString("package_hash").takeIf { value -> value.isNotBlank() },
                 uploadCorrelationId = payload.optString("upload_correlation_id").takeIf { value -> value.isNotBlank() },
                 uploadedAtIso = payload.optString("uploaded_at").takeIf { value -> value.isNotBlank() },

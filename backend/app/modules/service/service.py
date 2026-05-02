@@ -21,6 +21,9 @@ def upload_service_session(
     result: str | None = None,
     firmware_version: str | None = None,
     bootloader_version: str | None = None,
+    client_attempt_id: str | None = None,
+    client_attempt_number: int | None = None,
+    client_trigger_source: str | None = None,
 ) -> ServiceSession:
     safe_name = f"{session_id}_{file.filename}".replace("/", "_")
     path, digest = save_upload(file, "packages", safe_name)
@@ -28,9 +31,19 @@ def upload_service_session(
     uploaded_at = utc_now()
     existing = repository.get_service_session_by_id(db, session_id)
     if existing:
+        existing.device_serial_number = device_serial_number
+        existing.technician_id = technician_id
+        existing.device_type = device_type
+        existing.result = result
+        existing.firmware_version = firmware_version
+        existing.bootloader_version = bootloader_version
         existing.package_path = path
         existing.package_hash = digest
         existing.upload_status = rules.UPLOADED_STATUS
+        existing.upload_count = (existing.upload_count or 0) + 1
+        existing.client_attempt_id = client_attempt_id
+        existing.client_attempt_number = client_attempt_number
+        existing.client_trigger_source = client_trigger_source
         existing.upload_correlation_id = correlation_id
         existing.uploaded_at = uploaded_at
         db.commit()
@@ -47,6 +60,10 @@ def upload_service_session(
         package_path=path,
         package_hash=digest,
         upload_status=rules.UPLOADED_STATUS,
+        upload_count=1,
+        client_attempt_id=client_attempt_id,
+        client_attempt_number=client_attempt_number,
+        client_trigger_source=client_trigger_source,
         upload_correlation_id=correlation_id,
         uploaded_at=uploaded_at,
     )

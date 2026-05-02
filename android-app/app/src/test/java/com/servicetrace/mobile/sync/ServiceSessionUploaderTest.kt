@@ -1,6 +1,7 @@
 package com.servicetrace.mobile.sync
 
 import com.servicetrace.mobile.model.SyncFailureReasonCode
+import com.servicetrace.mobile.model.SyncAttemptTriggerSource
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -47,6 +48,10 @@ class ServiceSessionUploaderTest {
             backendServiceSessionId = "svc-db-id",
             sessionId = "SVC-123",
             uploadStatus = "UPLOADED",
+            uploadCount = 2,
+            clientAttemptId = "SYNC-12345678",
+            clientAttemptNumber = 2,
+            clientTriggerSource = "AUTO_NETWORK",
             packageHash = "abc123",
             uploadCorrelationId = "SRV-UP-ABC123DEF456",
             uploadedAtIso = "2026-05-02T10:15:30Z",
@@ -55,8 +60,25 @@ class ServiceSessionUploaderTest {
         assertEquals("svc-db-id", response.backendServiceSessionId)
         assertEquals("SVC-123", response.sessionId)
         assertEquals("UPLOADED", response.uploadStatus)
+        assertEquals(2, response.uploadCount)
+        assertEquals("SYNC-12345678", response.clientAttemptId)
+        assertEquals(2, response.clientAttemptNumber)
+        assertEquals("AUTO_NETWORK", response.clientTriggerSource)
         assertEquals("abc123", response.packageHash)
         assertEquals("SRV-UP-ABC123DEF456", response.uploadCorrelationId)
         assertEquals("2026-05-02T10:15:30Z", response.uploadedAtIso)
+    }
+
+    @Test
+    fun `upload attempt metadata preserves trigger source and numbering`() {
+        val metadata = SyncUploadAttemptMetadata(
+            attemptId = "SYNC-ABC12345",
+            attemptNumber = 3,
+            triggerSource = SyncAttemptTriggerSource.DEFERRED_WORKER,
+        )
+
+        assertEquals("SYNC-ABC12345", metadata.attemptId)
+        assertEquals(3, metadata.attemptNumber)
+        assertEquals(SyncAttemptTriggerSource.DEFERRED_WORKER, metadata.triggerSource)
     }
 }

@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, JSON, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, JSON, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base, utc_now
@@ -188,6 +188,10 @@ class ServiceSession(Base):
     package_path: Mapped[str | None] = mapped_column(String, nullable=True)
     package_hash: Mapped[str | None] = mapped_column(String, nullable=True)
     upload_status: Mapped[str] = mapped_column(String, default="UPLOADED")
+    upload_count: Mapped[int] = mapped_column(Integer, default=1)
+    client_attempt_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    client_attempt_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    client_trigger_source: Mapped[str | None] = mapped_column(String, nullable=True)
     upload_correlation_id: Mapped[str | None] = mapped_column(String, nullable=True)
     uploaded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)

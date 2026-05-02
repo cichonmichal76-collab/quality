@@ -18,6 +18,9 @@ def upload_service_session(
     result: str | None = Form(default=None),
     firmware_version: str | None = Form(default=None),
     bootloader_version: str | None = Form(default=None),
+    client_attempt_id: str | None = Form(default=None),
+    client_attempt_number: int | None = Form(default=None, ge=1),
+    client_trigger_source: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
     return service.upload_service_session(
@@ -30,6 +33,9 @@ def upload_service_session(
         result=result,
         firmware_version=firmware_version,
         bootloader_version=bootloader_version,
+        client_attempt_id=client_attempt_id,
+        client_attempt_number=client_attempt_number,
+        client_trigger_source=client_trigger_source,
     )
 
 

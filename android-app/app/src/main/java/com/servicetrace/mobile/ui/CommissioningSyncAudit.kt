@@ -54,6 +54,7 @@ internal fun buildSyncAuditRows(
 internal fun buildBackendSyncSummary(attempt: SyncAttemptHistoryEntry): String? {
     val parts = buildList {
         attempt.backendUploadStatus?.let { value -> add("Status backendu: $value") }
+        attempt.backendUploadCount?.let { value -> add("Upload count: $value") }
         attempt.backendServiceSessionId?.let { value -> add("ID backendu: $value") }
         attempt.backendPackageHash?.let { value -> add("Hash paczki: $value") }
         attempt.backendUploadCorrelationId?.let { value -> add("Correlation ID: $value") }
@@ -98,6 +99,7 @@ internal fun buildSyncAuditJson(
                         redactAuditValue(row.attempt.backendServiceSessionId, options.redactSensitiveData) ?: JSONObject.NULL,
                     )
                     put("backend_upload_status", row.attempt.backendUploadStatus ?: JSONObject.NULL)
+                    put("backend_upload_count", row.attempt.backendUploadCount ?: JSONObject.NULL)
                     put(
                         "backend_package_hash",
                         redactAuditValue(row.attempt.backendPackageHash, options.redactSensitiveData) ?: JSONObject.NULL,

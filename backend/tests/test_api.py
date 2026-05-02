@@ -6260,6 +6260,9 @@ def test_service_session_upload_list_and_download(tmp_path, monkeypatch):
             "result": "PASS",
             "firmware_version": "1.2.4",
             "bootloader_version": "0.9.8",
+            "client_attempt_id": "SYNC-UPLOAD-0001",
+            "client_attempt_number": "1",
+            "client_trigger_source": "MANUAL",
         },
         files={"file": ("service-package.zip", b"service-package-content", "application/zip")},
     )
@@ -6267,9 +6270,43 @@ def test_service_session_upload_list_and_download(tmp_path, monkeypatch):
     payload = upload.json()
     assert payload["session_id"] == session_id
     assert payload["upload_status"] == "UPLOADED"
+    assert payload["upload_count"] == 1
+    assert payload["client_attempt_id"] == "SYNC-UPLOAD-0001"
+    assert payload["client_attempt_number"] == 1
+    assert payload["client_trigger_source"] == "MANUAL"
     assert payload["package_hash"]
     assert payload["upload_correlation_id"].startswith("SRV-UP-")
     assert payload["uploaded_at"]
+
+    reupload = client.post(
+        "/api/service-sessions/upload",
+        data={
+            "session_id": session_id,
+            "device_serial_number": unique_id("ZSS"),
+            "technician_id": "TECH-RETRY",
+            "device_type": "ZSS-PRO",
+            "result": "HOLD",
+            "firmware_version": "1.2.5",
+            "bootloader_version": "0.9.9",
+            "client_attempt_id": "SYNC-UPLOAD-0002",
+            "client_attempt_number": "2",
+            "client_trigger_source": "AUTO_NETWORK",
+        },
+        files={"file": ("service-package.zip", b"service-package-updated", "application/zip")},
+    )
+    assert reupload.status_code == 200
+    updated_payload = reupload.json()
+    assert updated_payload["session_id"] == session_id
+    assert updated_payload["upload_count"] == 2
+    assert updated_payload["technician_id"] == "TECH-RETRY"
+    assert updated_payload["device_type"] == "ZSS-PRO"
+    assert updated_payload["result"] == "HOLD"
+    assert updated_payload["firmware_version"] == "1.2.5"
+    assert updated_payload["bootloader_version"] == "0.9.9"
+    assert updated_payload["client_attempt_id"] == "SYNC-UPLOAD-0002"
+    assert updated_payload["client_attempt_number"] == 2
+    assert updated_payload["client_trigger_source"] == "AUTO_NETWORK"
+    assert updated_payload["upload_correlation_id"] != payload["upload_correlation_id"]
 
     listed = client.get("/api/service-sessions")
     assert listed.status_code == 200
@@ -6277,12 +6314,16 @@ def test_service_session_upload_list_and_download(tmp_path, monkeypatch):
 
     fetched = client.get(f"/api/service-sessions/{session_id}")
     assert fetched.status_code == 200
-    assert fetched.json()["technician_id"] == "TECH-001"
-    assert fetched.json()["upload_correlation_id"] == payload["upload_correlation_id"]
+    assert fetched.json()["technician_id"] == "TECH-RETRY"
+    assert fetched.json()["upload_count"] == 2
+    assert fetched.json()["client_attempt_id"] == "SYNC-UPLOAD-0002"
+    assert fetched.json()["client_attempt_number"] == 2
+    assert fetched.json()["client_trigger_source"] == "AUTO_NETWORK"
+    assert fetched.json()["upload_correlation_id"] == updated_payload["upload_correlation_id"]
 
     package_download = client.get(f"/api/service-sessions/{session_id}/package")
     assert package_download.status_code == 200
-    assert package_download.content == b"service-package-content"
+    assert package_download.content == b"service-package-updated"
 
 
 def test_file_upload_and_download(tmp_path, monkeypatch):

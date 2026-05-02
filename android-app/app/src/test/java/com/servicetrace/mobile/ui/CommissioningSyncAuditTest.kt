@@ -108,6 +108,7 @@ class CommissioningSyncAuditTest {
             result = SyncAttemptResult.SUCCESS,
             backendServiceSessionId = "svc-db-id",
             backendUploadStatus = "UPLOADED",
+            backendUploadCount = 2,
             backendPackageHash = "hash-123",
             backendUploadCorrelationId = "SRV-UP-ABC123DEF456",
             backendUploadedAtIso = "2026-05-02T10:15:30Z",
@@ -119,7 +120,7 @@ class CommissioningSyncAuditTest {
         )
 
         assertEquals(
-            "Status backendu: UPLOADED | ID backendu: svc-db-id | Hash paczki: hash-123 | Correlation ID: SRV-UP-ABC123DEF456 | Uploaded at: 2026-05-02T10:15:30Z",
+            "Status backendu: UPLOADED | Upload count: 2 | ID backendu: svc-db-id | Hash paczki: hash-123 | Correlation ID: SRV-UP-ABC123DEF456 | Uploaded at: 2026-05-02T10:15:30Z",
             buildBackendSyncSummary(populated),
         )
         assertNull(buildBackendSyncSummary(empty))
@@ -139,6 +140,7 @@ class CommissioningSyncAuditTest {
                             result = SyncAttemptResult.SUCCESS,
                             backendServiceSessionId = "svc-db-json",
                             backendUploadStatus = "UPLOADED",
+                            backendUploadCount = 4,
                             backendPackageHash = "hash-json",
                             backendUploadCorrelationId = "SRV-UP-JSON123456",
                             backendUploadedAtIso = "2026-05-02T11:30:00Z",
@@ -163,6 +165,7 @@ class CommissioningSyncAuditTest {
         assertEquals("SVC-JSON", json.getString("selected_session_id"))
         assertEquals(1, json.getInt("entry_count"))
         assertEquals("svc-db-json", firstRow.getString("backend_service_session_id"))
+        assertEquals(4, firstRow.getInt("backend_upload_count"))
         assertEquals("SRV-UP-JSON123456", firstRow.getString("backend_upload_correlation_id"))
         assertEquals("2026-05-02T11:30:00Z", firstRow.getString("backend_uploaded_at"))
         assertTrue(firstRow.getBoolean("retryable").not())
@@ -182,6 +185,7 @@ class CommissioningSyncAuditTest {
                             result = SyncAttemptResult.SUCCESS,
                             backendServiceSessionId = "svc-db-redact",
                             backendUploadStatus = "UPLOADED",
+                            backendUploadCount = 3,
                             backendPackageHash = "hash-redact",
                             backendUploadCorrelationId = "SRV-UP-REDACT123",
                         ),
@@ -210,6 +214,7 @@ class CommissioningSyncAuditTest {
         assertTrue(firstRow.getString("backend_package_hash").startsWith("REDACTED-"))
         assertTrue(firstRow.getString("backend_upload_correlation_id").startsWith("REDACTED-"))
         assertEquals("UPLOADED", firstRow.getString("backend_upload_status"))
+        assertEquals(3, firstRow.getInt("backend_upload_count"))
     }
 
     private fun draftWithAttempts(
@@ -236,6 +241,7 @@ class CommissioningSyncAuditTest {
         attemptNumber: Int = 1,
         backendServiceSessionId: String? = null,
         backendUploadStatus: String? = null,
+        backendUploadCount: Int? = null,
         backendPackageHash: String? = null,
         backendUploadCorrelationId: String? = null,
         backendUploadedAtIso: String? = null,
@@ -251,6 +257,7 @@ class CommissioningSyncAuditTest {
             attemptNumber = attemptNumber,
             backendServiceSessionId = backendServiceSessionId,
             backendUploadStatus = backendUploadStatus,
+            backendUploadCount = backendUploadCount,
             backendPackageHash = backendPackageHash,
             backendUploadCorrelationId = backendUploadCorrelationId,
             backendUploadedAtIso = backendUploadedAtIso,

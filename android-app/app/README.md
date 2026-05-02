@@ -23,7 +23,7 @@ Aktualnie zawiera:
 17. limit auto-retry i czytelny stan `wymaga recznej interwencji` po wyczerpaniu prob
 18. trwaly `reason code` bledu syncu zapisany w draftcie i pokazany w UI
 19. lokalna historia prob syncu per sesja z triggerem i wynikiem
-20. historia sukcesu z metadanymi backendu: `upload_status`, `package_hash`, `id`, `upload_correlation_id`, `uploaded_at`
+20. historia sukcesu z metadanymi backendu: `upload_status`, `upload_count`, `package_hash`, `id`, `upload_correlation_id`, `uploaded_at` i echo proby klienta
 21. pelna sekcja audytu synchronizacji z filtrem sukcesow / bledow i szybkim przejsciem do draftu
 22. eksport aktualnego widoku audytu synchronizacji do lokalnego pliku JSON
 23. udostepnianie ostatniego eksportu audytu synchronizacji poza aplikacje
