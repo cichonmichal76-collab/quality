@@ -19,6 +19,8 @@ wkleić link do konkretnego kontekstu pracy bez ręcznego odtwarzania stanu.
 Ten sam mechanizm obsługuje też pełny widok szczegółów pod ścieżką
 `/devices/{serial}` z przyciskiem powrotu do dokładnie tego samego kontekstu
 dashboardu.
+Pełny widok urządzenia wspiera dodatkowo linki do sekcji przez hash URL,
+na przykład `#akcje`, `#bom` albo `#historia-gate`.
 
 Tekstowe filtry są odpytywane z debounce `250 ms`. W trakcie oczekiwania panel
 pokazuje znacznik `Oczekuje na zastosowanie`, a klawisz `Enter` wymusza
@@ -30,6 +32,8 @@ gate, żeby od razu pokazać blokady, rekomendowaną akcję, stan BOM oraz
 szczegóły blokujących komponentów.
 Z drawera można też przejść do pełnej strony szczegółów urządzenia, kiedy
 potrzebny jest stały link albo więcej miejsca na pracę.
+Na pełnej stronie dostępna jest też szybka nawigacja do sekcji `Akcje`,
+`Bramka wysyłki`, `BOM`, `Jakość komponentów` i `Historia gate`.
 
 Drawer nie jest już tylko podglądem. Panel pozwala teraz wykonać sześć
 bezpośrednie kroki operacyjne:

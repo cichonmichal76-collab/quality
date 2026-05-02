@@ -136,8 +136,40 @@ const URL_DEVICE_VARIANT_KEY = "device_variant";
 const URL_SHIPMENT_PREFIX = "ship_";
 const URL_COMPONENT_PREFIX = "comp_";
 const DEVICE_DETAILS_PATH_PREFIX = "/devices/";
+const DEVICE_DETAILS_SECTION_IDS = {
+  actions: "akcje",
+  shipmentGate: "bramka-wysylki",
+  bom: "bom",
+  componentQuality: "jakosc-komponentow",
+  shipmentGateHistory: "historia-gate",
+} as const;
+
+const DEVICE_DETAILS_SECTION_LINKS = [
+  {
+    id: DEVICE_DETAILS_SECTION_IDS.actions,
+    label: "Akcje",
+  },
+  {
+    id: DEVICE_DETAILS_SECTION_IDS.shipmentGate,
+    label: "Bramka wysyłki",
+  },
+  {
+    id: DEVICE_DETAILS_SECTION_IDS.bom,
+    label: "BOM",
+  },
+  {
+    id: DEVICE_DETAILS_SECTION_IDS.componentQuality,
+    label: "Jakość komponentów",
+  },
+  {
+    id: DEVICE_DETAILS_SECTION_IDS.shipmentGateHistory,
+    label: "Historia gate",
+  },
+] as const;
 
 type OptionalBooleanString = "" | "true" | "false";
+type DeviceDetailsSectionId =
+  (typeof DEVICE_DETAILS_SECTION_LINKS)[number]["id"];
 
 interface ShipmentFilters {
   device_type: string;
@@ -2167,6 +2199,7 @@ function DeviceDetailsDrawer({
               </button>
             </>
           }
+          sectionNavigation={null}
         />
       </aside>
     </>
@@ -2179,6 +2212,41 @@ function DeviceDetailsPage({
 }: DeviceDetailsViewProps & {
   devicePageHref: string | null;
 }) {
+  const [activeSectionId, setActiveSectionId] =
+    useState<DeviceDetailsSectionId | null>(() =>
+      readDeviceDetailsSectionHash(window.location.hash),
+    );
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      setActiveSectionId(readDeviceDetailsSectionHash(window.location.hash));
+    };
+
+    handleHashChange();
+    window.addEventListener("hashchange", handleHashChange);
+
+    return () => {
+      window.removeEventListener("hashchange", handleHashChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (props.loadState !== "loaded" || activeSectionId === null) {
+      return;
+    }
+
+    const sectionElement = document.getElementById(activeSectionId);
+    if (!sectionElement) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      if (typeof sectionElement.scrollIntoView === "function") {
+        sectionElement.scrollIntoView({ block: "start" });
+      }
+    });
+  }, [activeSectionId, props.loadState]);
+
   return (
     <article className="details-page">
       <div className="details-page-shell">
@@ -2187,6 +2255,23 @@ function DeviceDetailsPage({
           titleId="device-details-page-title"
           headerEyebrow="Pełny widok urządzenia"
           headerActions={null}
+          sectionNavigation={
+            <nav className="details-section-nav" aria-label="Sekcje urządzenia">
+              {DEVICE_DETAILS_SECTION_LINKS.map((section) => (
+                <a
+                  key={section.id}
+                  className={
+                    activeSectionId === section.id
+                      ? "details-section-link is-active"
+                      : "details-section-link"
+                  }
+                  href={`#${section.id}`}
+                >
+                  {section.label}
+                </a>
+              ))}
+            </nav>
+          }
         />
       </div>
     </article>
@@ -2229,10 +2314,12 @@ function DeviceDetailsSurface({
   titleId,
   headerEyebrow,
   headerActions,
+  sectionNavigation,
 }: DeviceDetailsViewProps & {
   titleId: string;
   headerEyebrow: string;
   headerActions: ReactNode;
+  sectionNavigation: ReactNode;
 }) {
   const shipment = details?.shipment ?? null;
   const component = details?.component ?? null;
@@ -2281,6 +2368,8 @@ function DeviceDetailsSurface({
           <div className="details-header-actions">{headerActions}</div>
         ) : null}
       </div>
+
+      {sectionNavigation ? sectionNavigation : null}
 
       {loadState === "loading" ? (
         <section className="details-section">
@@ -2331,7 +2420,10 @@ function DeviceDetailsSurface({
             />
           </section>
 
-            <DetailsSection title="Działania operacyjne">
+            <DetailsSection
+              title="Działania operacyjne"
+              sectionId={DEVICE_DETAILS_SECTION_IDS.actions}
+            >
               {actionSuccessMessage ? (
                 <div className="action-banner action-banner-success" role="status">
                   <strong>Akcja wykonana.</strong>
@@ -2736,7 +2828,10 @@ function DeviceDetailsSurface({
               ) : null}
             </DetailsSection>
 
-            <DetailsSection title="Bramka wysyłki">
+            <DetailsSection
+              title="Bramka wysyłki"
+              sectionId={DEVICE_DETAILS_SECTION_IDS.shipmentGate}
+            >
               <DetailsKeyGrid
                 items={[
                   {
@@ -2805,7 +2900,10 @@ function DeviceDetailsSurface({
               </div>
             </DetailsSection>
 
-            <DetailsSection title="BOM">
+            <DetailsSection
+              title="BOM"
+              sectionId={DEVICE_DETAILS_SECTION_IDS.bom}
+            >
               <DetailsKeyGrid
                 items={[
                   {
@@ -2885,7 +2983,10 @@ function DeviceDetailsSurface({
               </div>
             </DetailsSection>
 
-            <DetailsSection title="Kontrola jakości komponentów">
+            <DetailsSection
+              title="Kontrola jakości komponentów"
+              sectionId={DEVICE_DETAILS_SECTION_IDS.componentQuality}
+            >
               <DetailsKeyGrid
                 items={[
                   {
@@ -2947,7 +3048,10 @@ function DeviceDetailsSurface({
               </div>
             </DetailsSection>
 
-            <DetailsSection title="Historia shipment gate">
+            <DetailsSection
+              title="Historia shipment gate"
+              sectionId={DEVICE_DETAILS_SECTION_IDS.shipmentGateHistory}
+            >
               {historyRows.length > 0 ? (
                 <div className="detail-history-list">
                   {historyRows.map((event) => (
@@ -2985,13 +3089,15 @@ function DeviceDetailsSurface({
 
 function DetailsSection({
   title,
+  sectionId,
   children,
 }: {
   title: string;
+  sectionId?: string;
   children: ReactNode;
 }) {
   return (
-    <section className="details-section">
+    <section className="details-section" id={sectionId}>
       <h3>{title}</h3>
       {children}
     </section>
@@ -3986,6 +4092,18 @@ function readDevicePageSerial(pathname: string): string | null {
   } catch {
     return encodedSerial;
   }
+}
+
+function readDeviceDetailsSectionHash(
+  hash: string,
+): DeviceDetailsSectionId | null {
+  const normalizedHash = hash.startsWith("#") ? hash.slice(1) : hash;
+
+  return DEVICE_DETAILS_SECTION_LINKS.some(
+    (section) => section.id === normalizedHash,
+  )
+    ? (normalizedHash as DeviceDetailsSectionId)
+    : null;
 }
 
 function writeShipmentFiltersToSearchParams(
