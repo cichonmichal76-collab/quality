@@ -33,6 +33,20 @@ export interface DeviceShipmentLatestDecision {
   created_at: string;
 }
 
+export interface DeviceRead {
+  id: string;
+  device_serial_number: string;
+  device_type: string;
+  variant_code: string;
+  hardware_version: string | null;
+  firmware_version: string | null;
+  bootloader_version: string | null;
+  created_by: string | null;
+  production_status: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface DeviceBomComponentCoverage {
   component_type: string;
   substitution_group: string | null;
@@ -252,15 +266,37 @@ export function optionalBoolean(value: "" | "true" | "false"): boolean | undefin
   return value === "true";
 }
 
-export async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
+async function readErrorDetail(response: Response): Promise<string> {
+  const responseText = (await response.text()).slice(0, 240).trim();
+
+  if (!responseText) {
+    return "";
+  }
+
+  try {
+    const payload = JSON.parse(responseText) as { detail?: unknown };
+
+    if (typeof payload.detail === "string") {
+      return payload.detail.slice(0, 240).trim();
+    }
+  } catch {
+    // Fall back to the raw response body when the payload is not JSON.
+  }
+
+  return responseText;
+}
+
+async function requestJson<T>(url: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(url, {
-    headers: { Accept: "application/json" },
-    signal,
+    ...init,
+    headers: {
+      Accept: "application/json",
+      ...init.headers,
+    },
   });
 
   if (!response.ok) {
-    const responseText = await response.text();
-    const detail = responseText.slice(0, 240).trim();
+    const detail = await readErrorDetail(response);
     throw new Error(
       detail
         ? `API ${response.status} ${response.statusText}: ${detail}`
@@ -269,4 +305,34 @@ export async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T
   }
 
   return response.json() as Promise<T>;
+}
+
+export async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
+  return requestJson<T>(url, { signal });
+}
+
+export async function patchJson<T>(
+  url: string,
+  body: unknown,
+  signal?: AbortSignal,
+): Promise<T> {
+  return requestJson<T>(url, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal,
+  });
+}
+
+export async function updateDeviceStatus(
+  apiBaseUrl: string,
+  serialNumber: string,
+  productionStatus: string,
+  signal?: AbortSignal,
+): Promise<DeviceRead> {
+  return patchJson<DeviceRead>(
+    joinApiUrl(apiBaseUrl, `/devices/${encodeURIComponent(serialNumber)}/status`),
+    { production_status: productionStatus },
+    signal,
+  );
 }

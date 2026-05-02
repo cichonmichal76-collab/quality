@@ -310,6 +310,129 @@ const shipmentGateHistoryPayload: AuditEvent[] = [
   },
 ];
 
+const shipmentReadyQueuePayload: DeviceShipmentQueue = {
+  ...shipmentPayload,
+  production_status_summary: [
+    {
+      production_status: "READY_FOR_SHIPMENT",
+      device_count: 1,
+    },
+  ],
+  devices: [
+    {
+      ...shipmentPayload.devices[0],
+      production_status: "READY_FOR_SHIPMENT",
+      device_updated_at: "2026-05-01T10:15:00Z",
+    },
+  ],
+};
+
+const shipmentActionDetailsPayload: DeviceShipmentReadiness = {
+  ...shipmentPayload.devices[0],
+  bom_compliance: {
+    device_serial_number: "SHIP-001",
+    device_type: "DEMO-OPS",
+    device_variant_code: "DEFAULT",
+    production_status: "FINAL_TEST_PASSED",
+    resolution_source: "BOUND_TEMPLATE",
+    resolved_template_id: "BOM-01",
+    resolved_variant_code: "DEFAULT",
+    resolved_version: "1.2",
+    resolved_status: "ACTIVE",
+    resolved_is_active: true,
+    resolved_is_effective_now: true,
+    is_bom_resolved: true,
+    passes_bom_gate: true,
+    installed_component_count: 1,
+    missing_required_components: [],
+    over_installed_components: [],
+    unexpected_component_types: [],
+    component_coverage: [
+      {
+        component_type: "CONTROL_PCB",
+        substitution_group: null,
+        allowed_component_types: null,
+        required_quantity: 1,
+        installed_quantity: 1,
+        is_required: true,
+        status: "PASS",
+      },
+    ],
+    blocking_reason: null,
+  },
+  primary_blocking_code: null,
+  primary_blocking_message: null,
+  recommended_action: "MARK_READY_FOR_SHIPMENT",
+  blocking_reasons: [],
+  blocking_checks: [],
+};
+
+const shipmentActionComponentDetailsPayload: DeviceComponentQuality = {
+  device_serial_number: "SHIP-001",
+  device_type: "DEMO-OPS",
+  device_variant_code: "DEFAULT",
+  production_status: "FINAL_TEST_PASSED",
+  device_created_at: "2026-05-01T08:00:00Z",
+  device_updated_at: "2026-05-01T09:15:00Z",
+  stale_bucket: "LT_24H",
+  total_installed_components: 1,
+  passing_components: 1,
+  blocked_components: 0,
+  passes_component_quality_gate: true,
+  primary_quality_status: "PASS",
+  primary_blocking_component_type: null,
+  primary_blocking_component_serial_number: null,
+  recommended_action: "NO_ACTION",
+  components: [
+    {
+      component_serial_number: "CTRL-100",
+      component_type: "CONTROL_PCB",
+      child_barcode_value: "BC-CTRL-100",
+      installed_at: "2026-05-01T08:30:00Z",
+      installed_by: "OP-01",
+      workstation_id: "WS-01",
+      bom_template_id: "BOM-01",
+      bom_version: "1.2",
+      component_qc_passed: true,
+      has_critical_open_ncr: false,
+      critical_open_ncr_ids: [],
+      blocks_shipment: false,
+      quality_status: "PASS",
+    },
+  ],
+};
+
+const shipmentDetailsReadyPayload: DeviceShipmentReadiness = {
+  ...shipmentActionDetailsPayload,
+  production_status: "READY_FOR_SHIPMENT",
+  device_updated_at: "2026-05-01T10:15:00Z",
+  latest_shipment_gate_decision: {
+    event_type: "SHIPMENT_GATE_PASSED",
+    result: "PASS",
+    message: "Shipment gate passed",
+    recommended_action: "MARK_READY_FOR_SHIPMENT",
+    created_at: "2026-05-01T10:15:00Z",
+  },
+};
+
+const shipmentGateHistoryReadyPayload: AuditEvent[] = [
+  {
+    id: "AUD-3",
+    event_type: "SHIPMENT_GATE_PASSED",
+    entity_type: "DEVICE",
+    entity_id: "SHIP-001",
+    work_session_id: "WS-12",
+    operator_id: "OP-12",
+    workstation_id: "ST-12",
+    machine_id: null,
+    result: "PASS",
+    message: "Shipment gate passed",
+    payload: { requested_status: "READY_FOR_SHIPMENT" },
+    created_at: "2026-05-01T10:15:00Z",
+  },
+  ...shipmentGateHistoryPayload,
+];
+
 const paginatedShipmentPageOnePayload: DeviceShipmentQueue = {
   ...shipmentPayload,
   total_devices: 3,
@@ -409,11 +532,16 @@ const freshShipmentPayload: DeviceShipmentQueue = {
   ],
 };
 
-function createJsonResponse(payload: unknown): Response {
+function createJsonResponse(
+  payload: unknown,
+  init: { status?: number; statusText?: string } = {},
+): Response {
+  const status = init.status ?? 200;
+
   return {
-    ok: true,
-    status: 200,
-    statusText: "OK",
+    ok: status >= 200 && status < 300,
+    status,
+    statusText: init.statusText ?? (status >= 200 && status < 300 ? "OK" : "Error"),
     json: async () => payload,
     text: async () => JSON.stringify(payload),
   } as Response;
@@ -582,6 +710,151 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Zamknij" }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("marks device as ready for shipment from the details drawer", async () => {
+    let readyMarked = false;
+    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+
+      if (url.startsWith("/api/shipment-readiness")) {
+        return Promise.resolve(
+          createJsonResponse(readyMarked ? shipmentReadyQueuePayload : shipmentPayload),
+        );
+      }
+
+      if (url === "/api/devices/SHIP-001/shipment-readiness") {
+        return Promise.resolve(
+          createJsonResponse(
+            readyMarked ? shipmentDetailsReadyPayload : shipmentActionDetailsPayload,
+          ),
+        );
+      }
+
+      if (url === "/api/devices/SHIP-001/component-quality") {
+        return Promise.resolve(
+          createJsonResponse(shipmentActionComponentDetailsPayload),
+        );
+      }
+
+      if (url === "/api/devices/SHIP-001/shipment-gate-history?limit=10") {
+        return Promise.resolve(
+          createJsonResponse(
+            readyMarked ? shipmentGateHistoryReadyPayload : shipmentGateHistoryPayload,
+          ),
+        );
+      }
+
+      if (url === "/api/devices/SHIP-001/status" && method === "PATCH") {
+        readyMarked = true;
+        return Promise.resolve(
+          createJsonResponse({
+            id: "DEV-001",
+            device_serial_number: "SHIP-001",
+            device_type: "DEMO-OPS",
+            variant_code: "DEFAULT",
+            hardware_version: null,
+            firmware_version: null,
+            bootloader_version: null,
+            created_by: null,
+            production_status: "READY_FOR_SHIPMENT",
+            created_at: "2026-05-01T08:00:00Z",
+            updated_at: "2026-05-01T10:15:00Z",
+          }),
+        );
+      }
+
+      throw new Error(`Unexpected request: ${method} ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "SHIP-001" }));
+    const actionButton = await screen.findByRole("button", {
+      name: "Oznacz gotowe do wysyłki",
+    });
+    fireEvent.click(actionButton);
+
+    expect(
+      await screen.findByText("Urządzenie oznaczone jako gotowe do wysyłki."),
+    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/devices/SHIP-001/status",
+        expect.objectContaining({
+          method: "PATCH",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ production_status: "READY_FOR_SHIPMENT" }),
+        }),
+      );
+    });
+    expect(
+      screen.queryByRole("button", { name: "Oznacz gotowe do wysyłki" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows action error in the details drawer when mark-ready is rejected", async () => {
+    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+
+      if (url.startsWith("/api/shipment-readiness")) {
+        return Promise.resolve(createJsonResponse(shipmentPayload));
+      }
+
+      if (url === "/api/devices/SHIP-001/shipment-readiness") {
+        return Promise.resolve(createJsonResponse(shipmentActionDetailsPayload));
+      }
+
+      if (url === "/api/devices/SHIP-001/component-quality") {
+        return Promise.resolve(
+          createJsonResponse(shipmentActionComponentDetailsPayload),
+        );
+      }
+
+      if (url === "/api/devices/SHIP-001/shipment-gate-history?limit=10") {
+        return Promise.resolve(createJsonResponse(shipmentGateHistoryPayload));
+      }
+
+      if (url === "/api/devices/SHIP-001/status" && method === "PATCH") {
+        return Promise.resolve(
+          createJsonResponse(
+            { detail: "Open critical NCR blocks shipment" },
+            { status: 400, statusText: "Bad Request" },
+          ),
+        );
+      }
+
+      throw new Error(`Unexpected request: ${method} ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "SHIP-001" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Oznacz gotowe do wysyłki" }),
+    );
+
+    expect(
+      await screen.findByText(/Open critical NCR blocks shipment/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Oznacz gotowe do wysyłki" }),
+    ).toBeEnabled();
   });
 
   it("loads last active view from localStorage and persists tab changes", async () => {

@@ -592,6 +592,54 @@ td span {
   gap: 16px;
 }
 
+.action-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.action-copy {
+  display: grid;
+  gap: 4px;
+  max-width: 28rem;
+}
+
+.action-copy strong,
+.action-banner strong {
+  color: var(--ink);
+}
+
+.action-copy span,
+.action-banner span {
+  color: var(--muted);
+}
+
+.action-button {
+  min-width: 220px;
+}
+
+.action-button:disabled,
+.primary-button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.action-banner {
+  display: grid;
+  gap: 4px;
+  border: 1px solid rgb(23 32 27 / 10%);
+  border-radius: 8px;
+  background: rgb(244 239 229 / 92%);
+  padding: 14px 16px;
+}
+
+.action-banner-success {
+  border-color: rgb(38 118 83 / 24%);
+  background: rgb(236 247 240 / 96%);
+}
+
 .details-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -817,6 +865,11 @@ td span {
 
   .details-drawer-header {
     flex-direction: column;
+  }
+
+  .action-button {
+    width: 100%;
+    min-width: 0;
   }
 
   .pagination-actions {

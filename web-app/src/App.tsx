@@ -6,6 +6,7 @@ import {
   fetchJson,
   joinApiUrl,
   optionalBoolean,
+  updateDeviceStatus,
 } from "./api";
 import type {
   AuditEvent,
@@ -235,6 +236,13 @@ export function App() {
   const [deviceDetailsError, setDeviceDetailsError] = useState<string | null>(
     null,
   );
+  const [deviceActionState, setDeviceActionState] = useState<LoadState>("idle");
+  const [deviceActionError, setDeviceActionError] = useState<string | null>(
+    null,
+  );
+  const [deviceActionSuccess, setDeviceActionSuccess] = useState<string | null>(
+    null,
+  );
   const [refreshVersion, setRefreshVersion] = useState(0);
   const activePath =
     activeView === "shipment" ? "/shipment-readiness" : "/component-quality";
@@ -414,6 +422,45 @@ export function App() {
       controller.abort();
     };
   }, [apiBaseUrl, refreshVersion, selectedDeviceSerial]);
+
+  useEffect(() => {
+    setDeviceActionState("idle");
+    setDeviceActionError(null);
+    setDeviceActionSuccess(null);
+  }, [selectedDeviceSerial]);
+
+  const markSelectedDeviceReadyForShipment = async () => {
+    if (!selectedDeviceSerial || deviceActionState === "loading") {
+      return;
+    }
+
+    if (!apiBaseUrl.trim()) {
+      setDeviceActionState("error");
+      setDeviceActionError("Podaj bazowy adres API.");
+      setDeviceActionSuccess(null);
+      return;
+    }
+
+    setDeviceActionState("loading");
+    setDeviceActionError(null);
+    setDeviceActionSuccess(null);
+
+    try {
+      await updateDeviceStatus(
+        apiBaseUrl.trim(),
+        selectedDeviceSerial,
+        "READY_FOR_SHIPMENT",
+      );
+      setDeviceActionState("loaded");
+      setDeviceActionSuccess("Urządzenie oznaczone jako gotowe do wysyłki.");
+      setRefreshVersion((previous) => previous + 1);
+    } catch (error: unknown) {
+      setDeviceActionState("error");
+      setDeviceActionError(
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  };
 
   const updateShipmentFilter = <Key extends keyof ShipmentFilters>(
     key: Key,
@@ -602,6 +649,10 @@ export function App() {
             details={deviceDetails}
             loadState={deviceDetailsState}
             errorMessage={deviceDetailsError}
+            actionState={deviceActionState}
+            actionErrorMessage={deviceActionError}
+            actionSuccessMessage={deviceActionSuccess}
+            onMarkReadyForShipment={markSelectedDeviceReadyForShipment}
             onClose={() => setSelectedDevice(null)}
           />
         ) : null}
@@ -1333,12 +1384,20 @@ function DeviceDetailsDrawer({
   details,
   loadState,
   errorMessage,
+  actionState,
+  actionErrorMessage,
+  actionSuccessMessage,
+  onMarkReadyForShipment,
   onClose,
 }: {
   device: DeviceSelection;
   details: DeviceDetailsPayload | null;
   loadState: LoadState;
   errorMessage: string | null;
+  actionState: LoadState;
+  actionErrorMessage: string | null;
+  actionSuccessMessage: string | null;
+  onMarkReadyForShipment: () => void;
   onClose: () => void;
 }) {
   const shipment = details?.shipment ?? null;
@@ -1346,6 +1405,13 @@ function DeviceDetailsDrawer({
   const bomCoverage = shipment?.bom_compliance.component_coverage ?? [];
   const componentRows = component?.components ?? [];
   const historyRows = details?.shipmentGateHistory ?? [];
+  const canMarkReadyForShipment =
+    shipment !== null &&
+    shipment.production_status !== "READY_FOR_SHIPMENT" &&
+    shipment.can_transition_to_ready_for_shipment &&
+    shipment.recommended_action === "MARK_READY_FOR_SHIPMENT";
+  const isAlreadyReadyForShipment =
+    shipment?.production_status === "READY_FOR_SHIPMENT";
 
   return (
     <>
@@ -1422,6 +1488,64 @@ function DeviceDetailsDrawer({
                 value={labelForCode(component.stale_bucket)}
               />
             </section>
+
+            <DetailsSection title="Działania operacyjne">
+              {actionSuccessMessage ? (
+                <div className="action-banner action-banner-success" role="status">
+                  <strong>Akcja wykonana.</strong>
+                  <span>{actionSuccessMessage}</span>
+                </div>
+              ) : null}
+              {actionErrorMessage ? (
+                <div className="error-banner" role="alert">
+                  <strong>Nie udało się wykonać akcji.</strong>
+                  <span>{actionErrorMessage}</span>
+                </div>
+              ) : null}
+              {canMarkReadyForShipment ? (
+                <div className="action-row">
+                  <div className="action-copy">
+                    <strong>Urządzenie przechodzi shipment gate.</strong>
+                    <span>
+                      Możesz od razu nadać status <code>READY_FOR_SHIPMENT</code>
+                      i odświeżyć kolejki bez wychodzenia z dashboardu.
+                    </span>
+                  </div>
+                  <button
+                    className="primary-button action-button"
+                    type="button"
+                    onClick={onMarkReadyForShipment}
+                    disabled={actionState === "loading"}
+                  >
+                    {actionState === "loading"
+                      ? "Oznaczam..."
+                      : "Oznacz gotowe do wysyłki"}
+                  </button>
+                </div>
+              ) : isAlreadyReadyForShipment ? (
+                actionSuccessMessage ? null : (
+                <div className="action-banner action-banner-success">
+                  <strong>Urządzenie ma już status gotowe do wysyłki.</strong>
+                  <span>
+                    Drawer pozostaje miejscem do podglądu BOM, jakości komponentów
+                    i historii shipment gate.
+                  </span>
+                </div>
+                )
+              ) : (
+                <div className="action-banner">
+                  <strong>
+                    Ten panel obsługuje już pierwszą akcję bezpośrednią.
+                  </strong>
+                  <span>
+                    Obecna rekomendacja to{" "}
+                    <code>{labelForCode(shipment.recommended_action)}</code>.
+                    Dla tego typu akcji dashboard pokazuje pełny kontekst i blokady,
+                    a kolejne workflow operacyjne dołączymy w następnych krokach.
+                  </span>
+                </div>
+              )}
+            </DetailsSection>
 
             <DetailsSection title="Bramka wysyłki">
               <DetailsKeyGrid
