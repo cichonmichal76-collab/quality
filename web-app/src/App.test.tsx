@@ -1253,6 +1253,7 @@ function createErrorResponse(
 
 afterEach(() => {
   localStorage.clear();
+  window.history.replaceState({}, "", "/");
   vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -1384,6 +1385,123 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Zamknij" }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("hydrates active tab, filters and selected device from URL", async () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/?view=components&comp_device_type=DEMO-OPS&comp_sort_by=blocked_components&comp_sort_desc=true&comp_only_blocking=true&comp_limit=100&comp_offset=0&device_serial=COMP-001&device_type=DEMO-OPS&device_variant=DEFAULT",
+    );
+
+    const fetchMock = vi.fn((input: string | URL | Request) => {
+      const url = String(input);
+
+      if (
+        url ===
+        "/api/component-quality?device_type=DEMO-OPS&only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=100"
+      ) {
+        return Promise.resolve(createJsonResponse(componentPayload));
+      }
+
+      if (url === "/api/devices/COMP-001/shipment-readiness") {
+        return Promise.resolve(
+          createJsonResponse(componentActionShipmentDetailsPayload),
+        );
+      }
+
+      if (url === "/api/devices/COMP-001/component-quality") {
+        return Promise.resolve(
+          createJsonResponse(componentActionComponentDetailsPayload),
+        );
+      }
+
+      if (url === "/api/devices/COMP-001/shipment-gate-history?limit=10") {
+        return Promise.resolve(createJsonResponse([]));
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("COMP-001")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Komponenty" })).toHaveClass(
+      "is-active",
+    );
+    expect(screen.getByLabelText("Typ urządzenia")).toHaveValue("DEMO-OPS");
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "COMP-001" }),
+    ).toBeInTheDocument();
+  });
+
+  it("syncs active tab, filters and selected device into URL", async () => {
+    const fetchMock = vi.fn((input: string | URL | Request) => {
+      const url = String(input);
+
+      if (url.startsWith("/api/shipment-readiness")) {
+        return Promise.resolve(createJsonResponse(shipmentPayload));
+      }
+
+      if (
+        url ===
+        "/api/component-quality?only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=100"
+      ) {
+        return Promise.resolve(createJsonResponse(componentPayload));
+      }
+
+      if (
+        url ===
+        "/api/component-quality?device_type=DEMO-OPS&only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=100"
+      ) {
+        return Promise.resolve(createJsonResponse(componentPayload));
+      }
+
+      if (url === "/api/devices/COMP-001/shipment-readiness") {
+        return Promise.resolve(
+          createJsonResponse(componentActionShipmentDetailsPayload),
+        );
+      }
+
+      if (url === "/api/devices/COMP-001/component-quality") {
+        return Promise.resolve(
+          createJsonResponse(componentActionComponentDetailsPayload),
+        );
+      }
+
+      if (url === "/api/devices/COMP-001/shipment-gate-history?limit=10") {
+        return Promise.resolve(createJsonResponse([]));
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("SHIP-001")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Komponenty" }));
+    fireEvent.change(screen.getByLabelText("Typ urządzenia"), {
+      target: { value: "DEMO-OPS" },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "COMP-001" }));
+
+    await waitFor(() =>
+      expect(window.location.search).toContain("view=components"),
+    );
+    expect(window.location.search).toContain("comp_device_type=DEMO-OPS");
+    expect(window.location.search).toContain("device_serial=COMP-001");
+    expect(window.location.search).toContain("device_type=DEMO-OPS");
+    expect(window.location.search).toContain("device_variant=DEFAULT");
+
+    fireEvent.click(screen.getByRole("button", { name: "Zamknij" }));
+
+    await waitFor(() =>
+      expect(window.location.search).not.toContain("device_serial=COMP-001"),
+    );
   });
 
   it("marks device as ready for shipment from the details drawer", async () => {

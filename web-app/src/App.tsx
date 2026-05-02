@@ -129,6 +129,13 @@ const COMPONENT_SORT_OPTIONS = [
   "recommended_action",
 ];
 
+const URL_VIEW_KEY = "view";
+const URL_DEVICE_SERIAL_KEY = "device_serial";
+const URL_DEVICE_TYPE_KEY = "device_type";
+const URL_DEVICE_VARIANT_KEY = "device_variant";
+const URL_SHIPMENT_PREFIX = "ship_";
+const URL_COMPONENT_PREFIX = "comp_";
+
 type OptionalBooleanString = "" | "true" | "false";
 
 interface ShipmentFilters {
@@ -183,6 +190,13 @@ interface ActionWorkSessionOption {
   label: string;
 }
 
+interface DashboardUrlState {
+  activeView: DashboardMode | null;
+  hasShipmentFilters: boolean;
+  hasComponentFilters: boolean;
+  searchParams: URLSearchParams;
+}
+
 const SHIPMENT_TEXT_FILTER_KEYS: Array<keyof ShipmentFilters> = [
   "device_type",
   "variant_code",
@@ -226,17 +240,24 @@ const DEFAULT_COMPONENT_FILTERS: ComponentFilters = {
 };
 
 export function App() {
+  const dashboardUrlState = readDashboardUrlState();
   const [activeView, setActiveView] = useState<DashboardMode>(() => {
-    return readStoredDashboardMode();
+    return dashboardUrlState.activeView ?? readStoredDashboardMode();
   });
   const [apiBaseUrl, setApiBaseUrl] = useState(() => {
     return localStorage.getItem(API_STORAGE_KEY) ?? DEFAULT_API_BASE_URL;
   });
   const [shipmentFilters, setShipmentFilters] = useState(() => {
-    return readStoredShipmentFilters();
+    return readShipmentFiltersFromUrl(
+      dashboardUrlState.searchParams,
+      dashboardUrlState.hasShipmentFilters,
+    );
   });
   const [componentFilters, setComponentFilters] = useState(() => {
-    return readStoredComponentFilters();
+    return readComponentFiltersFromUrl(
+      dashboardUrlState.searchParams,
+      dashboardUrlState.hasComponentFilters,
+    );
   });
   const [
     shipmentRequestFilters,
@@ -266,7 +287,7 @@ export function App() {
   const [loadState, setLoadState] = useState<LoadState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [selectedDevice, setSelectedDevice] = useState<DeviceSelection | null>(
-    null,
+    () => readSelectedDeviceFromUrl(dashboardUrlState.searchParams),
   );
   const [deviceDetails, setDeviceDetails] = useState<DeviceDetailsPayload | null>(
     null,
@@ -383,6 +404,23 @@ export function App() {
   useEffect(() => {
     localStorage.setItem(VIEW_STORAGE_KEY, activeView);
   }, [activeView]);
+
+  useEffect(() => {
+    const nextSearch = buildDashboardUrlSearch({
+      activeView,
+      shipmentFilters,
+      componentFilters,
+      selectedDevice,
+    });
+    const currentSearch = window.location.search;
+
+    if (nextSearch === currentSearch) {
+      return;
+    }
+
+    const nextUrl = `${window.location.pathname}${nextSearch}${window.location.hash}`;
+    window.history.replaceState(null, "", nextUrl);
+  }, [activeView, componentFilters, selectedDevice, shipmentFilters]);
 
   useEffect(() => {
     localStorage.setItem(
@@ -671,6 +709,25 @@ export function App() {
     setDeviceActionSuccess(null);
     setAssemblyBarcodeValue("");
   }, [selectedDeviceSerial]);
+
+  useEffect(() => {
+    if (!selectedDevice || !deviceDetails) {
+      return;
+    }
+
+    if (
+      selectedDevice.deviceType !== "" &&
+      selectedDevice.variantCode !== ""
+    ) {
+      return;
+    }
+
+    setSelectedDevice({
+      serialNumber: selectedDevice.serialNumber,
+      deviceType: deviceDetails.shipment.device_type,
+      variantCode: deviceDetails.shipment.device_variant_code,
+    });
+  }, [deviceDetails, selectedDevice]);
 
   useEffect(() => {
     if (assemblyComponentTypeOptions.length === 0) {
@@ -1993,6 +2050,12 @@ function DeviceDetailsDrawer({
 }) {
   const shipment = details?.shipment ?? null;
   const component = details?.component ?? null;
+  const deviceType = device.deviceType || shipment?.device_type || component?.device_type || "Brak danych";
+  const deviceVariant =
+    device.variantCode ||
+    shipment?.device_variant_code ||
+    component?.device_variant_code ||
+    "Brak danych";
   const bomCoverage = shipment?.bom_compliance.component_coverage ?? [];
   const componentRows = component?.components ?? [];
   const historyRows = details?.shipmentGateHistory ?? [];
@@ -2037,7 +2100,7 @@ function DeviceDetailsDrawer({
             <p className="eyebrow">Szczegóły urządzenia</p>
             <h2 id="device-details-title">{device.serialNumber}</h2>
             <p className="details-subtitle">
-              {device.deviceType} · {device.variantCode}
+              {deviceType} · {deviceVariant}
             </p>
           </div>
           <button className="ghost-button" type="button" onClick={onClose}>
@@ -3302,6 +3365,205 @@ function readStoredDashboardMode(): DashboardMode {
   return storedValue === "components" ? "components" : "shipment";
 }
 
+function readDashboardUrlState(): DashboardUrlState {
+  const searchParams = new URLSearchParams(window.location.search);
+
+  return {
+    activeView:
+      searchParams.get(URL_VIEW_KEY) === "components"
+        ? "components"
+        : searchParams.get(URL_VIEW_KEY) === "shipment"
+          ? "shipment"
+          : null,
+    hasShipmentFilters: hasUrlFilterPrefix(searchParams, URL_SHIPMENT_PREFIX),
+    hasComponentFilters: hasUrlFilterPrefix(searchParams, URL_COMPONENT_PREFIX),
+    searchParams,
+  };
+}
+
+function readShipmentFiltersFromUrl(
+  searchParams: URLSearchParams,
+  hasShipmentFilters: boolean,
+): ShipmentFilters {
+  const baseFilters = hasShipmentFilters
+    ? DEFAULT_SHIPMENT_FILTERS
+    : readStoredShipmentFilters();
+
+  return sanitizeShipmentFilters({
+    device_type: readSearchString(
+      searchParams,
+      `${URL_SHIPMENT_PREFIX}device_type`,
+      baseFilters.device_type,
+    ),
+    variant_code: readSearchString(
+      searchParams,
+      `${URL_SHIPMENT_PREFIX}variant_code`,
+      baseFilters.variant_code,
+    ),
+    production_status: readSearchOption(
+      searchParams,
+      `${URL_SHIPMENT_PREFIX}production_status`,
+      PRODUCTION_STATUS_OPTIONS,
+      baseFilters.production_status,
+    ),
+    primary_blocking_code: readSearchOption(
+      searchParams,
+      `${URL_SHIPMENT_PREFIX}primary_blocking_code`,
+      SHIPMENT_BLOCKING_OPTIONS,
+      baseFilters.primary_blocking_code,
+    ),
+    recommended_action: readSearchOption(
+      searchParams,
+      `${URL_SHIPMENT_PREFIX}recommended_action`,
+      SHIPMENT_ACTION_OPTIONS,
+      baseFilters.recommended_action,
+    ),
+    latest_gate_result: readSearchOption(
+      searchParams,
+      `${URL_SHIPMENT_PREFIX}latest_gate_result`,
+      SHIPMENT_GATE_RESULT_OPTIONS,
+      baseFilters.latest_gate_result,
+    ),
+    only_blocked: readSearchBoolean(
+      searchParams,
+      `${URL_SHIPMENT_PREFIX}only_blocked`,
+      baseFilters.only_blocked,
+    ),
+    only_ready: readSearchBoolean(
+      searchParams,
+      `${URL_SHIPMENT_PREFIX}only_ready`,
+      baseFilters.only_ready,
+    ),
+    sort_by: readSearchOption(
+      searchParams,
+      `${URL_SHIPMENT_PREFIX}sort_by`,
+      SHIPMENT_SORT_OPTIONS,
+      baseFilters.sort_by,
+    ),
+    sort_desc: readSearchBoolean(
+      searchParams,
+      `${URL_SHIPMENT_PREFIX}sort_desc`,
+      baseFilters.sort_desc,
+    ),
+    limit: clampLimit(
+      readSearchNumber(
+        searchParams,
+        `${URL_SHIPMENT_PREFIX}limit`,
+        baseFilters.limit,
+      ),
+    ),
+    offset: clampOffset(
+      readSearchNumber(
+        searchParams,
+        `${URL_SHIPMENT_PREFIX}offset`,
+        baseFilters.offset,
+      ),
+    ),
+  });
+}
+
+function readComponentFiltersFromUrl(
+  searchParams: URLSearchParams,
+  hasComponentFilters: boolean,
+): ComponentFilters {
+  const baseFilters = hasComponentFilters
+    ? DEFAULT_COMPONENT_FILTERS
+    : readStoredComponentFilters();
+
+  return {
+    device_type: readSearchString(
+      searchParams,
+      `${URL_COMPONENT_PREFIX}device_type`,
+      baseFilters.device_type,
+    ),
+    variant_code: readSearchString(
+      searchParams,
+      `${URL_COMPONENT_PREFIX}variant_code`,
+      baseFilters.variant_code,
+    ),
+    production_status: readSearchOption(
+      searchParams,
+      `${URL_COMPONENT_PREFIX}production_status`,
+      PRODUCTION_STATUS_OPTIONS,
+      baseFilters.production_status,
+    ),
+    blocking_component_type: readSearchString(
+      searchParams,
+      `${URL_COMPONENT_PREFIX}blocking_component_type`,
+      baseFilters.blocking_component_type,
+    ),
+    primary_quality_status: readSearchOption(
+      searchParams,
+      `${URL_COMPONENT_PREFIX}primary_quality_status`,
+      COMPONENT_STATUS_OPTIONS,
+      baseFilters.primary_quality_status,
+    ),
+    stale_bucket: readSearchOption(
+      searchParams,
+      `${URL_COMPONENT_PREFIX}stale_bucket`,
+      COMPONENT_STALE_OPTIONS,
+      baseFilters.stale_bucket,
+    ),
+    recommended_action: readSearchOption(
+      searchParams,
+      `${URL_COMPONENT_PREFIX}recommended_action`,
+      COMPONENT_ACTION_OPTIONS,
+      baseFilters.recommended_action,
+    ),
+    passes_component_quality_gate: readSearchOptionalBooleanString(
+      searchParams,
+      `${URL_COMPONENT_PREFIX}passes_component_quality_gate`,
+      baseFilters.passes_component_quality_gate,
+    ),
+    only_blocking: readSearchBoolean(
+      searchParams,
+      `${URL_COMPONENT_PREFIX}only_blocking`,
+      baseFilters.only_blocking,
+    ),
+    sort_by: readSearchOption(
+      searchParams,
+      `${URL_COMPONENT_PREFIX}sort_by`,
+      COMPONENT_SORT_OPTIONS,
+      baseFilters.sort_by,
+    ),
+    sort_desc: readSearchBoolean(
+      searchParams,
+      `${URL_COMPONENT_PREFIX}sort_desc`,
+      baseFilters.sort_desc,
+    ),
+    limit: clampLimit(
+      readSearchNumber(
+        searchParams,
+        `${URL_COMPONENT_PREFIX}limit`,
+        baseFilters.limit,
+      ),
+    ),
+    offset: clampOffset(
+      readSearchNumber(
+        searchParams,
+        `${URL_COMPONENT_PREFIX}offset`,
+        baseFilters.offset,
+      ),
+    ),
+  };
+}
+
+function readSelectedDeviceFromUrl(
+  searchParams: URLSearchParams,
+): DeviceSelection | null {
+  const serialNumber = searchParams.get(URL_DEVICE_SERIAL_KEY)?.trim() ?? "";
+
+  if (serialNumber === "") {
+    return null;
+  }
+
+  return {
+    serialNumber,
+    deviceType: searchParams.get(URL_DEVICE_TYPE_KEY)?.trim() ?? "",
+    variantCode: searchParams.get(URL_DEVICE_VARIANT_KEY)?.trim() ?? "",
+  };
+}
+
 function readStoredShipmentFilters(): ShipmentFilters {
   const storedValue = readStoredObject(SHIPMENT_FILTERS_STORAGE_KEY);
 
@@ -3463,6 +3725,237 @@ function readStoredOptionalBooleanString(
   value: unknown,
   fallback: OptionalBooleanString,
 ): OptionalBooleanString {
+  return value === "" || value === "true" || value === "false"
+    ? value
+    : fallback;
+}
+
+function buildDashboardUrlSearch({
+  activeView,
+  shipmentFilters,
+  componentFilters,
+  selectedDevice,
+}: {
+  activeView: DashboardMode;
+  shipmentFilters: ShipmentFilters;
+  componentFilters: ComponentFilters;
+  selectedDevice: DeviceSelection | null;
+}): string {
+  const searchParams = new URLSearchParams();
+
+  searchParams.set(URL_VIEW_KEY, activeView);
+  writeShipmentFiltersToSearchParams(searchParams, shipmentFilters);
+  writeComponentFiltersToSearchParams(searchParams, componentFilters);
+
+  if (selectedDevice) {
+    searchParams.set(URL_DEVICE_SERIAL_KEY, selectedDevice.serialNumber);
+
+    if (selectedDevice.deviceType.trim() !== "") {
+      searchParams.set(URL_DEVICE_TYPE_KEY, selectedDevice.deviceType);
+    }
+
+    if (selectedDevice.variantCode.trim() !== "") {
+      searchParams.set(URL_DEVICE_VARIANT_KEY, selectedDevice.variantCode);
+    }
+  }
+
+  const search = searchParams.toString();
+  return search ? `?${search}` : "";
+}
+
+function writeShipmentFiltersToSearchParams(
+  searchParams: URLSearchParams,
+  filters: ShipmentFilters,
+): void {
+  searchParams.set(`${URL_SHIPMENT_PREFIX}sort_by`, filters.sort_by);
+  searchParams.set(
+    `${URL_SHIPMENT_PREFIX}sort_desc`,
+    String(filters.sort_desc),
+  );
+  searchParams.set(`${URL_SHIPMENT_PREFIX}limit`, String(clampLimit(filters.limit)));
+  searchParams.set(
+    `${URL_SHIPMENT_PREFIX}offset`,
+    String(clampOffset(filters.offset)),
+  );
+  searchParams.set(
+    `${URL_SHIPMENT_PREFIX}only_blocked`,
+    String(filters.only_blocked),
+  );
+  searchParams.set(`${URL_SHIPMENT_PREFIX}only_ready`, String(filters.only_ready));
+  setOptionalSearchString(
+    searchParams,
+    `${URL_SHIPMENT_PREFIX}device_type`,
+    filters.device_type,
+  );
+  setOptionalSearchString(
+    searchParams,
+    `${URL_SHIPMENT_PREFIX}variant_code`,
+    filters.variant_code,
+  );
+  setOptionalSearchString(
+    searchParams,
+    `${URL_SHIPMENT_PREFIX}production_status`,
+    filters.production_status,
+  );
+  setOptionalSearchString(
+    searchParams,
+    `${URL_SHIPMENT_PREFIX}primary_blocking_code`,
+    filters.primary_blocking_code,
+  );
+  setOptionalSearchString(
+    searchParams,
+    `${URL_SHIPMENT_PREFIX}recommended_action`,
+    filters.recommended_action,
+  );
+  setOptionalSearchString(
+    searchParams,
+    `${URL_SHIPMENT_PREFIX}latest_gate_result`,
+    filters.latest_gate_result,
+  );
+}
+
+function writeComponentFiltersToSearchParams(
+  searchParams: URLSearchParams,
+  filters: ComponentFilters,
+): void {
+  searchParams.set(`${URL_COMPONENT_PREFIX}sort_by`, filters.sort_by);
+  searchParams.set(
+    `${URL_COMPONENT_PREFIX}sort_desc`,
+    String(filters.sort_desc),
+  );
+  searchParams.set(
+    `${URL_COMPONENT_PREFIX}limit`,
+    String(clampLimit(filters.limit)),
+  );
+  searchParams.set(
+    `${URL_COMPONENT_PREFIX}offset`,
+    String(clampOffset(filters.offset)),
+  );
+  searchParams.set(
+    `${URL_COMPONENT_PREFIX}only_blocking`,
+    String(filters.only_blocking),
+  );
+  setOptionalSearchString(
+    searchParams,
+    `${URL_COMPONENT_PREFIX}device_type`,
+    filters.device_type,
+  );
+  setOptionalSearchString(
+    searchParams,
+    `${URL_COMPONENT_PREFIX}variant_code`,
+    filters.variant_code,
+  );
+  setOptionalSearchString(
+    searchParams,
+    `${URL_COMPONENT_PREFIX}production_status`,
+    filters.production_status,
+  );
+  setOptionalSearchString(
+    searchParams,
+    `${URL_COMPONENT_PREFIX}blocking_component_type`,
+    filters.blocking_component_type,
+  );
+  setOptionalSearchString(
+    searchParams,
+    `${URL_COMPONENT_PREFIX}primary_quality_status`,
+    filters.primary_quality_status,
+  );
+  setOptionalSearchString(
+    searchParams,
+    `${URL_COMPONENT_PREFIX}stale_bucket`,
+    filters.stale_bucket,
+  );
+  setOptionalSearchString(
+    searchParams,
+    `${URL_COMPONENT_PREFIX}recommended_action`,
+    filters.recommended_action,
+  );
+  setOptionalSearchString(
+    searchParams,
+    `${URL_COMPONENT_PREFIX}passes_component_quality_gate`,
+    filters.passes_component_quality_gate,
+  );
+}
+
+function hasUrlFilterPrefix(
+  searchParams: URLSearchParams,
+  prefix: string,
+): boolean {
+  return Array.from(searchParams.keys()).some((key) => key.startsWith(prefix));
+}
+
+function setOptionalSearchString(
+  searchParams: URLSearchParams,
+  key: string,
+  value: string,
+): void {
+  const normalizedValue = value.trim();
+
+  if (normalizedValue === "") {
+    return;
+  }
+
+  searchParams.set(key, normalizedValue);
+}
+
+function readSearchString(
+  searchParams: URLSearchParams,
+  key: string,
+  fallback: string,
+): string {
+  const value = searchParams.get(key);
+  return value === null ? fallback : value;
+}
+
+function readSearchOption(
+  searchParams: URLSearchParams,
+  key: string,
+  allowedValues: string[],
+  fallback: string,
+): string {
+  const value = searchParams.get(key);
+  return value !== null && allowedValues.includes(value) ? value : fallback;
+}
+
+function readSearchBoolean(
+  searchParams: URLSearchParams,
+  key: string,
+  fallback: boolean,
+): boolean {
+  const value = searchParams.get(key);
+
+  if (value === "true") {
+    return true;
+  }
+
+  if (value === "false") {
+    return false;
+  }
+
+  return fallback;
+}
+
+function readSearchNumber(
+  searchParams: URLSearchParams,
+  key: string,
+  fallback: number,
+): number {
+  const value = searchParams.get(key);
+
+  if (value === null) {
+    return fallback;
+  }
+
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue : fallback;
+}
+
+function readSearchOptionalBooleanString(
+  searchParams: URLSearchParams,
+  key: string,
+  fallback: OptionalBooleanString,
+): OptionalBooleanString {
+  const value = searchParams.get(key);
   return value === "" || value === "true" || value === "false"
     ? value
     : fallback;

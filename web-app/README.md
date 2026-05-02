@@ -13,6 +13,10 @@ i zapamiętanie w `localStorage`:
 - aktywnej zakładki `Wysyłka` / `Komponenty`
 - ostatnich filtrów dla obu widoków
 
+Panel synchronizuje też aktywną zakładkę, filtry obu kolejek i otwarte
+szczegóły urządzenia z adresem URL. Dzięki temu można odświeżyć stronę albo
+wkleić link do konkretnego kontekstu pracy bez ręcznego odtwarzania stanu.
+
 Tekstowe filtry są odpytywane z debounce `250 ms`. W trakcie oczekiwania panel
 pokazuje znacznik `Oczekuje na zastosowanie`, a klawisz `Enter` wymusza
 natychmiastowe wysłanie bieżącego filtra.
