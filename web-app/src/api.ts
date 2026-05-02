@@ -47,6 +47,27 @@ export interface DeviceRead {
   updated_at: string;
 }
 
+export interface OperatorRead {
+  id: string;
+  operator_id: string;
+  full_name: string;
+  role: string;
+  rfid_uid_hash: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface WorkSessionRead {
+  id: string;
+  work_session_id: string;
+  operator_id: string;
+  workstation_id: string;
+  machine_id: string | null;
+  status: string;
+  started_at: string;
+  ended_at: string | null;
+}
+
 export interface NonconformityRead {
   id: string;
   ncr_id: string;
@@ -216,6 +237,23 @@ export interface AuditEvent {
   created_at: string;
 }
 
+export interface FinalTestCreatePayload {
+  test_run_id: string;
+  device_serial_number: string;
+  result: "PASS" | "FAIL" | "HOLD";
+  operator_id?: string;
+  firmware_version?: string;
+  bootloader_version?: string;
+  report_path?: string;
+  mcu_log_path?: string;
+  work_session_id: string;
+}
+
+export interface FinalTestRead extends FinalTestCreatePayload {
+  id: string;
+  created_at: string;
+}
+
 export interface DeviceComponentQualityQueue {
   total_devices: number;
   devices_with_issues: number;
@@ -326,6 +364,19 @@ export async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T
   return requestJson<T>(url, { signal });
 }
 
+export async function postJson<T>(
+  url: string,
+  body: unknown,
+  signal?: AbortSignal,
+): Promise<T> {
+  return requestJson<T>(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal,
+  });
+}
+
 export async function patchJson<T>(
   url: string,
   body: unknown,
@@ -365,6 +416,38 @@ export async function updateNonconformityStatus(
       status,
       ...(correctiveAction ? { corrective_action: correctiveAction } : {}),
     },
+    signal,
+  );
+}
+
+export async function listWorkSessions(
+  apiBaseUrl: string,
+  signal?: AbortSignal,
+): Promise<WorkSessionRead[]> {
+  return fetchJson<WorkSessionRead[]>(
+    joinApiUrl(apiBaseUrl, "/work-sessions"),
+    signal,
+  );
+}
+
+export async function listOperators(
+  apiBaseUrl: string,
+  signal?: AbortSignal,
+): Promise<OperatorRead[]> {
+  return fetchJson<OperatorRead[]>(
+    joinApiUrl(apiBaseUrl, "/operators"),
+    signal,
+  );
+}
+
+export async function createFinalTest(
+  apiBaseUrl: string,
+  payload: FinalTestCreatePayload,
+  signal?: AbortSignal,
+): Promise<FinalTestRead> {
+  return postJson<FinalTestRead>(
+    joinApiUrl(apiBaseUrl, "/final-tests"),
+    payload,
     signal,
   );
 }

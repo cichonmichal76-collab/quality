@@ -3,8 +3,11 @@ import type { ChangeEvent, CSSProperties, ReactNode } from "react";
 
 import {
   buildQuery,
+  createFinalTest,
   fetchJson,
   joinApiUrl,
+  listOperators,
+  listWorkSessions,
   optionalBoolean,
   updateDeviceStatus,
   updateNonconformityStatus,
@@ -17,7 +20,9 @@ import type {
   DeviceShipmentQueue,
   DeviceShipmentReadiness,
   LoadState,
+  OperatorRead,
   QueryValue,
+  WorkSessionRead,
 } from "./api";
 import {
   formatDateTime,
@@ -32,8 +37,15 @@ const API_STORAGE_KEY = "servicetrace.web.apiBaseUrl";
 const VIEW_STORAGE_KEY = "servicetrace.web.activeView";
 const SHIPMENT_FILTERS_STORAGE_KEY = "servicetrace.web.shipmentFilters";
 const COMPONENT_FILTERS_STORAGE_KEY = "servicetrace.web.componentFilters";
+const FINAL_TEST_SESSION_STORAGE_KEY =
+  "servicetrace.web.finalTestWorkSessionId";
 const DEFAULT_API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 const TEXT_FILTER_DEBOUNCE_MS = 250;
+const FINAL_TEST_ALLOWED_ROLES = new Set([
+  "ADMIN",
+  "FINAL_TEST_OPERATOR",
+  "QUALITY_MANAGER",
+]);
 
 const PRODUCTION_STATUS_OPTIONS = [
   "CREATED",
@@ -144,6 +156,15 @@ interface DeviceDetailsPayload {
   shipmentGateHistory: AuditEvent[];
 }
 
+interface ActionWorkSessionOption {
+  workSessionId: string;
+  operatorId: string;
+  workstationId: string;
+  machineId: string | null;
+  role: string;
+  label: string;
+}
+
 const SHIPMENT_TEXT_FILTER_KEYS: Array<keyof ShipmentFilters> = [
   "device_type",
   "variant_code",
@@ -244,6 +265,15 @@ export function App() {
   const [deviceActionSuccess, setDeviceActionSuccess] = useState<string | null>(
     null,
   );
+  const [workSessions, setWorkSessions] = useState<WorkSessionRead[]>([]);
+  const [operators, setOperators] = useState<OperatorRead[]>([]);
+  const [actionContextState, setActionContextState] =
+    useState<LoadState>("idle");
+  const [actionContextError, setActionContextError] = useState<string | null>(
+    null,
+  );
+  const [selectedFinalTestSessionId, setSelectedFinalTestSessionId] =
+    useState(() => localStorage.getItem(FINAL_TEST_SESSION_STORAGE_KEY) ?? "");
   const [refreshVersion, setRefreshVersion] = useState(0);
   const activePath =
     activeView === "shipment" ? "/shipment-readiness" : "/component-quality";
@@ -252,6 +282,19 @@ export function App() {
       ? shipmentRequestFilters
       : componentRequestFilters;
   const selectedDeviceSerial = selectedDevice?.serialNumber ?? null;
+  const requiresFinalTestAction =
+    deviceDetails?.shipment.recommended_action === "RUN_FINAL_TEST";
+  const finalTestSessionOptions = buildActionWorkSessionOptions(
+    workSessions,
+    operators,
+    FINAL_TEST_ALLOWED_ROLES,
+  );
+  const selectedFinalTestSession =
+    finalTestSessionOptions.find(
+      (session) => session.workSessionId === selectedFinalTestSessionId,
+    ) ??
+    finalTestSessionOptions[0] ??
+    null;
 
   const clearActiveViewData = (view: DashboardMode) => {
     if (view === "shipment") {
@@ -295,6 +338,18 @@ export function App() {
       JSON.stringify(componentFilters),
     );
   }, [componentFilters]);
+
+  useEffect(() => {
+    if (selectedFinalTestSessionId) {
+      localStorage.setItem(
+        FINAL_TEST_SESSION_STORAGE_KEY,
+        selectedFinalTestSessionId,
+      );
+      return;
+    }
+
+    localStorage.removeItem(FINAL_TEST_SESSION_STORAGE_KEY);
+  }, [selectedFinalTestSessionId]);
 
   useEffect(() => {
     if (!apiBaseUrl.trim()) {
@@ -425,6 +480,77 @@ export function App() {
   }, [apiBaseUrl, refreshVersion, selectedDeviceSerial]);
 
   useEffect(() => {
+    if (!selectedDeviceSerial || !requiresFinalTestAction) {
+      setWorkSessions([]);
+      setOperators([]);
+      setActionContextState("idle");
+      setActionContextError(null);
+      return;
+    }
+
+    if (!apiBaseUrl.trim()) {
+      setWorkSessions([]);
+      setOperators([]);
+      setActionContextState("error");
+      setActionContextError("Podaj bazowy adres API.");
+      return;
+    }
+
+    const controller = new AbortController();
+    let isCurrentRequest = true;
+
+    setActionContextState("loading");
+    setActionContextError(null);
+
+    Promise.all([
+      listWorkSessions(apiBaseUrl.trim(), controller.signal),
+      listOperators(apiBaseUrl.trim(), controller.signal),
+    ])
+      .then(([sessionRows, operatorRows]) => {
+        if (!isCurrentRequest) {
+          return;
+        }
+
+        setWorkSessions(sessionRows);
+        setOperators(operatorRows);
+        setActionContextState("loaded");
+      })
+      .catch((error: unknown) => {
+        if (!isCurrentRequest || isAbortError(error)) {
+          return;
+        }
+
+        setWorkSessions([]);
+        setOperators([]);
+        setActionContextState("error");
+        setActionContextError(
+          error instanceof Error ? error.message : String(error),
+        );
+      });
+
+    return () => {
+      isCurrentRequest = false;
+      controller.abort();
+    };
+  }, [apiBaseUrl, requiresFinalTestAction, selectedDeviceSerial]);
+
+  useEffect(() => {
+    if (finalTestSessionOptions.length === 0) {
+      if (selectedFinalTestSessionId !== "") {
+        setSelectedFinalTestSessionId("");
+      }
+      return;
+    }
+
+    const isSelectedSessionAvailable = finalTestSessionOptions.some(
+      (session) => session.workSessionId === selectedFinalTestSessionId,
+    );
+    if (!isSelectedSessionAvailable) {
+      setSelectedFinalTestSessionId(finalTestSessionOptions[0].workSessionId);
+    }
+  }, [finalTestSessionOptions, selectedFinalTestSessionId]);
+
+  useEffect(() => {
     setDeviceActionState("idle");
     setDeviceActionError(null);
     setDeviceActionSuccess(null);
@@ -478,6 +604,53 @@ export function App() {
       "SHIPPED",
       "Urządzenie oznaczone jako wysłane.",
     );
+  };
+
+  const recordSelectedDeviceFinalTest = async (result: "PASS" | "FAIL") => {
+    if (!selectedDeviceSerial || deviceActionState === "loading") {
+      return;
+    }
+
+    if (!apiBaseUrl.trim()) {
+      setDeviceActionState("error");
+      setDeviceActionError("Podaj bazowy adres API.");
+      setDeviceActionSuccess(null);
+      return;
+    }
+
+    if (!selectedFinalTestSession) {
+      setDeviceActionState("error");
+      setDeviceActionError(
+        "Wybierz aktywną sesję final test z uprawnioną rolą.",
+      );
+      setDeviceActionSuccess(null);
+      return;
+    }
+
+    setDeviceActionState("loading");
+    setDeviceActionError(null);
+    setDeviceActionSuccess(null);
+
+    try {
+      await createFinalTest(apiBaseUrl.trim(), {
+        test_run_id: buildClientRunId("FT-WEB", selectedDeviceSerial),
+        device_serial_number: selectedDeviceSerial,
+        result,
+        work_session_id: selectedFinalTestSession.workSessionId,
+      });
+      setDeviceActionState("loaded");
+      setDeviceActionSuccess(
+        result === "PASS"
+          ? "Zapisano final test PASS."
+          : "Zapisano final test FAIL i otwarto krytyczne NCR.",
+      );
+      setRefreshVersion((previous) => previous + 1);
+    } catch (error: unknown) {
+      setDeviceActionState("error");
+      setDeviceActionError(
+        error instanceof Error ? error.message : String(error),
+      );
+    }
   };
 
   const closeSelectedNonconformities = async (
@@ -587,6 +760,7 @@ export function App() {
     localStorage.removeItem(VIEW_STORAGE_KEY);
     localStorage.removeItem(SHIPMENT_FILTERS_STORAGE_KEY);
     localStorage.removeItem(COMPONENT_FILTERS_STORAGE_KEY);
+    localStorage.removeItem(FINAL_TEST_SESSION_STORAGE_KEY);
 
     flushShipmentRequestFilters(DEFAULT_SHIPMENT_FILTERS);
     flushComponentRequestFilters(DEFAULT_COMPONENT_FILTERS);
@@ -594,6 +768,7 @@ export function App() {
     setActiveView("shipment");
     setShipmentFilters(DEFAULT_SHIPMENT_FILTERS);
     setComponentFilters(DEFAULT_COMPONENT_FILTERS);
+    setSelectedFinalTestSessionId("");
     setSelectedDevice(null);
     setDeviceDetails(null);
     setDeviceDetailsState("idle");
@@ -731,8 +906,15 @@ export function App() {
             actionState={deviceActionState}
             actionErrorMessage={deviceActionError}
             actionSuccessMessage={deviceActionSuccess}
+            actionContextState={actionContextState}
+            actionContextError={actionContextError}
+            finalTestSessionOptions={finalTestSessionOptions}
+            selectedFinalTestSessionId={selectedFinalTestSession?.workSessionId ?? ""}
+            onSelectFinalTestSession={setSelectedFinalTestSessionId}
             onMarkReadyForShipment={markSelectedDeviceReadyForShipment}
             onMarkShipped={markSelectedDeviceShipped}
+            onRecordFinalTestPass={() => recordSelectedDeviceFinalTest("PASS")}
+            onRecordFinalTestFail={() => recordSelectedDeviceFinalTest("FAIL")}
             onCloseDeviceCriticalNcrs={closeSelectedDeviceCriticalNcrs}
             onCloseComponentCriticalNcrs={closeSelectedComponentCriticalNcrs}
             onClose={() => setSelectedDevice(null)}
@@ -1469,8 +1651,15 @@ function DeviceDetailsDrawer({
   actionState,
   actionErrorMessage,
   actionSuccessMessage,
+  actionContextState,
+  actionContextError,
+  finalTestSessionOptions,
+  selectedFinalTestSessionId,
+  onSelectFinalTestSession,
   onMarkReadyForShipment,
   onMarkShipped,
+  onRecordFinalTestPass,
+  onRecordFinalTestFail,
   onCloseDeviceCriticalNcrs,
   onCloseComponentCriticalNcrs,
   onClose,
@@ -1482,8 +1671,15 @@ function DeviceDetailsDrawer({
   actionState: LoadState;
   actionErrorMessage: string | null;
   actionSuccessMessage: string | null;
+  actionContextState: LoadState;
+  actionContextError: string | null;
+  finalTestSessionOptions: ActionWorkSessionOption[];
+  selectedFinalTestSessionId: string;
+  onSelectFinalTestSession: (workSessionId: string) => void;
   onMarkReadyForShipment: () => void;
   onMarkShipped: () => void;
+  onRecordFinalTestPass: () => void;
+  onRecordFinalTestFail: () => void;
   onCloseDeviceCriticalNcrs: () => void;
   onCloseComponentCriticalNcrs: () => void;
   onClose: () => void;
@@ -1501,6 +1697,8 @@ function DeviceDetailsDrawer({
     shipment.production_status !== "READY_FOR_SHIPMENT" &&
     shipment.can_transition_to_ready_for_shipment &&
     shipment.recommended_action === "MARK_READY_FOR_SHIPMENT";
+  const canRecordFinalTest =
+    shipment !== null && shipment.recommended_action === "RUN_FINAL_TEST";
   const canMarkShipped =
     shipment?.production_status === "READY_FOR_SHIPMENT";
   const isAlreadyShipped = shipment?.production_status === "SHIPPED";
@@ -1635,6 +1833,86 @@ function DeviceDetailsDrawer({
                       ? "Oznaczam..."
                       : "Oznacz jako wysłane"}
                   </button>
+                </div>
+              ) : canRecordFinalTest ? (
+                <div className="action-row">
+                  <div className="action-copy">
+                    <strong>Urządzenie wymaga final testu.</strong>
+                    <span>
+                      Wybierz aktywną sesję operatora final test i zapisz
+                      bezpośrednio wynik <code>PASS</code> albo <code>FAIL</code>.
+                    </span>
+                    <label className="field action-field">
+                      <span>Sesja final test</span>
+                      <select
+                        value={selectedFinalTestSessionId}
+                        onChange={(event) =>
+                          onSelectFinalTestSession(event.target.value)
+                        }
+                        disabled={
+                          actionState === "loading" ||
+                          actionContextState === "loading" ||
+                          finalTestSessionOptions.length === 0
+                        }
+                      >
+                        {finalTestSessionOptions.length === 0 ? (
+                          <option value="">
+                            {actionContextState === "loading"
+                              ? "Ładowanie aktywnych sesji..."
+                              : "Brak aktywnej sesji final test"}
+                          </option>
+                        ) : (
+                          finalTestSessionOptions.map((session) => (
+                            <option
+                              key={session.workSessionId}
+                              value={session.workSessionId}
+                            >
+                              {session.label}
+                            </option>
+                          ))
+                        )}
+                      </select>
+                    </label>
+                    {actionContextError ? (
+                      <span className="action-hint">{actionContextError}</span>
+                    ) : finalTestSessionOptions.length === 0 &&
+                      actionContextState !== "loading" ? (
+                      <span className="action-hint">
+                        Brak aktywnej sesji z rolą final test. Uruchom sesję
+                        `FINAL_TEST_OPERATOR` albo `QUALITY_MANAGER`.
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="action-buttons">
+                    <button
+                      className="primary-button action-button"
+                      type="button"
+                      onClick={onRecordFinalTestPass}
+                      disabled={
+                        actionState === "loading" ||
+                        actionContextState === "loading" ||
+                        selectedFinalTestSessionId === ""
+                      }
+                    >
+                      {actionState === "loading"
+                        ? "Zapisuję..."
+                        : "Zapisz final test PASS"}
+                    </button>
+                    <button
+                      className="ghost-button action-button"
+                      type="button"
+                      onClick={onRecordFinalTestFail}
+                      disabled={
+                        actionState === "loading" ||
+                        actionContextState === "loading" ||
+                        selectedFinalTestSessionId === ""
+                      }
+                    >
+                      {actionState === "loading"
+                        ? "Zapisuję..."
+                        : "Zapisz final test FAIL"}
+                    </button>
+                  </div>
                 </div>
               ) : isAlreadyShipped ? (
                 <div className="action-banner action-banner-success">
@@ -2097,6 +2375,60 @@ function MetricCard({
       <p>{caption}</p>
     </article>
   );
+}
+
+function buildActionWorkSessionOptions(
+  sessions: WorkSessionRead[],
+  operators: OperatorRead[],
+  allowedRoles: Set<string>,
+): ActionWorkSessionOption[] {
+  const operatorsById = new Map(
+    operators.map((operator) => [operator.operator_id, operator]),
+  );
+
+  return sessions
+    .filter((session) => session.status === "ACTIVE" && session.ended_at === null)
+    .map((session) => {
+      const operator = operatorsById.get(session.operator_id);
+
+      if (
+        !operator ||
+        !operator.is_active ||
+        !allowedRoles.has(operator.role)
+      ) {
+        return null;
+      }
+
+      return {
+        workSessionId: session.work_session_id,
+        operatorId: session.operator_id,
+        workstationId: session.workstation_id,
+        machineId: session.machine_id,
+        role: operator.role,
+        label: `${operator.full_name} (${operator.operator_id}) · ${formatOperatorRole(
+          operator.role,
+        )} · ${session.workstation_id}`,
+      };
+    })
+    .filter((session): session is ActionWorkSessionOption => session !== null);
+}
+
+function formatOperatorRole(role: string): string {
+  return role
+    .toLowerCase()
+    .split("_")
+    .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
+    .join(" ");
+}
+
+function buildClientRunId(prefix: string, serialNumber: string): string {
+  const normalizedSerial = serialNumber
+    .replace(/[^A-Za-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toUpperCase()
+    .slice(-18);
+
+  return `${prefix}-${normalizedSerial || "DEVICE"}-${Date.now().toString(36).toUpperCase()}`;
 }
 
 function StatusBadge({ loadState }: { loadState: LoadState }) {

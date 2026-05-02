@@ -22,11 +22,17 @@ Drawer łączy dane z shipment readiness, component quality i historii shipment
 gate, żeby od razu pokazać blokady, rekomendowaną akcję, stan BOM oraz
 szczegóły blokujących komponentów.
 
-Drawer nie jest już tylko podglądem. Panel pozwala teraz wykonać trzy
+Drawer nie jest już tylko podglądem. Panel pozwala teraz wykonać cztery
 bezpośrednie kroki operacyjne:
 - `Oznacz gotowe do wysyłki` dla urządzeń, które przechodzą shipment gate
 - `Oznacz jako wysłane` dla urządzeń już gotowych do wysyłki
 - `Zamknij krytyczne NCR` dla blokujących NCR urządzenia albo komponentów
+- `Zapisz final test PASS/FAIL` dla urządzeń z rekomendacją `RUN_FINAL_TEST`
+
+Akcja final test korzysta z aktywnej sesji operatora o roli `FINAL_TEST_OPERATOR`,
+`QUALITY_MANAGER` albo `ADMIN`. Panel sam pobiera aktywne sesje z backendu
+(`GET /api/work-sessions` + `GET /api/operators`) i pozwala wybrać właściwy
+kontekst bez ręcznego wpisywania `work_session_id`.
 
 ## Uruchomienie lokalne
 
@@ -87,4 +93,5 @@ npm run e2e
 odtworzenie aktywnej zakładki i filtrów po przeładowaniu strony, reset
 zapisanego stanu do wartości domyślnych, otwarcie drawera szczegółów
 urządzenia z kolejki komponentów oraz mockowane scenariusze wykonania akcji
-`Oznacz gotowe do wysyłki`, `Oznacz jako wysłane` i `Zamknij krytyczne NCR`.
+`Oznacz gotowe do wysyłki`, `Oznacz jako wysłane`, `Zamknij krytyczne NCR`
+oraz `Zapisz final test PASS`.

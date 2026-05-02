@@ -15,6 +15,8 @@ import type {
   DeviceComponentQualityQueue,
   DeviceShipmentQueue,
   DeviceShipmentReadiness,
+  OperatorRead,
+  WorkSessionRead,
 } from "./api";
 
 const API_STORAGE_KEY = "servicetrace.web.apiBaseUrl";
@@ -513,6 +515,151 @@ const shipmentGateHistoryShippedPayload: AuditEvent[] = [
   },
   ...shipmentGateHistoryReadyPayload,
 ];
+
+const operatorsPayload: OperatorRead[] = [
+  {
+    id: "OP-ROW-FT-001",
+    operator_id: "OP-FT-001",
+    full_name: "Final Tester",
+    role: "FINAL_TEST_OPERATOR",
+    rfid_uid_hash: "RFID-FT-001",
+    is_active: true,
+    created_at: "2026-05-01T07:50:00Z",
+  },
+  {
+    id: "OP-ROW-PROD-001",
+    operator_id: "OP-PROD-001",
+    full_name: "Production Operator",
+    role: "PRODUCTION_OPERATOR",
+    rfid_uid_hash: "RFID-PROD-001",
+    is_active: true,
+    created_at: "2026-05-01T07:40:00Z",
+  },
+];
+
+const workSessionsPayload: WorkSessionRead[] = [
+  {
+    id: "WS-ROW-FT-001",
+    work_session_id: "WS-FT-001",
+    operator_id: "OP-FT-001",
+    workstation_id: "FT-ST-01",
+    machine_id: "FT-MC-01",
+    status: "ACTIVE",
+    started_at: "2026-05-01T08:00:00Z",
+    ended_at: null,
+  },
+  {
+    id: "WS-ROW-PROD-001",
+    work_session_id: "WS-PROD-001",
+    operator_id: "OP-PROD-001",
+    workstation_id: "PR-ST-01",
+    machine_id: "PR-MC-01",
+    status: "ACTIVE",
+    started_at: "2026-05-01T07:55:00Z",
+    ended_at: null,
+  },
+];
+
+const shipmentFinalTestQueuePayload: DeviceShipmentQueue = {
+  ...shipmentPayload,
+  ready_count: 0,
+  blocked_count: 1,
+  recommended_action_summary: [
+    {
+      recommended_action: "RUN_FINAL_TEST",
+      device_count: 1,
+    },
+  ],
+  latest_shipment_gate_result_summary: [],
+  production_status_summary: [
+    {
+      production_status: "CREATED",
+      device_count: 1,
+    },
+  ],
+  devices: [
+    {
+      ...shipmentPayload.devices[0],
+      device_serial_number: "TEST-001",
+      production_status: "CREATED",
+      device_updated_at: "2026-05-01T08:45:00Z",
+      final_test_passed: false,
+      can_transition_to_ready_for_shipment: false,
+      latest_shipment_gate_decision: null,
+      primary_blocking_code: "FINAL_TEST_NOT_PASSED",
+      primary_blocking_message: "Final test not passed",
+      recommended_action: "RUN_FINAL_TEST",
+      blocking_reasons: ["Final test not passed"],
+    },
+  ],
+};
+
+const shipmentFinalTestDetailsPayload: DeviceShipmentReadiness = {
+  ...shipmentFinalTestQueuePayload.devices[0],
+  bom_compliance: {
+    ...shipmentActionDetailsPayload.bom_compliance,
+    device_serial_number: "TEST-001",
+    production_status: "CREATED",
+  },
+  blocking_checks: [
+    {
+      code: "FINAL_TEST_NOT_PASSED",
+      is_blocking: true,
+      message: "Final test not passed",
+      details: [],
+    },
+  ],
+};
+
+const shipmentFinalTestComponentDetailsPayload: DeviceComponentQuality = {
+  ...shipmentActionComponentDetailsPayload,
+  device_serial_number: "TEST-001",
+  production_status: "CREATED",
+};
+
+const shipmentAfterFinalTestPassQueuePayload: DeviceShipmentQueue = {
+  ...shipmentPayload,
+  ready_count: 1,
+  blocked_count: 0,
+  recommended_action_summary: [
+    {
+      recommended_action: "MARK_READY_FOR_SHIPMENT",
+      device_count: 1,
+    },
+  ],
+  latest_shipment_gate_result_summary: [],
+  production_status_summary: [
+    {
+      production_status: "FINAL_TEST_PASSED",
+      device_count: 1,
+    },
+  ],
+  devices: [
+    {
+      ...shipmentPayload.devices[0],
+      device_serial_number: "TEST-001",
+      production_status: "FINAL_TEST_PASSED",
+      device_updated_at: "2026-05-01T09:10:00Z",
+      final_test_passed: true,
+      can_transition_to_ready_for_shipment: true,
+      latest_shipment_gate_decision: null,
+      primary_blocking_code: null,
+      primary_blocking_message: null,
+      recommended_action: "MARK_READY_FOR_SHIPMENT",
+      blocking_reasons: [],
+    },
+  ],
+};
+
+const shipmentAfterFinalTestPassDetailsPayload: DeviceShipmentReadiness = {
+  ...shipmentAfterFinalTestPassQueuePayload.devices[0],
+  bom_compliance: {
+    ...shipmentActionDetailsPayload.bom_compliance,
+    device_serial_number: "TEST-001",
+    production_status: "FINAL_TEST_PASSED",
+  },
+  blocking_checks: [],
+};
 
 const paginatedShipmentPageOnePayload: DeviceShipmentQueue = {
   ...shipmentPayload,
@@ -1025,6 +1172,123 @@ describe("App", () => {
     expect(
       screen.queryByRole("button", { name: "Oznacz jako wysłane" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("records final test PASS from the details drawer with an active work session", async () => {
+    let finalTestRecorded = false;
+    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+
+      if (url.startsWith("/api/shipment-readiness")) {
+        return Promise.resolve(
+          createJsonResponse(
+            finalTestRecorded
+              ? shipmentAfterFinalTestPassQueuePayload
+              : shipmentFinalTestQueuePayload,
+          ),
+        );
+      }
+
+      if (url === "/api/devices/TEST-001/shipment-readiness") {
+        return Promise.resolve(
+          createJsonResponse(
+            finalTestRecorded
+              ? shipmentAfterFinalTestPassDetailsPayload
+              : shipmentFinalTestDetailsPayload,
+          ),
+        );
+      }
+
+      if (url === "/api/devices/TEST-001/component-quality") {
+        return Promise.resolve(
+          createJsonResponse(shipmentFinalTestComponentDetailsPayload),
+        );
+      }
+
+      if (url === "/api/devices/TEST-001/shipment-gate-history?limit=10") {
+        return Promise.resolve(createJsonResponse([]));
+      }
+
+      if (url === "/api/work-sessions") {
+        return Promise.resolve(createJsonResponse(workSessionsPayload));
+      }
+
+      if (url === "/api/operators") {
+        return Promise.resolve(createJsonResponse(operatorsPayload));
+      }
+
+      if (url === "/api/final-tests" && method === "POST") {
+        finalTestRecorded = true;
+        const body = JSON.parse(String(init?.body)) as {
+          test_run_id: string;
+          device_serial_number: string;
+          result: string;
+          work_session_id: string;
+        };
+
+        expect(body.device_serial_number).toBe("TEST-001");
+        expect(body.result).toBe("PASS");
+        expect(body.work_session_id).toBe("WS-FT-001");
+        expect(body.test_run_id).toMatch(/^FT-WEB-TEST-001-/);
+
+        return Promise.resolve(
+          createJsonResponse({
+            id: "FT-ROW-001",
+            test_run_id: body.test_run_id,
+            device_serial_number: "TEST-001",
+            operator_id: "OP-FT-001",
+            result: "PASS",
+            firmware_version: null,
+            bootloader_version: null,
+            report_path: null,
+            mcu_log_path: null,
+            work_session_id: "WS-FT-001",
+            created_at: "2026-05-01T09:10:00Z",
+          }),
+        );
+      }
+
+      throw new Error(`Unexpected request: ${method} ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "TEST-001" }));
+
+    const finalTestSessionSelect = await screen.findByLabelText(
+      "Sesja final test",
+    );
+    await waitFor(() =>
+      expect(finalTestSessionSelect).toHaveValue("WS-FT-001"),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Zapisz final test PASS" }),
+    );
+
+    expect(
+      await screen.findByText("Zapisano final test PASS."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Zapisz final test PASS" }),
+    ).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/final-tests",
+        expect.objectContaining({
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+        }),
+      );
+    });
   });
 
   it("closes device critical NCRs from the details drawer", async () => {

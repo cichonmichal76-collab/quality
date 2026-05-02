@@ -616,6 +616,23 @@ td span {
   color: var(--muted);
 }
 
+.action-field {
+  margin-top: 8px;
+  max-width: 28rem;
+}
+
+.action-hint {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .action-button {
   min-width: 220px;
 }
@@ -870,6 +887,10 @@ td span {
   .action-button {
     width: 100%;
     min-width: 0;
+  }
+
+  .action-buttons {
+    width: 100%;
   }
 
   .pagination-actions {

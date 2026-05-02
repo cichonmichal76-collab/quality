@@ -180,6 +180,146 @@ const shipmentShippedQueuePayload = {
   ],
 };
 
+const operatorsPayload = [
+  {
+    id: "OP-ROW-FT-001",
+    operator_id: "OP-FT-001",
+    full_name: "Final Tester",
+    role: "FINAL_TEST_OPERATOR",
+    rfid_uid_hash: "RFID-FT-001",
+    is_active: true,
+    created_at: "2026-05-01T07:50:00Z",
+  },
+];
+
+const workSessionsPayload = [
+  {
+    id: "WS-ROW-FT-001",
+    work_session_id: "WS-FT-001",
+    operator_id: "OP-FT-001",
+    workstation_id: "FT-ST-01",
+    machine_id: "FT-MC-01",
+    status: "ACTIVE",
+    started_at: "2026-05-01T08:00:00Z",
+    ended_at: null,
+  },
+];
+
+const shipmentFinalTestQueuePayload = {
+  ...shipmentQueuePayload,
+  ready_count: 0,
+  blocked_count: 1,
+  recommended_action_summary: [
+    { recommended_action: "RUN_FINAL_TEST", device_count: 1 },
+  ],
+  latest_shipment_gate_result_summary: [],
+  production_status_summary: [
+    { production_status: "CREATED", device_count: 1 },
+  ],
+  devices: [
+    {
+      ...shipmentQueuePayload.devices[0],
+      device_serial_number: "TEST-001",
+      production_status: "CREATED",
+      device_updated_at: "2026-05-01T08:45:00Z",
+      final_test_passed: false,
+      can_transition_to_ready_for_shipment: false,
+      latest_shipment_gate_decision: null,
+      primary_blocking_code: "FINAL_TEST_NOT_PASSED",
+      primary_blocking_message: "Final test not passed",
+      recommended_action: "RUN_FINAL_TEST",
+      blocking_reasons: ["Final test not passed"],
+      blocking_checks: [
+        {
+          code: "FINAL_TEST_NOT_PASSED",
+          is_blocking: true,
+          message: "Final test not passed",
+          details: [],
+        },
+      ],
+    },
+  ],
+};
+
+const shipmentFinalTestDetailsPayload = {
+  ...shipmentFinalTestQueuePayload.devices[0],
+  bom_compliance: {
+    device_serial_number: "TEST-001",
+    device_type: "DEMO-OPS",
+    device_variant_code: "DEFAULT",
+    production_status: "CREATED",
+    resolution_source: "BOUND_TEMPLATE",
+    resolved_template_id: "BOM-01",
+    resolved_variant_code: "DEFAULT",
+    resolved_version: "1.2",
+    resolved_status: "ACTIVE",
+    resolved_is_active: true,
+    resolved_is_effective_now: true,
+    is_bom_resolved: true,
+    passes_bom_gate: true,
+    installed_component_count: 1,
+    missing_required_components: [],
+    over_installed_components: [],
+    unexpected_component_types: [],
+    component_coverage: [
+      {
+        component_type: "CONTROL_PCB",
+        substitution_group: null,
+        allowed_component_types: null,
+        required_quantity: 1,
+        installed_quantity: 1,
+        is_required: true,
+        status: "PASS",
+      },
+    ],
+    blocking_reason: null,
+  },
+};
+
+const componentFinalTestDetailsPayload = {
+  ...componentDetailsPayload,
+  device_serial_number: "TEST-001",
+  production_status: "CREATED",
+};
+
+const shipmentAfterFinalTestPassQueuePayload = {
+  ...shipmentQueuePayload,
+  ready_count: 1,
+  blocked_count: 0,
+  recommended_action_summary: [
+    { recommended_action: "MARK_READY_FOR_SHIPMENT", device_count: 1 },
+  ],
+  latest_shipment_gate_result_summary: [],
+  production_status_summary: [
+    { production_status: "FINAL_TEST_PASSED", device_count: 1 },
+  ],
+  devices: [
+    {
+      ...shipmentQueuePayload.devices[0],
+      device_serial_number: "TEST-001",
+      production_status: "FINAL_TEST_PASSED",
+      device_updated_at: "2026-05-01T09:10:00Z",
+      final_test_passed: true,
+      can_transition_to_ready_for_shipment: true,
+      latest_shipment_gate_decision: null,
+      primary_blocking_code: null,
+      primary_blocking_message: null,
+      recommended_action: "MARK_READY_FOR_SHIPMENT",
+      blocking_reasons: [],
+      blocking_checks: [],
+    },
+  ],
+};
+
+const shipmentAfterFinalTestPassDetailsPayload = {
+  ...shipmentAfterFinalTestPassQueuePayload.devices[0],
+  bom_compliance: {
+    ...shipmentDetailsPayload.bom_compliance,
+    device_serial_number: "TEST-001",
+    production_status: "FINAL_TEST_PASSED",
+  },
+};
+
 test("dashboard marks device ready for shipment from the details drawer", async ({
   page,
 }) => {
@@ -461,6 +601,134 @@ test("dashboard marks ready device as shipped from the details drawer", async ({
     drawer.getByRole("button", { name: "Oznacz jako wysłane" }),
   ).toHaveCount(0);
   expect(patchRequests).toBe(1);
+});
+
+test("dashboard records final test PASS from the details drawer", async ({
+  page,
+}) => {
+  let finalTestRecorded = false;
+  let postRequests = 0;
+
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const path = url.pathname;
+
+    if (path === "/api/shipment-readiness") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(
+          finalTestRecorded
+            ? shipmentAfterFinalTestPassQueuePayload
+            : shipmentFinalTestQueuePayload,
+        ),
+      });
+      return;
+    }
+
+    if (path === "/api/devices/TEST-001/shipment-readiness") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(
+          finalTestRecorded
+            ? shipmentAfterFinalTestPassDetailsPayload
+            : shipmentFinalTestDetailsPayload,
+        ),
+      });
+      return;
+    }
+
+    if (path === "/api/devices/TEST-001/component-quality") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(componentFinalTestDetailsPayload),
+      });
+      return;
+    }
+
+    if (path === "/api/devices/TEST-001/shipment-gate-history") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([]),
+      });
+      return;
+    }
+
+    if (path === "/api/work-sessions") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(workSessionsPayload),
+      });
+      return;
+    }
+
+    if (path === "/api/operators") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(operatorsPayload),
+      });
+      return;
+    }
+
+    if (path === "/api/final-tests" && request.method() === "POST") {
+      postRequests += 1;
+      const payload = request.postDataJSON() as {
+        test_run_id: string;
+        device_serial_number: string;
+        result: string;
+        work_session_id: string;
+      };
+
+      expect(payload.device_serial_number).toBe("TEST-001");
+      expect(payload.result).toBe("PASS");
+      expect(payload.work_session_id).toBe("WS-FT-001");
+      expect(payload.test_run_id).toMatch(/^FT-WEB-TEST-001-/);
+      finalTestRecorded = true;
+
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: "FT-ROW-001",
+          test_run_id: payload.test_run_id,
+          device_serial_number: "TEST-001",
+          operator_id: "OP-FT-001",
+          result: "PASS",
+          firmware_version: null,
+          bootloader_version: null,
+          report_path: null,
+          mcu_log_path: null,
+          work_session_id: "WS-FT-001",
+          created_at: "2026-05-01T09:10:00Z",
+        }),
+      });
+      return;
+    }
+
+    throw new Error(`Unexpected request: ${request.method()} ${path}`);
+  });
+
+  await page.goto("/");
+
+  await expect(page.getByText("API OK")).toBeVisible();
+  await page.getByRole("button", { name: "TEST-001" }).click();
+
+  const drawer = page.getByRole("dialog");
+  await expect(drawer.getByLabel("Sesja final test")).toHaveValue("WS-FT-001");
+
+  await drawer.getByRole("button", { name: "Zapisz final test PASS" }).click();
+
+  await expect(drawer.getByText("Zapisano final test PASS.")).toBeVisible();
+  await expect(
+    drawer.getByRole("button", { name: "Zapisz final test PASS" }),
+  ).toHaveCount(0);
+  expect(postRequests).toBe(1);
 });
 
 test("dashboard closes device critical NCRs from the details drawer", async ({

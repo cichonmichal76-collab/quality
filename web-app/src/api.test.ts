@@ -2,7 +2,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   buildQuery,
+  createFinalTest,
   joinApiUrl,
+  listOperators,
+  listWorkSessions,
   optionalBoolean,
   updateDeviceStatus,
   updateNonconformityStatus,
@@ -142,6 +145,103 @@ describe("updateNonconformityStatus", () => {
         body: JSON.stringify({
           status: "CLOSED",
           corrective_action: "Zamknięte z panelu operacyjnego.",
+        }),
+      }),
+    );
+  });
+});
+
+describe("listWorkSessions", () => {
+  it("pobiera aktywne sesje pracy z API", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => [
+        {
+          work_session_id: "WS-FT-001",
+          operator_id: "OP-FT-001",
+          status: "ACTIVE",
+        },
+      ],
+    } satisfies Partial<Response>);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const payload = await listWorkSessions("/api");
+
+    expect(payload).toHaveLength(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/work-sessions",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+      }),
+    );
+  });
+});
+
+describe("listOperators", () => {
+  it("pobiera operatorów do filtrowania sesji final test", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => [
+        {
+          operator_id: "OP-FT-001",
+          role: "FINAL_TEST_OPERATOR",
+        },
+      ],
+    } satisfies Partial<Response>);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const payload = await listOperators("/api");
+
+    expect(payload[0]?.role).toBe("FINAL_TEST_OPERATOR");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/operators",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+      }),
+    );
+  });
+});
+
+describe("createFinalTest", () => {
+  it("wysyła POST zapisujący wynik final testu z work_session_id", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => ({
+        test_run_id: "FT-WEB-001",
+        device_serial_number: "TEST-001",
+        result: "PASS",
+        work_session_id: "WS-FT-001",
+      }),
+    } satisfies Partial<Response>);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const payload = await createFinalTest("/api", {
+      test_run_id: "FT-WEB-001",
+      device_serial_number: "TEST-001",
+      result: "PASS",
+      work_session_id: "WS-FT-001",
+    });
+
+    expect(payload.result).toBe("PASS");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/final-tests",
+      expect.objectContaining({
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          test_run_id: "FT-WEB-001",
+          device_serial_number: "TEST-001",
+          result: "PASS",
+          work_session_id: "WS-FT-001",
         }),
       }),
     );
