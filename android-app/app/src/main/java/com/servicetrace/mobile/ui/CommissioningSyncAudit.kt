@@ -20,6 +20,10 @@ data class SyncAuditRow(
     val attempt: SyncAttemptHistoryEntry,
 )
 
+data class SyncAuditExportOptions(
+    val redactSensitiveData: Boolean = false,
+)
+
 internal fun buildSyncAuditRows(
     drafts: List<ServiceSessionDraft>,
     filter: SyncAuditFilter = SyncAuditFilter.ALL,
@@ -63,19 +67,24 @@ internal fun buildSyncAuditJson(
     filter: SyncAuditFilter,
     exportedAtMillis: Long,
     selectedSessionId: String?,
+    options: SyncAuditExportOptions = SyncAuditExportOptions(),
 ): String = JSONObject().apply {
     put("exported_at_millis", exportedAtMillis)
     put("filter", filter.name)
-    put("selected_session_id", selectedSessionId ?: JSONObject.NULL)
+    put(
+        "selected_session_id",
+        redactAuditValue(selectedSessionId, options.redactSensitiveData) ?: JSONObject.NULL,
+    )
     put("entry_count", rows.size)
+    put("redacted", options.redactSensitiveData)
     put("rows", JSONArray().apply {
         rows.forEach { row ->
             put(
                 JSONObject().apply {
-                    put("session_id", row.sessionId)
-                    put("device_serial_number", row.deviceSerialNumber)
+                    put("session_id", redactAuditValue(row.sessionId, options.redactSensitiveData))
+                    put("device_serial_number", redactAuditValue(row.deviceSerialNumber, options.redactSensitiveData))
                     put("device_type", row.deviceType)
-                    put("technician_id", row.technicianId)
+                    put("technician_id", redactAuditValue(row.technicianId, options.redactSensitiveData))
                     put("attempt_id", row.attempt.attemptId)
                     put("attempted_at_millis", row.attempt.attemptedAtMillis)
                     put("trigger_source", row.attempt.triggerSource.name)
@@ -84,10 +93,19 @@ internal fun buildSyncAuditJson(
                     put("message", row.attempt.message)
                     put("retryable", row.attempt.retryable)
                     put("attempt_number", row.attempt.attemptNumber)
-                    put("backend_service_session_id", row.attempt.backendServiceSessionId ?: JSONObject.NULL)
+                    put(
+                        "backend_service_session_id",
+                        redactAuditValue(row.attempt.backendServiceSessionId, options.redactSensitiveData) ?: JSONObject.NULL,
+                    )
                     put("backend_upload_status", row.attempt.backendUploadStatus ?: JSONObject.NULL)
-                    put("backend_package_hash", row.attempt.backendPackageHash ?: JSONObject.NULL)
-                    put("backend_upload_correlation_id", row.attempt.backendUploadCorrelationId ?: JSONObject.NULL)
+                    put(
+                        "backend_package_hash",
+                        redactAuditValue(row.attempt.backendPackageHash, options.redactSensitiveData) ?: JSONObject.NULL,
+                    )
+                    put(
+                        "backend_upload_correlation_id",
+                        redactAuditValue(row.attempt.backendUploadCorrelationId, options.redactSensitiveData) ?: JSONObject.NULL,
+                    )
                     put("backend_uploaded_at", row.attempt.backendUploadedAtIso ?: JSONObject.NULL)
                 },
             )
@@ -111,3 +129,17 @@ private fun matchesSyncAuditFilter(
         SyncAuditFilter.FAILURES -> attempt.result == SyncAttemptResult.FAILURE
         SyncAuditFilter.SUCCESSES -> attempt.result == SyncAttemptResult.SUCCESS
     }
+
+internal fun redactAuditValue(
+    value: String?,
+    redactSensitiveData: Boolean,
+): String? {
+    if (value.isNullOrBlank()) {
+        return null
+    }
+    if (!redactSensitiveData) {
+        return value
+    }
+    val fingerprint = value.hashCode().toUInt().toString(16).uppercase().padStart(8, '0')
+    return "REDACTED-$fingerprint"
+}

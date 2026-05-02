@@ -51,6 +51,7 @@ data class CommissioningUiState(
     val lastAuditExportPath: String? = null,
     val lastAuditExportAtMillis: Long? = null,
     val lastAuditExportRowCount: Int = 0,
+    val lastAuditExportRedacted: Boolean = false,
     val bannerMessage: String? = null,
 )
 
@@ -75,6 +76,7 @@ class CommissioningViewModel(
     private val lastAuditExportPath = MutableStateFlow<String?>(null)
     private val lastAuditExportAtMillis = MutableStateFlow<Long?>(null)
     private val lastAuditExportRowCount = MutableStateFlow(0)
+    private val lastAuditExportRedacted = MutableStateFlow(false)
     private val bannerMessage = MutableStateFlow<String?>(null)
     private var lastAutoSyncReadySignature: String = ""
 
@@ -91,8 +93,9 @@ class CommissioningViewModel(
         lastAuditExportPath,
         lastAuditExportAtMillis,
         lastAuditExportRowCount,
+        lastAuditExportRedacted,
         bannerMessage,
-    ) { drafts, draftInputs, currentDraft, availableUsbDevices, permissionInFlight, currentUploadBaseUrl, currentAutoSyncEnabled, online, syncRunning, auditExportPath, auditExportAtMillis, auditExportRowCountValue, message ->
+    ) { drafts, draftInputs, currentDraft, availableUsbDevices, permissionInFlight, currentUploadBaseUrl, currentAutoSyncEnabled, online, syncRunning, auditExportPath, auditExportAtMillis, auditExportRowCountValue, auditExportRedactedValue, message ->
         val selected = currentDraft?.let { draft ->
             drafts.firstOrNull { row -> row.sessionId == draft.sessionId } ?: draft
         } ?: drafts.firstOrNull()
@@ -109,6 +112,7 @@ class CommissioningViewModel(
             lastAuditExportPath = auditExportPath,
             lastAuditExportAtMillis = auditExportAtMillis,
             lastAuditExportRowCount = auditExportRowCountValue,
+            lastAuditExportRedacted = auditExportRedactedValue,
             bannerMessage = message,
         )
     }.stateIn(
@@ -456,6 +460,7 @@ class CommissioningViewModel(
     fun exportSyncAudit(
         filter: SyncAuditFilter,
         onlySelectedDraft: Boolean,
+        redactSensitiveData: Boolean,
     ) {
         viewModelScope.launch {
             val selectedSessionId = if (onlySelectedDraft) selectedDraft.value?.sessionId else null
@@ -475,6 +480,7 @@ class CommissioningViewModel(
                     filter = filter,
                     exportedAtMillis = exportedAtMillis,
                     selectedSessionId = selectedSessionId,
+                    options = SyncAuditExportOptions(redactSensitiveData = redactSensitiveData),
                 )
                 val result = artifactStore.exportSyncAuditReport(
                     content = json,
@@ -483,7 +489,12 @@ class CommissioningViewModel(
                 lastAuditExportPath.value = result.exportPath
                 lastAuditExportAtMillis.value = result.generatedAtMillis
                 lastAuditExportRowCount.value = result.rowCount
-                bannerMessage.value = "Wyeksportowano audyt synchronizacji do JSON."
+                lastAuditExportRedacted.value = redactSensitiveData
+                bannerMessage.value = if (redactSensitiveData) {
+                    "Wyeksportowano zanonimizowany audyt synchronizacji do JSON."
+                } else {
+                    "Wyeksportowano pelny audyt synchronizacji do JSON."
+                }
             } catch (error: Exception) {
                 bannerMessage.value = error.message ?: "Nie udalo sie wyeksportowac audytu synchronizacji."
             }

@@ -25,6 +25,7 @@
 - pelna sekcja audytu synchronizacji ze wszystkimi probami, filtrem sukcesow / bledow i szybkim przejsciem do draftu
 - eksport aktualnego widoku audytu synchronizacji do lokalnego pliku JSON
 - udostepnianie ostatniego eksportu audytu synchronizacji poza aplikacje
+- przełącznik anonimizacji dla eksportu i udostepniania audytu synchronizacji
 - lokalna checklista 5 krokow
 - komentarz ogolny, firmware i bootloader
 - status `DRAFT` / `READY_TO_SYNC`
@@ -60,7 +61,7 @@ Domyslny adres backendu w aplikacji to `http://10.0.2.2:8000/api`, co pasuje do 
 1. rozszerzyc snapshoty MCU o dodatkowe artefakty diagnostyczne
 2. rozbudowac worker o upload okresowy albo bardziej agresywne wznowienia po dluzszym offline
 3. rozbudowac backend o szersza telemetry uploadu albo eksport audytu
-4. rozwazyc podpisywanie albo redagowanie eksportu audytu przed wysylka
+4. rozwazyc podpisywanie eksportu audytu albo bardziej zaawansowane polityki redakcji
 
 ## Poza zakresem MVP
 

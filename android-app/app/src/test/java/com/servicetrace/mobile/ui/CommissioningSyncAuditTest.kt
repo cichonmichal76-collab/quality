@@ -154,6 +154,7 @@ class CommissioningSyncAuditTest {
                 filter = SyncAuditFilter.SUCCESSES,
                 exportedAtMillis = 99_000L,
                 selectedSessionId = "SVC-JSON",
+                options = SyncAuditExportOptions(),
             ),
         )
         val firstRow = json.getJSONArray("rows").getJSONObject(0)
@@ -165,6 +166,50 @@ class CommissioningSyncAuditTest {
         assertEquals("SRV-UP-JSON123456", firstRow.getString("backend_upload_correlation_id"))
         assertEquals("2026-05-02T11:30:00Z", firstRow.getString("backend_uploaded_at"))
         assertTrue(firstRow.getBoolean("retryable").not())
+    }
+
+    @Test
+    fun `sync audit json export can redact sensitive fields`() {
+        val rows = buildSyncAuditRows(
+            drafts = listOf(
+                draftWithAttempts(
+                    sessionId = "SVC-REDACT",
+                    deviceSerialNumber = "DEV-REDACT",
+                    attempts = listOf(
+                        syncAttempt(
+                            attemptId = "sync-redact",
+                            attemptedAtMillis = 22_000L,
+                            result = SyncAttemptResult.SUCCESS,
+                            backendServiceSessionId = "svc-db-redact",
+                            backendUploadStatus = "UPLOADED",
+                            backendPackageHash = "hash-redact",
+                            backendUploadCorrelationId = "SRV-UP-REDACT123",
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        val json = JSONObject(
+            buildSyncAuditJson(
+                rows = rows,
+                filter = SyncAuditFilter.SUCCESSES,
+                exportedAtMillis = 111_000L,
+                selectedSessionId = "SVC-REDACT",
+                options = SyncAuditExportOptions(redactSensitiveData = true),
+            ),
+        )
+        val firstRow = json.getJSONArray("rows").getJSONObject(0)
+
+        assertTrue(json.getBoolean("redacted"))
+        assertTrue(json.getString("selected_session_id").startsWith("REDACTED-"))
+        assertTrue(firstRow.getString("session_id").startsWith("REDACTED-"))
+        assertTrue(firstRow.getString("device_serial_number").startsWith("REDACTED-"))
+        assertTrue(firstRow.getString("technician_id").startsWith("REDACTED-"))
+        assertTrue(firstRow.getString("backend_service_session_id").startsWith("REDACTED-"))
+        assertTrue(firstRow.getString("backend_package_hash").startsWith("REDACTED-"))
+        assertTrue(firstRow.getString("backend_upload_correlation_id").startsWith("REDACTED-"))
+        assertEquals("UPLOADED", firstRow.getString("backend_upload_status"))
     }
 
     private fun draftWithAttempts(

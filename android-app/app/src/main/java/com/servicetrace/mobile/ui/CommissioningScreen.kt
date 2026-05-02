@@ -154,7 +154,7 @@ private fun CommissioningScreen(
     onSelectUsbDevice: (String) -> Unit,
     onRequestUsbPermission: () -> Unit,
     onConnectToMcu: () -> Unit,
-    onExportSyncAudit: (SyncAuditFilter, Boolean) -> Unit,
+    onExportSyncAudit: (SyncAuditFilter, Boolean, Boolean) -> Unit,
     onShareSyncAudit: () -> Unit,
     onCapturePhoto: () -> Unit,
     onAddPhotoFromGallery: () -> Unit,
@@ -219,6 +219,7 @@ private fun CommissioningScreen(
                 lastAuditExportPath = uiState.lastAuditExportPath,
                 lastAuditExportAtMillis = uiState.lastAuditExportAtMillis,
                 lastAuditExportRowCount = uiState.lastAuditExportRowCount,
+                lastAuditExportRedacted = uiState.lastAuditExportRedacted,
                 onSelectDraft = onSelectDraft,
                 onExportSyncAudit = onExportSyncAudit,
                 onShareSyncAudit = onShareSyncAudit,
@@ -257,12 +258,14 @@ private fun SyncAuditSection(
     lastAuditExportPath: String?,
     lastAuditExportAtMillis: Long?,
     lastAuditExportRowCount: Int,
+    lastAuditExportRedacted: Boolean,
     onSelectDraft: (String) -> Unit,
-    onExportSyncAudit: (SyncAuditFilter, Boolean) -> Unit,
+    onExportSyncAudit: (SyncAuditFilter, Boolean, Boolean) -> Unit,
     onShareSyncAudit: () -> Unit,
 ) {
     var filterName by rememberSaveable { mutableStateOf(SyncAuditFilter.ALL.name) }
     var onlySelectedDraft by rememberSaveable { mutableStateOf(false) }
+    var redactSensitiveData by rememberSaveable { mutableStateOf(true) }
     val activeFilter = SyncAuditFilter.valueOf(filterName)
     val allRows = remember(drafts) { buildSyncAuditRows(drafts) }
     val filteredRows = remember(drafts, filterName, onlySelectedDraft, selectedSessionId) {
@@ -305,6 +308,19 @@ private fun SyncAuditSection(
                             },
                         )
                     }
+                    FilterChip(
+                        selected = redactSensitiveData,
+                        onClick = { redactSensitiveData = !redactSensitiveData },
+                        label = {
+                            Text(
+                                if (redactSensitiveData) {
+                                    "Eksport z anonimizacja"
+                                } else {
+                                    "Eksport pelny"
+                                },
+                            )
+                        },
+                    )
                 }
                 Text(
                     "Pelny audyt pokazuje wszystkie lokalnie zapisane proby syncu wraz ze zrodlem uruchomienia, kodem bledu i metadanymi backendu po sukcesie.",
@@ -315,7 +331,7 @@ private fun SyncAuditSection(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Button(
-                        onClick = { onExportSyncAudit(activeFilter, onlySelectedDraft) },
+                        onClick = { onExportSyncAudit(activeFilter, onlySelectedDraft, redactSensitiveData) },
                         enabled = filteredRows.isNotEmpty(),
                         modifier = Modifier.weight(1f),
                     ) {
@@ -331,7 +347,7 @@ private fun SyncAuditSection(
                 }
                 if (lastAuditExportPath != null && lastAuditExportAtMillis != null) {
                     Text(
-                        "Ostatni eksport: ${formatTimestamp(lastAuditExportAtMillis)} ($lastAuditExportRowCount wpisow)",
+                        "Ostatni eksport: ${formatTimestamp(lastAuditExportAtMillis)} ($lastAuditExportRowCount wpisow, ${if (lastAuditExportRedacted) "anonimizowany" else "pelny"})",
                         style = MaterialTheme.typography.bodySmall,
                     )
                     Text(lastAuditExportPath, style = MaterialTheme.typography.bodySmall)
