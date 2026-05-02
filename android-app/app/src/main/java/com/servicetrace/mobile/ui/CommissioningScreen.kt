@@ -47,6 +47,8 @@ import com.servicetrace.mobile.model.McuConnectionStatus
 import com.servicetrace.mobile.model.ServiceSessionDraft
 import com.servicetrace.mobile.model.SessionOutcome
 import com.servicetrace.mobile.model.SessionSyncStatus
+import com.servicetrace.mobile.model.SyncAttemptResult
+import com.servicetrace.mobile.model.SyncAttemptTriggerSource
 import com.servicetrace.mobile.model.SyncFailureReasonCode
 import com.servicetrace.mobile.model.UsbCandidateDevice
 import com.servicetrace.mobile.sync.MAX_AUTO_SYNC_RETRY_ATTEMPTS
@@ -600,6 +602,21 @@ private fun SyncStatusSection(
                 )
             }
         }
+        if (draft.syncAttempts.isNotEmpty()) {
+            Text("Historia prob", style = MaterialTheme.typography.titleSmall)
+            draft.syncAttempts.take(5).forEach { attempt ->
+                Text(
+                    "${formatTimestamp(attempt.attemptedAtMillis)} | ${syncAttemptTriggerLabel(attempt.triggerSource)} | ${syncAttemptResultLabel(attempt.result)} | proba ${attempt.attemptNumber}",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                if (attempt.failureCode != SyncFailureReasonCode.NONE) {
+                    Text(
+                        "Kod: ${syncFailureReasonLabel(attempt.failureCode)} | ${attempt.message}",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -852,6 +869,20 @@ private fun syncFailureReasonLabel(reasonCode: SyncFailureReasonCode): String =
         SyncFailureReasonCode.VALIDATION_ERROR -> "Blad walidacji"
         SyncFailureReasonCode.CLIENT_ERROR -> "Blad klienta 4xx"
         SyncFailureReasonCode.UNKNOWN -> "Blad nieznany"
+    }
+
+private fun syncAttemptTriggerLabel(triggerSource: SyncAttemptTriggerSource): String =
+    when (triggerSource) {
+        SyncAttemptTriggerSource.MANUAL -> "Recznie"
+        SyncAttemptTriggerSource.AUTO_NETWORK -> "Auto po sieci"
+        SyncAttemptTriggerSource.AUTO_READY -> "Auto po READY"
+        SyncAttemptTriggerSource.DEFERRED_WORKER -> "Worker w tle"
+    }
+
+private fun syncAttemptResultLabel(result: SyncAttemptResult): String =
+    when (result) {
+        SyncAttemptResult.SUCCESS -> "SUCCESS"
+        SyncAttemptResult.FAILURE -> "FAILURE"
     }
 
 private fun isAutoRetrySuspended(draft: ServiceSessionDraft): Boolean =

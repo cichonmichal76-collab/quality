@@ -13,6 +13,7 @@ import com.servicetrace.mobile.model.McuConnectionStatus
 import com.servicetrace.mobile.model.ServiceSessionDraft
 import com.servicetrace.mobile.model.SessionSyncStatus
 import com.servicetrace.mobile.model.SyncFailureReasonCode
+import com.servicetrace.mobile.model.SyncAttemptTriggerSource
 import com.servicetrace.mobile.model.UsbCandidateDevice
 import com.servicetrace.mobile.mcu.MockMcuClient
 import com.servicetrace.mobile.mcu.UsbMcuClient
@@ -607,6 +608,7 @@ class CommissioningViewModel(
                 val result = syncRunner.syncDrafts(
                     baseUrl = uploadBaseUrl.value,
                     drafts = readyDrafts,
+                    triggerSource = trigger.toAttemptTriggerSource(),
                 )
                 val currentSelectedDraftId = selectedDraft.value?.sessionId
                 if (currentSelectedDraftId != null) {
@@ -658,6 +660,13 @@ internal enum class SyncTrigger {
     AUTO_NETWORK,
     AUTO_READY,
 }
+
+private fun SyncTrigger.toAttemptTriggerSource(): SyncAttemptTriggerSource =
+    when (this) {
+        SyncTrigger.MANUAL -> SyncAttemptTriggerSource.MANUAL
+        SyncTrigger.AUTO_NETWORK -> SyncAttemptTriggerSource.AUTO_NETWORK
+        SyncTrigger.AUTO_READY -> SyncAttemptTriggerSource.AUTO_READY
+    }
 
 internal fun canAutoSync(
     autoSyncEnabled: Boolean,

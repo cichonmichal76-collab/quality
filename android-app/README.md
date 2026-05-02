@@ -20,6 +20,7 @@
 - rozroznienie bledow retryable i trwalych, z retry workerem tylko dla bledow przejsciowych
 - limit automatycznych prob syncu i stan eskalacji do recznej interwencji po wyczerpaniu auto-retry
 - zapis `reason code` bledu syncu, np. brak lacznosci, timeout, walidacja albo blad backendu
+- lokalna historia prob syncu per sesja z wynikiem, zrodlem uruchomienia i komunikatem
 - lokalna checklista 5 krokow
 - komentarz ogolny, firmware i bootloader
 - status `DRAFT` / `READY_TO_SYNC`
@@ -54,8 +55,8 @@ Domyslny adres backendu w aplikacji to `http://10.0.2.2:8000/api`, co pasuje do 
 
 1. rozszerzyc snapshoty MCU o dodatkowe artefakty diagnostyczne
 2. rozbudowac worker o upload okresowy albo bardziej agresywne wznowienia po dluzszym offline
-3. dodac eksport albo podglad historii prob syncu per sesja
-4. rozbudowac reason codes o telemetry po stronie backendu / upload hash / correlation id
+3. rozbudowac reason codes o telemetry po stronie backendu / upload hash / correlation id
+4. dodac eksport historii prob syncu albo pelny ekran audytu sesji
 
 ## Poza zakresem MVP
 

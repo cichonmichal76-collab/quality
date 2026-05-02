@@ -18,6 +18,9 @@ import com.servicetrace.mobile.model.CommissioningStepStatus
 import com.servicetrace.mobile.model.McuConnectionMode
 import com.servicetrace.mobile.model.McuConnectionStatus
 import com.servicetrace.mobile.model.ServiceSessionDraft
+import com.servicetrace.mobile.model.SyncAttemptHistoryEntry
+import com.servicetrace.mobile.model.SyncAttemptResult
+import com.servicetrace.mobile.model.SyncAttemptTriggerSource
 import com.servicetrace.mobile.model.SessionSyncStatus
 import com.servicetrace.mobile.model.SyncFailureReasonCode
 import kotlinx.coroutines.flow.Flow
@@ -105,6 +108,31 @@ data class CommissioningAttachmentEntity(
     val createdAtMillis: Long,
 )
 
+@Entity(
+    tableName = "commissioning_sync_attempts",
+    primaryKeys = ["sessionId", "attemptId"],
+    indices = [Index("sessionId")],
+    foreignKeys = [
+        ForeignKey(
+            entity = ServiceSessionDraftEntity::class,
+            parentColumns = ["sessionId"],
+            childColumns = ["sessionId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+)
+data class CommissioningSyncAttemptEntity(
+    val sessionId: String,
+    val attemptId: String,
+    val attemptedAtMillis: Long,
+    val triggerSource: String,
+    val result: String,
+    val failureCode: String,
+    val message: String,
+    val retryable: Boolean,
+    val attemptNumber: Int,
+)
+
 data class ServiceSessionDraftWithSteps(
     @Embedded
     val session: ServiceSessionDraftEntity,
@@ -118,12 +146,18 @@ data class ServiceSessionDraftWithSteps(
         entityColumn = "sessionId",
     )
     val attachments: List<CommissioningAttachmentEntity>,
+    @Relation(
+        parentColumn = "sessionId",
+        entityColumn = "sessionId",
+    )
+    val syncAttempts: List<CommissioningSyncAttemptEntity>,
 )
 
 data class LocalDraftBundle(
     val session: ServiceSessionDraftEntity,
     val steps: List<CommissioningStepEntity>,
     val attachments: List<CommissioningAttachmentEntity>,
+    val syncAttempts: List<CommissioningSyncAttemptEntity>,
 )
 
 fun ServiceSessionDraftWithSteps.toDomain(): ServiceSessionDraft =
@@ -184,6 +218,20 @@ fun ServiceSessionDraftWithSteps.toDomain(): ServiceSessionDraft =
                     stepOrder = row.stepOrder,
                 )
             },
+        syncAttempts = syncAttempts
+            .sortedByDescending { row -> row.attemptedAtMillis }
+            .map { row ->
+                SyncAttemptHistoryEntry(
+                    attemptId = row.attemptId,
+                    attemptedAtMillis = row.attemptedAtMillis,
+                    triggerSource = SyncAttemptTriggerSource.valueOf(row.triggerSource),
+                    result = SyncAttemptResult.valueOf(row.result),
+                    failureCode = SyncFailureReasonCode.valueOf(row.failureCode),
+                    message = row.message,
+                    retryable = row.retryable,
+                    attemptNumber = row.attemptNumber,
+                )
+            },
     )
 
 fun ServiceSessionDraft.toLocalEntity(): LocalDraftBundle =
@@ -233,6 +281,19 @@ fun ServiceSessionDraft.toLocalEntity(): LocalDraftBundle =
                 createdAtMillis = attachment.createdAtMillis,
             )
         },
+        syncAttempts = syncAttempts.map { attempt ->
+            CommissioningSyncAttemptEntity(
+                sessionId = sessionId,
+                attemptId = attempt.attemptId,
+                attemptedAtMillis = attempt.attemptedAtMillis,
+                triggerSource = attempt.triggerSource.name,
+                result = attempt.result.name,
+                failureCode = attempt.failureCode.name,
+                message = attempt.message,
+                retryable = attempt.retryable,
+                attemptNumber = attempt.attemptNumber,
+            )
+        },
         steps = steps.map { step ->
             CommissioningStepEntity(
                 sessionId = sessionId,
@@ -269,18 +330,26 @@ interface CommissioningDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAttachments(attachments: List<CommissioningAttachmentEntity>)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertSyncAttempts(syncAttempts: List<CommissioningSyncAttemptEntity>)
+
     @Query("DELETE FROM commissioning_steps WHERE sessionId = :sessionId")
     suspend fun deleteStepsForSession(sessionId: String)
 
     @Query("DELETE FROM commissioning_attachments WHERE sessionId = :sessionId")
     suspend fun deleteAttachmentsForSession(sessionId: String)
 
+    @Query("DELETE FROM commissioning_sync_attempts WHERE sessionId = :sessionId")
+    suspend fun deleteSyncAttemptsForSession(sessionId: String)
+
     @Transaction
     suspend fun upsertDraft(bundle: LocalDraftBundle) {
         upsertSession(bundle.session)
         deleteStepsForSession(bundle.session.sessionId)
         deleteAttachmentsForSession(bundle.session.sessionId)
+        deleteSyncAttemptsForSession(bundle.session.sessionId)
         upsertSteps(bundle.steps)
         upsertAttachments(bundle.attachments)
+        upsertSyncAttempts(bundle.syncAttempts)
     }
 }

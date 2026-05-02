@@ -6,6 +6,7 @@ import androidx.work.WorkerParameters
 import com.servicetrace.mobile.data.OfflineCommissioningRepository
 import com.servicetrace.mobile.data.local.ServiceTraceMobileDatabase
 import com.servicetrace.mobile.files.CommissioningArtifactStore
+import com.servicetrace.mobile.model.SyncAttemptTriggerSource
 
 class CommissioningSyncWorker(
     appContext: Context,
@@ -34,6 +35,7 @@ class CommissioningSyncWorker(
         val result = runner.syncDrafts(
             baseUrl = syncSettings.uploadBaseUrl,
             drafts = readyDrafts,
+            triggerSource = SyncAttemptTriggerSource.DEFERRED_WORKER,
         )
         return if (result.retryableFailedCount > 0) {
             Result.retry()

@@ -33,6 +33,7 @@ class CommissioningDraftFactoryTest {
         assertEquals("", draft.lastSyncErrorMessage)
         assertEquals(SyncFailureReasonCode.NONE, draft.lastSyncFailureCode)
         assertTrue(draft.lastSyncAutoRetryEligible)
+        assertTrue(draft.syncAttempts.isEmpty())
         assertNull(draft.outcome)
         assertFalse(draft.readyToSync)
     }

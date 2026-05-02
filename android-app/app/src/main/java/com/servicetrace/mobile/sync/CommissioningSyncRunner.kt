@@ -3,9 +3,13 @@ package com.servicetrace.mobile.sync
 import com.servicetrace.mobile.data.CommissioningRepository
 import com.servicetrace.mobile.files.CommissioningArtifactStore
 import com.servicetrace.mobile.model.ServiceSessionDraft
+import com.servicetrace.mobile.model.SyncAttemptHistoryEntry
+import com.servicetrace.mobile.model.SyncAttemptResult
+import com.servicetrace.mobile.model.SyncAttemptTriggerSource
 import com.servicetrace.mobile.model.SessionSyncStatus
 import com.servicetrace.mobile.model.SyncFailureReasonCode
 import java.io.File
+import java.util.UUID
 
 data class CommissioningSyncRunResult(
     val uploadedCount: Int,
@@ -30,6 +34,7 @@ class CommissioningSyncRunner(
     suspend fun syncDrafts(
         baseUrl: String,
         drafts: List<ServiceSessionDraft>,
+        triggerSource: SyncAttemptTriggerSource,
     ): CommissioningSyncRunResult {
         var uploadedCount = 0
         var failedCount = 0
@@ -41,15 +46,27 @@ class CommissioningSyncRunner(
                 val uploadDraft = ensurePackageForUpload(draft)
                 uploader.upload(baseUrl, uploadDraft)
                 val completedAtMillis = System.currentTimeMillis()
+                val attemptNumber = uploadDraft.syncAttemptCount + 1
                 val syncedDraft = uploadDraft.copy(
                     syncStatus = SessionSyncStatus.SYNCED,
-                    syncAttemptCount = uploadDraft.syncAttemptCount + 1,
+                    syncAttemptCount = attemptNumber,
                     lastSyncAttemptAtMillis = completedAtMillis,
                     lastSyncSuccessAtMillis = completedAtMillis,
                     lastSyncErrorMessage = "",
                     lastSyncFailureCode = SyncFailureReasonCode.NONE,
                     lastSyncAutoRetryEligible = true,
                     updatedAtMillis = completedAtMillis,
+                    syncAttempts = listOf(
+                        createSyncAttemptHistoryEntry(
+                            attemptedAtMillis = completedAtMillis,
+                            triggerSource = triggerSource,
+                            result = SyncAttemptResult.SUCCESS,
+                            failureCode = SyncFailureReasonCode.NONE,
+                            message = "Synchronizacja commissioning zakonczona sukcesem.",
+                            retryable = false,
+                            attemptNumber = attemptNumber,
+                        ),
+                    ) + uploadDraft.syncAttempts,
                 )
                 repository.saveDraft(syncedDraft)
                 latestDraftsBySessionId[syncedDraft.sessionId] = syncedDraft
@@ -67,6 +84,17 @@ class CommissioningSyncRunner(
                     lastSyncFailureCode = uploadError.reasonCode,
                     lastSyncAutoRetryEligible = autoRetryEligible,
                     updatedAtMillis = failedAtMillis,
+                    syncAttempts = listOf(
+                        createSyncAttemptHistoryEntry(
+                            attemptedAtMillis = failedAtMillis,
+                            triggerSource = triggerSource,
+                            result = SyncAttemptResult.FAILURE,
+                            failureCode = uploadError.reasonCode,
+                            message = uploadError.message ?: "Nieznany blad synchronizacji commissioning.",
+                            retryable = uploadError.isRetryable,
+                            attemptNumber = nextAttemptCount,
+                        ),
+                    ) + draft.syncAttempts,
                 )
                 repository.saveDraft(failedDraft)
                 latestDraftsBySessionId[failedDraft.sessionId] = failedDraft
@@ -102,3 +130,23 @@ class CommissioningSyncRunner(
         return updatedDraft
     }
 }
+
+private fun createSyncAttemptHistoryEntry(
+    attemptedAtMillis: Long,
+    triggerSource: SyncAttemptTriggerSource,
+    result: SyncAttemptResult,
+    failureCode: SyncFailureReasonCode,
+    message: String,
+    retryable: Boolean,
+    attemptNumber: Int,
+): SyncAttemptHistoryEntry =
+    SyncAttemptHistoryEntry(
+        attemptId = "SYNC-${UUID.randomUUID().toString().take(8).uppercase()}",
+        attemptedAtMillis = attemptedAtMillis,
+        triggerSource = triggerSource,
+        result = result,
+        failureCode = failureCode,
+        message = message,
+        retryable = retryable,
+        attemptNumber = attemptNumber,
+    )

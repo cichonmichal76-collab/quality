@@ -22,7 +22,8 @@ Aktualnie zawiera:
 16. retry worker tylko dla bledow przejsciowych typu transport / 5xx / 429
 17. limit auto-retry i czytelny stan `wymaga recznej interwencji` po wyczerpaniu prob
 18. trwały `reason code` bledu syncu zapisany w draftcie i pokazany w UI
-19. testy JVM dla fabryki draftu, snapshotu, mocka MCU, serializacji paczki, polityki syncu i normalizacji adresu API
+19. lokalna historia prob syncu per sesja z triggerem i wynikiem
+20. testy JVM dla fabryki draftu, snapshotu, mocka MCU, serializacji paczki, polityki syncu i normalizacji adresu API
 
 Domyslny adres backendu dla syncu to `http://10.0.2.2:8000/api`.
 
@@ -30,4 +31,4 @@ Najblizszy sensowny krok:
 
 1. rozszerzyc snapshoty i artefakty diagnostyczne
 2. rozbudowac worker o strategia okresowa albo batch sync dla dluzszego offline
-3. dolozyc telemetry backendowe, correlation id i bogatsza historie prob syncu
+3. dolozyc telemetry backendowe, correlation id i ewentualny ekran audytu historii syncu

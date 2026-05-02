@@ -27,6 +27,18 @@ enum class SyncFailureReasonCode {
     UNKNOWN,
 }
 
+enum class SyncAttemptResult {
+    SUCCESS,
+    FAILURE,
+}
+
+enum class SyncAttemptTriggerSource {
+    MANUAL,
+    AUTO_NETWORK,
+    AUTO_READY,
+    DEFERRED_WORKER,
+}
+
 enum class McuConnectionMode {
     MOCK,
     USB,
@@ -89,6 +101,17 @@ data class CommissioningStep(
     val stepOrder: Int,
 )
 
+data class SyncAttemptHistoryEntry(
+    val attemptId: String,
+    val attemptedAtMillis: Long,
+    val triggerSource: SyncAttemptTriggerSource,
+    val result: SyncAttemptResult,
+    val failureCode: SyncFailureReasonCode,
+    val message: String,
+    val retryable: Boolean,
+    val attemptNumber: Int,
+)
+
 data class ServiceSessionDraft(
     val sessionId: String,
     val deviceSerialNumber: String,
@@ -123,6 +146,7 @@ data class ServiceSessionDraft(
     val updatedAtMillis: Long,
     val attachments: List<CommissioningAttachment>,
     val steps: List<CommissioningStep>,
+    val syncAttempts: List<SyncAttemptHistoryEntry>,
 ) {
     val outcome: SessionOutcome?
         get() = deriveOutcome(steps)
@@ -220,6 +244,7 @@ object CommissioningDraftFactory {
                     stepOrder = index,
                 )
             },
+            syncAttempts = emptyList(),
         )
     }
 }

@@ -1,8 +1,10 @@
 package com.servicetrace.mobile.sync
 
 import com.servicetrace.mobile.model.CommissioningDraftFactory
+import com.servicetrace.mobile.model.SyncAttemptTriggerSource
 import com.servicetrace.mobile.model.SessionSyncStatus
 import com.servicetrace.mobile.ui.shouldQueueDeferredSync
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -65,5 +67,31 @@ class CommissioningSyncWorkSchedulerTest {
         assertTrue(shouldAutoRetrySync(cleanReadyDraft))
         assertTrue(shouldAutoRetrySync(retryableDraft))
         assertFalse(shouldAutoRetrySync(permanentDraft))
+    }
+
+    @Test
+    fun `sync attempt history entry can be stored on draft`() {
+        val baseline = CommissioningDraftFactory.create(
+            deviceSerialNumber = "ZSS-1001",
+            deviceType = "ZSS",
+            technicianId = "TECH-01",
+        )
+        val updated = baseline.copy(
+            syncAttempts = listOf(
+                com.servicetrace.mobile.model.SyncAttemptHistoryEntry(
+                    attemptId = "SYNC-001",
+                    attemptedAtMillis = 1234L,
+                    triggerSource = SyncAttemptTriggerSource.MANUAL,
+                    result = com.servicetrace.mobile.model.SyncAttemptResult.FAILURE,
+                    failureCode = com.servicetrace.mobile.model.SyncFailureReasonCode.NETWORK_CONNECTIVITY,
+                    message = "offline",
+                    retryable = true,
+                    attemptNumber = 1,
+                ),
+            ),
+        )
+
+        assertEquals(1, updated.syncAttempts.size)
+        assertEquals(SyncAttemptTriggerSource.MANUAL, updated.syncAttempts.first().triggerSource)
     }
 }
