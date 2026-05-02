@@ -31,10 +31,10 @@ Już zaimplementowane:
 - smoke test e2e Playwright dla panelu webowego
 - przepływ CI dla backendu, runnera, web-app i buildu Docker
 
-Na poziomie scaffoldu lub szkicu:
+W trakcie aktywnego rozwoju:
 
-- `android-app/` jako mobilny klient offline-first dla serwisu
-- Service AR Part Identification
+- `android-app/` jako mobilny klient offline-first z pierwszym MVP commissioning zapisującym drafty lokalnie w `Room`
+- Service AR Part Identification jako nadal osobny scaffold
 
 ## Struktura repozytorium
 
@@ -43,7 +43,7 @@ Na poziomie scaffoldu lub szkicu:
 |-- backend/             backend FastAPI, modele DB, API, testy, Alembic
 |-- final-test-runner/   Python CLI do final testu urządzenia
 |-- web-app/             panel React dla Production / Quality
-|-- android-app/         scaffold aplikacji Android dla serwisu
+|-- android-app/         mobilny klient Android dla commissioning i serwisu
 |-- docs/                PRD, pipeline, stack, mechanizmy, backlog
 |-- .github/             przepływ CI, szablon PR, CODEOWNERS
 `-- docker-compose.yml   lokalny start backendu i PostgreSQL

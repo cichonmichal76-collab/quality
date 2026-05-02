@@ -1,0 +1,133 @@
+package com.servicetrace.mobile.model
+
+import java.util.UUID
+
+enum class CommissioningStepStatus {
+    TODO,
+    PASS,
+    FAIL,
+    HOLD,
+}
+
+enum class SessionSyncStatus {
+    DRAFT,
+    READY_TO_SYNC,
+    SYNCED,
+}
+
+enum class SessionOutcome {
+    PASS,
+    FAIL,
+    HOLD,
+}
+
+data class CommissioningStep(
+    val stepCode: String,
+    val title: String,
+    val instructions: String,
+    val status: CommissioningStepStatus,
+    val note: String,
+    val stepOrder: Int,
+)
+
+data class ServiceSessionDraft(
+    val sessionId: String,
+    val deviceSerialNumber: String,
+    val deviceType: String,
+    val technicianId: String,
+    val overallComment: String,
+    val firmwareVersion: String,
+    val bootloaderVersion: String,
+    val syncStatus: SessionSyncStatus,
+    val createdAtMillis: Long,
+    val updatedAtMillis: Long,
+    val steps: List<CommissioningStep>,
+) {
+    val outcome: SessionOutcome?
+        get() = deriveOutcome(steps)
+
+    val readyToSync: Boolean
+        get() = steps.isNotEmpty() &&
+            steps.none { step -> step.status == CommissioningStepStatus.TODO } &&
+            outcome != null
+}
+
+object CommissioningDraftFactory {
+    private data class StepTemplate(
+        val stepCode: String,
+        val title: String,
+        val instructions: String,
+    )
+
+    private val templates = listOf(
+        StepTemplate(
+            stepCode = "IDENTIFY_DEVICE",
+            title = "Identyfikacja urządzenia",
+            instructions = "Potwierdź numer seryjny z tabliczki, HMI albo odczytu serwisowego.",
+        ),
+        StepTemplate(
+            stepCode = "USB_LINK",
+            title = "Połączenie USB / MCU",
+            instructions = "Sprawdź przewodowe połączenie serwisowe i gotowość klienta MCU.",
+        ),
+        StepTemplate(
+            stepCode = "SAFETY_CHECK",
+            title = "Kontrola bezpieczeństwa",
+            instructions = "Potwierdź blokady, osłony i warunki bezpiecznego uruchomienia.",
+        ),
+        StepTemplate(
+            stepCode = "STARTUP_SEQUENCE",
+            title = "Procedura startowa",
+            instructions = "Zweryfikuj start HMI, sekwencję boot i podstawowe odpowiedzi urządzenia.",
+        ),
+        StepTemplate(
+            stepCode = "SERVICE_SIGNOFF",
+            title = "Podsumowanie i podpis technika",
+            instructions = "Potwierdź wynik commissioning i gotowość paczki serwisowej do synchronizacji.",
+        ),
+    )
+
+    fun create(
+        deviceSerialNumber: String,
+        deviceType: String,
+        technicianId: String,
+        nowMillis: Long = System.currentTimeMillis(),
+    ): ServiceSessionDraft {
+        val sessionId = "SVC-${UUID.randomUUID().toString().take(8).uppercase()}"
+        return ServiceSessionDraft(
+            sessionId = sessionId,
+            deviceSerialNumber = deviceSerialNumber.trim(),
+            deviceType = deviceType.trim().ifEmpty { "UNKNOWN" },
+            technicianId = technicianId.trim(),
+            overallComment = "",
+            firmwareVersion = "",
+            bootloaderVersion = "",
+            syncStatus = SessionSyncStatus.DRAFT,
+            createdAtMillis = nowMillis,
+            updatedAtMillis = nowMillis,
+            steps = templates.mapIndexed { index, template ->
+                CommissioningStep(
+                    stepCode = template.stepCode,
+                    title = template.title,
+                    instructions = template.instructions,
+                    status = CommissioningStepStatus.TODO,
+                    note = "",
+                    stepOrder = index,
+                )
+            },
+        )
+    }
+}
+
+fun deriveOutcome(steps: List<CommissioningStep>): SessionOutcome? {
+    if (steps.isEmpty() || steps.any { step -> step.status == CommissioningStepStatus.TODO }) {
+        return null
+    }
+    if (steps.any { step -> step.status == CommissioningStepStatus.FAIL }) {
+        return SessionOutcome.FAIL
+    }
+    if (steps.any { step -> step.status == CommissioningStepStatus.HOLD }) {
+        return SessionOutcome.HOLD
+    }
+    return SessionOutcome.PASS
+}
