@@ -181,6 +181,7 @@ interface ShipmentFilters {
   variant_code: string;
   production_status: string;
   primary_blocking_code: string;
+  missing_component_type: string;
   recommended_action: string;
   latest_gate_result: string;
   only_blocked: boolean;
@@ -236,6 +237,7 @@ interface QueueShortcutLink {
 
 interface DeviceDetailsQueueShortcuts {
   shipment: QueueShortcutLink[];
+  bom: QueueShortcutLink[];
   component: QueueShortcutLink[];
 }
 
@@ -251,6 +253,7 @@ interface DashboardUrlState {
 const SHIPMENT_TEXT_FILTER_KEYS: Array<keyof ShipmentFilters> = [
   "device_type",
   "variant_code",
+  "missing_component_type",
 ];
 
 const COMPONENT_TEXT_FILTER_KEYS: Array<keyof ComponentFilters> = [
@@ -264,6 +267,7 @@ const DEFAULT_SHIPMENT_FILTERS: ShipmentFilters = {
   variant_code: "",
   production_status: "",
   primary_blocking_code: "",
+  missing_component_type: "",
   recommended_action: "",
   latest_gate_result: "",
   only_blocked: false,
@@ -1427,6 +1431,13 @@ function ShipmentFiltersPanel({
           onCommit={onCommitTextFilters}
           placeholder="np. DEFAULT"
         />
+        <TextField
+          label="Brakujący typ BOM"
+          value={filters.missing_component_type}
+          onChange={(value) => onChange("missing_component_type", value)}
+          onCommit={onCommitTextFilters}
+          placeholder="np. CONTROL_PCB"
+        />
         <SelectField
           label="Status produkcji"
           value={filters.production_status}
@@ -2133,6 +2144,8 @@ function DeviceDetailsDrawer({
   device,
   details,
   queueShortcuts,
+  shipmentFilters,
+  componentFilters,
   loadState,
   errorMessage,
   actionState,
@@ -2187,6 +2200,8 @@ function DeviceDetailsDrawer({
           device={device}
           details={details}
           queueShortcuts={queueShortcuts}
+          shipmentFilters={shipmentFilters}
+          componentFilters={componentFilters}
           loadState={loadState}
           errorMessage={errorMessage}
           actionState={actionState}
@@ -3024,6 +3039,14 @@ function DeviceDetailsSurface({
                   emptyLabel="Brak nieoczekiwanych komponentów."
                 />
               </div>
+              {enableRecordDeepLinks &&
+              queueShortcuts &&
+              queueShortcuts.bom.length > 0 ? (
+                <div className="details-stack">
+                  <strong>Powiązane kolejki</strong>
+                  <QueueShortcutList links={queueShortcuts.bom} />
+                </div>
+              ) : null}
               <div className="details-stack">
                 <strong>Pokrycie BOM</strong>
                 {bomCoverage.length > 0 ? (
@@ -3686,6 +3709,7 @@ function shipmentQueryParams(filters: ShipmentFilters): Record<string, QueryValu
     variant_code: filters.variant_code,
     production_status: filters.production_status,
     primary_blocking_code: filters.primary_blocking_code,
+    missing_component_type: filters.missing_component_type,
     recommended_action: filters.recommended_action,
     latest_gate_result: filters.latest_gate_result,
     only_blocked: filters.only_blocked || undefined,
@@ -3755,6 +3779,7 @@ function reconcileShipmentFilterChange<Key extends keyof ShipmentFilters>(
   if (key === "only_ready" && next.only_ready) {
     next.only_blocked = false;
     next.primary_blocking_code = "";
+    next.missing_component_type = "";
     if (
       next.recommended_action !== "" &&
       next.recommended_action !== "MARK_READY_FOR_SHIPMENT"
@@ -3765,6 +3790,11 @@ function reconcileShipmentFilterChange<Key extends keyof ShipmentFilters>(
   }
 
   if (key === "primary_blocking_code" && next.primary_blocking_code !== "") {
+    next.only_ready = false;
+    return next;
+  }
+
+  if (key === "missing_component_type" && next.missing_component_type !== "") {
     next.only_ready = false;
     return next;
   }
@@ -3786,6 +3816,7 @@ function sanitizeShipmentFilters(filters: ShipmentFilters): ShipmentFilters {
   if (next.only_ready) {
     next.only_blocked = false;
     next.primary_blocking_code = "";
+    next.missing_component_type = "";
     if (
       next.recommended_action !== "" &&
       next.recommended_action !== "MARK_READY_FOR_SHIPMENT"
@@ -3871,6 +3902,11 @@ function readShipmentFiltersFromUrl(
       `${URL_SHIPMENT_PREFIX}primary_blocking_code`,
       SHIPMENT_BLOCKING_OPTIONS,
       baseFilters.primary_blocking_code,
+    ),
+    missing_component_type: readSearchString(
+      searchParams,
+      `${URL_SHIPMENT_PREFIX}missing_component_type`,
+      baseFilters.missing_component_type,
     ),
     recommended_action: readSearchOption(
       searchParams,
@@ -4049,6 +4085,10 @@ function readStoredShipmentFilters(): ShipmentFilters {
       storedValue.primary_blocking_code,
       SHIPMENT_BLOCKING_OPTIONS,
       DEFAULT_SHIPMENT_FILTERS.primary_blocking_code,
+    ),
+    missing_component_type: readStoredString(
+      storedValue.missing_component_type,
+      DEFAULT_SHIPMENT_FILTERS.missing_component_type,
     ),
     recommended_action: readStoredOption(
       storedValue.recommended_action,
@@ -4339,6 +4379,7 @@ function buildDeviceDetailsQueueShortcuts({
 }): DeviceDetailsQueueShortcuts | null {
   const deviceType = shipment.device_type || component.device_type;
   const shipmentLinks: QueueShortcutLink[] = [];
+  const bomLinks: QueueShortcutLink[] = [];
   const componentLinks: QueueShortcutLink[] = [];
 
   if (shipment.primary_blocking_code) {
@@ -4376,6 +4417,24 @@ function buildDeviceDetailsQueueShortcuts({
     });
   }
 
+  for (const missingComponentType of shipment.bom_compliance
+    .missing_required_components) {
+    bomLinks.push({
+      href: buildShipmentQueueShortcutHref({
+        deviceType,
+        shipmentFilters,
+        componentFilters,
+        primaryBlockingCode: "BOM_REQUIRED_COMPONENTS_MISSING",
+        missingComponentType,
+        recommendedAction: "",
+        onlyBlocked: true,
+        onlyReady: false,
+      }),
+      label: `Pokaż braki BOM dla ${labelForCode(missingComponentType)}`,
+      caption: `${labelForCode("BOM_REQUIRED_COMPONENTS_MISSING")} · ${deviceType}`,
+    });
+  }
+
   if (component.primary_blocking_component_type) {
     componentLinks.push({
       href: buildComponentQueueShortcutHref({
@@ -4410,10 +4469,12 @@ function buildDeviceDetailsQueueShortcuts({
   }
 
   const dedupedShipmentLinks = dedupeQueueShortcutLinks(shipmentLinks);
+  const dedupedBomLinks = dedupeQueueShortcutLinks(bomLinks);
   const dedupedComponentLinks = dedupeQueueShortcutLinks(componentLinks);
 
   if (
     dedupedShipmentLinks.length === 0 &&
+    dedupedBomLinks.length === 0 &&
     dedupedComponentLinks.length === 0
   ) {
     return null;
@@ -4421,6 +4482,7 @@ function buildDeviceDetailsQueueShortcuts({
 
   return {
     shipment: dedupedShipmentLinks,
+    bom: dedupedBomLinks,
     component: dedupedComponentLinks,
   };
 }
@@ -4430,6 +4492,7 @@ function buildShipmentQueueShortcutHref({
   shipmentFilters,
   componentFilters,
   primaryBlockingCode,
+  missingComponentType = "",
   recommendedAction,
   onlyBlocked,
   onlyReady,
@@ -4440,6 +4503,7 @@ function buildShipmentQueueShortcutHref({
   shipmentFilters: ShipmentFilters;
   componentFilters: ComponentFilters;
   primaryBlockingCode: string;
+  missingComponentType?: string;
   recommendedAction: string;
   onlyBlocked: boolean;
   onlyReady: boolean;
@@ -4454,6 +4518,7 @@ function buildShipmentQueueShortcutHref({
       device_type: deviceType,
       production_status: productionStatus,
       primary_blocking_code: primaryBlockingCode,
+      missing_component_type: missingComponentType,
       recommended_action: recommendedAction,
       latest_gate_result: latestGateResult,
       only_blocked: onlyBlocked,
@@ -4607,6 +4672,11 @@ function writeShipmentFiltersToSearchParams(
     searchParams,
     `${URL_SHIPMENT_PREFIX}primary_blocking_code`,
     filters.primary_blocking_code,
+  );
+  setOptionalSearchString(
+    searchParams,
+    `${URL_SHIPMENT_PREFIX}missing_component_type`,
+    filters.missing_component_type,
   );
   setOptionalSearchString(
     searchParams,

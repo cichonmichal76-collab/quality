@@ -1635,6 +1635,64 @@ describe("App", () => {
     ).not.toHaveAttribute("href", expect.stringContaining("device_serial="));
   });
 
+  it("shows BOM-specific shipment queue shortcuts on the full device page", async () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/devices/ASM-001?view=shipment&ship_device_type=DEMO-OPS&ship_sort_by=created_at&ship_sort_desc=true&ship_limit=100&ship_offset=0&device_type=DEMO-OPS&device_variant=DEFAULT#bom",
+    );
+
+    const fetchMock = vi.fn((input: string | URL | Request) => {
+      const url = String(input);
+
+      if (
+        url ===
+        "/api/shipment-readiness?device_type=DEMO-OPS&sort_by=created_at&sort_desc=true&limit=100"
+      ) {
+        return Promise.resolve(createJsonResponse(shipmentAssemblyQueuePayload));
+      }
+
+      if (url === "/api/devices/ASM-001/shipment-readiness") {
+        return Promise.resolve(createJsonResponse(shipmentAssemblyDetailsPayload));
+      }
+
+      if (url === "/api/devices/ASM-001/component-quality") {
+        return Promise.resolve(createJsonResponse(componentAssemblyDetailsPayload));
+      }
+
+      if (url === "/api/devices/ASM-001/shipment-gate-history?limit=10") {
+        return Promise.resolve(createJsonResponse([]));
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", { name: "ASM-001" }),
+    ).toBeInTheDocument();
+
+    const bomShortcut = screen.getByRole("link", {
+      name: /Pokaż braki BOM dla/i,
+    });
+    expect(bomShortcut).toHaveAttribute(
+      "href",
+      expect.stringContaining(
+        "ship_primary_blocking_code=BOM_REQUIRED_COMPONENTS_MISSING",
+      ),
+    );
+    expect(bomShortcut).toHaveAttribute(
+      "href",
+      expect.stringContaining("ship_missing_component_type=FAN_MODULE"),
+    );
+    expect(bomShortcut).not.toHaveAttribute(
+      "href",
+      expect.stringContaining("device_serial="),
+    );
+  });
+
   it("shows shipment gate history queue shortcuts on the full device page", async () => {
     window.history.replaceState(
       {},
@@ -3453,6 +3511,7 @@ describe("App", () => {
           variant_code: "",
           production_status: "",
           primary_blocking_code: "",
+          missing_component_type: "",
           recommended_action: "",
           latest_gate_result: "",
           only_blocked: false,
@@ -3498,13 +3557,14 @@ describe("App", () => {
   it("sanitizes incompatible shipment filters restored from localStorage", async () => {
     localStorage.setItem(
       SHIPMENT_FILTERS_STORAGE_KEY,
-      JSON.stringify({
-        device_type: "DEMO-OPS",
-        only_blocked: true,
-        only_ready: true,
-        primary_blocking_code: "FINAL_TEST_NOT_PASSED",
-        recommended_action: "COMPLETE_ASSEMBLY",
-      }),
+        JSON.stringify({
+          device_type: "DEMO-OPS",
+          only_blocked: true,
+          only_ready: true,
+          primary_blocking_code: "FINAL_TEST_NOT_PASSED",
+          missing_component_type: "CONTROL_PCB",
+          recommended_action: "COMPLETE_ASSEMBLY",
+        }),
     );
 
     const fetchMock = vi.fn(async () => createJsonResponse(shipmentPayload));
@@ -3528,6 +3588,7 @@ describe("App", () => {
           variant_code: "",
           production_status: "",
           primary_blocking_code: "",
+          missing_component_type: "",
           recommended_action: "",
           latest_gate_result: "",
           only_blocked: false,

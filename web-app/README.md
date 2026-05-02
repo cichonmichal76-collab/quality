@@ -108,9 +108,14 @@ backend pod `http://127.0.0.1:8000`.
 Pełny widok urządzenia zawiera też skróty do gotowych, przefiltrowanych
 kolejek powiązanych z bieżącym problemem, np. do tej samej blokady
 wysyłkowej, tej samej akcji komponentowej albo tego samego typu
-blokującego komponentu.
+blokującego komponentu. Sekcja `BOM` dodaje do tego osobny skrót do kolejki
+wysyłki przefiltrowanej po tym samym brakującym typie komponentu BOM.
 Historia shipment gate ma dodatkowo własne skróty do kolejek z tym samym
 wynikiem gate albo tym samym żądanym statusem urządzenia.
+
+Widok `Wysyłka` ma też tekstowy filtr `Brakujący typ BOM`, który pozwala
+zawęzić kolejkę do urządzeń z tym samym brakującym komponentem wymaganym
+przez resolved BOM.
 
 ## Walidacja
 
@@ -126,7 +131,8 @@ npm run e2e
 `http://127.0.0.1:8000` z zasianymi danymi `DEMO-E2E`. Smoke obejmuje też
 odtworzenie aktywnej zakładki i filtrów po przeładowaniu strony, reset
 zapisanego stanu do wartości domyślnych, otwarcie drawera szczegółów
-urządzenia z kolejki komponentów oraz mockowane scenariusze wykonania akcji
+urządzenia z kolejki komponentów, przejście z sekcji `BOM` do przefiltrowanej
+kolejki wysyłki oraz mockowane scenariusze wykonania akcji
 `Oznacz gotowe do wysyłki`, `Oznacz jako wysłane`, `Zamontuj komponent`,
 `Zamknij krytyczne NCR` oraz `Zapisz final test PASS` i
 `Zapisz komponentowy QC PASS`.

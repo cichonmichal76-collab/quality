@@ -5451,6 +5451,34 @@ def test_shipment_readiness_queue_can_filter_by_primary_blocking_code():
     assert payload["devices"][0]["primary_blocking_code"] == "FINAL_TEST_NOT_PASSED"
 
 
+def test_shipment_readiness_queue_can_filter_by_missing_component_type():
+    device_type = unique_id("DEMO-SHIP")
+    seed_tag = unique_id("SHIP-MISSING")
+    seeded = seed_operations_dashboard_demo(
+        device_type=device_type,
+        tag=seed_tag,
+        verify=True,
+    )
+
+    queue = client.get(
+        f"/api/shipment-readiness?device_type={device_type}&missing_component_type=CONTROL_PCB"
+    )
+    assert queue.status_code == 200
+    payload = queue.json()
+    assert payload["total_devices"] == 1
+    assert payload["ready_count"] == 0
+    assert payload["blocked_count"] == 1
+    assert payload["filters"]["device_type"] == device_type
+    assert payload["filters"]["missing_component_type"] == "CONTROL_PCB"
+    assert [row["device_serial_number"] for row in payload["devices"]] == [
+        seeded.assembly_gap_device_serial_number
+    ]
+    assert payload["devices"][0]["primary_blocking_code"] == "BOM_REQUIRED_COMPONENTS_MISSING"
+    assert payload["devices"][0]["bom_compliance"]["missing_required_components"] == [
+        "CONTROL_PCB"
+    ]
+
+
 def test_shipment_readiness_queue_can_sort_by_priority():
     device_type = unique_id("DT")
     ensure_device_bom_template(device_type, component_type="CONTROL_PCB")
@@ -5613,6 +5641,14 @@ def test_shipment_readiness_queue_rejects_primary_blocking_code_with_only_ready(
     )
     assert response.status_code == 400
     assert response.json()["detail"] == "primary_blocking_code cannot be combined with only_ready"
+
+
+def test_shipment_readiness_queue_rejects_missing_component_type_with_only_ready():
+    response = client.get(
+        "/api/shipment-readiness?missing_component_type=CONTROL_PCB&only_ready=true"
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "missing_component_type cannot be combined with only_ready"
 
 
 def test_shipment_readiness_queue_rejects_unsupported_sort_by():

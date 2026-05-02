@@ -130,6 +130,39 @@ test("dashboard jumps from full device page to a filtered related queue", async 
   ).toHaveValue("FAN_MODULE");
 });
 
+test("dashboard jumps from BOM details to a filtered shipment queue", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  await expect(page.getByText("API OK")).toBeVisible();
+
+  await page.getByLabel("Typ urządzenia").fill("DEMO-E2E");
+  await page.getByRole("button", { name: /ASM-E2E-/ }).click();
+
+  const drawer = page.getByRole("dialog");
+  await expect(drawer).toBeVisible();
+
+  await drawer.getByRole("link", { name: "Pełna strona" }).click();
+
+  await expect(page).toHaveURL(/\/devices\/ASM-E2E-/);
+  await page.getByRole("link", { name: /Pokaż braki BOM dla/i }).click();
+
+  await expect(page).toHaveURL(/\/\?view=shipment/);
+  await expect(page).toHaveURL(/ship_device_type=DEMO-E2E/);
+  await expect(
+    page,
+  ).toHaveURL(/ship_primary_blocking_code=BOM_REQUIRED_COMPONENTS_MISSING/);
+  await expect(page).toHaveURL(/ship_missing_component_type=CONTROL_PCB/);
+  await expect(page).not.toHaveURL(/device_serial=/);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Wysyłka" })).toHaveClass(
+    /is-active/,
+  );
+  await expect(page.getByLabel("Typ urządzenia")).toHaveValue("DEMO-E2E");
+  await expect(page.getByLabel("Brakujący typ BOM")).toHaveValue("CONTROL_PCB");
+});
+
 test("dashboard jumps from shipment gate history to a filtered shipment queue", async ({
   page,
 }) => {

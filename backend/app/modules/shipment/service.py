@@ -1314,6 +1314,7 @@ def list_device_shipment_readiness(
     production_status: str | None = None,
     blocking_code: str | None = None,
     primary_blocking_code: str | None = None,
+    missing_component_type: str | None = None,
     recommended_action: str | None = None,
     latest_gate_result: str | None = None,
     only_blocked: bool = False,
@@ -1343,6 +1344,11 @@ def list_device_shipment_readiness(
         raise HTTPException(
             status_code=400,
             detail="primary_blocking_code cannot be combined with only_ready",
+        )
+    if missing_component_type and only_ready:
+        raise HTTPException(
+            status_code=400,
+            detail="missing_component_type cannot be combined with only_ready",
         )
     if recommended_action and only_ready and recommended_action != MARK_READY_FOR_SHIPMENT_ACTION:
         raise HTTPException(
@@ -1384,6 +1390,12 @@ def list_device_shipment_readiness(
         readiness_rows = [
             row for row in readiness_rows if row.primary_blocking_code == primary_blocking_code
         ]
+    if missing_component_type:
+        readiness_rows = [
+            row
+            for row in readiness_rows
+            if missing_component_type in row.bom_compliance.missing_required_components
+        ]
     if recommended_action:
         readiness_rows = [
             row for row in readiness_rows if row.recommended_action == recommended_action
@@ -1421,6 +1433,7 @@ def list_device_shipment_readiness(
             "production_status": production_status,
             "blocking_code": blocking_code,
             "primary_blocking_code": primary_blocking_code,
+            "missing_component_type": missing_component_type,
             "recommended_action": recommended_action,
             "latest_gate_result": latest_gate_result,
             "only_blocked": only_blocked,
