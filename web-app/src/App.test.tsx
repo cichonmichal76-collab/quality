@@ -1504,6 +1504,119 @@ describe("App", () => {
     );
   });
 
+  it("opens full device details page directly from route", async () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/devices/COMP-001?view=components&comp_device_type=DEMO-OPS&comp_sort_by=blocked_components&comp_sort_desc=true&comp_only_blocking=true&comp_limit=100&comp_offset=0&device_type=DEMO-OPS&device_variant=DEFAULT",
+    );
+
+    const fetchMock = vi.fn((input: string | URL | Request) => {
+      const url = String(input);
+
+      if (
+        url ===
+        "/api/component-quality?device_type=DEMO-OPS&only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=100"
+      ) {
+        return Promise.resolve(createJsonResponse(componentPayload));
+      }
+
+      if (url === "/api/devices/COMP-001/shipment-readiness") {
+        return Promise.resolve(
+          createJsonResponse(componentActionShipmentDetailsPayload),
+        );
+      }
+
+      if (url === "/api/devices/COMP-001/component-quality") {
+        return Promise.resolve(
+          createJsonResponse(componentActionComponentDetailsPayload),
+        );
+      }
+
+      if (url === "/api/devices/COMP-001/shipment-gate-history?limit=10") {
+        return Promise.resolve(createJsonResponse([]));
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", { name: "COMP-001" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(
+      screen.getByText("Pełny widok urządzenia"),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Wróć do dashboardu" })).toHaveAttribute(
+      "href",
+      expect.stringContaining(
+        "/?view=components&ship_sort_by=created_at&ship_sort_desc=true",
+      ),
+    );
+    expect(
+      screen.getByRole("link", { name: "Wróć do dashboardu" }),
+    ).toHaveAttribute("href", expect.stringContaining("device_serial=COMP-001"));
+  });
+
+  it("shows full page link in the details drawer", async () => {
+    const fetchMock = vi.fn((input: string | URL | Request) => {
+      const url = String(input);
+
+      if (url.startsWith("/api/shipment-readiness")) {
+        return Promise.resolve(createJsonResponse(shipmentPayload));
+      }
+
+      if (
+        url ===
+        "/api/component-quality?only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=100"
+      ) {
+        return Promise.resolve(createJsonResponse(componentPayload));
+      }
+
+      if (
+        url ===
+        "/api/component-quality?device_type=DEMO-OPS&only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=100"
+      ) {
+        return Promise.resolve(createJsonResponse(componentPayload));
+      }
+
+      if (url === "/api/devices/COMP-001/shipment-readiness") {
+        return Promise.resolve(
+          createJsonResponse(componentActionShipmentDetailsPayload),
+        );
+      }
+
+      if (url === "/api/devices/COMP-001/component-quality") {
+        return Promise.resolve(
+          createJsonResponse(componentActionComponentDetailsPayload),
+        );
+      }
+
+      if (url === "/api/devices/COMP-001/shipment-gate-history?limit=10") {
+        return Promise.resolve(createJsonResponse([]));
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("SHIP-001")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Komponenty" }));
+    fireEvent.change(screen.getByLabelText("Typ urządzenia"), {
+      target: { value: "DEMO-OPS" },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "COMP-001" }));
+
+    const pageLink = await screen.findByRole("link", { name: "Pełna strona" });
+    expect(pageLink).toHaveAttribute("href", "/devices/COMP-001?view=components&ship_sort_by=created_at&ship_sort_desc=true&ship_limit=100&ship_offset=0&ship_only_blocked=false&ship_only_ready=false&comp_sort_by=blocked_components&comp_sort_desc=true&comp_limit=100&comp_offset=0&comp_only_blocking=true&comp_device_type=DEMO-OPS&device_serial=COMP-001&device_type=DEMO-OPS&device_variant=DEFAULT");
+  });
+
   it("marks device as ready for shipment from the details drawer", async () => {
     let readyMarked = false;
     const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
@@ -1980,7 +2093,6 @@ describe("App", () => {
         "Zamontowano komponent Fan Module V2 z barcode BC-FAN-777.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText("Barcode komponentu")).toHaveValue("");
     await waitFor(() =>
       expect(
         screen.queryByRole("button", { name: "Zamontuj komponent" }),

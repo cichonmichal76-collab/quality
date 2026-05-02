@@ -135,6 +135,7 @@ const URL_DEVICE_TYPE_KEY = "device_type";
 const URL_DEVICE_VARIANT_KEY = "device_variant";
 const URL_SHIPMENT_PREFIX = "ship_";
 const URL_COMPONENT_PREFIX = "comp_";
+const DEVICE_DETAILS_PATH_PREFIX = "/devices/";
 
 type OptionalBooleanString = "" | "true" | "false";
 
@@ -195,6 +196,8 @@ interface DashboardUrlState {
   hasShipmentFilters: boolean;
   hasComponentFilters: boolean;
   searchParams: URLSearchParams;
+  isDevicePage: boolean;
+  devicePageSerial: string | null;
 }
 
 const SHIPMENT_TEXT_FILTER_KEYS: Array<keyof ShipmentFilters> = [
@@ -241,6 +244,7 @@ const DEFAULT_COMPONENT_FILTERS: ComponentFilters = {
 
 export function App() {
   const dashboardUrlState = readDashboardUrlState();
+  const isDevicePage = dashboardUrlState.isDevicePage;
   const [activeView, setActiveView] = useState<DashboardMode>(() => {
     return dashboardUrlState.activeView ?? readStoredDashboardMode();
   });
@@ -287,7 +291,11 @@ export function App() {
   const [loadState, setLoadState] = useState<LoadState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [selectedDevice, setSelectedDevice] = useState<DeviceSelection | null>(
-    () => readSelectedDeviceFromUrl(dashboardUrlState.searchParams),
+    () =>
+      readSelectedDeviceFromUrl(
+        dashboardUrlState.searchParams,
+        dashboardUrlState.devicePageSerial,
+      ),
   );
   const [deviceDetails, setDeviceDetails] = useState<DeviceDetailsPayload | null>(
     null,
@@ -372,6 +380,22 @@ export function App() {
     ) ??
     qualitySessionOptions[0] ??
     null;
+  const dashboardHref = buildDashboardLocationHref({
+    pathname: "/",
+    activeView,
+    shipmentFilters,
+    componentFilters,
+    selectedDevice,
+  });
+  const selectedDevicePageHref = selectedDevice
+    ? buildDashboardLocationHref({
+        pathname: buildDeviceDetailsPath(selectedDevice.serialNumber),
+        activeView,
+        shipmentFilters,
+        componentFilters,
+        selectedDevice,
+      })
+    : null;
   const assemblyComponentTypeOptions = buildAssemblyComponentTypeOptions(
     deviceDetails?.shipment.bom_compliance.component_coverage ?? [],
   );
@@ -1089,10 +1113,13 @@ export function App() {
     setSelectedQualitySessionId("");
     setSelectedAssemblyComponentType("");
     setAssemblyBarcodeValue("");
-    setSelectedDevice(null);
-    setDeviceDetails(null);
-    setDeviceDetailsState("idle");
-    setDeviceDetailsError(null);
+
+    if (!isDevicePage) {
+      setSelectedDevice(null);
+      setDeviceDetails(null);
+      setDeviceDetailsState("idle");
+      setDeviceDetailsError(null);
+    }
   };
 
   const flushActiveRequestFilters = () => {
@@ -1103,6 +1130,45 @@ export function App() {
 
     flushComponentRequestFilters();
   };
+
+  const deviceDetailsViewProps = selectedDevice
+    ? {
+        device: selectedDevice,
+        details: deviceDetails,
+        loadState: deviceDetailsState,
+        errorMessage: deviceDetailsError,
+        actionState: deviceActionState,
+        actionErrorMessage: deviceActionError,
+        actionSuccessMessage: deviceActionSuccess,
+        actionContextState,
+        actionContextError,
+        finalTestSessionOptions,
+        selectedFinalTestSessionId:
+          selectedFinalTestSession?.workSessionId ?? "",
+        onSelectFinalTestSession: setSelectedFinalTestSessionId,
+        productionSessionOptions,
+        selectedProductionSessionId:
+          selectedProductionSession?.workSessionId ?? "",
+        onSelectProductionSession: setSelectedProductionSessionId,
+        assemblyComponentTypeOptions,
+        selectedAssemblyComponentType,
+        onSelectAssemblyComponentType: setSelectedAssemblyComponentType,
+        assemblyBarcodeValue,
+        onChangeAssemblyBarcode: setAssemblyBarcodeValue,
+        qualitySessionOptions,
+        selectedQualitySessionId: selectedQualitySession?.workSessionId ?? "",
+        onSelectQualitySession: setSelectedQualitySessionId,
+        onMarkReadyForShipment: markSelectedDeviceReadyForShipment,
+        onMarkShipped: markSelectedDeviceShipped,
+        onCompleteAssembly: completeSelectedAssembly,
+        onRecordFinalTestPass: () => recordSelectedDeviceFinalTest("PASS"),
+        onRecordFinalTestFail: () => recordSelectedDeviceFinalTest("FAIL"),
+        onRecordComponentQcPass: () => recordSelectedComponentQc("PASS"),
+        onRecordComponentQcFail: () => recordSelectedComponentQc("FAIL"),
+        onCloseDeviceCriticalNcrs: closeSelectedDeviceCriticalNcrs,
+        onCloseComponentCriticalNcrs: closeSelectedComponentCriticalNcrs,
+      }
+    : null;
 
   return (
     <main className="app-shell">
@@ -1148,115 +1214,102 @@ export function App() {
         </section>
       </header>
 
-      <section className="workspace">
-        <nav className="view-switch" aria-label="Widok panelu">
-          <button
-            className={activeView === "shipment" ? "is-active" : ""}
-            type="button"
-            onClick={() => {
-              flushShipmentRequestFilters();
-              setActiveView("shipment");
-            }}
-          >
-            Wysyłka
-          </button>
-          <button
-            className={activeView === "components" ? "is-active" : ""}
-            type="button"
-            onClick={() => {
-              flushComponentRequestFilters();
-              setActiveView("components");
-            }}
-          >
-            Komponenty
-          </button>
-        </nav>
-
-        {errorMessage ? (
-          <div className="error-banner" role="alert">
-            <strong>API zwróciło problem.</strong>
-            <span>{errorMessage}</span>
+      {isDevicePage && selectedDevice && deviceDetailsViewProps ? (
+        <section className="workspace">
+          <div className="device-page-bar">
+            <a className="ghost-button button-link" href={dashboardHref}>
+              Wróć do dashboardu
+            </a>
+            <span className="empty-copy">
+              Pełny widok urządzenia zachowuje kontekst filtrów i aktywnej
+              kolejki, więc możesz wrócić dokładnie do miejsca, z którego
+              wszedłeś.
+            </span>
           </div>
-        ) : null}
-
-        {activeView === "shipment" ? (
-          <>
-            <ShipmentFiltersPanel
-              filters={shipmentFilters}
-              onChange={updateShipmentFilter}
-              onReset={() => setShipmentFilters(DEFAULT_SHIPMENT_FILTERS)}
-              onCommitTextFilters={flushShipmentRequestFilters}
-              hasPendingTextFilters={shipmentFiltersPending}
-            />
-            <ShipmentDashboard
-              data={shipmentData}
-              isLoading={loadState === "loading"}
-              onPageChange={(offset) => updateShipmentFilter("offset", offset)}
-              fallbackLimit={shipmentFilters.limit}
-              onSelectDevice={selectDevice}
-              selectedDeviceSerial={selectedDeviceSerial}
-            />
-          </>
-        ) : (
-          <>
-            <ComponentFiltersPanel
-              filters={componentFilters}
-              onChange={updateComponentFilter}
-              onReset={() => setComponentFilters(DEFAULT_COMPONENT_FILTERS)}
-              onCommitTextFilters={flushComponentRequestFilters}
-              hasPendingTextFilters={componentFiltersPending}
-            />
-            <ComponentDashboard
-              data={componentData}
-              isLoading={loadState === "loading"}
-              onPageChange={(offset) => updateComponentFilter("offset", offset)}
-              fallbackLimit={componentFilters.limit}
-              onSelectDevice={selectDevice}
-              selectedDeviceSerial={selectedDeviceSerial}
-            />
-          </>
-        )}
-
-        {selectedDevice ? (
-          <DeviceDetailsDrawer
-            device={selectedDevice}
-            details={deviceDetails}
-            loadState={deviceDetailsState}
-            errorMessage={deviceDetailsError}
-            actionState={deviceActionState}
-            actionErrorMessage={deviceActionError}
-            actionSuccessMessage={deviceActionSuccess}
-            actionContextState={actionContextState}
-            actionContextError={actionContextError}
-            finalTestSessionOptions={finalTestSessionOptions}
-            selectedFinalTestSessionId={selectedFinalTestSession?.workSessionId ?? ""}
-            onSelectFinalTestSession={setSelectedFinalTestSessionId}
-            productionSessionOptions={productionSessionOptions}
-            selectedProductionSessionId={
-              selectedProductionSession?.workSessionId ?? ""
-            }
-            onSelectProductionSession={setSelectedProductionSessionId}
-            assemblyComponentTypeOptions={assemblyComponentTypeOptions}
-            selectedAssemblyComponentType={selectedAssemblyComponentType}
-            onSelectAssemblyComponentType={setSelectedAssemblyComponentType}
-            assemblyBarcodeValue={assemblyBarcodeValue}
-            onChangeAssemblyBarcode={setAssemblyBarcodeValue}
-            qualitySessionOptions={qualitySessionOptions}
-            selectedQualitySessionId={selectedQualitySession?.workSessionId ?? ""}
-            onSelectQualitySession={setSelectedQualitySessionId}
-            onMarkReadyForShipment={markSelectedDeviceReadyForShipment}
-            onMarkShipped={markSelectedDeviceShipped}
-            onCompleteAssembly={completeSelectedAssembly}
-            onRecordFinalTestPass={() => recordSelectedDeviceFinalTest("PASS")}
-            onRecordFinalTestFail={() => recordSelectedDeviceFinalTest("FAIL")}
-            onRecordComponentQcPass={() => recordSelectedComponentQc("PASS")}
-            onRecordComponentQcFail={() => recordSelectedComponentQc("FAIL")}
-            onCloseDeviceCriticalNcrs={closeSelectedDeviceCriticalNcrs}
-            onCloseComponentCriticalNcrs={closeSelectedComponentCriticalNcrs}
-            onClose={() => setSelectedDevice(null)}
+          <DeviceDetailsPage
+            {...deviceDetailsViewProps}
+            devicePageHref={selectedDevicePageHref}
           />
-        ) : null}
-      </section>
+        </section>
+      ) : (
+        <section className="workspace">
+          <nav className="view-switch" aria-label="Widok panelu">
+            <button
+              className={activeView === "shipment" ? "is-active" : ""}
+              type="button"
+              onClick={() => {
+                flushShipmentRequestFilters();
+                setActiveView("shipment");
+              }}
+            >
+              Wysyłka
+            </button>
+            <button
+              className={activeView === "components" ? "is-active" : ""}
+              type="button"
+              onClick={() => {
+                flushComponentRequestFilters();
+                setActiveView("components");
+              }}
+            >
+              Komponenty
+            </button>
+          </nav>
+
+          {errorMessage ? (
+            <div className="error-banner" role="alert">
+              <strong>API zwróciło problem.</strong>
+              <span>{errorMessage}</span>
+            </div>
+          ) : null}
+
+          {activeView === "shipment" ? (
+            <>
+              <ShipmentFiltersPanel
+                filters={shipmentFilters}
+                onChange={updateShipmentFilter}
+                onReset={() => setShipmentFilters(DEFAULT_SHIPMENT_FILTERS)}
+                onCommitTextFilters={flushShipmentRequestFilters}
+                hasPendingTextFilters={shipmentFiltersPending}
+              />
+              <ShipmentDashboard
+                data={shipmentData}
+                isLoading={loadState === "loading"}
+                onPageChange={(offset) => updateShipmentFilter("offset", offset)}
+                fallbackLimit={shipmentFilters.limit}
+                onSelectDevice={selectDevice}
+                selectedDeviceSerial={selectedDeviceSerial}
+              />
+            </>
+          ) : (
+            <>
+              <ComponentFiltersPanel
+                filters={componentFilters}
+                onChange={updateComponentFilter}
+                onReset={() => setComponentFilters(DEFAULT_COMPONENT_FILTERS)}
+                onCommitTextFilters={flushComponentRequestFilters}
+                hasPendingTextFilters={componentFiltersPending}
+              />
+              <ComponentDashboard
+                data={componentData}
+                isLoading={loadState === "loading"}
+                onPageChange={(offset) => updateComponentFilter("offset", offset)}
+                fallbackLimit={componentFilters.limit}
+                onSelectDevice={selectDevice}
+                selectedDeviceSerial={selectedDeviceSerial}
+              />
+            </>
+          )}
+
+          {selectedDevice && deviceDetailsViewProps ? (
+            <DeviceDetailsDrawer
+              {...deviceDetailsViewProps}
+              devicePageHref={selectedDevicePageHref}
+              onClose={() => setSelectedDevice(null)}
+            />
+          ) : null}
+        </section>
+      )}
     </main>
   );
 }
@@ -1979,6 +2032,41 @@ function ComponentTable({
   );
 }
 
+interface DeviceDetailsViewProps {
+  device: DeviceSelection;
+  details: DeviceDetailsPayload | null;
+  loadState: LoadState;
+  errorMessage: string | null;
+  actionState: LoadState;
+  actionErrorMessage: string | null;
+  actionSuccessMessage: string | null;
+  actionContextState: LoadState;
+  actionContextError: string | null;
+  finalTestSessionOptions: ActionWorkSessionOption[];
+  selectedFinalTestSessionId: string;
+  onSelectFinalTestSession: (workSessionId: string) => void;
+  productionSessionOptions: ActionWorkSessionOption[];
+  selectedProductionSessionId: string;
+  onSelectProductionSession: (workSessionId: string) => void;
+  assemblyComponentTypeOptions: string[];
+  selectedAssemblyComponentType: string;
+  onSelectAssemblyComponentType: (componentType: string) => void;
+  assemblyBarcodeValue: string;
+  onChangeAssemblyBarcode: (barcodeValue: string) => void;
+  qualitySessionOptions: ActionWorkSessionOption[];
+  selectedQualitySessionId: string;
+  onSelectQualitySession: (workSessionId: string) => void;
+  onMarkReadyForShipment: () => void;
+  onMarkShipped: () => void;
+  onCompleteAssembly: () => void;
+  onRecordFinalTestPass: () => void;
+  onRecordFinalTestFail: () => void;
+  onRecordComponentQcPass: () => void;
+  onRecordComponentQcFail: () => void;
+  onCloseDeviceCriticalNcrs: () => void;
+  onCloseComponentCriticalNcrs: () => void;
+}
+
 function DeviceDetailsDrawer({
   device,
   details,
@@ -2012,41 +2100,139 @@ function DeviceDetailsDrawer({
   onRecordComponentQcFail,
   onCloseDeviceCriticalNcrs,
   onCloseComponentCriticalNcrs,
+  devicePageHref,
   onClose,
-}: {
-  device: DeviceSelection;
-  details: DeviceDetailsPayload | null;
-  loadState: LoadState;
-  errorMessage: string | null;
-  actionState: LoadState;
-  actionErrorMessage: string | null;
-  actionSuccessMessage: string | null;
-  actionContextState: LoadState;
-  actionContextError: string | null;
-  finalTestSessionOptions: ActionWorkSessionOption[];
-  selectedFinalTestSessionId: string;
-  onSelectFinalTestSession: (workSessionId: string) => void;
-  productionSessionOptions: ActionWorkSessionOption[];
-  selectedProductionSessionId: string;
-  onSelectProductionSession: (workSessionId: string) => void;
-  assemblyComponentTypeOptions: string[];
-  selectedAssemblyComponentType: string;
-  onSelectAssemblyComponentType: (componentType: string) => void;
-  assemblyBarcodeValue: string;
-  onChangeAssemblyBarcode: (barcodeValue: string) => void;
-  qualitySessionOptions: ActionWorkSessionOption[];
-  selectedQualitySessionId: string;
-  onSelectQualitySession: (workSessionId: string) => void;
-  onMarkReadyForShipment: () => void;
-  onMarkShipped: () => void;
-  onCompleteAssembly: () => void;
-  onRecordFinalTestPass: () => void;
-  onRecordFinalTestFail: () => void;
-  onRecordComponentQcPass: () => void;
-  onRecordComponentQcFail: () => void;
-  onCloseDeviceCriticalNcrs: () => void;
-  onCloseComponentCriticalNcrs: () => void;
+}: DeviceDetailsViewProps & {
+  devicePageHref: string | null;
   onClose: () => void;
+}) {
+  return (
+    <>
+      <button
+        className="drawer-backdrop"
+        type="button"
+        aria-label="Zamknij szczegóły urządzenia"
+        onClick={onClose}
+      />
+      <aside
+        className="details-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="device-details-title"
+      >
+        <DeviceDetailsSurface
+          device={device}
+          details={details}
+          loadState={loadState}
+          errorMessage={errorMessage}
+          actionState={actionState}
+          actionErrorMessage={actionErrorMessage}
+          actionSuccessMessage={actionSuccessMessage}
+          actionContextState={actionContextState}
+          actionContextError={actionContextError}
+          finalTestSessionOptions={finalTestSessionOptions}
+          selectedFinalTestSessionId={selectedFinalTestSessionId}
+          onSelectFinalTestSession={onSelectFinalTestSession}
+          productionSessionOptions={productionSessionOptions}
+          selectedProductionSessionId={selectedProductionSessionId}
+          onSelectProductionSession={onSelectProductionSession}
+          assemblyComponentTypeOptions={assemblyComponentTypeOptions}
+          selectedAssemblyComponentType={selectedAssemblyComponentType}
+          onSelectAssemblyComponentType={onSelectAssemblyComponentType}
+          assemblyBarcodeValue={assemblyBarcodeValue}
+          onChangeAssemblyBarcode={onChangeAssemblyBarcode}
+          qualitySessionOptions={qualitySessionOptions}
+          selectedQualitySessionId={selectedQualitySessionId}
+          onSelectQualitySession={onSelectQualitySession}
+          onMarkReadyForShipment={onMarkReadyForShipment}
+          onMarkShipped={onMarkShipped}
+          onCompleteAssembly={onCompleteAssembly}
+          onRecordFinalTestPass={onRecordFinalTestPass}
+          onRecordFinalTestFail={onRecordFinalTestFail}
+          onRecordComponentQcPass={onRecordComponentQcPass}
+          onRecordComponentQcFail={onRecordComponentQcFail}
+          onCloseDeviceCriticalNcrs={onCloseDeviceCriticalNcrs}
+          onCloseComponentCriticalNcrs={onCloseComponentCriticalNcrs}
+          titleId="device-details-title"
+          headerEyebrow="Szczegóły urządzenia"
+          headerActions={
+            <>
+              {devicePageHref ? (
+                <a className="ghost-button button-link" href={devicePageHref}>
+                  Pełna strona
+                </a>
+              ) : null}
+              <button className="ghost-button" type="button" onClick={onClose}>
+                Zamknij
+              </button>
+            </>
+          }
+        />
+      </aside>
+    </>
+  );
+}
+
+function DeviceDetailsPage({
+  devicePageHref: _devicePageHref,
+  ...props
+}: DeviceDetailsViewProps & {
+  devicePageHref: string | null;
+}) {
+  return (
+    <article className="details-page">
+      <div className="details-page-shell">
+        <DeviceDetailsSurface
+          {...props}
+          titleId="device-details-page-title"
+          headerEyebrow="Pełny widok urządzenia"
+          headerActions={null}
+        />
+      </div>
+    </article>
+  );
+}
+
+function DeviceDetailsSurface({
+  device,
+  details,
+  loadState,
+  errorMessage,
+  actionState,
+  actionErrorMessage,
+  actionSuccessMessage,
+  actionContextState,
+  actionContextError,
+  finalTestSessionOptions,
+  selectedFinalTestSessionId,
+  onSelectFinalTestSession,
+  productionSessionOptions,
+  selectedProductionSessionId,
+  onSelectProductionSession,
+  assemblyComponentTypeOptions,
+  selectedAssemblyComponentType,
+  onSelectAssemblyComponentType,
+  assemblyBarcodeValue,
+  onChangeAssemblyBarcode,
+  qualitySessionOptions,
+  selectedQualitySessionId,
+  onSelectQualitySession,
+  onMarkReadyForShipment,
+  onMarkShipped,
+  onCompleteAssembly,
+  onRecordFinalTestPass,
+  onRecordFinalTestFail,
+  onRecordComponentQcPass,
+  onRecordComponentQcFail,
+  onCloseDeviceCriticalNcrs,
+  onCloseComponentCriticalNcrs,
+  titleId,
+  headerEyebrow,
+  headerActions,
+}: DeviceDetailsViewProps & {
+  titleId: string;
+  headerEyebrow: string;
+  headerActions: ReactNode;
 }) {
   const shipment = details?.shipment ?? null;
   const component = details?.component ?? null;
@@ -2083,79 +2269,67 @@ function DeviceDetailsDrawer({
 
   return (
     <>
-      <button
-        className="drawer-backdrop"
-        type="button"
-        aria-label="Zamknij szczegóły urządzenia"
-        onClick={onClose}
-      />
-      <aside
-        className="details-drawer"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="device-details-title"
-      >
-        <div className="details-drawer-header">
-          <div>
-            <p className="eyebrow">Szczegóły urządzenia</p>
-            <h2 id="device-details-title">{device.serialNumber}</h2>
-            <p className="details-subtitle">
-              {deviceType} · {deviceVariant}
-            </p>
-          </div>
-          <button className="ghost-button" type="button" onClick={onClose}>
-            Zamknij
-          </button>
+      <div className="details-drawer-header">
+        <div>
+          <p className="eyebrow">{headerEyebrow}</p>
+          <h2 id={titleId}>{device.serialNumber}</h2>
+          <p className="details-subtitle">
+            {deviceType} · {deviceVariant}
+          </p>
         </div>
+        {headerActions ? (
+          <div className="details-header-actions">{headerActions}</div>
+        ) : null}
+      </div>
 
-        {loadState === "loading" ? (
-          <section className="details-section">
-            <strong>Ładowanie szczegółów urządzenia...</strong>
-            <span className="empty-copy">
-              Pobieram bramkę wysyłki, BOM, jakość komponentów i historię gate.
-            </span>
+      {loadState === "loading" ? (
+        <section className="details-section">
+          <strong>Ładowanie szczegółów urządzenia...</strong>
+          <span className="empty-copy">
+            Pobieram bramkę wysyłki, BOM, jakość komponentów i historię gate.
+          </span>
+        </section>
+      ) : errorMessage ? (
+        <section className="details-section error-banner" role="alert">
+          <strong>Nie udało się pobrać szczegółów urządzenia.</strong>
+          <span>{errorMessage}</span>
+        </section>
+      ) : shipment && component ? (
+        <div className="details-content">
+          <section className="details-grid">
+            <DetailCard
+              label="Status produkcji"
+              value={labelForCode(shipment.production_status)}
+            />
+            <DetailCard
+              label="Rekomendowana akcja"
+              value={labelForCode(shipment.recommended_action)}
+            />
+            <DetailCard
+              label="Wysyłka"
+              value={
+                shipment.can_transition_to_ready_for_shipment
+                  ? "Gotowe"
+                  : "Blokada"
+              }
+            />
+            <DetailCard
+              label="Gate komponentów"
+              value={
+                component.passes_component_quality_gate
+                  ? "Zaliczone"
+                  : "Blokada"
+              }
+            />
+            <DetailCard
+              label="Final test"
+              value={labelForCode(shipment.final_test_passed)}
+            />
+            <DetailCard
+              label="Świeżość danych"
+              value={labelForCode(component.stale_bucket)}
+            />
           </section>
-        ) : errorMessage ? (
-          <section className="details-section error-banner" role="alert">
-            <strong>Nie udało się pobrać szczegółów urządzenia.</strong>
-            <span>{errorMessage}</span>
-          </section>
-        ) : shipment && component ? (
-          <div className="details-content">
-            <section className="details-grid">
-              <DetailCard
-                label="Status produkcji"
-                value={labelForCode(shipment.production_status)}
-              />
-              <DetailCard
-                label="Rekomendowana akcja"
-                value={labelForCode(shipment.recommended_action)}
-              />
-              <DetailCard
-                label="Wysyłka"
-                value={
-                  shipment.can_transition_to_ready_for_shipment
-                    ? "Gotowe"
-                    : "Blokada"
-                }
-              />
-              <DetailCard
-                label="Gate komponentów"
-                value={
-                  component.passes_component_quality_gate
-                    ? "Zaliczone"
-                    : "Blokada"
-                }
-              />
-              <DetailCard
-                label="Final test"
-                value={labelForCode(shipment.final_test_passed)}
-              />
-              <DetailCard
-                label="Świeżość danych"
-                value={labelForCode(component.stale_bucket)}
-              />
-            </section>
 
             <DetailsSection title="Działania operacyjne">
               {actionSuccessMessage ? (
@@ -2800,12 +2974,11 @@ function DeviceDetailsDrawer({
               )}
             </DetailsSection>
           </div>
-        ) : (
-          <section className="details-section">
-            <strong>Nie znaleziono danych szczegółowych.</strong>
-          </section>
-        )}
-      </aside>
+      ) : (
+        <section className="details-section">
+          <strong>Nie znaleziono danych szczegółowych.</strong>
+        </section>
+      )}
     </>
   );
 }
@@ -3367,6 +3540,7 @@ function readStoredDashboardMode(): DashboardMode {
 
 function readDashboardUrlState(): DashboardUrlState {
   const searchParams = new URLSearchParams(window.location.search);
+  const devicePageSerial = readDevicePageSerial(window.location.pathname);
 
   return {
     activeView:
@@ -3378,6 +3552,8 @@ function readDashboardUrlState(): DashboardUrlState {
     hasShipmentFilters: hasUrlFilterPrefix(searchParams, URL_SHIPMENT_PREFIX),
     hasComponentFilters: hasUrlFilterPrefix(searchParams, URL_COMPONENT_PREFIX),
     searchParams,
+    isDevicePage: devicePageSerial !== null,
+    devicePageSerial,
   };
 }
 
@@ -3550,8 +3726,12 @@ function readComponentFiltersFromUrl(
 
 function readSelectedDeviceFromUrl(
   searchParams: URLSearchParams,
+  devicePageSerial: string | null = null,
 ): DeviceSelection | null {
-  const serialNumber = searchParams.get(URL_DEVICE_SERIAL_KEY)?.trim() ?? "";
+  const serialNumber =
+    devicePageSerial ??
+    searchParams.get(URL_DEVICE_SERIAL_KEY)?.trim() ??
+    "";
 
   if (serialNumber === "") {
     return null;
@@ -3761,6 +3941,51 @@ function buildDashboardUrlSearch({
 
   const search = searchParams.toString();
   return search ? `?${search}` : "";
+}
+
+function buildDashboardLocationHref({
+  pathname,
+  activeView,
+  shipmentFilters,
+  componentFilters,
+  selectedDevice,
+}: {
+  pathname: string;
+  activeView: DashboardMode;
+  shipmentFilters: ShipmentFilters;
+  componentFilters: ComponentFilters;
+  selectedDevice: DeviceSelection | null;
+}): string {
+  return `${pathname}${buildDashboardUrlSearch({
+    activeView,
+    shipmentFilters,
+    componentFilters,
+    selectedDevice,
+  })}`;
+}
+
+function buildDeviceDetailsPath(serialNumber: string): string {
+  return `${DEVICE_DETAILS_PATH_PREFIX}${encodeURIComponent(serialNumber)}`;
+}
+
+function readDevicePageSerial(pathname: string): string | null {
+  if (!pathname.startsWith(DEVICE_DETAILS_PATH_PREFIX)) {
+    return null;
+  }
+
+  const encodedSerial = pathname
+    .slice(DEVICE_DETAILS_PATH_PREFIX.length)
+    .split("/")[0]
+    ?.trim();
+  if (!encodedSerial) {
+    return null;
+  }
+
+  try {
+    return decodeURIComponent(encodedSerial);
+  } catch {
+    return encodedSerial;
+  }
 }
 
 function writeShipmentFiltersToSearchParams(

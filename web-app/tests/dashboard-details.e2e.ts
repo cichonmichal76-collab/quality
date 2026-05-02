@@ -37,3 +37,41 @@ test("dashboard opens device details from component queue", async ({ page }) => 
   await expect(drawer).toHaveCount(0);
   await expect(page).not.toHaveURL(/device_serial=/);
 });
+
+test("dashboard opens full device details page and returns to queue context", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  await expect(page.getByText("API OK")).toBeVisible();
+
+  await page.getByRole("button", { name: "Komponenty" }).click();
+  await page.locator(".filters-card input").first().fill("DEMO-E2E");
+  await page.getByRole("button", { name: /CQ-E2E-/ }).click();
+
+  const drawer = page.getByRole("dialog");
+  await expect(drawer).toBeVisible();
+
+  await drawer.getByRole("link", { name: "Pełna strona" }).click();
+
+  await expect(page).toHaveURL(/\/devices\/CQ-E2E-/);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: /CQ-E2E-/ }),
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "Wróć do dashboardu" })).toBeVisible();
+
+  await page.reload();
+
+  await expect(page).toHaveURL(/\/devices\/CQ-E2E-/);
+  await expect(
+    page.getByRole("heading", { name: /CQ-E2E-/ }),
+  ).toBeVisible();
+
+  await page.getByRole("link", { name: "Wróć do dashboardu" }).click();
+
+  await expect(page).toHaveURL(/view=components/);
+  await expect(page).toHaveURL(/comp_device_type=DEMO-E2E/);
+  await expect(page).toHaveURL(/device_serial=CQ-E2E-/);
+  await expect(page.getByRole("dialog")).toBeVisible();
+});

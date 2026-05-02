@@ -16,6 +16,9 @@ i zapamiętanie w `localStorage`:
 Panel synchronizuje też aktywną zakładkę, filtry obu kolejek i otwarte
 szczegóły urządzenia z adresem URL. Dzięki temu można odświeżyć stronę albo
 wkleić link do konkretnego kontekstu pracy bez ręcznego odtwarzania stanu.
+Ten sam mechanizm obsługuje też pełny widok szczegółów pod ścieżką
+`/devices/{serial}` z przyciskiem powrotu do dokładnie tego samego kontekstu
+dashboardu.
 
 Tekstowe filtry są odpytywane z debounce `250 ms`. W trakcie oczekiwania panel
 pokazuje znacznik `Oczekuje na zastosowanie`, a klawisz `Enter` wymusza
@@ -25,6 +28,8 @@ Kliknięcie numeru seryjnego w tabeli otwiera drawer szczegółów urządzenia.
 Drawer łączy dane z shipment readiness, component quality i historii shipment
 gate, żeby od razu pokazać blokady, rekomendowaną akcję, stan BOM oraz
 szczegóły blokujących komponentów.
+Z drawera można też przejść do pełnej strony szczegółów urządzenia, kiedy
+potrzebny jest stały link albo więcej miejsca na pracę.
 
 Drawer nie jest już tylko podglądem. Panel pozwala teraz wykonać sześć
 bezpośrednie kroki operacyjne:
