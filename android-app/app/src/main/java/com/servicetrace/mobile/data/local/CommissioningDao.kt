@@ -131,6 +131,9 @@ data class CommissioningSyncAttemptEntity(
     val message: String,
     val retryable: Boolean,
     val attemptNumber: Int,
+    val backendServiceSessionId: String,
+    val backendUploadStatus: String,
+    val backendPackageHash: String,
 )
 
 data class ServiceSessionDraftWithSteps(
@@ -230,6 +233,9 @@ fun ServiceSessionDraftWithSteps.toDomain(): ServiceSessionDraft =
                     message = row.message,
                     retryable = row.retryable,
                     attemptNumber = row.attemptNumber,
+                    backendServiceSessionId = row.backendServiceSessionId.ifBlank { null },
+                    backendUploadStatus = row.backendUploadStatus.ifBlank { null },
+                    backendPackageHash = row.backendPackageHash.ifBlank { null },
                 )
             },
     )
@@ -292,6 +298,9 @@ fun ServiceSessionDraft.toLocalEntity(): LocalDraftBundle =
                 message = attempt.message,
                 retryable = attempt.retryable,
                 attemptNumber = attempt.attemptNumber,
+                backendServiceSessionId = attempt.backendServiceSessionId.orEmpty(),
+                backendUploadStatus = attempt.backendUploadStatus.orEmpty(),
+                backendPackageHash = attempt.backendPackageHash.orEmpty(),
             )
         },
         steps = steps.map { step ->

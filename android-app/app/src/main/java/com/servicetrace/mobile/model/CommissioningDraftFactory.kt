@@ -110,6 +110,9 @@ data class SyncAttemptHistoryEntry(
     val message: String,
     val retryable: Boolean,
     val attemptNumber: Int,
+    val backendServiceSessionId: String?,
+    val backendUploadStatus: String?,
+    val backendPackageHash: String?,
 )
 
 data class ServiceSessionDraft(

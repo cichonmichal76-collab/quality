@@ -614,6 +614,11 @@ private fun SyncStatusSection(
                         "Kod: ${syncFailureReasonLabel(attempt.failureCode)} | ${attempt.message}",
                         style = MaterialTheme.typography.bodySmall,
                     )
+                } else {
+                    val backendSummary = buildBackendSyncSummary(attempt)
+                    if (backendSummary != null) {
+                        Text(backendSummary, style = MaterialTheme.typography.bodySmall)
+                    }
                 }
             }
         }
@@ -884,6 +889,15 @@ private fun syncAttemptResultLabel(result: SyncAttemptResult): String =
         SyncAttemptResult.SUCCESS -> "SUCCESS"
         SyncAttemptResult.FAILURE -> "FAILURE"
     }
+
+private fun buildBackendSyncSummary(attempt: SyncAttemptHistoryEntry): String? {
+    val parts = buildList {
+        attempt.backendUploadStatus?.let { value -> add("Status backendu: $value") }
+        attempt.backendServiceSessionId?.let { value -> add("ID backendu: $value") }
+        attempt.backendPackageHash?.let { value -> add("Hash paczki: $value") }
+    }
+    return if (parts.isEmpty()) null else parts.joinToString(" | ")
+}
 
 private fun isAutoRetrySuspended(draft: ServiceSessionDraft): Boolean =
     draft.syncStatus == SessionSyncStatus.READY_TO_SYNC &&

@@ -87,6 +87,9 @@ class CommissioningSyncWorkSchedulerTest {
                     message = "offline",
                     retryable = true,
                     attemptNumber = 1,
+                    backendServiceSessionId = null,
+                    backendUploadStatus = null,
+                    backendPackageHash = null,
                 ),
             ),
         )

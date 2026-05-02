@@ -40,4 +40,17 @@ class ServiceSessionUploaderTest {
             classifyTransportUploadException(IllegalStateException("bad package")).reasonCode,
         )
     }
+
+    @Test
+    fun `upload response can carry backend session metadata`() {
+        val response = ServiceSessionUploadResponse(
+            backendServiceSessionId = "svc-db-id",
+            sessionId = "SVC-123",
+            uploadStatus = "UPLOADED",
+            packageHash = "abc123",
+        )
+
+        assertEquals("svc-db-id", response.backendServiceSessionId)
+        assertEquals("abc123", response.packageHash)
+    }
 }

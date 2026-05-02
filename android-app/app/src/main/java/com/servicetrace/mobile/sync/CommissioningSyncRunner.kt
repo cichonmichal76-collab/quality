@@ -44,7 +44,7 @@ class CommissioningSyncRunner(
         drafts.distinctBy { draft -> draft.sessionId }.forEach { draft ->
             try {
                 val uploadDraft = ensurePackageForUpload(draft)
-                uploader.upload(baseUrl, uploadDraft)
+                val uploadResponse = uploader.upload(baseUrl, uploadDraft)
                 val completedAtMillis = System.currentTimeMillis()
                 val attemptNumber = uploadDraft.syncAttemptCount + 1
                 val syncedDraft = uploadDraft.copy(
@@ -65,6 +65,9 @@ class CommissioningSyncRunner(
                             message = "Synchronizacja commissioning zakonczona sukcesem.",
                             retryable = false,
                             attemptNumber = attemptNumber,
+                            backendServiceSessionId = uploadResponse.backendServiceSessionId,
+                            backendUploadStatus = uploadResponse.uploadStatus,
+                            backendPackageHash = uploadResponse.packageHash,
                         ),
                     ) + uploadDraft.syncAttempts,
                 )
@@ -93,6 +96,9 @@ class CommissioningSyncRunner(
                             message = uploadError.message ?: "Nieznany blad synchronizacji commissioning.",
                             retryable = uploadError.isRetryable,
                             attemptNumber = nextAttemptCount,
+                            backendServiceSessionId = null,
+                            backendUploadStatus = null,
+                            backendPackageHash = null,
                         ),
                     ) + draft.syncAttempts,
                 )
@@ -139,6 +145,9 @@ private fun createSyncAttemptHistoryEntry(
     message: String,
     retryable: Boolean,
     attemptNumber: Int,
+    backendServiceSessionId: String?,
+    backendUploadStatus: String?,
+    backendPackageHash: String?,
 ): SyncAttemptHistoryEntry =
     SyncAttemptHistoryEntry(
         attemptId = "SYNC-${UUID.randomUUID().toString().take(8).uppercase()}",
@@ -149,4 +158,7 @@ private fun createSyncAttemptHistoryEntry(
         message = message,
         retryable = retryable,
         attemptNumber = attemptNumber,
+        backendServiceSessionId = backendServiceSessionId,
+        backendUploadStatus = backendUploadStatus,
+        backendPackageHash = backendPackageHash,
     )

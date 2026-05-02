@@ -15,6 +15,7 @@ import java.net.URL
 import java.net.UnknownHostException
 
 data class ServiceSessionUploadResponse(
+    val backendServiceSessionId: String?,
     val sessionId: String,
     val uploadStatus: String,
     val packageHash: String?,
@@ -86,6 +87,7 @@ class ServiceSessionUploader(
 
             val payload = JSONObject(responseText.ifBlank { "{}" })
             ServiceSessionUploadResponse(
+                backendServiceSessionId = payload.optString("id").takeIf { value -> value.isNotBlank() },
                 sessionId = payload.optString("session_id", draft.sessionId),
                 uploadStatus = payload.optString("upload_status", "UPLOADED"),
                 packageHash = payload.optString("package_hash").takeIf { value -> value.isNotBlank() },
