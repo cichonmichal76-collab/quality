@@ -16,19 +16,26 @@ class MockMcuClient(
             .filter { character -> character.isLetterOrDigit() }
             .takeLast(4)
             .padStart(4, '0')
+        val capturedAtMillis = nowProvider()
 
-        return McuConnectionSnapshot(
+        return buildSnapshotFromProtocol(
             connectionMode = McuConnectionMode.MOCK,
-            echoedSerialNumber = normalizedSerial,
-            firmwareVersion = "mock-$normalizedType-1.$serialSuffix",
-            bootloaderVersion = "boot-0.$serialSuffix",
-            mainboardStatus = "OK",
-            inductionBoardStatus = "OK",
-            hmiStatus = "OK",
-            watchdogStatus = "ARMED",
-            usbLinkStatus = "USB CDC LINK ACTIVE",
-            logExcerpt = "Mock MCU handshake OK for $normalizedSerial ($normalizedType).",
-            capturedAtMillis = nowProvider(),
+            deviceInfo = mapOf(
+                "device_serial_number" to normalizedSerial,
+                "device_type" to normalizedType,
+                "firmware_version" to "mock-$normalizedType-1.$serialSuffix",
+                "bootloader_version" to "boot-0.$serialSuffix",
+            ),
+            status = mapOf(
+                "state" to "READY",
+                "watchdog" to "ARMED",
+                "mainboard" to "OK",
+                "induction_board" to "OK",
+            ),
+            errors = emptyList(),
+            logs = listOf("INFO@$capturedAtMillis:Mock MCU handshake OK for $normalizedSerial ($normalizedType)"),
+            linkStatus = "USB CDC LINK ACTIVE",
+            capturedAtMillis = capturedAtMillis,
         )
     }
 }

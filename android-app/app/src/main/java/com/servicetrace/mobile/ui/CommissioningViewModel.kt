@@ -10,6 +10,7 @@ import com.servicetrace.mobile.model.McuConnectionStatus
 import com.servicetrace.mobile.model.ServiceSessionDraft
 import com.servicetrace.mobile.model.SessionSyncStatus
 import com.servicetrace.mobile.mcu.MockMcuClient
+import com.servicetrace.mobile.mcu.UsbMcuClient
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -34,6 +35,7 @@ data class CommissioningUiState(
 class CommissioningViewModel(
     private val repository: CommissioningRepository,
     private val mockMcuClient: MockMcuClient,
+    private val usbMcuClient: UsbMcuClient,
 ) : ViewModel() {
     private val inputs = MutableStateFlow(NewDraftInputs())
     private val selectedDraft = MutableStateFlow<ServiceSessionDraft?>(null)
@@ -150,39 +152,47 @@ class CommissioningViewModel(
     fun connectToMcu() {
         val draft = selectedDraft.value ?: return
         viewModelScope.launch {
-            if (draft.connectionMode == McuConnectionMode.USB) {
+            try {
+                val snapshot = when (draft.connectionMode) {
+                    McuConnectionMode.MOCK -> mockMcuClient.connect(
+                        deviceSerialNumber = draft.deviceSerialNumber,
+                        deviceType = draft.deviceType,
+                    )
+                    McuConnectionMode.USB -> usbMcuClient.connect(
+                        deviceSerialNumber = draft.deviceSerialNumber,
+                        deviceType = draft.deviceType,
+                    )
+                }
                 val updatedDraft = draft.copy(
-                    connectionStatus = McuConnectionStatus.HARDWARE_REQUIRED,
-                    updatedAtMillis = System.currentTimeMillis(),
+                    firmwareVersion = snapshot.firmwareVersion,
+                    bootloaderVersion = snapshot.bootloaderVersion,
+                    connectionStatus = McuConnectionStatus.CONNECTED,
+                    echoedSerialNumber = snapshot.echoedSerialNumber,
+                    mainboardStatus = snapshot.mainboardStatus,
+                    inductionBoardStatus = snapshot.inductionBoardStatus,
+                    hmiStatus = snapshot.hmiStatus,
+                    watchdogStatus = snapshot.watchdogStatus,
+                    usbLinkStatus = snapshot.usbLinkStatus,
+                    logExcerpt = snapshot.logExcerpt,
+                    snapshotCapturedAtMillis = snapshot.capturedAtMillis,
+                    updatedAtMillis = snapshot.capturedAtMillis,
                 )
                 repository.saveDraft(updatedDraft)
                 selectedDraft.value = updatedDraft
-                bannerMessage.value =
-                    "Tryb USB jest już widoczny w workflow, ale właściwy UsbMcuClient dołożymy w następnym kroku."
-                return@launch
+                bannerMessage.value = if (draft.connectionMode == McuConnectionMode.USB) {
+                    "Połączono z MCU przez USB i zapisano snapshot commissioning."
+                } else {
+                    "Połączono z Mock MCU i zapisano snapshot commissioning."
+                }
+            } catch (error: Exception) {
+                val failedDraft = draft.copy(
+                    connectionStatus = McuConnectionStatus.HARDWARE_REQUIRED,
+                    updatedAtMillis = System.currentTimeMillis(),
+                )
+                repository.saveDraft(failedDraft)
+                selectedDraft.value = failedDraft
+                bannerMessage.value = error.message ?: "Nie udało się połączyć z MCU."
             }
-
-            val snapshot = mockMcuClient.connect(
-                deviceSerialNumber = draft.deviceSerialNumber,
-                deviceType = draft.deviceType,
-            )
-            val updatedDraft = draft.copy(
-                firmwareVersion = snapshot.firmwareVersion,
-                bootloaderVersion = snapshot.bootloaderVersion,
-                connectionStatus = McuConnectionStatus.CONNECTED,
-                echoedSerialNumber = snapshot.echoedSerialNumber,
-                mainboardStatus = snapshot.mainboardStatus,
-                inductionBoardStatus = snapshot.inductionBoardStatus,
-                hmiStatus = snapshot.hmiStatus,
-                watchdogStatus = snapshot.watchdogStatus,
-                usbLinkStatus = snapshot.usbLinkStatus,
-                logExcerpt = snapshot.logExcerpt,
-                snapshotCapturedAtMillis = snapshot.capturedAtMillis,
-                updatedAtMillis = snapshot.capturedAtMillis,
-            )
-            repository.saveDraft(updatedDraft)
-            selectedDraft.value = updatedDraft
-            bannerMessage.value = "Połączono z Mock MCU i zapisano snapshot commissioning."
         }
     }
 
@@ -228,11 +238,12 @@ class CommissioningViewModel(
         fun factory(
             repository: CommissioningRepository,
             mockMcuClient: MockMcuClient,
+            usbMcuClient: UsbMcuClient,
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                    CommissioningViewModel(repository, mockMcuClient) as T
+                    CommissioningViewModel(repository, mockMcuClient, usbMcuClient) as T
             }
     }
 }

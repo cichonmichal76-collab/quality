@@ -385,7 +385,7 @@ private fun ConnectionSection(
                         "Połącz z Mock MCU"
                     }
                 } else {
-                    "Spróbuj trybu USB"
+                    "Połącz przez USB"
                 },
             )
         }
@@ -465,7 +465,7 @@ private fun connectionStatusLabel(status: McuConnectionStatus): String =
     when (status) {
         McuConnectionStatus.DISCONNECTED -> "Rozłączone"
         McuConnectionStatus.CONNECTED -> "Połączone"
-        McuConnectionStatus.HARDWARE_REQUIRED -> "Wymaga klienta USB"
+        McuConnectionStatus.HARDWARE_REQUIRED -> "Wymaga sprzętu lub zgody USB"
     }
 
 private fun statusLabel(status: CommissioningStepStatus): String =

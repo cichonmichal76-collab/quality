@@ -9,6 +9,7 @@
 - ekran tworzenia draftu sesji commissioning
 - krok połączenia `Mock MCU / USB`
 - snapshot stanu MCU zapisany lokalnie w sesji
+- `UsbMcuClient` oparty o Android USB Host i kontrakt komend zgodny z `final-test-runner`
 - lokalna checklista 5 kroków
 - komentarz ogólny, firmware i bootloader
 - status `DRAFT` / `READY_TO_SYNC`
@@ -18,7 +19,7 @@ Po uruchomieniu aplikacji serwisant może:
 1. utworzyć lokalną sesję commissioning
 2. wpisać numer seryjny, typ urządzenia i identyfikator technika
 3. wybrać tryb połączenia `Mock MCU` albo `USB`
-4. pobrać lokalny snapshot commissioning z `Mock MCU`
+4. pobrać lokalny snapshot commissioning z `Mock MCU` albo z realnego urządzenia USB CDC
 5. przejść przez checklistę krok po kroku
 6. zapisać wynik lokalnie w `Room`
 7. oznaczyć sesję jako gotową do przyszłej synchronizacji
@@ -34,11 +35,10 @@ Po uruchomieniu aplikacji serwisant może:
 
 ## Następny sensowny krok
 
-1. dodać `MockMcuClient` i ekran połączenia USB / mock
-2. dołożyć właściwy `UsbMcuClient`
-3. zapisywać zdjęcia i snapshoty MCU do lokalnej sesji
-4. generować paczkę ZIP
-5. dodać kolejkę uploadu do backendu `POST /api/service-sessions/upload`
+1. dodać workflow nadawania zgody Androida na USB i selekcję konkretnego urządzenia
+2. zapisywać zdjęcia i rozszerzone snapshoty MCU do lokalnej sesji
+3. generować paczkę ZIP
+4. dodać kolejkę uploadu do backendu `POST /api/service-sessions/upload`
 
 ## Poza zakresem MVP
 

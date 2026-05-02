@@ -10,6 +10,7 @@ import androidx.compose.material3.Surface
 import com.servicetrace.mobile.data.OfflineCommissioningRepository
 import com.servicetrace.mobile.data.local.ServiceTraceMobileDatabase
 import com.servicetrace.mobile.mcu.MockMcuClient
+import com.servicetrace.mobile.mcu.UsbMcuClient
 import com.servicetrace.mobile.ui.CommissioningScreen
 import com.servicetrace.mobile.ui.CommissioningViewModel
 
@@ -20,6 +21,7 @@ class MainActivity : ComponentActivity() {
                 dao = ServiceTraceMobileDatabase.build(applicationContext).commissioningDao(),
             ),
             mockMcuClient = MockMcuClient(),
+            usbMcuClient = UsbMcuClient(applicationContext),
         )
     }
 
