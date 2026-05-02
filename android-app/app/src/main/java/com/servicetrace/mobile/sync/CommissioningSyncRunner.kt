@@ -68,6 +68,8 @@ class CommissioningSyncRunner(
                             backendServiceSessionId = uploadResponse.backendServiceSessionId,
                             backendUploadStatus = uploadResponse.uploadStatus,
                             backendPackageHash = uploadResponse.packageHash,
+                            backendUploadCorrelationId = uploadResponse.uploadCorrelationId,
+                            backendUploadedAtIso = uploadResponse.uploadedAtIso,
                         ),
                     ) + uploadDraft.syncAttempts,
                 )
@@ -99,6 +101,8 @@ class CommissioningSyncRunner(
                             backendServiceSessionId = null,
                             backendUploadStatus = null,
                             backendPackageHash = null,
+                            backendUploadCorrelationId = null,
+                            backendUploadedAtIso = null,
                         ),
                     ) + draft.syncAttempts,
                 )
@@ -148,6 +152,8 @@ private fun createSyncAttemptHistoryEntry(
     backendServiceSessionId: String?,
     backendUploadStatus: String?,
     backendPackageHash: String?,
+    backendUploadCorrelationId: String?,
+    backendUploadedAtIso: String?,
 ): SyncAttemptHistoryEntry =
     SyncAttemptHistoryEntry(
         attemptId = "SYNC-${UUID.randomUUID().toString().take(8).uppercase()}",
@@ -161,4 +167,6 @@ private fun createSyncAttemptHistoryEntry(
         backendServiceSessionId = backendServiceSessionId,
         backendUploadStatus = backendUploadStatus,
         backendPackageHash = backendPackageHash,
+        backendUploadCorrelationId = backendUploadCorrelationId,
+        backendUploadedAtIso = backendUploadedAtIso,
     )

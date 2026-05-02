@@ -50,6 +50,8 @@ internal fun buildBackendSyncSummary(attempt: SyncAttemptHistoryEntry): String? 
         attempt.backendUploadStatus?.let { value -> add("Status backendu: $value") }
         attempt.backendServiceSessionId?.let { value -> add("ID backendu: $value") }
         attempt.backendPackageHash?.let { value -> add("Hash paczki: $value") }
+        attempt.backendUploadCorrelationId?.let { value -> add("Correlation ID: $value") }
+        attempt.backendUploadedAtIso?.let { value -> add("Uploaded at: $value") }
     }
     return if (parts.isEmpty()) null else parts.joinToString(" | ")
 }

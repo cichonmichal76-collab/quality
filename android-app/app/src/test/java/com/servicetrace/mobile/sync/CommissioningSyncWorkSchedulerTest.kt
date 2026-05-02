@@ -90,6 +90,8 @@ class CommissioningSyncWorkSchedulerTest {
                     backendServiceSessionId = null,
                     backendUploadStatus = null,
                     backendPackageHash = null,
+                    backendUploadCorrelationId = null,
+                    backendUploadedAtIso = null,
                 ),
             ),
         )

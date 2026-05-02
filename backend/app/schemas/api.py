@@ -638,6 +638,8 @@ class ServiceSessionRead(BaseModel):
     package_path: str | None = None
     package_hash: str | None = None
     upload_status: str
+    upload_correlation_id: str | None = None
+    uploaded_at: datetime | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

@@ -1,7 +1,10 @@
+from uuid import uuid4
+
 from fastapi import HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
+from app.database import utc_now
 from app.models import ServiceSession
 from app.modules.service import repository, rules
 from app.services.files import save_upload
@@ -21,11 +24,15 @@ def upload_service_session(
 ) -> ServiceSession:
     safe_name = f"{session_id}_{file.filename}".replace("/", "_")
     path, digest = save_upload(file, "packages", safe_name)
+    correlation_id = f"SRV-UP-{uuid4().hex[:12].upper()}"
+    uploaded_at = utc_now()
     existing = repository.get_service_session_by_id(db, session_id)
     if existing:
         existing.package_path = path
         existing.package_hash = digest
         existing.upload_status = rules.UPLOADED_STATUS
+        existing.upload_correlation_id = correlation_id
+        existing.uploaded_at = uploaded_at
         db.commit()
         db.refresh(existing)
         return existing
@@ -40,6 +47,8 @@ def upload_service_session(
         package_path=path,
         package_hash=digest,
         upload_status=rules.UPLOADED_STATUS,
+        upload_correlation_id=correlation_id,
+        uploaded_at=uploaded_at,
     )
     db.add(service_session)
     db.commit()

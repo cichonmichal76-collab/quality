@@ -134,6 +134,8 @@ data class CommissioningSyncAttemptEntity(
     val backendServiceSessionId: String,
     val backendUploadStatus: String,
     val backendPackageHash: String,
+    val backendUploadCorrelationId: String,
+    val backendUploadedAtIso: String,
 )
 
 data class ServiceSessionDraftWithSteps(
@@ -236,6 +238,8 @@ fun ServiceSessionDraftWithSteps.toDomain(): ServiceSessionDraft =
                     backendServiceSessionId = row.backendServiceSessionId.ifBlank { null },
                     backendUploadStatus = row.backendUploadStatus.ifBlank { null },
                     backendPackageHash = row.backendPackageHash.ifBlank { null },
+                    backendUploadCorrelationId = row.backendUploadCorrelationId.ifBlank { null },
+                    backendUploadedAtIso = row.backendUploadedAtIso.ifBlank { null },
                 )
             },
     )
@@ -301,6 +305,8 @@ fun ServiceSessionDraft.toLocalEntity(): LocalDraftBundle =
                 backendServiceSessionId = attempt.backendServiceSessionId.orEmpty(),
                 backendUploadStatus = attempt.backendUploadStatus.orEmpty(),
                 backendPackageHash = attempt.backendPackageHash.orEmpty(),
+                backendUploadCorrelationId = attempt.backendUploadCorrelationId.orEmpty(),
+                backendUploadedAtIso = attempt.backendUploadedAtIso.orEmpty(),
             )
         },
         steps = steps.map { step ->

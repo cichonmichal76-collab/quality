@@ -19,6 +19,8 @@ data class ServiceSessionUploadResponse(
     val sessionId: String,
     val uploadStatus: String,
     val packageHash: String?,
+    val uploadCorrelationId: String?,
+    val uploadedAtIso: String?,
 )
 
 class CommissioningUploadException(
@@ -91,6 +93,8 @@ class ServiceSessionUploader(
                 sessionId = payload.optString("session_id", draft.sessionId),
                 uploadStatus = payload.optString("upload_status", "UPLOADED"),
                 packageHash = payload.optString("package_hash").takeIf { value -> value.isNotBlank() },
+                uploadCorrelationId = payload.optString("upload_correlation_id").takeIf { value -> value.isNotBlank() },
+                uploadedAtIso = payload.optString("uploaded_at").takeIf { value -> value.isNotBlank() },
             )
         } catch (error: Exception) {
             throw classifyTransportUploadException(error)

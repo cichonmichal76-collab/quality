@@ -188,6 +188,8 @@ class ServiceSession(Base):
     package_path: Mapped[str | None] = mapped_column(String, nullable=True)
     package_hash: Mapped[str | None] = mapped_column(String, nullable=True)
     upload_status: Mapped[str] = mapped_column(String, default="UPLOADED")
+    upload_correlation_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    uploaded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
 

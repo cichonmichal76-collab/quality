@@ -6268,6 +6268,8 @@ def test_service_session_upload_list_and_download(tmp_path, monkeypatch):
     assert payload["session_id"] == session_id
     assert payload["upload_status"] == "UPLOADED"
     assert payload["package_hash"]
+    assert payload["upload_correlation_id"].startswith("SRV-UP-")
+    assert payload["uploaded_at"]
 
     listed = client.get("/api/service-sessions")
     assert listed.status_code == 200
@@ -6276,6 +6278,7 @@ def test_service_session_upload_list_and_download(tmp_path, monkeypatch):
     fetched = client.get(f"/api/service-sessions/{session_id}")
     assert fetched.status_code == 200
     assert fetched.json()["technician_id"] == "TECH-001"
+    assert fetched.json()["upload_correlation_id"] == payload["upload_correlation_id"]
 
     package_download = client.get(f"/api/service-sessions/{session_id}/package")
     assert package_download.status_code == 200

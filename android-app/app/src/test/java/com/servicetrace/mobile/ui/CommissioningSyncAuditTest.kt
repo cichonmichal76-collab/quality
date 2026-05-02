@@ -107,6 +107,8 @@ class CommissioningSyncAuditTest {
             backendServiceSessionId = "svc-db-id",
             backendUploadStatus = "UPLOADED",
             backendPackageHash = "hash-123",
+            backendUploadCorrelationId = "SRV-UP-ABC123DEF456",
+            backendUploadedAtIso = "2026-05-02T10:15:30Z",
         )
         val empty = syncAttempt(
             attemptId = "empty",
@@ -115,7 +117,7 @@ class CommissioningSyncAuditTest {
         )
 
         assertEquals(
-            "Status backendu: UPLOADED | ID backendu: svc-db-id | Hash paczki: hash-123",
+            "Status backendu: UPLOADED | ID backendu: svc-db-id | Hash paczki: hash-123 | Correlation ID: SRV-UP-ABC123DEF456 | Uploaded at: 2026-05-02T10:15:30Z",
             buildBackendSyncSummary(populated),
         )
         assertNull(buildBackendSyncSummary(empty))
@@ -146,6 +148,8 @@ class CommissioningSyncAuditTest {
         backendServiceSessionId: String? = null,
         backendUploadStatus: String? = null,
         backendPackageHash: String? = null,
+        backendUploadCorrelationId: String? = null,
+        backendUploadedAtIso: String? = null,
     ): SyncAttemptHistoryEntry =
         SyncAttemptHistoryEntry(
             attemptId = attemptId,
@@ -159,5 +163,7 @@ class CommissioningSyncAuditTest {
             backendServiceSessionId = backendServiceSessionId,
             backendUploadStatus = backendUploadStatus,
             backendPackageHash = backendPackageHash,
+            backendUploadCorrelationId = backendUploadCorrelationId,
+            backendUploadedAtIso = backendUploadedAtIso,
         )
 }

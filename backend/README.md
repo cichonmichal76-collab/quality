@@ -215,6 +215,7 @@ Wersje BOM mają też teraz jawne lineage przez `source_template_id` i `replaced
 - `GET /api/audit-events`
   Obsługuje filtry `entity_type`, `entity_id`, `work_session_id`, `event_type` i `result`.
 - `POST /api/service-sessions/upload`
+  Zwraca teĹĽ metadane uploadu: `upload_status`, `package_hash`, `upload_correlation_id`, `uploaded_at`.
 
 ## Kontekst traceability i work sessions
 

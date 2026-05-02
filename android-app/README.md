@@ -21,7 +21,7 @@
 - limit automatycznych prob syncu i stan eskalacji do recznej interwencji po wyczerpaniu auto-retry
 - zapis `reason code` bledu syncu, np. brak lacznosci, timeout, walidacja albo blad backendu
 - lokalna historia prob syncu per sesja z wynikiem, zrodlem uruchomienia i komunikatem
-- historia sukcesow zawiera tez `upload_status`, `package_hash` i identyfikator rekordu backendowego
+- historia sukcesow zawiera tez `upload_status`, `package_hash`, identyfikator rekordu backendowego, `upload_correlation_id` i `uploaded_at`
 - pelna sekcja audytu synchronizacji ze wszystkimi probami, filtrem sukcesow / bledow i szybkim przejsciem do draftu
 - lokalna checklista 5 krokow
 - komentarz ogolny, firmware i bootloader
@@ -58,7 +58,7 @@ Domyslny adres backendu w aplikacji to `http://10.0.2.2:8000/api`, co pasuje do 
 1. rozszerzyc snapshoty MCU o dodatkowe artefakty diagnostyczne
 2. rozbudowac worker o upload okresowy albo bardziej agresywne wznowienia po dluzszym offline
 3. dodac eksport historii prob syncu albo udostepnianie audytu poza telefon
-4. rozbudowac backend o jawne correlation id albo telemetry uploadu
+4. rozbudowac backend o szersza telemetry uploadu albo eksport audytu
 
 ## Poza zakresem MVP
 

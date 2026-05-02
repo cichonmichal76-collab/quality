@@ -12,7 +12,7 @@ import androidx.room.RoomDatabase
         CommissioningAttachmentEntity::class,
         CommissioningSyncAttemptEntity::class,
     ],
-    version = 9,
+    version = 10,
     exportSchema = false,
 )
 abstract class ServiceTraceMobileDatabase : RoomDatabase() {

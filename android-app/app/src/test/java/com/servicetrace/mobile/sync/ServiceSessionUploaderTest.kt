@@ -48,9 +48,15 @@ class ServiceSessionUploaderTest {
             sessionId = "SVC-123",
             uploadStatus = "UPLOADED",
             packageHash = "abc123",
+            uploadCorrelationId = "SRV-UP-ABC123DEF456",
+            uploadedAtIso = "2026-05-02T10:15:30Z",
         )
 
         assertEquals("svc-db-id", response.backendServiceSessionId)
+        assertEquals("SVC-123", response.sessionId)
+        assertEquals("UPLOADED", response.uploadStatus)
         assertEquals("abc123", response.packageHash)
+        assertEquals("SRV-UP-ABC123DEF456", response.uploadCorrelationId)
+        assertEquals("2026-05-02T10:15:30Z", response.uploadedAtIso)
     }
 }
