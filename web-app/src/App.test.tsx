@@ -1545,6 +1545,87 @@ describe("App", () => {
     );
   });
 
+  it("shows removable shipment filter chips and refreshes the queue immediately", async () => {
+    localStorage.setItem(
+      SHIPMENT_FILTERS_STORAGE_KEY,
+      JSON.stringify({
+        device_type: "DEMO-OPS",
+        primary_blocking_code: "FINAL_TEST_NOT_PASSED",
+        only_blocked: true,
+      }),
+    );
+
+    const fetchMock = vi.fn(async () => createJsonResponse(shipmentPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    const activeFilters = await screen.findByRole("group", {
+      name: "Aktywne filtry wysyłki",
+    });
+    expect(activeFilters).toHaveTextContent("Typ urządzenia: DEMO-OPS");
+    expect(activeFilters).toHaveTextContent(
+      "Główna blokada: Final test niezaliczony",
+    );
+    expect(activeFilters).toHaveTextContent("Tylko zablokowane");
+
+    fireEvent.click(
+      within(activeFilters).getByRole("button", {
+        name: /Usuń filtr: Tylko zablokowane/i,
+      }),
+    );
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/shipment-readiness?device_type=DEMO-OPS&primary_blocking_code=FINAL_TEST_NOT_PASSED&sort_by=created_at&sort_desc=true&limit=100",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+    expect(activeFilters).not.toHaveTextContent("Tylko zablokowane");
+  });
+
+  it("shows removable component filter chips and refreshes the queue immediately", async () => {
+    localStorage.setItem(VIEW_STORAGE_KEY, "components");
+    localStorage.setItem(
+      COMPONENT_FILTERS_STORAGE_KEY,
+      JSON.stringify({
+        device_type: "DEMO-OPS",
+        passes_component_quality_gate: "true",
+        only_blocking: false,
+      }),
+    );
+
+    const fetchMock = vi.fn(async () => createJsonResponse(componentPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    const activeFilters = await screen.findByRole("group", {
+      name: "Aktywne filtry komponentów",
+    });
+    expect(activeFilters).toHaveTextContent("Typ urządzenia: DEMO-OPS");
+    expect(activeFilters).toHaveTextContent("Gate komponentów: Tak");
+    expect(activeFilters).toHaveTextContent("Pokaż także nieblokujące");
+
+    fireEvent.click(
+      within(activeFilters).getByRole("button", {
+        name: /Usuń filtr: Pokaż także nieblokujące/i,
+      }),
+    );
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/component-quality?device_type=DEMO-OPS&passes_component_quality_gate=true&only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=100",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+    expect(activeFilters).not.toHaveTextContent("Pokaż także nieblokujące");
+  });
+
   it("opens device details drawer from shipment queue and renders fetched details", async () => {
     const fetchMock = vi
       .fn()

@@ -151,6 +151,31 @@ test("dashboard applies metric filters from shipment and component cards", async
   await expect(page.locator(".table-card")).toContainText(/READY-E2E-/);
 });
 
+test("dashboard shows removable active shipment filter chips", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  await expect(page.getByText("API OK")).toBeVisible();
+
+  await page.locator(".filters-card input").first().fill("DEMO-E2E");
+  await page.getByRole("button", { name: "Gotowe", exact: true }).click();
+
+  const activeFilters = page.getByRole("group", {
+    name: "Aktywne filtry wysyłki",
+  });
+  await expect(activeFilters).toContainText("Typ urządzenia: DEMO-E2E");
+  await expect(activeFilters).toContainText("Tylko gotowe");
+
+  await activeFilters
+    .getByRole("button", { name: /Usuń filtr: Tylko gotowe/i })
+    .click();
+
+  await expect.poll(() => page.url()).not.toMatch(/ship_only_ready=true/);
+  await expect(activeFilters).not.toContainText("Tylko gotowe");
+  await expect(page.locator(".table-card tbody tr")).toHaveCount(6);
+});
+
 test("dashboard clamps limit filters before calling the API", async ({
   page,
 }) => {

@@ -250,6 +250,11 @@ interface DashboardUrlState {
   devicePageSerial: string | null;
 }
 
+interface ActiveFilterChip {
+  id: string;
+  label: string;
+}
+
 const SHIPMENT_TEXT_FILTER_KEYS: Array<keyof ShipmentFilters> = [
   "device_type",
   "variant_code",
@@ -459,6 +464,32 @@ export function App() {
         componentFilters,
       })
     : null;
+  const shipmentActiveFilterChips = buildShipmentActiveFilterChips(
+    shipmentFilters,
+  );
+  const componentActiveFilterChips = buildComponentActiveFilterChips(
+    componentFilters,
+  );
+
+  const commitShipmentFilters = (nextFilters: ShipmentFilters) => {
+    const sanitizedFilters = sanitizeShipmentFilters({
+      ...nextFilters,
+      limit: clampLimit(nextFilters.limit),
+      offset: clampOffset(nextFilters.offset),
+    });
+    setShipmentFilters(sanitizedFilters);
+    flushShipmentRequestFilters(sanitizedFilters);
+  };
+
+  const commitComponentFilters = (nextFilters: ComponentFilters) => {
+    const sanitizedFilters = {
+      ...nextFilters,
+      limit: clampLimit(nextFilters.limit),
+      offset: clampOffset(nextFilters.offset),
+    };
+    setComponentFilters(sanitizedFilters);
+    flushComponentRequestFilters(sanitizedFilters);
+  };
 
   const clearActiveViewData = (view: DashboardMode) => {
     if (view === "shipment") {
@@ -1157,7 +1188,7 @@ export function App() {
   const applyShipmentSummaryFilter = (
     partialFilters: Partial<ShipmentFilters>,
   ) => {
-    const nextFilters = sanitizeShipmentFilters({
+    commitShipmentFilters({
       ...DEFAULT_SHIPMENT_FILTERS,
       device_type: shipmentFilters.device_type,
       variant_code: shipmentFilters.variant_code,
@@ -1167,14 +1198,12 @@ export function App() {
       ...partialFilters,
       offset: 0,
     });
-    setShipmentFilters(nextFilters);
-    flushShipmentRequestFilters(nextFilters);
   };
 
   const applyComponentSummaryFilter = (
     partialFilters: Partial<ComponentFilters>,
   ) => {
-    const nextFilters = {
+    commitComponentFilters({
       ...DEFAULT_COMPONENT_FILTERS,
       device_type: componentFilters.device_type,
       variant_code: componentFilters.variant_code,
@@ -1183,9 +1212,27 @@ export function App() {
       limit: componentFilters.limit,
       ...partialFilters,
       offset: 0,
+    } as ComponentFilters);
+  };
+
+  const removeShipmentActiveFilter = (chipId: string) => {
+    const nextFilters = {
+      ...shipmentFilters,
+      [chipId]:
+        DEFAULT_SHIPMENT_FILTERS[chipId as keyof ShipmentFilters],
+      offset: 0,
+    } as ShipmentFilters;
+    commitShipmentFilters(nextFilters);
+  };
+
+  const removeComponentActiveFilter = (chipId: string) => {
+    const nextFilters = {
+      ...componentFilters,
+      [chipId]:
+        DEFAULT_COMPONENT_FILTERS[chipId as keyof ComponentFilters],
+      offset: 0,
     } as ComponentFilters;
-    setComponentFilters(nextFilters);
-    flushComponentRequestFilters(nextFilters);
+    commitComponentFilters(nextFilters);
   };
 
   const resetStoredDashboardState = () => {
@@ -1365,9 +1412,11 @@ export function App() {
               <ShipmentFiltersPanel
                 filters={shipmentFilters}
                 onChange={updateShipmentFilter}
-                onReset={() => setShipmentFilters(DEFAULT_SHIPMENT_FILTERS)}
+                onReset={() => commitShipmentFilters(DEFAULT_SHIPMENT_FILTERS)}
                 onCommitTextFilters={flushShipmentRequestFilters}
                 hasPendingTextFilters={shipmentFiltersPending}
+                activeFilters={shipmentActiveFilterChips}
+                onRemoveActiveFilter={removeShipmentActiveFilter}
               />
               <ShipmentDashboard
                 data={shipmentData}
@@ -1412,9 +1461,11 @@ export function App() {
               <ComponentFiltersPanel
                 filters={componentFilters}
                 onChange={updateComponentFilter}
-                onReset={() => setComponentFilters(DEFAULT_COMPONENT_FILTERS)}
+                onReset={() => commitComponentFilters(DEFAULT_COMPONENT_FILTERS)}
                 onCommitTextFilters={flushComponentRequestFilters}
                 hasPendingTextFilters={componentFiltersPending}
+                activeFilters={componentActiveFilterChips}
+                onRemoveActiveFilter={removeComponentActiveFilter}
               />
               <ComponentDashboard
                 data={componentData}
@@ -1475,6 +1526,8 @@ function ShipmentFiltersPanel({
   onReset,
   onCommitTextFilters,
   hasPendingTextFilters,
+  activeFilters,
+  onRemoveActiveFilter,
 }: {
   filters: ShipmentFilters;
   onChange: <Key extends keyof ShipmentFilters>(
@@ -1484,6 +1537,8 @@ function ShipmentFiltersPanel({
   onReset: () => void;
   onCommitTextFilters: () => void;
   hasPendingTextFilters: boolean;
+  activeFilters: ActiveFilterChip[];
+  onRemoveActiveFilter: (chipId: string) => void;
 }) {
   const actionOptions: SelectOption[] = SHIPMENT_ACTION_OPTIONS.map((option) => ({
     value: option,
@@ -1508,6 +1563,13 @@ function ShipmentFiltersPanel({
           </button>
         </div>
       </div>
+      {activeFilters.length > 0 ? (
+        <ActiveFilterBar
+          label="Aktywne filtry wysyłki"
+          chips={activeFilters}
+          onRemove={onRemoveActiveFilter}
+        />
+      ) : null}
       <div className="filters-grid">
         <TextField
           label="Typ urządzenia"
@@ -1597,6 +1659,8 @@ function ComponentFiltersPanel({
   onReset,
   onCommitTextFilters,
   hasPendingTextFilters,
+  activeFilters,
+  onRemoveActiveFilter,
 }: {
   filters: ComponentFilters;
   onChange: <Key extends keyof ComponentFilters>(
@@ -1606,6 +1670,8 @@ function ComponentFiltersPanel({
   onReset: () => void;
   onCommitTextFilters: () => void;
   hasPendingTextFilters: boolean;
+  activeFilters: ActiveFilterChip[];
+  onRemoveActiveFilter: (chipId: string) => void;
 }) {
   return (
     <section className="filters-card" aria-label="Filtry jakości komponentów">
@@ -1623,6 +1689,13 @@ function ComponentFiltersPanel({
           </button>
         </div>
       </div>
+      {activeFilters.length > 0 ? (
+        <ActiveFilterBar
+          label="Aktywne filtry komponentów"
+          chips={activeFilters}
+          onRemove={onRemoveActiveFilter}
+        />
+      ) : null}
       <div className="filters-grid">
         <TextField
           label="Typ urządzenia"
@@ -3827,6 +3900,33 @@ function SwitchField({
   );
 }
 
+function ActiveFilterBar({
+  label,
+  chips,
+  onRemove,
+}: {
+  label: string;
+  chips: ActiveFilterChip[];
+  onRemove: (chipId: string) => void;
+}) {
+  return (
+    <div className="active-filter-bar" role="group" aria-label={label}>
+      {chips.map((chip) => (
+        <button
+          key={chip.id}
+          className="active-filter-chip"
+          type="button"
+          aria-label={`Usuń filtr: ${chip.label}`}
+          onClick={() => onRemove(chip.id)}
+        >
+          <span>{chip.label}</span>
+          <strong aria-hidden="true">×</strong>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function BooleanPill({
   value,
   trueLabel,
@@ -3862,6 +3962,156 @@ function EmptyTable({
       </span>
     </section>
   );
+}
+
+function buildShipmentActiveFilterChips(
+  filters: ShipmentFilters,
+): ActiveFilterChip[] {
+  const chips: ActiveFilterChip[] = [];
+
+  if (filters.device_type.trim() !== "") {
+    chips.push({
+      id: "device_type",
+      label: `Typ urządzenia: ${filters.device_type.trim()}`,
+    });
+  }
+
+  if (filters.variant_code.trim() !== "") {
+    chips.push({
+      id: "variant_code",
+      label: `Wariant: ${filters.variant_code.trim()}`,
+    });
+  }
+
+  if (filters.production_status !== "") {
+    chips.push({
+      id: "production_status",
+      label: `Status produkcji: ${labelForCode(filters.production_status)}`,
+    });
+  }
+
+  if (filters.primary_blocking_code !== "") {
+    chips.push({
+      id: "primary_blocking_code",
+      label: `Główna blokada: ${labelForCode(filters.primary_blocking_code)}`,
+    });
+  }
+
+  if (filters.missing_component_type.trim() !== "") {
+    chips.push({
+      id: "missing_component_type",
+      label: `Brak BOM: ${labelForCode(filters.missing_component_type.trim())}`,
+    });
+  }
+
+  if (filters.recommended_action !== "") {
+    chips.push({
+      id: "recommended_action",
+      label: `Akcja: ${labelForCode(filters.recommended_action)}`,
+    });
+  }
+
+  if (filters.latest_gate_result !== "") {
+    chips.push({
+      id: "latest_gate_result",
+      label: `Ostatni gate: ${labelForCode(filters.latest_gate_result)}`,
+    });
+  }
+
+  if (filters.only_blocked) {
+    chips.push({
+      id: "only_blocked",
+      label: "Tylko zablokowane",
+    });
+  }
+
+  if (filters.only_ready) {
+    chips.push({
+      id: "only_ready",
+      label: "Tylko gotowe",
+    });
+  }
+
+  return chips;
+}
+
+function buildComponentActiveFilterChips(
+  filters: ComponentFilters,
+): ActiveFilterChip[] {
+  const chips: ActiveFilterChip[] = [];
+
+  if (filters.device_type.trim() !== "") {
+    chips.push({
+      id: "device_type",
+      label: `Typ urządzenia: ${filters.device_type.trim()}`,
+    });
+  }
+
+  if (filters.variant_code.trim() !== "") {
+    chips.push({
+      id: "variant_code",
+      label: `Wariant: ${filters.variant_code.trim()}`,
+    });
+  }
+
+  if (filters.production_status !== "") {
+    chips.push({
+      id: "production_status",
+      label: `Status produkcji: ${labelForCode(filters.production_status)}`,
+    });
+  }
+
+  if (filters.blocking_component_type.trim() !== "") {
+    chips.push({
+      id: "blocking_component_type",
+      label: `Typ blokującego komponentu: ${labelForCode(
+        filters.blocking_component_type.trim(),
+      )}`,
+    });
+  }
+
+  if (filters.primary_quality_status !== "") {
+    chips.push({
+      id: "primary_quality_status",
+      label: `Główny status jakości: ${labelForCode(
+        filters.primary_quality_status,
+      )}`,
+    });
+  }
+
+  if (filters.stale_bucket !== "") {
+    chips.push({
+      id: "stale_bucket",
+      label: `Świeżość danych: ${labelForCode(filters.stale_bucket)}`,
+    });
+  }
+
+  if (filters.recommended_action !== "") {
+    chips.push({
+      id: "recommended_action",
+      label: `Akcja: ${labelForCode(filters.recommended_action)}`,
+    });
+  }
+
+  if (filters.passes_component_quality_gate !== "") {
+    chips.push({
+      id: "passes_component_quality_gate",
+      label: `Gate komponentów: ${labelForCode(
+        filters.passes_component_quality_gate,
+      )}`,
+    });
+  }
+
+  if (filters.only_blocking !== DEFAULT_COMPONENT_FILTERS.only_blocking) {
+    chips.push({
+      id: "only_blocking",
+      label: filters.only_blocking
+        ? "Tylko blokujące"
+        : "Pokaż także nieblokujące",
+    });
+  }
+
+  return chips;
 }
 
 function shipmentQueryParams(filters: ShipmentFilters): Record<string, QueryValue> {

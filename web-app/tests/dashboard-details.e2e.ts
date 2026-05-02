@@ -124,7 +124,9 @@ test("dashboard jumps from full device page to a filtered related queue", async 
   await expect(page.getByRole("button", { name: "Komponenty" })).toHaveClass(
     /is-active/,
   );
-  await expect(page.getByLabel("Typ urządzenia")).toHaveValue("DEMO-E2E");
+  await expect(
+    page.getByRole("textbox", { name: "Typ urządzenia" }),
+  ).toHaveValue("DEMO-E2E");
   await expect(
     page.getByRole("textbox", { name: "Typ blokującego komponentu" }),
   ).toHaveValue("FAN_MODULE");
@@ -159,8 +161,12 @@ test("dashboard jumps from BOM details to a filtered shipment queue", async ({
   await expect(page.getByRole("button", { name: "Wysyłka" })).toHaveClass(
     /is-active/,
   );
-  await expect(page.getByLabel("Typ urządzenia")).toHaveValue("DEMO-E2E");
-  await expect(page.getByLabel("Brakujący typ BOM")).toHaveValue("CONTROL_PCB");
+  await expect(
+    page.getByRole("textbox", { name: "Typ urządzenia" }),
+  ).toHaveValue("DEMO-E2E");
+  await expect(
+    page.getByRole("textbox", { name: "Brakujący typ BOM" }),
+  ).toHaveValue("CONTROL_PCB");
 });
 
 test("dashboard jumps from shipment gate history to a filtered shipment queue", async ({
@@ -347,5 +353,7 @@ test("dashboard jumps from shipment gate history to a filtered shipment queue", 
   await expect(page.getByRole("button", { name: "Wysyłka" })).toHaveClass(
     /is-active/,
   );
-  await expect(page.getByLabel("Typ urządzenia")).toHaveValue("DEMO-OPS");
+  await expect(
+    page.getByRole("textbox", { name: "Typ urządzenia" }),
+  ).toHaveValue("DEMO-OPS");
 });
