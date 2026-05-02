@@ -29,6 +29,9 @@ import type {
   WorkSessionRead,
 } from "./api";
 import {
+  buildComponentQueueCsv,
+  buildDashboardCsvFileName,
+  buildShipmentQueueCsv,
   formatDateTime,
   formatDurationLabel,
   formatNumber,
@@ -416,12 +419,16 @@ export function App() {
     null,
   );
   const activePath =
-    activeView === "shipment" ? "/shipment-readiness" : "/component-quality";
-  const activeRequestFilters =
-    activeView === "shipment"
-      ? shipmentRequestFilters
-      : componentRequestFilters;
-  const selectedDeviceSerial = selectedDevice?.serialNumber ?? null;
+      activeView === "shipment" ? "/shipment-readiness" : "/component-quality";
+    const activeRequestFilters =
+      activeView === "shipment"
+        ? shipmentRequestFilters
+        : componentRequestFilters;
+    const canExportActiveQueue =
+      activeView === "shipment"
+        ? Boolean(shipmentData && shipmentData.devices.length > 0)
+        : Boolean(componentData && componentData.devices.length > 0);
+    const selectedDeviceSerial = selectedDevice?.serialNumber ?? null;
   const requiresCompleteAssemblyAction =
     deviceDetails?.shipment.recommended_action === "COMPLETE_ASSEMBLY";
   const requiresFinalTestAction =
@@ -552,6 +559,47 @@ export function App() {
       showCopyFeedback(scope, "success", "Link skopiowany.");
     } catch {
       showCopyFeedback(scope, "error", "Nie udało się skopiować linku.");
+    }
+  };
+
+  const exportActiveQueueCsv = () => {
+    try {
+      if (activeView === "shipment") {
+        if (!shipmentData || shipmentData.devices.length === 0) {
+          showCopyFeedback("dashboard", "error", "Brak danych do eksportu.");
+          return;
+        }
+
+        downloadTextFile(
+          buildDashboardCsvFileName("shipment"),
+          buildShipmentQueueCsv(shipmentData),
+          "text/csv;charset=utf-8",
+        );
+        showCopyFeedback(
+          "dashboard",
+          "success",
+          "Wyeksportowano CSV kolejki wysyłki.",
+        );
+        return;
+      }
+
+      if (!componentData || componentData.devices.length === 0) {
+        showCopyFeedback("dashboard", "error", "Brak danych do eksportu.");
+        return;
+      }
+
+      downloadTextFile(
+        buildDashboardCsvFileName("components"),
+        buildComponentQueueCsv(componentData),
+        "text/csv;charset=utf-8",
+      );
+      showCopyFeedback(
+        "dashboard",
+        "success",
+        "Wyeksportowano CSV kolejki komponentów.",
+      );
+    } catch {
+      showCopyFeedback("dashboard", "error", "Nie udało się wyeksportować CSV.");
     }
   };
 
@@ -1474,11 +1522,19 @@ export function App() {
           >
             Odśwież
           </button>
-          <button
-            className="ghost-button"
-            type="button"
-            onClick={() => {
-              void copyCurrentLink("dashboard");
+            <button
+              className="ghost-button"
+              disabled={!canExportActiveQueue}
+              type="button"
+              onClick={exportActiveQueueCsv}
+            >
+              Eksport CSV
+            </button>
+            <button
+              className="ghost-button"
+              type="button"
+              onClick={() => {
+                void copyCurrentLink("dashboard");
             }}
           >
             Kopiuj link dashboardu
@@ -4475,6 +4531,34 @@ async function copyTextToClipboard(text: string): Promise<void> {
     }
   } finally {
     document.body.removeChild(textarea);
+  }
+}
+
+function downloadTextFile(
+  fileName: string,
+  text: string,
+  mimeType: string,
+): void {
+  if (
+    typeof URL.createObjectURL !== "function" ||
+    typeof URL.revokeObjectURL !== "function"
+  ) {
+    throw new Error("Blob download API unavailable");
+  }
+
+  const blob = new Blob(["\uFEFF", text], { type: mimeType });
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = fileName;
+  anchor.style.display = "none";
+  document.body.appendChild(anchor);
+
+  try {
+    anchor.click();
+  } finally {
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(objectUrl);
   }
 }
 

@@ -1,3 +1,9 @@
+import type {
+  DashboardMode,
+  DeviceComponentQualityQueue,
+  DeviceShipmentQueue,
+} from "./api";
+
 const CODE_LABELS: Record<string, string> = {
   ACTIVATE_OR_CONFIGURE_BOM: "Aktywuj lub skonfiguruj BOM",
   ACTIVE: "Aktywny",
@@ -114,4 +120,153 @@ export function formatDurationLabel(durationMs: number): string {
 
   const minutes = Math.round(seconds / 60);
   return `${minutes} min`;
+}
+
+export function buildDashboardCsvFileName(
+  view: DashboardMode,
+  now: Date = new Date(),
+): string {
+  const viewSlug = view === "shipment" ? "wysylka" : "komponenty";
+  const timestamp = [
+    now.getUTCFullYear(),
+    padFileNameSegment(now.getUTCMonth() + 1),
+    padFileNameSegment(now.getUTCDate()),
+  ].join("");
+  const time = [
+    padFileNameSegment(now.getUTCHours()),
+    padFileNameSegment(now.getUTCMinutes()),
+    padFileNameSegment(now.getUTCSeconds()),
+  ].join("");
+
+  return `servicetrace-${viewSlug}-${timestamp}-${time}.csv`;
+}
+
+export function buildShipmentQueueCsv(data: DeviceShipmentQueue): string {
+  const headers = [
+    "device_serial_number",
+    "device_type",
+    "device_variant_code",
+    "production_status",
+    "production_status_label",
+    "final_test_passed",
+    "has_critical_open_ncr",
+    "passes_bom_gate",
+    "installed_component_count",
+    "missing_required_components",
+    "critical_open_ncr_ids",
+    "primary_blocking_code",
+    "primary_blocking_label",
+    "recommended_action",
+    "recommended_action_label",
+    "latest_gate_result",
+    "latest_gate_result_label",
+    "latest_gate_recommended_action",
+    "latest_gate_recommended_action_label",
+    "latest_gate_message",
+    "latest_gate_created_at",
+    "blocking_reasons",
+    "device_created_at",
+    "device_updated_at",
+  ];
+
+  const rows = data.devices.map((device) => [
+    device.device_serial_number,
+    device.device_type,
+    device.device_variant_code,
+    device.production_status,
+    labelForCode(device.production_status),
+    labelForCode(device.final_test_passed),
+    labelForCode(device.has_critical_open_ncr),
+    labelForCode(device.bom_compliance.passes_bom_gate),
+    device.bom_compliance.installed_component_count,
+    device.bom_compliance.missing_required_components.join(" | "),
+    device.critical_open_ncr_ids.join(" | "),
+    device.primary_blocking_code,
+    labelForCode(device.primary_blocking_code),
+    device.recommended_action,
+    labelForCode(device.recommended_action),
+    device.latest_shipment_gate_decision?.result ?? "",
+    labelForCode(device.latest_shipment_gate_decision?.result),
+    device.latest_shipment_gate_decision?.recommended_action ?? "",
+    labelForCode(device.latest_shipment_gate_decision?.recommended_action),
+    device.latest_shipment_gate_decision?.message ?? "",
+    device.latest_shipment_gate_decision?.created_at ?? "",
+    device.blocking_reasons.join(" | "),
+    device.device_created_at,
+    device.device_updated_at,
+  ]);
+
+  return buildCsv(headers, rows);
+}
+
+export function buildComponentQueueCsv(
+  data: DeviceComponentQualityQueue,
+): string {
+  const headers = [
+    "device_serial_number",
+    "device_type",
+    "device_variant_code",
+    "production_status",
+    "production_status_label",
+    "passes_component_quality_gate",
+    "primary_quality_status",
+    "primary_quality_status_label",
+    "primary_blocking_component_type",
+    "primary_blocking_component_serial_number",
+    "recommended_action",
+    "recommended_action_label",
+    "total_installed_components",
+    "passing_components",
+    "blocked_components",
+    "stale_bucket",
+    "stale_bucket_label",
+    "device_created_at",
+    "device_updated_at",
+  ];
+
+  const rows = data.devices.map((device) => [
+    device.device_serial_number,
+    device.device_type,
+    device.device_variant_code,
+    device.production_status,
+    labelForCode(device.production_status),
+    labelForCode(device.passes_component_quality_gate),
+    device.primary_quality_status,
+    labelForCode(device.primary_quality_status),
+    device.primary_blocking_component_type ?? "",
+    device.primary_blocking_component_serial_number ?? "",
+    device.recommended_action,
+    labelForCode(device.recommended_action),
+    device.total_installed_components,
+    device.passing_components,
+    device.blocked_components,
+    device.stale_bucket,
+    labelForCode(device.stale_bucket),
+    device.device_created_at,
+    device.device_updated_at,
+  ]);
+
+  return buildCsv(headers, rows);
+}
+
+function buildCsv(
+  headers: string[],
+  rows: Array<Array<string | number | boolean | null | undefined>>,
+): string {
+  return [headers, ...rows]
+    .map((row) => row.map(escapeCsvCell).join(","))
+    .join("\r\n");
+}
+
+function escapeCsvCell(
+  value: string | number | boolean | null | undefined,
+): string {
+  const normalized =
+    value === null || value === undefined ? "" : String(value);
+  const escaped = normalized.replace(/"/g, '""');
+  return /[",\r\n]/.test(escaped) ? `"${escaped}"` : escaped;
+}
+
+function padFileNameSegment(value: number): string {
+  return String(value).padStart(2, "0");
 }

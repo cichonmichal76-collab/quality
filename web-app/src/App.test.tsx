@@ -1900,6 +1900,118 @@ describe("App", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Link skopiowany.");
   });
 
+  it("exports the active shipment queue to CSV", async () => {
+    const createObjectURLMock = vi.fn((_blob: Blob) => {
+      return "blob:shipment-export";
+    });
+    const revokeObjectURLMock = vi.fn();
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: createObjectURLMock,
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: revokeObjectURLMock,
+    });
+
+    const clickedDownloads: Array<{ download: string; href: string }> = [];
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(
+      function click(this: HTMLAnchorElement) {
+        clickedDownloads.push({
+          download: this.download,
+          href: this.href,
+        });
+      },
+    );
+
+    const fetchMock = vi.fn(async () => createJsonResponse(shipmentPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText("SHIP-001")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Eksport CSV" }));
+
+    expect(createObjectURLMock).toHaveBeenCalledTimes(1);
+    const csvBlob = createObjectURLMock.mock.calls[0]?.[0] as unknown as Blob;
+    const csvText = await csvBlob.text();
+    expect(csvText).toContain("device_serial_number");
+    expect(csvText).toContain("SHIP-001");
+    expect(csvText).toContain("MARK_READY_FOR_SHIPMENT");
+    expect(clickedDownloads).toHaveLength(1);
+    expect(clickedDownloads[0]?.download).toMatch(
+      /^servicetrace-wysylka-\d{8}-\d{6}\.csv$/,
+    );
+    expect(clickedDownloads[0]?.href).toBe("blob:shipment-export");
+    expect(revokeObjectURLMock).toHaveBeenCalledWith("blob:shipment-export");
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Wyeksportowano CSV kolejki wysyłki.",
+    );
+  });
+
+  it("exports the active component queue to CSV", async () => {
+    localStorage.setItem(VIEW_STORAGE_KEY, "components");
+
+    const createObjectURLMock = vi.fn((_blob: Blob) => {
+      return "blob:component-export";
+    });
+    const revokeObjectURLMock = vi.fn();
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: createObjectURLMock,
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: revokeObjectURLMock,
+    });
+
+    const clickedDownloads: Array<{ download: string; href: string }> = [];
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(
+      function click(this: HTMLAnchorElement) {
+        clickedDownloads.push({
+          download: this.download,
+          href: this.href,
+        });
+      },
+    );
+
+    const fetchMock = vi.fn(async () => createJsonResponse(componentPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText("COMP-001")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Eksport CSV" }));
+
+    expect(createObjectURLMock).toHaveBeenCalledTimes(1);
+    const csvBlob = createObjectURLMock.mock.calls[0]?.[0] as unknown as Blob;
+    const csvText = await csvBlob.text();
+    expect(csvText).toContain("device_serial_number");
+    expect(csvText).toContain("COMP-001");
+    expect(csvText).toContain("RUN_COMPONENT_QC_OR_REWORK");
+    expect(clickedDownloads).toHaveLength(1);
+    expect(clickedDownloads[0]?.download).toMatch(
+      /^servicetrace-komponenty-\d{8}-\d{6}\.csv$/,
+    );
+    expect(clickedDownloads[0]?.href).toBe("blob:component-export");
+    expect(revokeObjectURLMock).toHaveBeenCalledWith("blob:component-export");
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Wyeksportowano CSV kolejki komponentów.",
+    );
+  });
+
   it("copies current device page link with the active hash section", async () => {
     window.history.replaceState(
       {},
@@ -2405,9 +2517,11 @@ describe("App", () => {
         }),
       );
     });
-    expect(
-      screen.queryByRole("button", { name: "Oznacz gotowe do wysyłki" }),
-    ).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("button", { name: "Oznacz gotowe do wysy�ki" }),
+      ).not.toBeInTheDocument();
+    });
   });
 
   it("shows action error in the details drawer when mark-ready is rejected", async () => {
@@ -3160,11 +3274,13 @@ describe("App", () => {
         }),
       );
     });
-    expect(
-      screen.queryByRole("button", {
-        name: "Zamknij krytyczne NCR komponentów",
-      }),
-    ).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("button", {
+          name: "Zamknij krytyczne NCR komponent�w",
+        }),
+      ).not.toBeInTheDocument();
+    });
   });
 
   it("loads last active view from localStorage and persists tab changes", async () => {
@@ -4340,3 +4456,5 @@ describe("App", () => {
     );
   });
 });
+
+

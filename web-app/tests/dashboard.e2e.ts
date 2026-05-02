@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+
 import { expect, test } from "@playwright/test";
 
 test("dashboard renders seeded shipment and component queues", async ({
@@ -99,6 +101,32 @@ test("dashboard copies the current link with active filters", async ({
   const copiedLink = await page.evaluate(async () => navigator.clipboard.readText());
   expect(copiedLink).toContain("ship_device_type=DEMO-E2E");
   expect(copiedLink).toContain("ship_only_ready=true");
+});
+
+test("dashboard downloads CSV for the active shipment queue", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/");
+
+  await expect(page.getByText("API OK")).toBeVisible();
+
+  await page.locator(".filters-card input").first().fill("DEMO-E2E");
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Eksport CSV" }).click();
+  const download = await downloadPromise;
+
+  expect(download.suggestedFilename()).toMatch(
+    /^servicetrace-wysylka-\d{8}-\d{6}\.csv$/,
+  );
+
+  const exportPath = testInfo.outputPath("shipment-queue-export.csv");
+  await download.saveAs(exportPath);
+  const exportContent = await readFile(exportPath, "utf8");
+
+  expect(exportContent).toContain("device_serial_number");
+  expect(exportContent).toContain("READY-E2E-");
+  expect(exportContent).toContain("DEMO-E2E");
 });
 
 test("dashboard auto-refreshes the active queue", async ({ page }) => {
