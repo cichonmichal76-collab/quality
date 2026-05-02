@@ -404,6 +404,178 @@ const shipmentActionComponentDetailsPayload: DeviceComponentQuality = {
   ],
 };
 
+const componentActionShipmentDetailsPayload: DeviceShipmentReadiness = {
+  ...shipmentActionDetailsPayload,
+  device_serial_number: "COMP-001",
+  bom_compliance: {
+    ...shipmentActionDetailsPayload.bom_compliance,
+    device_serial_number: "COMP-001",
+    installed_component_count: 2,
+    component_coverage: [
+      {
+        component_type: "CONTROL_PCB",
+        substitution_group: null,
+        allowed_component_types: null,
+        required_quantity: 1,
+        installed_quantity: 1,
+        is_required: true,
+        status: "PASS",
+      },
+      {
+        component_type: "FAN_MODULE",
+        substitution_group: "AIRFLOW",
+        allowed_component_types: ["FAN_MODULE"],
+        required_quantity: 1,
+        installed_quantity: 1,
+        is_required: true,
+        status: "PASS",
+      },
+    ],
+  },
+  can_transition_to_ready_for_shipment: false,
+  primary_blocking_code: "COMPONENT_QC_NOT_PASSED",
+  primary_blocking_message: "Zamontowany komponent nie ma QC_PASSED",
+  recommended_action: "RESOLVE_COMPONENT_QUALITY",
+  blocking_reasons: ["Installed component lacks QC_PASSED"],
+  blocking_checks: [
+    {
+      code: "COMPONENT_QC_NOT_PASSED",
+      is_blocking: true,
+      message: "Installed component lacks QC_PASSED",
+      details: ["FAN-001 (FAN_MODULE)"],
+    },
+  ],
+};
+
+const componentActionComponentDetailsPayload: DeviceComponentQuality = {
+  device_serial_number: "COMP-001",
+  device_type: "DEMO-OPS",
+  device_variant_code: "DEFAULT",
+  production_status: "FINAL_TEST_PASSED",
+  device_created_at: "2026-05-01T08:00:00Z",
+  device_updated_at: "2026-05-01T09:05:00Z",
+  stale_bucket: "LT_24H",
+  total_installed_components: 2,
+  passing_components: 1,
+  blocked_components: 1,
+  passes_component_quality_gate: false,
+  primary_quality_status: "QC_NOT_PASSED",
+  primary_blocking_component_type: "FAN_MODULE",
+  primary_blocking_component_serial_number: "FAN-001",
+  recommended_action: "RUN_COMPONENT_QC_OR_REWORK",
+  components: [
+    {
+      component_serial_number: "CTRL-200",
+      component_type: "CONTROL_PCB",
+      child_barcode_value: "BC-CTRL-200",
+      installed_at: "2026-05-01T08:20:00Z",
+      installed_by: "OP-01",
+      workstation_id: "WS-01",
+      bom_template_id: "BOM-01",
+      bom_version: "1.2",
+      component_qc_passed: true,
+      has_critical_open_ncr: false,
+      critical_open_ncr_ids: [],
+      blocks_shipment: false,
+      quality_status: "PASS",
+    },
+    {
+      component_serial_number: "FAN-001",
+      component_type: "FAN_MODULE",
+      child_barcode_value: "BC-FAN-001",
+      installed_at: "2026-05-01T08:25:00Z",
+      installed_by: "OP-02",
+      workstation_id: "WS-02",
+      bom_template_id: "BOM-01",
+      bom_version: "1.2",
+      component_qc_passed: false,
+      has_critical_open_ncr: false,
+      critical_open_ncr_ids: [],
+      blocks_shipment: true,
+      quality_status: "QC_NOT_PASSED",
+    },
+  ],
+};
+
+const componentActionAfterPassQueuePayload: DeviceComponentQualityQueue = {
+  ...componentPayload,
+  devices_with_issues: 0,
+  quality_status_summary: [
+    {
+      quality_status: "PASS",
+      component_count: 2,
+      device_count: 1,
+    },
+  ],
+  primary_quality_status_summary: [
+    {
+      primary_quality_status: "PASS",
+      device_count: 1,
+    },
+  ],
+  component_quality_gate_summary: [
+    {
+      passes_component_quality_gate: true,
+      device_count: 1,
+    },
+  ],
+  blocking_component_type_summary: [],
+  primary_blocking_component_type_summary: [],
+  recommended_action_summary: [
+    {
+      recommended_action: "NO_ACTION",
+      device_count: 1,
+    },
+  ],
+  devices: [
+    {
+      ...componentPayload.devices[0],
+      passes_component_quality_gate: true,
+      primary_quality_status: "PASS",
+      primary_blocking_component_type: null,
+      primary_blocking_component_serial_number: null,
+      recommended_action: "NO_ACTION",
+      blocked_components: 0,
+      passing_components: 2,
+    },
+  ],
+};
+
+const componentActionAfterPassShipmentDetailsPayload: DeviceShipmentReadiness = {
+  ...shipmentActionDetailsPayload,
+  device_serial_number: "COMP-001",
+  bom_compliance: {
+    ...componentActionShipmentDetailsPayload.bom_compliance,
+  },
+  can_transition_to_ready_for_shipment: true,
+  primary_blocking_code: null,
+  primary_blocking_message: null,
+  recommended_action: "MARK_READY_FOR_SHIPMENT",
+  blocking_reasons: [],
+  blocking_checks: [],
+};
+
+const componentActionAfterPassComponentDetailsPayload: DeviceComponentQuality = {
+  ...componentActionComponentDetailsPayload,
+  passing_components: 2,
+  blocked_components: 0,
+  passes_component_quality_gate: true,
+  primary_quality_status: "PASS",
+  primary_blocking_component_type: null,
+  primary_blocking_component_serial_number: null,
+  recommended_action: "NO_ACTION",
+  components: componentActionComponentDetailsPayload.components?.map((component) =>
+    component.component_serial_number === "FAN-001"
+      ? {
+          ...component,
+          component_qc_passed: true,
+          blocks_shipment: false,
+          quality_status: "PASS",
+        }
+      : component,
+  ),
+};
+
 const shipmentDetailsReadyPayload: DeviceShipmentReadiness = {
   ...shipmentActionDetailsPayload,
   production_status: "READY_FOR_SHIPMENT",
@@ -535,6 +707,15 @@ const operatorsPayload: OperatorRead[] = [
     is_active: true,
     created_at: "2026-05-01T07:40:00Z",
   },
+  {
+    id: "OP-ROW-QA-001",
+    operator_id: "OP-QA-001",
+    full_name: "Quality Inspector",
+    role: "QUALITY_INSPECTOR",
+    rfid_uid_hash: "RFID-QA-001",
+    is_active: true,
+    created_at: "2026-05-01T07:45:00Z",
+  },
 ];
 
 const workSessionsPayload: WorkSessionRead[] = [
@@ -556,6 +737,16 @@ const workSessionsPayload: WorkSessionRead[] = [
     machine_id: "PR-MC-01",
     status: "ACTIVE",
     started_at: "2026-05-01T07:55:00Z",
+    ended_at: null,
+  },
+  {
+    id: "WS-ROW-QA-001",
+    work_session_id: "WS-QA-001",
+    operator_id: "OP-QA-001",
+    workstation_id: "QA-ST-01",
+    machine_id: "QA-MC-01",
+    status: "ACTIVE",
+    started_at: "2026-05-01T08:05:00Z",
     ended_at: null,
   },
 ];
@@ -1274,9 +1465,11 @@ describe("App", () => {
     expect(
       await screen.findByText("Zapisano final test PASS."),
     ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Zapisz final test PASS" }),
-    ).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("button", { name: "Zapisz final test PASS" }),
+      ).not.toBeInTheDocument();
+    });
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
         "/api/final-tests",
@@ -1286,6 +1479,184 @@ describe("App", () => {
             Accept: "application/json",
             "Content-Type": "application/json",
           },
+        }),
+      );
+    });
+  });
+
+  it("records component QC PASS from the details drawer with an active quality session", async () => {
+    let componentQcRecorded = false;
+    let qcRunId = "";
+    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+
+      if (url.startsWith("/api/shipment-readiness")) {
+        return Promise.resolve(createJsonResponse(shipmentPayload));
+      }
+
+      if (
+        url.startsWith("/api/component-quality?only_blocking=true")
+      ) {
+        return Promise.resolve(
+          createJsonResponse(
+            componentQcRecorded
+              ? componentActionAfterPassQueuePayload
+              : componentPayload,
+          ),
+        );
+      }
+
+      if (url === "/api/devices/COMP-001/shipment-readiness") {
+        return Promise.resolve(
+          createJsonResponse(
+            componentQcRecorded
+              ? componentActionAfterPassShipmentDetailsPayload
+              : componentActionShipmentDetailsPayload,
+          ),
+        );
+      }
+
+      if (url === "/api/devices/COMP-001/component-quality") {
+        return Promise.resolve(
+          createJsonResponse(
+            componentQcRecorded
+              ? componentActionAfterPassComponentDetailsPayload
+              : componentActionComponentDetailsPayload,
+          ),
+        );
+      }
+
+      if (url === "/api/devices/COMP-001/shipment-gate-history?limit=10") {
+        return Promise.resolve(createJsonResponse([]));
+      }
+
+      if (url === "/api/work-sessions") {
+        return Promise.resolve(createJsonResponse(workSessionsPayload));
+      }
+
+      if (url === "/api/operators") {
+        return Promise.resolve(createJsonResponse(operatorsPayload));
+      }
+
+      if (url === "/api/qc-runs" && method === "POST") {
+        const body = JSON.parse(String(init?.body)) as {
+          run_id: string;
+          device_serial_number: string;
+          item_serial_number: string;
+          barcode_value: string;
+          process_stage: string;
+          work_session_id: string;
+        };
+        qcRunId = body.run_id;
+
+        expect(body.device_serial_number).toBe("COMP-001");
+        expect(body.item_serial_number).toBe("FAN-001");
+        expect(body.barcode_value).toBe("BC-FAN-001");
+        expect(body.process_stage).toBe("COMPONENT_QC");
+        expect(body.work_session_id).toBe("WS-QA-001");
+        expect(body.run_id).toMatch(/^QC-WEB-FAN-001-/);
+
+        return Promise.resolve(
+          createJsonResponse({
+            id: "QC-ROW-001",
+            run_id: body.run_id,
+            device_serial_number: "COMP-001",
+            item_serial_number: "FAN-001",
+            barcode_value: "BC-FAN-001",
+            checklist_id: null,
+            process_stage: "COMPONENT_QC",
+            operator_id: "OP-QA-001",
+            work_session_id: "WS-QA-001",
+            status: "IN_PROGRESS",
+            result: null,
+            started_at: "2026-05-01T09:20:00Z",
+            ended_at: null,
+          }),
+        );
+      }
+
+      if (
+        qcRunId &&
+        url === `/api/qc-runs/${qcRunId}/complete` &&
+        method === "POST"
+      ) {
+        componentQcRecorded = true;
+        expect(init?.body).toBe("result=PASS");
+
+        return Promise.resolve(
+          createJsonResponse({
+            id: "QC-ROW-001",
+            run_id: qcRunId,
+            device_serial_number: "COMP-001",
+            item_serial_number: "FAN-001",
+            barcode_value: "BC-FAN-001",
+            checklist_id: null,
+            process_stage: "COMPONENT_QC",
+            operator_id: "OP-QA-001",
+            work_session_id: "WS-QA-001",
+            status: "COMPLETED",
+            result: "PASS",
+            started_at: "2026-05-01T09:20:00Z",
+            ended_at: "2026-05-01T09:21:00Z",
+          }),
+        );
+      }
+
+      throw new Error(`Unexpected request: ${method} ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Komponenty" }));
+    expect(await screen.findByText("COMP-001")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "COMP-001" }));
+
+    const qualitySessionSelect = await screen.findByLabelText(
+      "Sesja QC komponentów",
+    );
+    await waitFor(() =>
+      expect(qualitySessionSelect).toHaveValue("WS-QA-001"),
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Zapisz komponentowy QC PASS" }),
+    );
+
+    expect(
+      await screen.findByText("Zapisano komponentowy QC PASS."),
+    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("button", { name: "Zapisz komponentowy QC PASS" }),
+      ).not.toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/qc-runs",
+        expect.objectContaining({
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+        }),
+      );
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringMatching(/^\/api\/qc-runs\/QC-WEB-FAN-001-.*\/complete$/),
+        expect.objectContaining({
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+          },
+          body: "result=PASS",
         }),
       );
     });

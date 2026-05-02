@@ -254,6 +254,25 @@ export interface FinalTestRead extends FinalTestCreatePayload {
   created_at: string;
 }
 
+export interface QcRunCreatePayload {
+  run_id: string;
+  device_serial_number?: string;
+  item_serial_number?: string;
+  barcode_value?: string;
+  checklist_id?: string;
+  process_stage: string;
+  operator_id?: string;
+  work_session_id: string;
+}
+
+export interface QcRunRead extends QcRunCreatePayload {
+  id: string;
+  status: string;
+  result: string | null;
+  started_at: string | null;
+  ended_at: string | null;
+}
+
 export interface DeviceComponentQualityQueue {
   total_devices: number;
   devices_with_issues: number;
@@ -377,6 +396,23 @@ export async function postJson<T>(
   });
 }
 
+export async function postForm<T>(
+  url: string,
+  body: Record<string, string>,
+  signal?: AbortSignal,
+): Promise<T> {
+  const formBody = new URLSearchParams(body);
+
+  return requestJson<T>(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+    },
+    body: formBody.toString(),
+    signal,
+  });
+}
+
 export async function patchJson<T>(
   url: string,
   body: unknown,
@@ -448,6 +484,31 @@ export async function createFinalTest(
   return postJson<FinalTestRead>(
     joinApiUrl(apiBaseUrl, "/final-tests"),
     payload,
+    signal,
+  );
+}
+
+export async function createQcRun(
+  apiBaseUrl: string,
+  payload: QcRunCreatePayload,
+  signal?: AbortSignal,
+): Promise<QcRunRead> {
+  return postJson<QcRunRead>(
+    joinApiUrl(apiBaseUrl, "/qc-runs"),
+    payload,
+    signal,
+  );
+}
+
+export async function completeQcRun(
+  apiBaseUrl: string,
+  runId: string,
+  result: "PASS" | "FAIL",
+  signal?: AbortSignal,
+): Promise<QcRunRead> {
+  return postForm<QcRunRead>(
+    joinApiUrl(apiBaseUrl, `/qc-runs/${encodeURIComponent(runId)}/complete`),
+    { result },
     signal,
   );
 }

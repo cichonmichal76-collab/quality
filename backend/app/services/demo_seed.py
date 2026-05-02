@@ -565,6 +565,11 @@ def seed_operations_dashboard_demo(
         f"{tag}-FT",
         role="FINAL_TEST_OPERATOR",
     )
+    start_work_session(
+        client,
+        f"{tag}-Q",
+        role="QUALITY_INSPECTOR",
+    )
 
     ready_serial = unique_id("READY", tag)
     assembly_gap_serial = unique_id("ASM", tag)
@@ -641,6 +646,19 @@ def seed_operations_dashboard_demo(
         component_type="CONTROL_PCB",
         barcode_value=qc_gap_item["barcode_value"],
     )
+    qc_gap_blocking_item = create_qc_passed_item(
+        client,
+        production_session,
+        f"{tag}-CQ-FAN",
+        item_type="FAN_MODULE",
+    )
+    install_component(
+        client,
+        production_session,
+        device_serial_number=component_qc_gap_serial,
+        component_type="FAN_MODULE",
+        barcode_value=qc_gap_blocking_item["barcode_value"],
+    )
     record_final_test_pass(
         client,
         final_test_session,
@@ -648,14 +666,20 @@ def seed_operations_dashboard_demo(
         device_serial_number=component_qc_gap_serial,
     )
     with SessionLocal() as db:
-        add_manual_component_link(
-            db,
-            device_serial_number=component_qc_gap_serial,
-            template_ref=template_ref,
-            component_type="FAN_MODULE",
-            component_qc_passed=False,
-            tag=f"{tag}-FAN",
+        blocking_link = (
+            db.query(AssemblyLink)
+            .filter(
+                AssemblyLink.parent_device_serial_number == component_qc_gap_serial,
+                AssemblyLink.child_item_serial_number
+                == qc_gap_blocking_item["item_serial_number"],
+            )
+            .first()
         )
+        if blocking_link is None:
+            raise RuntimeError(
+                "expected installed FAN_MODULE link for component QC gap scenario"
+            )
+        blocking_link.component_qc_passed = False
         db.commit()
 
     component_ncr_item = create_qc_passed_item(client, production_session, f"{tag}-CN")

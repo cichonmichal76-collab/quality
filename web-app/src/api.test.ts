@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   buildQuery,
+  completeQcRun,
   createFinalTest,
+  createQcRun,
   joinApiUrl,
   listOperators,
   listWorkSessions,
@@ -243,6 +245,98 @@ describe("createFinalTest", () => {
           result: "PASS",
           work_session_id: "WS-FT-001",
         }),
+      }),
+    );
+  });
+});
+
+describe("createQcRun", () => {
+  it("wysyła POST zapisujący komponentowy QC run z work_session_id", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => ({
+        run_id: "QC-WEB-001",
+        device_serial_number: "SHIP-001",
+        item_serial_number: "FAN-900",
+        barcode_value: "BC-FAN-900",
+        process_stage: "COMPONENT_QC",
+        work_session_id: "WS-QA-001",
+        id: "QC-ROW-001",
+        status: "IN_PROGRESS",
+        result: null,
+        started_at: "2026-05-01T09:20:00Z",
+        ended_at: null,
+      }),
+    } satisfies Partial<Response>);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const payload = await createQcRun("/api", {
+      run_id: "QC-WEB-001",
+      device_serial_number: "SHIP-001",
+      item_serial_number: "FAN-900",
+      barcode_value: "BC-FAN-900",
+      process_stage: "COMPONENT_QC",
+      work_session_id: "WS-QA-001",
+    });
+
+    expect(payload.status).toBe("IN_PROGRESS");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/qc-runs",
+      expect.objectContaining({
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          run_id: "QC-WEB-001",
+          device_serial_number: "SHIP-001",
+          item_serial_number: "FAN-900",
+          barcode_value: "BC-FAN-900",
+          process_stage: "COMPONENT_QC",
+          work_session_id: "WS-QA-001",
+        }),
+      }),
+    );
+  });
+});
+
+describe("completeQcRun", () => {
+  it("wysyła POST form-data zamykający komponentowy QC run wynikiem FAIL", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => ({
+        run_id: "QC-WEB-001",
+        device_serial_number: "SHIP-001",
+        item_serial_number: "FAN-900",
+        barcode_value: "BC-FAN-900",
+        process_stage: "COMPONENT_QC",
+        work_session_id: "WS-QA-001",
+        id: "QC-ROW-001",
+        status: "COMPLETED",
+        result: "FAIL",
+        started_at: "2026-05-01T09:20:00Z",
+        ended_at: "2026-05-01T09:21:00Z",
+      }),
+    } satisfies Partial<Response>);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const payload = await completeQcRun("/api", "QC-WEB-001", "FAIL");
+
+    expect(payload.result).toBe("FAIL");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/qc-runs/QC-WEB-001/complete",
+      expect.objectContaining({
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+        },
+        body: "result=FAIL",
       }),
     );
   });

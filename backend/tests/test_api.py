@@ -2918,6 +2918,153 @@ def test_qc_run_pass_updates_item_status():
     assert item.json()["current_status"] == "QC_PASSED"
 
 
+def test_qc_run_pass_updates_installed_component_snapshot_and_queue_state():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(device_type, component_type="CONTROL_PCB")
+    device_serial_number = unique_id("DEV")
+    device_response = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
+    )
+    assert device_response.status_code == 200
+
+    production_session = start_work_session(role="PRODUCTION_OPERATOR")
+    item = create_qc_passed_item(production_session, item_type="CONTROL_PCB")
+    install = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": production_session["work_session_id"],
+        },
+    )
+    assert install.status_code == 200
+
+    with SessionLocal() as db:
+        link = (
+            db.query(AssemblyLink)
+            .filter(AssemblyLink.child_barcode_value == item["barcode_value"])
+            .first()
+        )
+        device = (
+            db.query(Device)
+            .filter(Device.device_serial_number == device_serial_number)
+            .first()
+        )
+        assert link is not None
+        assert device is not None
+        link.component_qc_passed = False
+        previous_updated_at = device.updated_at - timedelta(hours=2)
+        device.updated_at = previous_updated_at
+        db.commit()
+
+    quality_before = client.get(f"/api/devices/{device_serial_number}/component-quality")
+    assert quality_before.status_code == 200
+    assert quality_before.json()["recommended_action"] == "RUN_COMPONENT_QC_OR_REWORK"
+
+    quality_session = start_work_session(role="QUALITY_INSPECTOR")
+    run_id = unique_id("QCRUN")
+    qc_run = client.post(
+        "/api/qc-runs",
+        json={
+            "run_id": run_id,
+            "device_serial_number": device_serial_number,
+            "item_serial_number": item["item_serial_number"],
+            "barcode_value": item["barcode_value"],
+            "process_stage": "COMPONENT_QC",
+            "work_session_id": quality_session["work_session_id"],
+        },
+    )
+    assert qc_run.status_code == 200
+
+    completed = client.post(f"/api/qc-runs/{run_id}/complete", data={"result": "PASS"})
+    assert completed.status_code == 200
+    assert completed.json()["result"] == "PASS"
+
+    with SessionLocal() as db:
+        link = (
+            db.query(AssemblyLink)
+            .filter(AssemblyLink.child_barcode_value == item["barcode_value"])
+            .first()
+        )
+        device = (
+            db.query(Device)
+            .filter(Device.device_serial_number == device_serial_number)
+            .first()
+        )
+        assert link is not None
+        assert device is not None
+        assert link.component_qc_passed is True
+        assert device.updated_at > previous_updated_at
+
+    quality_after = client.get(f"/api/devices/{device_serial_number}/component-quality")
+    assert quality_after.status_code == 200
+    assert quality_after.json()["passes_component_quality_gate"] is True
+    assert quality_after.json()["primary_quality_status"] == "PASS"
+    assert quality_after.json()["recommended_action"] == "NO_ACTION"
+
+
+def test_qc_run_fail_updates_installed_component_snapshot_and_creates_component_ncr():
+    device_type = unique_id("DT")
+    ensure_device_bom_template(device_type, component_type="CONTROL_PCB")
+    device_serial_number = unique_id("DEV")
+    device_response = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
+    )
+    assert device_response.status_code == 200
+
+    production_session = start_work_session(role="PRODUCTION_OPERATOR")
+    item = create_qc_passed_item(production_session, item_type="CONTROL_PCB")
+    install = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": item["barcode_value"],
+            "component_type": "CONTROL_PCB",
+            "work_session_id": production_session["work_session_id"],
+        },
+    )
+    assert install.status_code == 200
+
+    quality_session = start_work_session(role="QUALITY_INSPECTOR")
+    run_id = unique_id("QCRUN")
+    qc_run = client.post(
+        "/api/qc-runs",
+        json={
+            "run_id": run_id,
+            "device_serial_number": device_serial_number,
+            "item_serial_number": item["item_serial_number"],
+            "barcode_value": item["barcode_value"],
+            "process_stage": "COMPONENT_QC",
+            "work_session_id": quality_session["work_session_id"],
+        },
+    )
+    assert qc_run.status_code == 200
+
+    completed = client.post(f"/api/qc-runs/{run_id}/complete", data={"result": "FAIL"})
+    assert completed.status_code == 200
+    assert completed.json()["result"] == "FAIL"
+
+    with SessionLocal() as db:
+        link = (
+            db.query(AssemblyLink)
+            .filter(AssemblyLink.child_barcode_value == item["barcode_value"])
+            .first()
+        )
+        assert link is not None
+        assert link.component_qc_passed is False
+
+    ncr = client.get(f"/api/nonconformities/NCR-QC-{run_id}")
+    assert ncr.status_code == 200
+    assert ncr.json()["component_serial_number"] == item["item_serial_number"]
+
+    quality_after = client.get(f"/api/devices/{device_serial_number}/component-quality")
+    assert quality_after.status_code == 200
+    assert quality_after.json()["passes_component_quality_gate"] is False
+    assert quality_after.json()["primary_quality_status"] == "CRITICAL_NCR_OPEN"
+    assert quality_after.json()["recommended_action"] == "RESOLVE_COMPONENT_NCR"
+
+
 def test_assembly_scan_installs_component_and_blocks_duplicate_use():
     device_type = unique_id("DT")
     ensure_device_bom_template(device_type, component_type="CONTROL_PCB")

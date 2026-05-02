@@ -190,6 +190,15 @@ const operatorsPayload = [
     is_active: true,
     created_at: "2026-05-01T07:50:00Z",
   },
+  {
+    id: "OP-ROW-QA-001",
+    operator_id: "OP-QA-001",
+    full_name: "Quality Inspector",
+    role: "QUALITY_INSPECTOR",
+    rfid_uid_hash: "RFID-QA-001",
+    is_active: true,
+    created_at: "2026-05-01T07:55:00Z",
+  },
 ];
 
 const workSessionsPayload = [
@@ -201,6 +210,16 @@ const workSessionsPayload = [
     machine_id: "FT-MC-01",
     status: "ACTIVE",
     started_at: "2026-05-01T08:00:00Z",
+    ended_at: null,
+  },
+  {
+    id: "WS-ROW-QA-001",
+    work_session_id: "WS-QA-001",
+    operator_id: "OP-QA-001",
+    workstation_id: "QA-ST-01",
+    machine_id: "QA-MC-01",
+    status: "ACTIVE",
+    started_at: "2026-05-01T08:05:00Z",
     ended_at: null,
   },
 ];
@@ -318,6 +337,222 @@ const shipmentAfterFinalTestPassDetailsPayload = {
     device_serial_number: "TEST-001",
     production_status: "FINAL_TEST_PASSED",
   },
+};
+
+const componentActionShipmentDetailsPayload = {
+  ...shipmentDetailsPayload,
+  device_serial_number: "COMP-001",
+  has_critical_open_ncr: false,
+  critical_open_ncr_ids: [],
+  bom_compliance: {
+    ...shipmentDetailsPayload.bom_compliance,
+    device_serial_number: "COMP-001",
+    installed_component_count: 2,
+    missing_required_components: [],
+    blocking_reason: null,
+    component_coverage: [
+      {
+        component_type: "CONTROL_PCB",
+        substitution_group: null,
+        allowed_component_types: null,
+        required_quantity: 1,
+        installed_quantity: 1,
+        is_required: true,
+        status: "PASS",
+      },
+      {
+        component_type: "FAN_MODULE",
+        substitution_group: "AIRFLOW",
+        allowed_component_types: ["FAN_MODULE"],
+        required_quantity: 1,
+        installed_quantity: 1,
+        is_required: true,
+        status: "PASS",
+      },
+    ],
+  },
+  can_transition_to_ready_for_shipment: false,
+  latest_shipment_gate_decision: null,
+  primary_blocking_code: "COMPONENT_QC_NOT_PASSED",
+  primary_blocking_message: "Installed component lacks QC_PASSED",
+  recommended_action: "RESOLVE_COMPONENT_QUALITY",
+  blocking_reasons: ["Installed component lacks QC_PASSED"],
+  blocking_checks: [
+    {
+      code: "COMPONENT_QC_NOT_PASSED",
+      is_blocking: true,
+      message: "Installed component lacks QC_PASSED",
+      details: ["FAN-001 (FAN_MODULE)"],
+    },
+  ],
+};
+
+const componentActionComponentDetailsPayload = {
+  device_serial_number: "COMP-001",
+  device_type: "DEMO-OPS",
+  device_variant_code: "DEFAULT",
+  production_status: "FINAL_TEST_PASSED",
+  device_created_at: "2026-05-01T08:00:00Z",
+  device_updated_at: "2026-05-01T09:05:00Z",
+  stale_bucket: "LT_24H",
+  total_installed_components: 2,
+  passing_components: 1,
+  blocked_components: 1,
+  passes_component_quality_gate: false,
+  primary_quality_status: "QC_NOT_PASSED",
+  primary_blocking_component_type: "FAN_MODULE",
+  primary_blocking_component_serial_number: "FAN-001",
+  recommended_action: "RUN_COMPONENT_QC_OR_REWORK",
+  components: [
+    {
+      component_serial_number: "CTRL-200",
+      component_type: "CONTROL_PCB",
+      child_barcode_value: "BC-CTRL-200",
+      installed_at: "2026-05-01T08:20:00Z",
+      installed_by: "OP-01",
+      workstation_id: "WS-01",
+      bom_template_id: "BOM-01",
+      bom_version: "1.2",
+      component_qc_passed: true,
+      has_critical_open_ncr: false,
+      critical_open_ncr_ids: [],
+      blocks_shipment: false,
+      quality_status: "PASS",
+    },
+    {
+      component_serial_number: "FAN-001",
+      component_type: "FAN_MODULE",
+      child_barcode_value: "BC-FAN-001",
+      installed_at: "2026-05-01T08:25:00Z",
+      installed_by: "OP-02",
+      workstation_id: "WS-02",
+      bom_template_id: "BOM-01",
+      bom_version: "1.2",
+      component_qc_passed: false,
+      has_critical_open_ncr: false,
+      critical_open_ncr_ids: [],
+      blocks_shipment: true,
+      quality_status: "QC_NOT_PASSED",
+    },
+  ],
+};
+
+const componentActionQueuePayload = {
+  total_devices: 1,
+  devices_with_issues: 1,
+  returned_count: 1,
+  offset: 0,
+  limit: 100,
+  has_more: false,
+  next_offset: null,
+  filters: {},
+  quality_status_summary: [
+    { quality_status: "QC_NOT_PASSED", component_count: 1, device_count: 1 },
+  ],
+  variant_code_summary: [{ variant_code: "DEFAULT", device_count: 1 }],
+  production_status_summary: [
+    { production_status: "FINAL_TEST_PASSED", device_count: 1 },
+  ],
+  primary_quality_status_summary: [
+    { primary_quality_status: "QC_NOT_PASSED", device_count: 1 },
+  ],
+  component_quality_gate_summary: [
+    { passes_component_quality_gate: false, device_count: 1 },
+  ],
+  staleness_summary: [{ stale_bucket: "LT_24H", device_count: 1 }],
+  component_type_summary: [
+    { component_type: "FAN_MODULE", component_count: 1, device_count: 1 },
+  ],
+  blocking_component_type_summary: [
+    { component_type: "FAN_MODULE", component_count: 1, device_count: 1 },
+  ],
+  primary_blocking_component_type_summary: [
+    { component_type: "FAN_MODULE", device_count: 1 },
+  ],
+  recommended_action_summary: [
+    { recommended_action: "RUN_COMPONENT_QC_OR_REWORK", device_count: 1 },
+  ],
+  devices: [
+    {
+      device_serial_number: "COMP-001",
+      device_type: "DEMO-OPS",
+      device_variant_code: "DEFAULT",
+      production_status: "FINAL_TEST_PASSED",
+      device_created_at: "2026-05-01T08:00:00Z",
+      device_updated_at: "2026-05-01T09:05:00Z",
+      stale_bucket: "LT_24H",
+      total_installed_components: 2,
+      passing_components: 1,
+      blocked_components: 1,
+      passes_component_quality_gate: false,
+      primary_quality_status: "QC_NOT_PASSED",
+      primary_blocking_component_type: "FAN_MODULE",
+      primary_blocking_component_serial_number: "FAN-001",
+      recommended_action: "RUN_COMPONENT_QC_OR_REWORK",
+    },
+  ],
+};
+
+const componentActionAfterPassQueuePayload = {
+  ...componentActionQueuePayload,
+  devices_with_issues: 0,
+  quality_status_summary: [
+    { quality_status: "PASS", component_count: 2, device_count: 1 },
+  ],
+  primary_quality_status_summary: [
+    { primary_quality_status: "PASS", device_count: 1 },
+  ],
+  component_quality_gate_summary: [
+    { passes_component_quality_gate: true, device_count: 1 },
+  ],
+  blocking_component_type_summary: [],
+  primary_blocking_component_type_summary: [],
+  recommended_action_summary: [
+    { recommended_action: "NO_ACTION", device_count: 1 },
+  ],
+  devices: [
+    {
+      ...componentActionQueuePayload.devices[0],
+      passing_components: 2,
+      blocked_components: 0,
+      passes_component_quality_gate: true,
+      primary_quality_status: "PASS",
+      primary_blocking_component_type: null,
+      primary_blocking_component_serial_number: null,
+      recommended_action: "NO_ACTION",
+    },
+  ],
+};
+
+const componentActionAfterPassShipmentDetailsPayload = {
+  ...componentActionShipmentDetailsPayload,
+  can_transition_to_ready_for_shipment: true,
+  primary_blocking_code: null,
+  primary_blocking_message: null,
+  recommended_action: "MARK_READY_FOR_SHIPMENT",
+  blocking_reasons: [],
+  blocking_checks: [],
+};
+
+const componentActionAfterPassComponentDetailsPayload = {
+  ...componentActionComponentDetailsPayload,
+  passing_components: 2,
+  blocked_components: 0,
+  passes_component_quality_gate: true,
+  primary_quality_status: "PASS",
+  primary_blocking_component_type: null,
+  primary_blocking_component_serial_number: null,
+  recommended_action: "NO_ACTION",
+  components: componentActionComponentDetailsPayload.components.map((component) =>
+    component.component_serial_number === "FAN-001"
+      ? {
+          ...component,
+          component_qc_passed: true,
+          blocks_shipment: false,
+          quality_status: "PASS",
+        }
+      : component,
+  ),
 };
 
 test("dashboard marks device ready for shipment from the details drawer", async ({
@@ -729,6 +964,190 @@ test("dashboard records final test PASS from the details drawer", async ({
     drawer.getByRole("button", { name: "Zapisz final test PASS" }),
   ).toHaveCount(0);
   expect(postRequests).toBe(1);
+});
+
+test("dashboard records component QC PASS from the details drawer", async ({
+  page,
+}) => {
+  let componentQcRecorded = false;
+  let qcRunId = "";
+  let createRequests = 0;
+  let completeRequests = 0;
+
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const path = url.pathname;
+
+    if (path === "/api/shipment-readiness") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(shipmentQueuePayload),
+      });
+      return;
+    }
+
+    if (path === "/api/component-quality") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(
+          componentQcRecorded
+            ? componentActionAfterPassQueuePayload
+            : componentActionQueuePayload,
+        ),
+      });
+      return;
+    }
+
+    if (path === "/api/devices/COMP-001/shipment-readiness") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(
+          componentQcRecorded
+            ? componentActionAfterPassShipmentDetailsPayload
+            : componentActionShipmentDetailsPayload,
+        ),
+      });
+      return;
+    }
+
+    if (path === "/api/devices/COMP-001/component-quality") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(
+          componentQcRecorded
+            ? componentActionAfterPassComponentDetailsPayload
+            : componentActionComponentDetailsPayload,
+        ),
+      });
+      return;
+    }
+
+    if (path === "/api/devices/COMP-001/shipment-gate-history") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([]),
+      });
+      return;
+    }
+
+    if (path === "/api/work-sessions") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(workSessionsPayload),
+      });
+      return;
+    }
+
+    if (path === "/api/operators") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(operatorsPayload),
+      });
+      return;
+    }
+
+    if (path === "/api/qc-runs" && request.method() === "POST") {
+      createRequests += 1;
+      const payload = request.postDataJSON() as {
+        run_id: string;
+        device_serial_number: string;
+        item_serial_number: string;
+        barcode_value: string;
+        process_stage: string;
+        work_session_id: string;
+      };
+      qcRunId = payload.run_id;
+
+      expect(payload.device_serial_number).toBe("COMP-001");
+      expect(payload.item_serial_number).toBe("FAN-001");
+      expect(payload.barcode_value).toBe("BC-FAN-001");
+      expect(payload.process_stage).toBe("COMPONENT_QC");
+      expect(payload.work_session_id).toBe("WS-QA-001");
+      expect(payload.run_id).toMatch(/^QC-WEB-FAN-001-/);
+
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: "QC-ROW-001",
+          run_id: payload.run_id,
+          device_serial_number: "COMP-001",
+          item_serial_number: "FAN-001",
+          barcode_value: "BC-FAN-001",
+          checklist_id: null,
+          process_stage: "COMPONENT_QC",
+          operator_id: "OP-QA-001",
+          work_session_id: "WS-QA-001",
+          status: "IN_PROGRESS",
+          result: null,
+          started_at: "2026-05-01T09:20:00Z",
+          ended_at: null,
+        }),
+      });
+      return;
+    }
+
+    if (
+      qcRunId &&
+      path === `/api/qc-runs/${qcRunId}/complete` &&
+      request.method() === "POST"
+    ) {
+      completeRequests += 1;
+      componentQcRecorded = true;
+      expect(request.postData()).toBe("result=PASS");
+
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: "QC-ROW-001",
+          run_id: qcRunId,
+          device_serial_number: "COMP-001",
+          item_serial_number: "FAN-001",
+          barcode_value: "BC-FAN-001",
+          checklist_id: null,
+          process_stage: "COMPONENT_QC",
+          operator_id: "OP-QA-001",
+          work_session_id: "WS-QA-001",
+          status: "COMPLETED",
+          result: "PASS",
+          started_at: "2026-05-01T09:20:00Z",
+          ended_at: "2026-05-01T09:21:00Z",
+        }),
+      });
+      return;
+    }
+
+    throw new Error(`Unexpected request: ${request.method()} ${path}`);
+  });
+
+  await page.goto("/");
+
+  await expect(page.getByText("API OK")).toBeVisible();
+  await page.getByRole("button", { name: "Komponenty" }).click();
+  await page.getByRole("button", { name: "COMP-001" }).click();
+
+  const drawer = page.getByRole("dialog");
+  await expect(drawer.getByLabel("Sesja QC komponentów")).toHaveValue("WS-QA-001");
+
+  await drawer
+    .getByRole("button", { name: "Zapisz komponentowy QC PASS" })
+    .click();
+
+  await expect(drawer.getByText("Zapisano komponentowy QC PASS.")).toBeVisible();
+  await expect(
+    drawer.getByRole("button", { name: "Zapisz komponentowy QC PASS" }),
+  ).toHaveCount(0);
+  expect(createRequests).toBe(1);
+  expect(completeRequests).toBe(1);
 });
 
 test("dashboard closes device critical NCRs from the details drawer", async ({

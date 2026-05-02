@@ -3,7 +3,16 @@ from sqlalchemy.orm import Session
 
 from app.core.audit import record_audit_event
 from app.database import utc_now
-from app.models import Nonconformity, ProductionItem, QcChecklist, QcRun, QcStep, QcStepResult
+from app.models import (
+    AssemblyLink,
+    Device,
+    Nonconformity,
+    ProductionItem,
+    QcChecklist,
+    QcRun,
+    QcStep,
+    QcStepResult,
+)
 from app.modules.auth_rfid.service import QUALITY_SESSION_ROLES, require_active_work_session
 from app.modules.qc import repository
 from app.schemas import (
@@ -125,9 +134,10 @@ def add_qc_step_result(
 def complete_qc_run(db: Session, run_id: str, result: str | None) -> QcRun:
     run = get_qc_run_or_404(db, run_id)
     final_result = _normalize_run_result(result) or _derive_run_result(db, run)
+    completed_at = utc_now()
     run.result = final_result
     run.status = "COMPLETED"
-    run.ended_at = utc_now()
+    run.ended_at = completed_at
 
     if run.item_serial_number:
         item = db.query(ProductionItem).filter(
@@ -135,6 +145,24 @@ def complete_qc_run(db: Session, run_id: str, result: str | None) -> QcRun:
         ).first()
         if item:
             item.current_status = "QC_PASSED" if final_result == "PASS" else "QC_FAILED"
+
+        installed_links = db.query(AssemblyLink).filter(
+            AssemblyLink.child_item_serial_number == run.item_serial_number,
+            AssemblyLink.status == "INSTALLED",
+        ).all()
+        if installed_links:
+            parent_serial_numbers = set()
+            component_qc_passed = final_result == "PASS"
+            for link in installed_links:
+                link.component_qc_passed = component_qc_passed
+                parent_serial_numbers.add(link.parent_device_serial_number)
+
+            if parent_serial_numbers:
+                parent_devices = db.query(Device).filter(
+                    Device.device_serial_number.in_(parent_serial_numbers)
+                ).all()
+                for device in parent_devices:
+                    device.updated_at = completed_at
 
     if final_result == "FAIL":
         ncr_id = f"NCR-QC-{run.run_id}"

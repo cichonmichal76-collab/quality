@@ -3,7 +3,9 @@ import type { ChangeEvent, CSSProperties, ReactNode } from "react";
 
 import {
   buildQuery,
+  completeQcRun,
   createFinalTest,
+  createQcRun,
   fetchJson,
   joinApiUrl,
   listOperators,
@@ -39,11 +41,18 @@ const SHIPMENT_FILTERS_STORAGE_KEY = "servicetrace.web.shipmentFilters";
 const COMPONENT_FILTERS_STORAGE_KEY = "servicetrace.web.componentFilters";
 const FINAL_TEST_SESSION_STORAGE_KEY =
   "servicetrace.web.finalTestWorkSessionId";
+const QUALITY_SESSION_STORAGE_KEY =
+  "servicetrace.web.qualityWorkSessionId";
 const DEFAULT_API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 const TEXT_FILTER_DEBOUNCE_MS = 250;
 const FINAL_TEST_ALLOWED_ROLES = new Set([
   "ADMIN",
   "FINAL_TEST_OPERATOR",
+  "QUALITY_MANAGER",
+]);
+const QUALITY_ACTION_ALLOWED_ROLES = new Set([
+  "ADMIN",
+  "QUALITY_INSPECTOR",
   "QUALITY_MANAGER",
 ]);
 
@@ -274,6 +283,9 @@ export function App() {
   );
   const [selectedFinalTestSessionId, setSelectedFinalTestSessionId] =
     useState(() => localStorage.getItem(FINAL_TEST_SESSION_STORAGE_KEY) ?? "");
+  const [selectedQualitySessionId, setSelectedQualitySessionId] = useState(
+    () => localStorage.getItem(QUALITY_SESSION_STORAGE_KEY) ?? "",
+  );
   const [refreshVersion, setRefreshVersion] = useState(0);
   const activePath =
     activeView === "shipment" ? "/shipment-readiness" : "/component-quality";
@@ -284,16 +296,31 @@ export function App() {
   const selectedDeviceSerial = selectedDevice?.serialNumber ?? null;
   const requiresFinalTestAction =
     deviceDetails?.shipment.recommended_action === "RUN_FINAL_TEST";
+  const requiresComponentQcAction =
+    deviceDetails?.component.recommended_action === "RUN_COMPONENT_QC_OR_REWORK";
+  const requiresOperatorActionContext =
+    requiresFinalTestAction || requiresComponentQcAction;
   const finalTestSessionOptions = buildActionWorkSessionOptions(
     workSessions,
     operators,
     FINAL_TEST_ALLOWED_ROLES,
+  );
+  const qualitySessionOptions = buildActionWorkSessionOptions(
+    workSessions,
+    operators,
+    QUALITY_ACTION_ALLOWED_ROLES,
   );
   const selectedFinalTestSession =
     finalTestSessionOptions.find(
       (session) => session.workSessionId === selectedFinalTestSessionId,
     ) ??
     finalTestSessionOptions[0] ??
+    null;
+  const selectedQualitySession =
+    qualitySessionOptions.find(
+      (session) => session.workSessionId === selectedQualitySessionId,
+    ) ??
+    qualitySessionOptions[0] ??
     null;
 
   const clearActiveViewData = (view: DashboardMode) => {
@@ -350,6 +377,18 @@ export function App() {
 
     localStorage.removeItem(FINAL_TEST_SESSION_STORAGE_KEY);
   }, [selectedFinalTestSessionId]);
+
+  useEffect(() => {
+    if (selectedQualitySessionId) {
+      localStorage.setItem(
+        QUALITY_SESSION_STORAGE_KEY,
+        selectedQualitySessionId,
+      );
+      return;
+    }
+
+    localStorage.removeItem(QUALITY_SESSION_STORAGE_KEY);
+  }, [selectedQualitySessionId]);
 
   useEffect(() => {
     if (!apiBaseUrl.trim()) {
@@ -480,7 +519,7 @@ export function App() {
   }, [apiBaseUrl, refreshVersion, selectedDeviceSerial]);
 
   useEffect(() => {
-    if (!selectedDeviceSerial || !requiresFinalTestAction) {
+    if (!selectedDeviceSerial || !requiresOperatorActionContext) {
       setWorkSessions([]);
       setOperators([]);
       setActionContextState("idle");
@@ -532,7 +571,7 @@ export function App() {
       isCurrentRequest = false;
       controller.abort();
     };
-  }, [apiBaseUrl, requiresFinalTestAction, selectedDeviceSerial]);
+  }, [apiBaseUrl, requiresOperatorActionContext, selectedDeviceSerial]);
 
   useEffect(() => {
     if (finalTestSessionOptions.length === 0) {
@@ -549,6 +588,22 @@ export function App() {
       setSelectedFinalTestSessionId(finalTestSessionOptions[0].workSessionId);
     }
   }, [finalTestSessionOptions, selectedFinalTestSessionId]);
+
+  useEffect(() => {
+    if (qualitySessionOptions.length === 0) {
+      if (selectedQualitySessionId !== "") {
+        setSelectedQualitySessionId("");
+      }
+      return;
+    }
+
+    const isSelectedSessionAvailable = qualitySessionOptions.some(
+      (session) => session.workSessionId === selectedQualitySessionId,
+    );
+    if (!isSelectedSessionAvailable) {
+      setSelectedQualitySessionId(qualitySessionOptions[0].workSessionId);
+    }
+  }, [qualitySessionOptions, selectedQualitySessionId]);
 
   useEffect(() => {
     setDeviceActionState("idle");
@@ -643,6 +698,71 @@ export function App() {
         result === "PASS"
           ? "Zapisano final test PASS."
           : "Zapisano final test FAIL i otwarto krytyczne NCR.",
+      );
+      setRefreshVersion((previous) => previous + 1);
+    } catch (error: unknown) {
+      setDeviceActionState("error");
+      setDeviceActionError(
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  };
+
+  const recordSelectedComponentQc = async (result: "PASS" | "FAIL") => {
+    if (!selectedDeviceSerial || deviceActionState === "loading") {
+      return;
+    }
+
+    if (!apiBaseUrl.trim()) {
+      setDeviceActionState("error");
+      setDeviceActionError("Podaj bazowy adres API.");
+      setDeviceActionSuccess(null);
+      return;
+    }
+
+    if (!selectedQualitySession) {
+      setDeviceActionState("error");
+      setDeviceActionError(
+        "Wybierz aktywną sesję jakościową z uprawnioną rolą.",
+      );
+      setDeviceActionSuccess(null);
+      return;
+    }
+
+    const blockingComponent =
+      (deviceDetails?.component.components ?? []).find(
+        (componentRow) =>
+          componentRow.component_serial_number ===
+          deviceDetails?.component.primary_blocking_component_serial_number,
+      ) ?? null;
+    if (!blockingComponent) {
+      setDeviceActionState("error");
+      setDeviceActionError(
+        "Nie znaleziono blokującego komponentu do akcji QC.",
+      );
+      setDeviceActionSuccess(null);
+      return;
+    }
+
+    setDeviceActionState("loading");
+    setDeviceActionError(null);
+    setDeviceActionSuccess(null);
+
+    try {
+      const qcRun = await createQcRun(apiBaseUrl.trim(), {
+        run_id: buildClientRunId("QC-WEB", blockingComponent.component_serial_number),
+        device_serial_number: selectedDeviceSerial,
+        item_serial_number: blockingComponent.component_serial_number,
+        barcode_value: blockingComponent.child_barcode_value,
+        process_stage: "COMPONENT_QC",
+        work_session_id: selectedQualitySession.workSessionId,
+      });
+      await completeQcRun(apiBaseUrl.trim(), qcRun.run_id, result);
+      setDeviceActionState("loaded");
+      setDeviceActionSuccess(
+        result === "PASS"
+          ? "Zapisano komponentowy QC PASS."
+          : "Zapisano komponentowy QC FAIL i otwarto krytyczne NCR.",
       );
       setRefreshVersion((previous) => previous + 1);
     } catch (error: unknown) {
@@ -761,6 +881,7 @@ export function App() {
     localStorage.removeItem(SHIPMENT_FILTERS_STORAGE_KEY);
     localStorage.removeItem(COMPONENT_FILTERS_STORAGE_KEY);
     localStorage.removeItem(FINAL_TEST_SESSION_STORAGE_KEY);
+    localStorage.removeItem(QUALITY_SESSION_STORAGE_KEY);
 
     flushShipmentRequestFilters(DEFAULT_SHIPMENT_FILTERS);
     flushComponentRequestFilters(DEFAULT_COMPONENT_FILTERS);
@@ -769,6 +890,7 @@ export function App() {
     setShipmentFilters(DEFAULT_SHIPMENT_FILTERS);
     setComponentFilters(DEFAULT_COMPONENT_FILTERS);
     setSelectedFinalTestSessionId("");
+    setSelectedQualitySessionId("");
     setSelectedDevice(null);
     setDeviceDetails(null);
     setDeviceDetailsState("idle");
@@ -911,10 +1033,15 @@ export function App() {
             finalTestSessionOptions={finalTestSessionOptions}
             selectedFinalTestSessionId={selectedFinalTestSession?.workSessionId ?? ""}
             onSelectFinalTestSession={setSelectedFinalTestSessionId}
+            qualitySessionOptions={qualitySessionOptions}
+            selectedQualitySessionId={selectedQualitySession?.workSessionId ?? ""}
+            onSelectQualitySession={setSelectedQualitySessionId}
             onMarkReadyForShipment={markSelectedDeviceReadyForShipment}
             onMarkShipped={markSelectedDeviceShipped}
             onRecordFinalTestPass={() => recordSelectedDeviceFinalTest("PASS")}
             onRecordFinalTestFail={() => recordSelectedDeviceFinalTest("FAIL")}
+            onRecordComponentQcPass={() => recordSelectedComponentQc("PASS")}
+            onRecordComponentQcFail={() => recordSelectedComponentQc("FAIL")}
             onCloseDeviceCriticalNcrs={closeSelectedDeviceCriticalNcrs}
             onCloseComponentCriticalNcrs={closeSelectedComponentCriticalNcrs}
             onClose={() => setSelectedDevice(null)}
@@ -1656,10 +1783,15 @@ function DeviceDetailsDrawer({
   finalTestSessionOptions,
   selectedFinalTestSessionId,
   onSelectFinalTestSession,
+  qualitySessionOptions,
+  selectedQualitySessionId,
+  onSelectQualitySession,
   onMarkReadyForShipment,
   onMarkShipped,
   onRecordFinalTestPass,
   onRecordFinalTestFail,
+  onRecordComponentQcPass,
+  onRecordComponentQcFail,
   onCloseDeviceCriticalNcrs,
   onCloseComponentCriticalNcrs,
   onClose,
@@ -1676,10 +1808,15 @@ function DeviceDetailsDrawer({
   finalTestSessionOptions: ActionWorkSessionOption[];
   selectedFinalTestSessionId: string;
   onSelectFinalTestSession: (workSessionId: string) => void;
+  qualitySessionOptions: ActionWorkSessionOption[];
+  selectedQualitySessionId: string;
+  onSelectQualitySession: (workSessionId: string) => void;
   onMarkReadyForShipment: () => void;
   onMarkShipped: () => void;
   onRecordFinalTestPass: () => void;
   onRecordFinalTestFail: () => void;
+  onRecordComponentQcPass: () => void;
+  onRecordComponentQcFail: () => void;
   onCloseDeviceCriticalNcrs: () => void;
   onCloseComponentCriticalNcrs: () => void;
   onClose: () => void;
@@ -1699,6 +1836,10 @@ function DeviceDetailsDrawer({
     shipment.recommended_action === "MARK_READY_FOR_SHIPMENT";
   const canRecordFinalTest =
     shipment !== null && shipment.recommended_action === "RUN_FINAL_TEST";
+  const canRecordComponentQc =
+    component !== null &&
+    component.recommended_action === "RUN_COMPONENT_QC_OR_REWORK" &&
+    component.primary_blocking_component_serial_number !== null;
   const canMarkShipped =
     shipment?.production_status === "READY_FOR_SHIPMENT";
   const isAlreadyShipped = shipment?.production_status === "SHIPPED";
@@ -1911,6 +2052,93 @@ function DeviceDetailsDrawer({
                       {actionState === "loading"
                         ? "Zapisuję..."
                         : "Zapisz final test FAIL"}
+                    </button>
+                  </div>
+                </div>
+              ) : canRecordComponentQc ? (
+                <div className="action-row">
+                  <div className="action-copy">
+                    <strong>Blokujący komponent wymaga QC albo reworku.</strong>
+                    <span>
+                      Wybierz aktywną sesję jakościową i zapisz wynik{" "}
+                      <code>PASS</code> albo <code>FAIL</code> dla komponentu{" "}
+                      <code>
+                        {component.primary_blocking_component_serial_number}
+                      </code>{" "}
+                      typu{" "}
+                      <code>
+                        {labelForCode(component.primary_blocking_component_type)}
+                      </code>.
+                    </span>
+                    <label className="field action-field">
+                      <span>Sesja QC komponentów</span>
+                      <select
+                        value={selectedQualitySessionId}
+                        onChange={(event) =>
+                          onSelectQualitySession(event.target.value)
+                        }
+                        disabled={
+                          actionState === "loading" ||
+                          actionContextState === "loading" ||
+                          qualitySessionOptions.length === 0
+                        }
+                      >
+                        {qualitySessionOptions.length === 0 ? (
+                          <option value="">
+                            {actionContextState === "loading"
+                              ? "Ładowanie aktywnych sesji..."
+                              : "Brak aktywnej sesji jakościowej"}
+                          </option>
+                        ) : (
+                          qualitySessionOptions.map((session) => (
+                            <option
+                              key={session.workSessionId}
+                              value={session.workSessionId}
+                            >
+                              {session.label}
+                            </option>
+                          ))
+                        )}
+                      </select>
+                    </label>
+                    {actionContextError ? (
+                      <span className="action-hint">{actionContextError}</span>
+                    ) : qualitySessionOptions.length === 0 &&
+                      actionContextState !== "loading" ? (
+                      <span className="action-hint">
+                        Brak aktywnej sesji z rolą jakościową. Uruchom sesję
+                        `QUALITY_INSPECTOR` albo `QUALITY_MANAGER`.
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="action-buttons">
+                    <button
+                      className="primary-button action-button"
+                      type="button"
+                      onClick={onRecordComponentQcPass}
+                      disabled={
+                        actionState === "loading" ||
+                        actionContextState === "loading" ||
+                        selectedQualitySessionId === ""
+                      }
+                    >
+                      {actionState === "loading"
+                        ? "Zapisuję..."
+                        : "Zapisz komponentowy QC PASS"}
+                    </button>
+                    <button
+                      className="ghost-button action-button"
+                      type="button"
+                      onClick={onRecordComponentQcFail}
+                      disabled={
+                        actionState === "loading" ||
+                        actionContextState === "loading" ||
+                        selectedQualitySessionId === ""
+                      }
+                    >
+                      {actionState === "loading"
+                        ? "Zapisuję..."
+                        : "Zapisz komponentowy QC FAIL"}
                     </button>
                   </div>
                 </div>
