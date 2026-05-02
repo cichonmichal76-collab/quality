@@ -7,6 +7,8 @@
 - Kotlin + Jetpack Compose
 - lokalna baza `Room`
 - ekran tworzenia draftu sesji commissioning
+- krok połączenia `Mock MCU / USB`
+- snapshot stanu MCU zapisany lokalnie w sesji
 - lokalna checklista 5 kroków
 - komentarz ogólny, firmware i bootloader
 - status `DRAFT` / `READY_TO_SYNC`
@@ -15,9 +17,11 @@ Po uruchomieniu aplikacji serwisant może:
 
 1. utworzyć lokalną sesję commissioning
 2. wpisać numer seryjny, typ urządzenia i identyfikator technika
-3. przejść przez checklistę krok po kroku
-4. zapisać wynik lokalnie w `Room`
-5. oznaczyć sesję jako gotową do przyszłej synchronizacji
+3. wybrać tryb połączenia `Mock MCU` albo `USB`
+4. pobrać lokalny snapshot commissioning z `Mock MCU`
+5. przejść przez checklistę krok po kroku
+6. zapisać wynik lokalnie w `Room`
+7. oznaczyć sesję jako gotową do przyszłej synchronizacji
 
 ## Struktura MVP mobile
 
@@ -31,9 +35,10 @@ Po uruchomieniu aplikacji serwisant może:
 ## Następny sensowny krok
 
 1. dodać `MockMcuClient` i ekran połączenia USB / mock
-2. zapisywać zdjęcia i snapshoty MCU do lokalnej sesji
-3. generować paczkę ZIP
-4. dodać kolejkę uploadu do backendu `POST /api/service-sessions/upload`
+2. dołożyć właściwy `UsbMcuClient`
+3. zapisywać zdjęcia i snapshoty MCU do lokalnej sesji
+4. generować paczkę ZIP
+5. dodać kolejkę uploadu do backendu `POST /api/service-sessions/upload`
 
 ## Poza zakresem MVP
 

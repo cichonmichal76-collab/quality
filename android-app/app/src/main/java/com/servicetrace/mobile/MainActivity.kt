@@ -9,6 +9,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import com.servicetrace.mobile.data.OfflineCommissioningRepository
 import com.servicetrace.mobile.data.local.ServiceTraceMobileDatabase
+import com.servicetrace.mobile.mcu.MockMcuClient
 import com.servicetrace.mobile.ui.CommissioningScreen
 import com.servicetrace.mobile.ui.CommissioningViewModel
 
@@ -18,6 +19,7 @@ class MainActivity : ComponentActivity() {
             repository = OfflineCommissioningRepository(
                 dao = ServiceTraceMobileDatabase.build(applicationContext).commissioningDao(),
             ),
+            mockMcuClient = MockMcuClient(),
         )
     }
 

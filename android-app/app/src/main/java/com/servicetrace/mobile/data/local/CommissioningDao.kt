@@ -13,6 +13,8 @@ import androidx.room.Relation
 import androidx.room.Transaction
 import com.servicetrace.mobile.model.CommissioningStep
 import com.servicetrace.mobile.model.CommissioningStepStatus
+import com.servicetrace.mobile.model.McuConnectionMode
+import com.servicetrace.mobile.model.McuConnectionStatus
 import com.servicetrace.mobile.model.ServiceSessionDraft
 import com.servicetrace.mobile.model.SessionSyncStatus
 import kotlinx.coroutines.flow.Flow
@@ -27,6 +29,16 @@ data class ServiceSessionDraftEntity(
     val overallComment: String,
     val firmwareVersion: String,
     val bootloaderVersion: String,
+    val connectionMode: String,
+    val connectionStatus: String,
+    val echoedSerialNumber: String,
+    val mainboardStatus: String,
+    val inductionBoardStatus: String,
+    val hmiStatus: String,
+    val watchdogStatus: String,
+    val usbLinkStatus: String,
+    val logExcerpt: String,
+    val snapshotCapturedAtMillis: Long?,
     val syncStatus: String,
     val createdAtMillis: Long,
     val updatedAtMillis: Long,
@@ -79,6 +91,16 @@ fun ServiceSessionDraftWithSteps.toDomain(): ServiceSessionDraft =
         overallComment = session.overallComment,
         firmwareVersion = session.firmwareVersion,
         bootloaderVersion = session.bootloaderVersion,
+        connectionMode = McuConnectionMode.valueOf(session.connectionMode),
+        connectionStatus = McuConnectionStatus.valueOf(session.connectionStatus),
+        echoedSerialNumber = session.echoedSerialNumber,
+        mainboardStatus = session.mainboardStatus,
+        inductionBoardStatus = session.inductionBoardStatus,
+        hmiStatus = session.hmiStatus,
+        watchdogStatus = session.watchdogStatus,
+        usbLinkStatus = session.usbLinkStatus,
+        logExcerpt = session.logExcerpt,
+        snapshotCapturedAtMillis = session.snapshotCapturedAtMillis,
         syncStatus = SessionSyncStatus.valueOf(session.syncStatus),
         createdAtMillis = session.createdAtMillis,
         updatedAtMillis = session.updatedAtMillis,
@@ -106,6 +128,16 @@ fun ServiceSessionDraft.toLocalEntity(): LocalDraftBundle =
             overallComment = overallComment,
             firmwareVersion = firmwareVersion,
             bootloaderVersion = bootloaderVersion,
+            connectionMode = connectionMode.name,
+            connectionStatus = connectionStatus.name,
+            echoedSerialNumber = echoedSerialNumber,
+            mainboardStatus = mainboardStatus,
+            inductionBoardStatus = inductionBoardStatus,
+            hmiStatus = hmiStatus,
+            watchdogStatus = watchdogStatus,
+            usbLinkStatus = usbLinkStatus,
+            logExcerpt = logExcerpt,
+            snapshotCapturedAtMillis = snapshotCapturedAtMillis,
             syncStatus = syncStatus.name,
             createdAtMillis = createdAtMillis,
             updatedAtMillis = updatedAtMillis,

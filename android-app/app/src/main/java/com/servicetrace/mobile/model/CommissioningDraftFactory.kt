@@ -15,11 +15,36 @@ enum class SessionSyncStatus {
     SYNCED,
 }
 
+enum class McuConnectionMode {
+    MOCK,
+    USB,
+}
+
+enum class McuConnectionStatus {
+    DISCONNECTED,
+    CONNECTED,
+    HARDWARE_REQUIRED,
+}
+
 enum class SessionOutcome {
     PASS,
     FAIL,
     HOLD,
 }
+
+data class McuConnectionSnapshot(
+    val connectionMode: McuConnectionMode,
+    val echoedSerialNumber: String,
+    val firmwareVersion: String,
+    val bootloaderVersion: String,
+    val mainboardStatus: String,
+    val inductionBoardStatus: String,
+    val hmiStatus: String,
+    val watchdogStatus: String,
+    val usbLinkStatus: String,
+    val logExcerpt: String,
+    val capturedAtMillis: Long,
+)
 
 data class CommissioningStep(
     val stepCode: String,
@@ -38,6 +63,16 @@ data class ServiceSessionDraft(
     val overallComment: String,
     val firmwareVersion: String,
     val bootloaderVersion: String,
+    val connectionMode: McuConnectionMode,
+    val connectionStatus: McuConnectionStatus,
+    val echoedSerialNumber: String,
+    val mainboardStatus: String,
+    val inductionBoardStatus: String,
+    val hmiStatus: String,
+    val watchdogStatus: String,
+    val usbLinkStatus: String,
+    val logExcerpt: String,
+    val snapshotCapturedAtMillis: Long?,
     val syncStatus: SessionSyncStatus,
     val createdAtMillis: Long,
     val updatedAtMillis: Long,
@@ -47,7 +82,9 @@ data class ServiceSessionDraft(
         get() = deriveOutcome(steps)
 
     val readyToSync: Boolean
-        get() = steps.isNotEmpty() &&
+        get() = connectionStatus == McuConnectionStatus.CONNECTED &&
+            echoedSerialNumber.isNotBlank() &&
+            steps.isNotEmpty() &&
             steps.none { step -> step.status == CommissioningStepStatus.TODO } &&
             outcome != null
 }
@@ -102,6 +139,16 @@ object CommissioningDraftFactory {
             overallComment = "",
             firmwareVersion = "",
             bootloaderVersion = "",
+            connectionMode = McuConnectionMode.MOCK,
+            connectionStatus = McuConnectionStatus.DISCONNECTED,
+            echoedSerialNumber = "",
+            mainboardStatus = "",
+            inductionBoardStatus = "",
+            hmiStatus = "",
+            watchdogStatus = "",
+            usbLinkStatus = "",
+            logExcerpt = "",
+            snapshotCapturedAtMillis = null,
             syncStatus = SessionSyncStatus.DRAFT,
             createdAtMillis = nowMillis,
             updatedAtMillis = nowMillis,

@@ -36,6 +36,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.servicetrace.mobile.model.CommissioningStep
 import com.servicetrace.mobile.model.CommissioningStepStatus
+import com.servicetrace.mobile.model.McuConnectionMode
+import com.servicetrace.mobile.model.McuConnectionStatus
 import com.servicetrace.mobile.model.ServiceSessionDraft
 import com.servicetrace.mobile.model.SessionOutcome
 import com.servicetrace.mobile.model.SessionSyncStatus
@@ -70,6 +72,8 @@ fun CommissioningScreen(
         onOverallCommentChange = viewModel::updateOverallComment,
         onFirmwareVersionChange = viewModel::updateFirmwareVersion,
         onBootloaderVersionChange = viewModel::updateBootloaderVersion,
+        onConnectionModeChange = viewModel::updateConnectionMode,
+        onConnectToMcu = viewModel::connectToMcu,
         onSaveOffline = viewModel::saveOffline,
         onMarkReadyToSync = viewModel::markReadyToSync,
     )
@@ -90,6 +94,8 @@ private fun CommissioningScreen(
     onOverallCommentChange: (String) -> Unit,
     onFirmwareVersionChange: (String) -> Unit,
     onBootloaderVersionChange: (String) -> Unit,
+    onConnectionModeChange: (McuConnectionMode) -> Unit,
+    onConnectToMcu: () -> Unit,
     onSaveOffline: () -> Unit,
     onMarkReadyToSync: () -> Unit,
 ) {
@@ -139,6 +145,8 @@ private fun CommissioningScreen(
                 onOverallCommentChange = onOverallCommentChange,
                 onFirmwareVersionChange = onFirmwareVersionChange,
                 onBootloaderVersionChange = onBootloaderVersionChange,
+                onConnectionModeChange = onConnectionModeChange,
+                onConnectToMcu = onConnectToMcu,
                 onSaveOffline = onSaveOffline,
                 onMarkReadyToSync = onMarkReadyToSync,
             )
@@ -268,6 +276,8 @@ private fun DraftEditorSection(
     onOverallCommentChange: (String) -> Unit,
     onFirmwareVersionChange: (String) -> Unit,
     onBootloaderVersionChange: (String) -> Unit,
+    onConnectionModeChange: (McuConnectionMode) -> Unit,
+    onConnectToMcu: () -> Unit,
     onSaveOffline: () -> Unit,
     onMarkReadyToSync: () -> Unit,
 ) {
@@ -289,6 +299,11 @@ private fun DraftEditorSection(
                 Text("Technik: ${draft.technicianId}")
                 Text("Status kolejki: ${syncLabel(draft.syncStatus)}")
                 Text("Aktualny wynik: ${draft.outcome?.name ?: "W trakcie"}")
+                ConnectionSection(
+                    draft = draft,
+                    onConnectionModeChange = onConnectionModeChange,
+                    onConnectToMcu = onConnectToMcu,
+                )
                 OutlinedTextField(
                     value = draft.firmwareVersion,
                     onValueChange = onFirmwareVersionChange,
@@ -343,6 +358,62 @@ private fun DraftEditorSection(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
+private fun ConnectionSection(
+    draft: ServiceSessionDraft,
+    onConnectionModeChange: (McuConnectionMode) -> Unit,
+    onConnectToMcu: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Połączenie techniczne", style = MaterialTheme.typography.titleMedium)
+        Text("Tryb: ${connectionModeLabel(draft.connectionMode)}")
+        Text("Status: ${connectionStatusLabel(draft.connectionStatus)}")
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            McuConnectionMode.entries.forEach { mode ->
+                FilterChip(
+                    selected = draft.connectionMode == mode,
+                    onClick = { onConnectionModeChange(mode) },
+                    label = { Text(connectionModeLabel(mode)) },
+                )
+            }
+        }
+        Button(onClick = onConnectToMcu, modifier = Modifier.fillMaxWidth()) {
+            Text(
+                if (draft.connectionMode == McuConnectionMode.MOCK) {
+                    if (draft.connectionStatus == McuConnectionStatus.CONNECTED) {
+                        "Odśwież snapshot Mock MCU"
+                    } else {
+                        "Połącz z Mock MCU"
+                    }
+                } else {
+                    "Spróbuj trybu USB"
+                },
+            )
+        }
+        if (draft.snapshotCapturedAtMillis != null) {
+            Text("Snapshot: ${formatTimestamp(draft.snapshotCapturedAtMillis)}")
+        }
+        if (draft.echoedSerialNumber.isNotBlank()) {
+            Text("Serial z MCU: ${draft.echoedSerialNumber}")
+        }
+        if (draft.usbLinkStatus.isNotBlank()) {
+            Text("Link: ${draft.usbLinkStatus}")
+        }
+        if (draft.mainboardStatus.isNotBlank()) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                AssistChip(onClick = {}, label = { Text("Mainboard: ${draft.mainboardStatus}") })
+                AssistChip(onClick = {}, label = { Text("Induction: ${draft.inductionBoardStatus}") })
+                AssistChip(onClick = {}, label = { Text("HMI: ${draft.hmiStatus}") })
+                AssistChip(onClick = {}, label = { Text("Watchdog: ${draft.watchdogStatus}") })
+            }
+        }
+        if (draft.logExcerpt.isNotBlank()) {
+            Text(draft.logExcerpt, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
 private fun StepCard(
     step: CommissioningStep,
     onStatusChange: (String, CommissioningStepStatus) -> Unit,
@@ -382,6 +453,19 @@ private fun syncLabel(status: SessionSyncStatus): String =
         SessionSyncStatus.DRAFT -> "Draft lokalny"
         SessionSyncStatus.READY_TO_SYNC -> "Gotowe do synchronizacji"
         SessionSyncStatus.SYNCED -> "Zsynchronizowane"
+    }
+
+private fun connectionModeLabel(mode: McuConnectionMode): String =
+    when (mode) {
+        McuConnectionMode.MOCK -> "Mock MCU"
+        McuConnectionMode.USB -> "USB"
+    }
+
+private fun connectionStatusLabel(status: McuConnectionStatus): String =
+    when (status) {
+        McuConnectionStatus.DISCONNECTED -> "Rozłączone"
+        McuConnectionStatus.CONNECTED -> "Połączone"
+        McuConnectionStatus.HARDWARE_REQUIRED -> "Wymaga klienta USB"
     }
 
 private fun statusLabel(status: CommissioningStepStatus): String =

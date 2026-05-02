@@ -21,6 +21,8 @@ class CommissioningDraftFactoryTest {
         assertEquals(5, draft.steps.size)
         assertEquals(listOf(0, 1, 2, 3, 4), draft.steps.map { step -> step.stepOrder })
         assertTrue(draft.steps.all { step -> step.status == CommissioningStepStatus.TODO })
+        assertEquals(McuConnectionMode.MOCK, draft.connectionMode)
+        assertEquals(McuConnectionStatus.DISCONNECTED, draft.connectionStatus)
         assertNull(draft.outcome)
         assertFalse(draft.readyToSync)
     }
@@ -30,6 +32,8 @@ class CommissioningDraftFactoryTest {
         val baseline = CommissioningDraftFactory.create("ZSS-1", "ZSS", "TECH")
         val passDraft = baseline.copy(
             steps = baseline.steps.map { step -> step.copy(status = CommissioningStepStatus.PASS) },
+            connectionStatus = McuConnectionStatus.CONNECTED,
+            echoedSerialNumber = "ZSS-1",
         )
         val failDraft = passDraft.copy(
             steps = passDraft.steps.mapIndexed { index, step ->
@@ -48,5 +52,8 @@ class CommissioningDraftFactoryTest {
         assertTrue(passDraft.readyToSync)
         assertTrue(failDraft.readyToSync)
         assertTrue(holdDraft.readyToSync)
+        assertFalse(baseline.copy(
+            steps = baseline.steps.map { step -> step.copy(status = CommissioningStepStatus.PASS) },
+        ).readyToSync)
     }
 }

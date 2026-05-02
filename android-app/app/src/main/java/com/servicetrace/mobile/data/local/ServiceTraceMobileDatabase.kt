@@ -10,7 +10,7 @@ import androidx.room.RoomDatabase
         ServiceSessionDraftEntity::class,
         CommissioningStepEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 abstract class ServiceTraceMobileDatabase : RoomDatabase() {
@@ -26,7 +26,9 @@ abstract class ServiceTraceMobileDatabase : RoomDatabase() {
                     context.applicationContext,
                     ServiceTraceMobileDatabase::class.java,
                     "service_trace_mobile.db",
-                ).build().also { database ->
+                ).fallbackToDestructiveMigration()
+                    .build()
+                    .also { database ->
                     instance = database
                 }
             }

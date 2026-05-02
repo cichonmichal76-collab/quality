@@ -5,8 +5,11 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.servicetrace.mobile.data.CommissioningRepository
 import com.servicetrace.mobile.model.CommissioningStepStatus
+import com.servicetrace.mobile.model.McuConnectionMode
+import com.servicetrace.mobile.model.McuConnectionStatus
 import com.servicetrace.mobile.model.ServiceSessionDraft
 import com.servicetrace.mobile.model.SessionSyncStatus
+import com.servicetrace.mobile.mcu.MockMcuClient
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -30,6 +33,7 @@ data class CommissioningUiState(
 
 class CommissioningViewModel(
     private val repository: CommissioningRepository,
+    private val mockMcuClient: MockMcuClient,
 ) : ViewModel() {
     private val inputs = MutableStateFlow(NewDraftInputs())
     private val selectedDraft = MutableStateFlow<ServiceSessionDraft?>(null)
@@ -41,7 +45,9 @@ class CommissioningViewModel(
         selectedDraft,
         bannerMessage,
     ) { drafts, draftInputs, currentDraft, message ->
-        val selected = currentDraft ?: drafts.firstOrNull()
+        val selected = currentDraft?.let { draft ->
+            drafts.firstOrNull { row -> row.sessionId == draft.sessionId } ?: draft
+        } ?: drafts.firstOrNull()
         CommissioningUiState(
             drafts = drafts,
             selectedDraft = selected,
@@ -122,6 +128,64 @@ class CommissioningViewModel(
         selectedDraft.update { draft -> draft?.copy(bootloaderVersion = value) }
     }
 
+    fun updateConnectionMode(mode: McuConnectionMode) {
+        selectedDraft.update { draft ->
+            draft?.copy(
+                connectionMode = mode,
+                connectionStatus = McuConnectionStatus.DISCONNECTED,
+                firmwareVersion = "",
+                bootloaderVersion = "",
+                echoedSerialNumber = "",
+                mainboardStatus = "",
+                inductionBoardStatus = "",
+                hmiStatus = "",
+                watchdogStatus = "",
+                usbLinkStatus = "",
+                logExcerpt = "",
+                snapshotCapturedAtMillis = null,
+            )
+        }
+    }
+
+    fun connectToMcu() {
+        val draft = selectedDraft.value ?: return
+        viewModelScope.launch {
+            if (draft.connectionMode == McuConnectionMode.USB) {
+                val updatedDraft = draft.copy(
+                    connectionStatus = McuConnectionStatus.HARDWARE_REQUIRED,
+                    updatedAtMillis = System.currentTimeMillis(),
+                )
+                repository.saveDraft(updatedDraft)
+                selectedDraft.value = updatedDraft
+                bannerMessage.value =
+                    "Tryb USB jest już widoczny w workflow, ale właściwy UsbMcuClient dołożymy w następnym kroku."
+                return@launch
+            }
+
+            val snapshot = mockMcuClient.connect(
+                deviceSerialNumber = draft.deviceSerialNumber,
+                deviceType = draft.deviceType,
+            )
+            val updatedDraft = draft.copy(
+                firmwareVersion = snapshot.firmwareVersion,
+                bootloaderVersion = snapshot.bootloaderVersion,
+                connectionStatus = McuConnectionStatus.CONNECTED,
+                echoedSerialNumber = snapshot.echoedSerialNumber,
+                mainboardStatus = snapshot.mainboardStatus,
+                inductionBoardStatus = snapshot.inductionBoardStatus,
+                hmiStatus = snapshot.hmiStatus,
+                watchdogStatus = snapshot.watchdogStatus,
+                usbLinkStatus = snapshot.usbLinkStatus,
+                logExcerpt = snapshot.logExcerpt,
+                snapshotCapturedAtMillis = snapshot.capturedAtMillis,
+                updatedAtMillis = snapshot.capturedAtMillis,
+            )
+            repository.saveDraft(updatedDraft)
+            selectedDraft.value = updatedDraft
+            bannerMessage.value = "Połączono z Mock MCU i zapisano snapshot commissioning."
+        }
+    }
+
     fun saveOffline() {
         val draft = selectedDraft.value ?: return
         viewModelScope.launch {
@@ -161,11 +225,14 @@ class CommissioningViewModel(
     }
 
     companion object {
-        fun factory(repository: CommissioningRepository): ViewModelProvider.Factory =
+        fun factory(
+            repository: CommissioningRepository,
+            mockMcuClient: MockMcuClient,
+        ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                    CommissioningViewModel(repository) as T
+                    CommissioningViewModel(repository, mockMcuClient) as T
             }
     }
 }
