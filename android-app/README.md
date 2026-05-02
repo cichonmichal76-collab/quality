@@ -25,7 +25,7 @@
 - pelna sekcja audytu synchronizacji ze wszystkimi probami, filtrem sukcesow / bledow i szybkim przejsciem do draftu
 - eksport aktualnego widoku audytu synchronizacji do lokalnego pliku JSON
 - udostepnianie ostatniego eksportu audytu synchronizacji poza aplikacje
-- przełącznik anonimizacji dla eksportu i udostepniania audytu synchronizacji
+- przelacznik anonimizacji dla eksportu i udostepniania audytu synchronizacji
 - lokalna checklista 5 krokow
 - komentarz ogolny, firmware i bootloader
 - status `DRAFT` / `READY_TO_SYNC`

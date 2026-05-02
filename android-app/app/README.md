@@ -27,7 +27,7 @@ Aktualnie zawiera:
 21. pelna sekcja audytu synchronizacji z filtrem sukcesow / bledow i szybkim przejsciem do draftu
 22. eksport aktualnego widoku audytu synchronizacji do lokalnego pliku JSON
 23. udostepnianie ostatniego eksportu audytu synchronizacji poza aplikacje
-24. przełącznik anonimizacji dla eksportu i udostepniania audytu synchronizacji
+24. przelacznik anonimizacji dla eksportu i udostepniania audytu synchronizacji
 25. testy JVM dla fabryki draftu, snapshotu, mocka MCU, serializacji paczki, polityki syncu i normalizacji adresu API
 
 Domyslny adres backendu dla syncu to `http://10.0.2.2:8000/api`.
