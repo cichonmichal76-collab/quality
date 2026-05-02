@@ -1798,3 +1798,220 @@ test("dashboard marks selected shipment devices ready from bulk actions", async 
   expect(patchRequests).toBe(2);
   await expect(page.getByRole("checkbox", { name: "Zaznacz BULK-READY-001" })).not.toBeChecked();
 });
+
+test("dashboard closes selected component critical NCRs from bulk actions", async ({
+  page,
+}) => {
+  let ncrClosed = false;
+  let patchRequests = 0;
+
+  const bulkComponentQueuePayload = {
+    ...componentActionQueuePayload,
+    total_devices: 3,
+    devices_with_issues: 3,
+    returned_count: 3,
+    devices: [
+      {
+        ...componentActionQueuePayload.devices[0],
+        device_serial_number: "COMP-NCR-001",
+        primary_quality_status: "CRITICAL_NCR_OPEN",
+        primary_blocking_component_type: "FAN_MODULE",
+        primary_blocking_component_serial_number: "FAN-001",
+        recommended_action: "RESOLVE_COMPONENT_QUALITY",
+      },
+      {
+        ...componentActionQueuePayload.devices[0],
+        device_serial_number: "COMP-NCR-002",
+        primary_quality_status: "CRITICAL_NCR_OPEN",
+        primary_blocking_component_type: "FAN_MODULE",
+        primary_blocking_component_serial_number: "FAN-002",
+        recommended_action: "RESOLVE_COMPONENT_QUALITY",
+      },
+      {
+        ...componentActionQueuePayload.devices[0],
+        device_serial_number: "COMP-QC-001",
+        primary_quality_status: "QC_NOT_PASSED",
+        primary_blocking_component_type: "CONTROL_PCB",
+        primary_blocking_component_serial_number: "PCB-001",
+        recommended_action: "RUN_COMPONENT_QC_OR_REWORK",
+      },
+    ],
+  };
+
+  const refreshedBulkComponentQueuePayload = {
+    ...bulkComponentQueuePayload,
+    devices_with_issues: 1,
+    devices: [
+      {
+        ...bulkComponentQueuePayload.devices[0],
+        passes_component_quality_gate: true,
+        primary_quality_status: "PASS",
+        primary_blocking_component_type: null,
+        primary_blocking_component_serial_number: null,
+        recommended_action: "NO_ACTION",
+        blocked_components: 0,
+        passing_components: 2,
+      },
+      {
+        ...bulkComponentQueuePayload.devices[1],
+        passes_component_quality_gate: true,
+        primary_quality_status: "PASS",
+        primary_blocking_component_type: null,
+        primary_blocking_component_serial_number: null,
+        recommended_action: "NO_ACTION",
+        blocked_components: 0,
+        passing_components: 2,
+      },
+      bulkComponentQueuePayload.devices[2],
+    ],
+  };
+
+  const componentBulkDetailsBySerial: Record<string, unknown> = {
+    "COMP-NCR-001": {
+      ...componentDetailsPayload,
+      device_serial_number: "COMP-NCR-001",
+      primary_quality_status: "CRITICAL_NCR_OPEN",
+      primary_blocking_component_serial_number: "FAN-001",
+      recommended_action: "RESOLVE_COMPONENT_QUALITY",
+      components: [
+        {
+          ...componentDetailsPayload.components[0],
+          component_serial_number: "CTRL-001",
+          critical_open_ncr_ids: [],
+          has_critical_open_ncr: false,
+        },
+        {
+          ...componentDetailsPayload.components[1],
+          component_serial_number: "FAN-001",
+          critical_open_ncr_ids: ["NCR-COMP-BULK-001"],
+          has_critical_open_ncr: true,
+        },
+      ],
+    },
+    "COMP-NCR-002": {
+      ...componentDetailsPayload,
+      device_serial_number: "COMP-NCR-002",
+      primary_quality_status: "CRITICAL_NCR_OPEN",
+      primary_blocking_component_serial_number: "FAN-002",
+      recommended_action: "RESOLVE_COMPONENT_QUALITY",
+      components: [
+        {
+          ...componentDetailsPayload.components[0],
+          component_serial_number: "CTRL-002",
+          critical_open_ncr_ids: [],
+          has_critical_open_ncr: false,
+        },
+        {
+          ...componentDetailsPayload.components[1],
+          component_serial_number: "FAN-002",
+          critical_open_ncr_ids: ["NCR-COMP-BULK-002"],
+          has_critical_open_ncr: true,
+        },
+      ],
+    },
+  };
+
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const path = url.pathname;
+
+    if (path === "/api/shipment-readiness") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(shipmentQueuePayload),
+      });
+      return;
+    }
+
+    if (path === "/api/component-quality") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(
+          ncrClosed
+            ? refreshedBulkComponentQueuePayload
+            : bulkComponentQueuePayload,
+        ),
+      });
+      return;
+    }
+
+    if (
+      (path === "/api/devices/COMP-NCR-001/component-quality" ||
+        path === "/api/devices/COMP-NCR-002/component-quality") &&
+      request.method() === "GET"
+    ) {
+      const serialNumber = path.includes("COMP-NCR-001")
+        ? "COMP-NCR-001"
+        : "COMP-NCR-002";
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(componentBulkDetailsBySerial[serialNumber]),
+      });
+      return;
+    }
+
+    if (
+      (path === "/api/nonconformities/NCR-COMP-BULK-001" ||
+        path === "/api/nonconformities/NCR-COMP-BULK-002") &&
+      request.method() === "PATCH"
+    ) {
+      patchRequests += 1;
+      const serialNumber = path.includes("NCR-COMP-BULK-001")
+        ? "COMP-NCR-001"
+        : "COMP-NCR-002";
+      const ncrId = path.includes("NCR-COMP-BULK-001")
+        ? "NCR-COMP-BULK-001"
+        : "NCR-COMP-BULK-002";
+      expect(request.postDataJSON()).toEqual({
+        status: "CLOSED",
+        corrective_action: `Zamknięte zbiorczo z kolejki komponentów dla ${serialNumber}.`,
+      });
+      ncrClosed = true;
+
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: `ROW-${ncrId}`,
+          ncr_id: ncrId,
+          status: "CLOSED",
+          corrective_action: `Zamknięte zbiorczo z kolejki komponentów dla ${serialNumber}.`,
+        }),
+      });
+      return;
+    }
+
+    throw new Error(`Unexpected request: ${request.method()} ${path}`);
+  });
+
+  await page.goto("/");
+
+  await expect(page.getByText("API OK")).toBeVisible();
+  await page.getByRole("button", { name: "Komponenty" }).click();
+  await expect(page.getByText("COMP-NCR-001")).toBeVisible();
+
+  await page
+    .getByRole("checkbox", {
+      name: "Zaznacz wszystkie urządzenia w kolejce komponentów na stronie",
+    })
+    .check();
+
+  await expect(page.getByText("Zaznaczone: 3")).toBeVisible();
+  await expect(page.getByText("Z krytycznym NCR: 2")).toBeVisible();
+
+  await page
+    .getByRole("button", { name: "Zamknij NCR komponentów (2)" })
+    .click();
+
+  await expect(
+    page.getByText("Zamknięto 2 krytyczne NCR komponentów w 2 urządzeniach."),
+  ).toBeVisible();
+  expect(patchRequests).toBe(2);
+  await expect(
+    page.getByRole("checkbox", { name: "Zaznacz COMP-NCR-001" }),
+  ).not.toBeChecked();
+});

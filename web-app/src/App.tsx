@@ -428,6 +428,17 @@ export function App() {
   const [shipmentBulkActionSuccess, setShipmentBulkActionSuccess] = useState<
     string | null
   >(null);
+  const [selectedComponentSerials, setSelectedComponentSerials] = useState<
+    string[]
+  >([]);
+  const [componentBulkActionState, setComponentBulkActionState] =
+    useState<LoadState>("idle");
+  const [componentBulkActionError, setComponentBulkActionError] = useState<
+    string | null
+  >(null);
+  const [componentBulkActionSuccess, setComponentBulkActionSuccess] = useState<
+    string | null
+  >(null);
   const copyFeedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
@@ -458,6 +469,19 @@ export function App() {
       selectedShipmentSerials.includes(device.device_serial_number),
     );
   const isShipmentBulkActionLoading = shipmentBulkActionState === "loading";
+  const visibleComponentDevices = componentData?.devices ?? [];
+  const selectedComponentDevices = visibleComponentDevices.filter((device) =>
+    selectedComponentSerials.includes(device.device_serial_number),
+  );
+  const selectedComponentNcrCandidateDevices = selectedComponentDevices.filter(
+    (device) => device.primary_quality_status === "CRITICAL_NCR_OPEN",
+  );
+  const hasSelectedAllVisibleComponentRows =
+    visibleComponentDevices.length > 0 &&
+    visibleComponentDevices.every((device) =>
+      selectedComponentSerials.includes(device.device_serial_number),
+    );
+  const isComponentBulkActionLoading = componentBulkActionState === "loading";
   const selectedDeviceSerial = selectedDevice?.serialNumber ?? null;
   const requiresCompleteAssemblyAction =
     deviceDetails?.shipment.recommended_action === "COMPLETE_ASSEMBLY";
@@ -598,6 +622,12 @@ export function App() {
     setShipmentBulkActionSuccess(null);
   };
 
+  const resetComponentBulkActionFeedback = () => {
+    setComponentBulkActionState("idle");
+    setComponentBulkActionError(null);
+    setComponentBulkActionSuccess(null);
+  };
+
   const exportActiveQueueCsv = async () => {
     if (!apiBaseUrl.trim()) {
       showCopyFeedback("dashboard", "error", "Podaj bazowy adres API.");
@@ -713,6 +743,38 @@ export function App() {
     setSelectedShipmentSerials([]);
   };
 
+  const toggleComponentSelection = (serialNumber: string) => {
+    resetComponentBulkActionFeedback();
+    setSelectedComponentSerials((previous) =>
+      previous.includes(serialNumber)
+        ? previous.filter((serial) => serial !== serialNumber)
+        : [...previous, serialNumber],
+    );
+  };
+
+  const toggleAllVisibleComponentSelections = () => {
+    resetComponentBulkActionFeedback();
+    setSelectedComponentSerials((previous) => {
+      const visibleSerials = visibleComponentDevices.map(
+        (device) => device.device_serial_number,
+      );
+      const hasSelectedAllVisibleRows =
+        visibleSerials.length > 0 &&
+        visibleSerials.every((serial) => previous.includes(serial));
+
+      if (hasSelectedAllVisibleRows) {
+        return previous.filter((serial) => !visibleSerials.includes(serial));
+      }
+
+      return Array.from(new Set([...previous, ...visibleSerials]));
+    });
+  };
+
+  const clearComponentSelections = () => {
+    resetComponentBulkActionFeedback();
+    setSelectedComponentSerials([]);
+  };
+
   const runShipmentBulkStatusUpdate = async ({
     devices,
     targetStatus,
@@ -808,6 +870,101 @@ export function App() {
     });
   };
 
+  const closeSelectedComponentQueueCriticalNcrs = async () => {
+    if (isComponentBulkActionLoading) {
+      return;
+    }
+
+    if (!apiBaseUrl.trim()) {
+      setComponentBulkActionState("error");
+      setComponentBulkActionError("Podaj bazowy adres API.");
+      setComponentBulkActionSuccess(null);
+      return;
+    }
+
+    if (selectedComponentNcrCandidateDevices.length === 0) {
+      setComponentBulkActionState("error");
+      setComponentBulkActionError(
+        "W zaznaczeniu nie ma urządzeń z krytycznym NCR komponentów.",
+      );
+      setComponentBulkActionSuccess(null);
+      return;
+    }
+
+    setComponentBulkActionState("loading");
+    setComponentBulkActionError(null);
+    setComponentBulkActionSuccess(null);
+
+    let updatedDeviceCount = 0;
+    let updatedNcrCount = 0;
+    const failedSerials: string[] = [];
+
+    for (const device of selectedComponentNcrCandidateDevices) {
+      try {
+        const details = await fetchJson<DeviceComponentQuality>(
+          joinApiUrl(
+            apiBaseUrl.trim(),
+            `/devices/${encodeURIComponent(device.device_serial_number)}/component-quality`,
+          ),
+        );
+        const ncrIds = Array.from(
+          new Set(
+            (details.components ?? []).flatMap(
+              (component) => component.critical_open_ncr_ids,
+            ),
+          ),
+        );
+
+        if (ncrIds.length === 0) {
+          failedSerials.push(device.device_serial_number);
+          continue;
+        }
+
+        await Promise.all(
+          ncrIds.map((ncrId) =>
+            updateNonconformityStatus(
+              apiBaseUrl.trim(),
+              ncrId,
+              "CLOSED",
+              `Zamknięte zbiorczo z kolejki komponentów dla ${device.device_serial_number}.`,
+            ),
+          ),
+        );
+        updatedDeviceCount += 1;
+        updatedNcrCount += ncrIds.length;
+      } catch {
+        failedSerials.push(device.device_serial_number);
+      }
+    }
+
+    if (updatedDeviceCount > 0) {
+      setRefreshVersion((previous) => previous + 1);
+      setComponentBulkActionSuccess(
+        `Zamknięto ${formatNumber(
+          updatedNcrCount,
+        )} krytyczne NCR komponentów w ${formatNumber(updatedDeviceCount)} ${
+          updatedDeviceCount === 1 ? "urządzeniu" : "urządzeniach"
+        }.`,
+      );
+    }
+
+    if (failedSerials.length > 0) {
+      setComponentBulkActionState("error");
+      setComponentBulkActionError(
+        `Nie udało się zamknąć NCR dla ${formatNumber(
+          failedSerials.length,
+        )} urządzeń: ${failedSerials.slice(0, 3).join(", ")}${
+          failedSerials.length > 3 ? " i więcej." : "."
+        }`,
+      );
+      setSelectedComponentSerials(failedSerials);
+      return;
+    }
+
+    setComponentBulkActionState("loaded");
+    setSelectedComponentSerials([]);
+  };
+
   const selectDevice = (device: {
     device_serial_number: string;
     device_type: string;
@@ -858,6 +1015,17 @@ export function App() {
   }, [visibleShipmentDevices]);
 
   useEffect(() => {
+    const visibleSerials = new Set(
+      visibleComponentDevices.map((device) => device.device_serial_number),
+    );
+
+    setSelectedComponentSerials((previous) => {
+      const next = previous.filter((serial) => visibleSerials.has(serial));
+      return next.length === previous.length ? previous : next;
+    });
+  }, [visibleComponentDevices]);
+
+  useEffect(() => {
     if (activeView === "shipment") {
       return;
     }
@@ -866,6 +1034,17 @@ export function App() {
     setShipmentBulkActionState("idle");
     setShipmentBulkActionError(null);
     setShipmentBulkActionSuccess(null);
+  }, [activeView]);
+
+  useEffect(() => {
+    if (activeView === "components") {
+      return;
+    }
+
+    setSelectedComponentSerials([]);
+    setComponentBulkActionState("idle");
+    setComponentBulkActionError(null);
+    setComponentBulkActionSuccess(null);
   }, [activeView]);
 
   useEffect(() => {
@@ -1633,6 +1812,10 @@ export function App() {
     setShipmentBulkActionState("idle");
     setShipmentBulkActionError(null);
     setShipmentBulkActionSuccess(null);
+    setSelectedComponentSerials([]);
+    setComponentBulkActionState("idle");
+    setComponentBulkActionError(null);
+    setComponentBulkActionSuccess(null);
 
     if (!isDevicePage) {
       setSelectedDevice(null);
@@ -1980,6 +2163,24 @@ export function App() {
                 fallbackLimit={componentFilters.limit}
                 onSelectDevice={selectDevice}
                 selectedDeviceSerial={selectedDeviceSerial}
+                selectedComponentSerials={selectedComponentSerials}
+                hasSelectedAllVisibleComponentRows={
+                  hasSelectedAllVisibleComponentRows
+                }
+                bulkActionState={componentBulkActionState}
+                bulkActionError={componentBulkActionError}
+                bulkActionSuccess={componentBulkActionSuccess}
+                componentNcrSelectionCount={
+                  selectedComponentNcrCandidateDevices.length
+                }
+                onToggleComponentSelection={toggleComponentSelection}
+                onToggleAllComponentSelections={
+                  toggleAllVisibleComponentSelections
+                }
+                onClearComponentSelections={clearComponentSelections}
+                onCloseSelectedComponentNcrs={
+                  closeSelectedComponentQueueCriticalNcrs
+                }
               />
             </>
           )}
@@ -2422,6 +2623,16 @@ function ComponentDashboard({
   fallbackLimit,
   onSelectDevice,
   selectedDeviceSerial,
+  selectedComponentSerials,
+  hasSelectedAllVisibleComponentRows,
+  bulkActionState,
+  bulkActionError,
+  bulkActionSuccess,
+  componentNcrSelectionCount,
+  onToggleComponentSelection,
+  onToggleAllComponentSelections,
+  onClearComponentSelections,
+  onCloseSelectedComponentNcrs,
 }: {
   data: DeviceComponentQualityQueue | null;
   isLoading: boolean;
@@ -2434,6 +2645,16 @@ function ComponentDashboard({
   fallbackLimit: number;
   onSelectDevice: (device: DeviceComponentQuality) => void;
   selectedDeviceSerial: string | null;
+  selectedComponentSerials: string[];
+  hasSelectedAllVisibleComponentRows: boolean;
+  bulkActionState: LoadState;
+  bulkActionError: string | null;
+  bulkActionSuccess: string | null;
+  componentNcrSelectionCount: number;
+  onToggleComponentSelection: (serialNumber: string) => void;
+  onToggleAllComponentSelections: () => void;
+  onClearComponentSelections: () => void;
+  onCloseSelectedComponentNcrs: () => void;
 }) {
   const totalDevices = data?.total_devices ?? 0;
   const devicesWithIssues = data?.devices_with_issues ?? 0;
@@ -2495,11 +2716,26 @@ function ComponentDashboard({
         />
       </div>
 
+      <ComponentBulkActionsBar
+        isLoading={isLoading}
+        selectedCount={selectedComponentSerials.length}
+        componentNcrSelectionCount={componentNcrSelectionCount}
+        hasSelectedAllVisibleRows={hasSelectedAllVisibleComponentRows}
+        actionState={bulkActionState}
+        actionError={bulkActionError}
+        actionSuccess={bulkActionSuccess}
+        onToggleAll={onToggleAllComponentSelections}
+        onClearSelection={onClearComponentSelections}
+        onCloseSelectedNcrs={onCloseSelectedComponentNcrs}
+      />
+
       <ComponentTable
         devices={data?.devices ?? []}
         isLoading={isLoading}
         onSelectDevice={onSelectDevice}
         selectedDeviceSerial={selectedDeviceSerial}
+        selectedComponentSerials={selectedComponentSerials}
+        onToggleComponentSelection={onToggleComponentSelection}
       />
       <PaginationBar
         label="kolejki komponentów"
@@ -2681,6 +2917,92 @@ function ShipmentBulkActionsBar({
   );
 }
 
+function ComponentBulkActionsBar({
+  isLoading,
+  selectedCount,
+  componentNcrSelectionCount,
+  hasSelectedAllVisibleRows,
+  actionState,
+  actionError,
+  actionSuccess,
+  onToggleAll,
+  onClearSelection,
+  onCloseSelectedNcrs,
+}: {
+  isLoading: boolean;
+  selectedCount: number;
+  componentNcrSelectionCount: number;
+  hasSelectedAllVisibleRows: boolean;
+  actionState: LoadState;
+  actionError: string | null;
+  actionSuccess: string | null;
+  onToggleAll: () => void;
+  onClearSelection: () => void;
+  onCloseSelectedNcrs: () => void;
+}) {
+  const isActionLoading = actionState === "loading";
+
+  return (
+    <section
+      className="bulk-action-bar"
+      aria-label="Akcje zbiorcze kolejki komponentów"
+    >
+      <div className="bulk-action-meta">
+        <label className="switch-field bulk-select-toggle">
+          <input
+            aria-label="Zaznacz wszystkie urządzenia w kolejce komponentów na stronie"
+            checked={hasSelectedAllVisibleRows}
+            type="checkbox"
+            onChange={onToggleAll}
+            disabled={isLoading || isActionLoading}
+          />
+          <span>Zaznacz wszystko na stronie</span>
+        </label>
+        <div className="bulk-action-counts">
+          <strong>Zaznaczone: {formatNumber(selectedCount)}</strong>
+          <span>
+            Z krytycznym NCR: {formatNumber(componentNcrSelectionCount)}
+          </span>
+        </div>
+      </div>
+      <div className="bulk-action-buttons">
+        <button
+          className="primary-button"
+          type="button"
+          onClick={onCloseSelectedNcrs}
+          disabled={
+            componentNcrSelectionCount === 0 || isLoading || isActionLoading
+          }
+        >
+          {isActionLoading
+            ? "Przetwarzam..."
+            : `Zamknij NCR komponentów (${formatNumber(componentNcrSelectionCount)})`}
+        </button>
+        <button
+          className="ghost-button"
+          type="button"
+          onClick={onClearSelection}
+          disabled={selectedCount === 0 || isLoading || isActionLoading}
+        >
+          Wyczyść zaznaczenie
+        </button>
+      </div>
+      {actionSuccess ? (
+        <div className="action-banner action-banner-success" role="status">
+          <strong>Akcja zbiorcza wykonana.</strong>
+          <span>{actionSuccess}</span>
+        </div>
+      ) : null}
+      {actionError ? (
+        <div className="error-banner" role="alert">
+          <strong>Nie udało się wykonać akcji zbiorczej.</strong>
+          <span>{actionError}</span>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 function ShipmentTable({
   devices,
   isLoading,
@@ -2817,11 +3139,15 @@ function ComponentTable({
   isLoading,
   onSelectDevice,
   selectedDeviceSerial,
+  selectedComponentSerials,
+  onToggleComponentSelection,
 }: {
   devices: DeviceComponentQuality[];
   isLoading: boolean;
   onSelectDevice: (device: DeviceComponentQuality) => void;
   selectedDeviceSerial: string | null;
+  selectedComponentSerials: string[];
+  onToggleComponentSelection: (serialNumber: string) => void;
 }) {
   if (devices.length === 0) {
     return (
@@ -2845,6 +3171,7 @@ function ComponentTable({
         <table>
           <thead>
             <tr>
+              <th>Wybór</th>
               <th>Serial</th>
               <th>Typ / wariant</th>
               <th>Status</th>
@@ -2861,12 +3188,26 @@ function ComponentTable({
             {devices.map((device) => {
               const isSelected =
                 selectedDeviceSerial === device.device_serial_number;
+              const isChecked = selectedComponentSerials.includes(
+                device.device_serial_number,
+              );
 
               return (
               <tr
                 key={device.device_serial_number}
                 className={isSelected ? "table-row-selected" : undefined}
               >
+                <td className="selection-cell">
+                  <input
+                    aria-label={`Zaznacz ${device.device_serial_number}`}
+                    checked={isChecked}
+                    type="checkbox"
+                    onChange={() =>
+                      onToggleComponentSelection(device.device_serial_number)
+                    }
+                    disabled={isLoading}
+                  />
+                </td>
                 <td className="serial-cell">
                   <button
                     className={`row-link ${isSelected ? "is-selected" : ""}`}
