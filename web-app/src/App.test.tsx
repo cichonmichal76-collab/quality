@@ -1399,6 +1399,53 @@ describe("App", () => {
     );
   });
 
+  it("filters shipment queue immediately from metric cards", async () => {
+    const shipmentReadyPayload: DeviceShipmentQueue = {
+      ...shipmentPayload,
+      total_devices: 2,
+      ready_count: 1,
+      blocked_count: 1,
+      devices: [
+        shipmentPayload.devices[0],
+        {
+          ...shipmentPayload.devices[0],
+          device_serial_number: "BLOCK-001",
+          production_status: "CREATED",
+          final_test_passed: false,
+          can_transition_to_ready_for_shipment: false,
+          latest_shipment_gate_decision: {
+            event_type: "SHIPMENT_GATE_BLOCKED",
+            result: "BLOCKED",
+            message: "Final test wymagany",
+            recommended_action: "RUN_FINAL_TEST",
+            created_at: "2026-05-01T09:05:00Z",
+          },
+          primary_blocking_code: "FINAL_TEST_NOT_PASSED",
+          primary_blocking_message: "Final test wymagany",
+          recommended_action: "RUN_FINAL_TEST",
+          blocking_reasons: ["Final test wymagany"],
+        },
+      ],
+    };
+    const fetchMock = vi.fn(async () => createJsonResponse(shipmentReadyPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("SHIP-001")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Gotowe$/i }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/shipment-readiness?only_ready=true&sort_by=created_at&sort_desc=true&limit=100",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+  });
+
   it("filters component queue immediately from summary action buttons", async () => {
     const componentSummaryPayload: DeviceComponentQualityQueue = {
       ...componentPayload,
@@ -1440,6 +1487,57 @@ describe("App", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
     expect(fetchMock).toHaveBeenLastCalledWith(
       "/api/component-quality?recommended_action=RUN_COMPONENT_QC_OR_REWORK&only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=100",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+  });
+
+  it("filters component queue immediately from metric cards", async () => {
+    const componentSummaryPayload: DeviceComponentQualityQueue = {
+      ...componentPayload,
+      total_devices: 2,
+      devices_with_issues: 1,
+      devices: [
+        componentPayload.devices[0],
+        {
+          ...componentPayload.devices[0],
+          device_serial_number: "PASS-001",
+          passes_component_quality_gate: true,
+          blocked_components: 0,
+          passing_components: 2,
+          primary_quality_status: "PASS",
+          primary_blocking_component_type: null,
+          primary_blocking_component_serial_number: null,
+          recommended_action: "NO_ACTION",
+        },
+      ],
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(createJsonResponse(shipmentPayload))
+      .mockResolvedValueOnce(createJsonResponse(componentSummaryPayload))
+      .mockResolvedValueOnce(createJsonResponse(componentSummaryPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Komponenty" }));
+
+    expect(await screen.findByText("COMP-001")).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Przechodzą gate$/i }),
+    );
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/component-quality?passes_component_quality_gate=true&sort_by=blocked_components&sort_desc=true&limit=100",
       expect.objectContaining({
         headers: { Accept: "application/json" },
         signal: expect.any(AbortSignal),

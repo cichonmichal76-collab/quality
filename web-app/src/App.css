@@ -331,6 +331,25 @@ select:focus {
   padding: 18px;
 }
 
+.metric-card-action {
+  width: 100%;
+  cursor: pointer;
+  appearance: none;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+}
+
+.metric-card-action:hover {
+  border-color: rgb(177 133 47 / 70%);
+  transform: translateY(-1px);
+}
+
+.metric-card-action:focus-visible {
+  outline: 2px solid rgb(177 133 47 / 65%);
+  outline-offset: 2px;
+}
+
 .metric-card::after {
   position: absolute;
   inset: auto -18px -28px auto;

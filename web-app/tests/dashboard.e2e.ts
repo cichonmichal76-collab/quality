@@ -124,6 +124,33 @@ test("dashboard applies summary filters from shipment and component actions", as
   await expect(page.locator(".table-card")).toContainText(/CQ-E2E-/);
 });
 
+test("dashboard applies metric filters from shipment and component cards", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  await expect(page.getByText("API OK")).toBeVisible();
+
+  await page.locator(".filters-card input").first().fill("DEMO-E2E");
+
+  await page.getByRole("button", { name: "Gotowe", exact: true }).click();
+
+  await expect(page).toHaveURL(/ship_device_type=DEMO-E2E/);
+  await expect(page).toHaveURL(/ship_only_ready=true/);
+  await expect(page.locator(".table-card tbody tr")).toHaveCount(1);
+  await expect(page.locator(".table-card")).toContainText(/READY-E2E-/);
+
+  await page.getByRole("button", { name: "Komponenty" }).click();
+  await page.locator(".filters-card input").first().fill("DEMO-E2E");
+
+  await page.getByRole("button", { name: /Przechodzą gate/i }).click();
+
+  await expect(page).toHaveURL(/comp_device_type=DEMO-E2E/);
+  await expect(page).toHaveURL(/comp_passes_component_quality_gate=true/);
+  await expect(page.locator(".table-card tbody tr")).toHaveCount(4);
+  await expect(page.locator(".table-card")).toContainText(/READY-E2E-/);
+});
+
 test("dashboard clamps limit filters before calling the API", async ({
   page,
 }) => {

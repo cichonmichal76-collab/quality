@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { ChangeEvent, CSSProperties, ReactNode } from "react";
 
 import {
@@ -1373,6 +1373,16 @@ export function App() {
                 data={shipmentData}
                 isLoading={loadState === "loading"}
                 onPageChange={(offset) => updateShipmentFilter("offset", offset)}
+                onSelectReadyMetric={() =>
+                  applyShipmentSummaryFilter({
+                    only_ready: true,
+                  })
+                }
+                onSelectBlockedMetric={() =>
+                  applyShipmentSummaryFilter({
+                    only_blocked: true,
+                  })
+                }
                 onSelectBlockingCode={(code) =>
                   applyShipmentSummaryFilter({
                     primary_blocking_code: code,
@@ -1410,6 +1420,17 @@ export function App() {
                 data={componentData}
                 isLoading={loadState === "loading"}
                 onPageChange={(offset) => updateComponentFilter("offset", offset)}
+                onSelectPassingMetric={() =>
+                  applyComponentSummaryFilter({
+                    passes_component_quality_gate: "true",
+                    only_blocking: false,
+                  })
+                }
+                onSelectIssuesMetric={() =>
+                  applyComponentSummaryFilter({
+                    only_blocking: true,
+                  })
+                }
                 onSelectBlockingComponentType={(componentType) =>
                   applyComponentSummaryFilter({
                     blocking_component_type: componentType,
@@ -1690,6 +1711,8 @@ function ShipmentDashboard({
   data,
   isLoading,
   onPageChange,
+  onSelectReadyMetric,
+  onSelectBlockedMetric,
   onSelectBlockingCode,
   onSelectRecommendedAction,
   onSelectLatestGateResult,
@@ -1700,6 +1723,8 @@ function ShipmentDashboard({
   data: DeviceShipmentQueue | null;
   isLoading: boolean;
   onPageChange: (offset: number) => void;
+  onSelectReadyMetric: () => void;
+  onSelectBlockedMetric: () => void;
   onSelectBlockingCode: (code: string) => void;
   onSelectRecommendedAction: (action: string) => void;
   onSelectLatestGateResult: (result: string) => void;
@@ -1724,12 +1749,14 @@ function ShipmentDashboard({
           value={formatNumber(readyCount)}
           caption={`${percentage(readyCount, totalDevices)} kolejki`}
           tone="success"
+          onClick={onSelectReadyMetric}
         />
         <MetricCard
           title="Zablokowane"
           value={formatNumber(blockedCount)}
           caption={`${percentage(blockedCount, totalDevices)} kolejki`}
           tone="danger"
+          onClick={onSelectBlockedMetric}
         />
       </div>
 
@@ -1796,6 +1823,8 @@ function ComponentDashboard({
   data,
   isLoading,
   onPageChange,
+  onSelectPassingMetric,
+  onSelectIssuesMetric,
   onSelectBlockingComponentType,
   onSelectPrimaryQualityStatus,
   onSelectRecommendedAction,
@@ -1806,6 +1835,8 @@ function ComponentDashboard({
   data: DeviceComponentQualityQueue | null;
   isLoading: boolean;
   onPageChange: (offset: number) => void;
+  onSelectPassingMetric: () => void;
+  onSelectIssuesMetric: () => void;
   onSelectBlockingComponentType: (componentType: string) => void;
   onSelectPrimaryQualityStatus: (primaryQualityStatus: string) => void;
   onSelectRecommendedAction: (action: string) => void;
@@ -1830,12 +1861,14 @@ function ComponentDashboard({
           value={formatNumber(passingDevices)}
           caption={`${percentage(passingDevices, totalDevices)} kolejki`}
           tone="success"
+          onClick={onSelectPassingMetric}
         />
         <MetricCard
           title="Z problemami"
           value={formatNumber(devicesWithIssues)}
           caption={`${percentage(devicesWithIssues, totalDevices)} kolejki`}
           tone="danger"
+          onClick={onSelectIssuesMetric}
         />
       </div>
 
@@ -3533,18 +3566,37 @@ function MetricCard({
   value,
   caption,
   tone = "neutral",
+  onClick,
 }: {
   title: string;
   value: string;
   caption: string;
   tone?: "neutral" | "success" | "danger";
+  onClick?: () => void;
 }) {
-  return (
-    <article className={`metric-card tone-${tone}`}>
-      <span>{title}</span>
-      <strong>{value}</strong>
-      <p>{caption}</p>
-    </article>
+  const titleId = useId();
+  const valueId = useId();
+  const captionId = useId();
+  const content = (
+    <>
+      <span id={titleId}>{title}</span>
+      <strong id={valueId}>{value}</strong>
+      <p id={captionId}>{caption}</p>
+    </>
+  );
+
+  return onClick ? (
+    <button
+      aria-describedby={`${valueId} ${captionId}`}
+      aria-labelledby={titleId}
+      className={`metric-card metric-card-action tone-${tone}`}
+      type="button"
+      onClick={onClick}
+    >
+      {content}
+    </button>
+  ) : (
+    <article className={`metric-card tone-${tone}`}>{content}</article>
   );
 }
 

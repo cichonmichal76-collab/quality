@@ -29,6 +29,8 @@ pokazuje znacznik `Oczekuje na zastosowanie`, a klawisz `Enter` wymusza
 natychmiastowe wysłanie bieżącego filtra.
 Karty podsumowań `Główne blokady`, `Akcje operacyjne`, `Typy blokujące`
 i podobne działają też jako szybkie presety filtrów dla bieżącej kolejki.
+To samo dotyczy kart metryk, takich jak `Gotowe`, `Zablokowane`,
+`Przechodzą gate` i `Z problemami`.
 
 Kliknięcie numeru seryjnego w tabeli otwiera drawer szczegółów urządzenia.
 Drawer łączy dane z shipment readiness, component quality i historii shipment
@@ -134,8 +136,8 @@ npm run e2e
 odtworzenie aktywnej zakładki i filtrów po przeładowaniu strony, reset
 zapisanego stanu do wartości domyślnych, otwarcie drawera szczegółów
 urządzenia z kolejki komponentów, przejście z sekcji `BOM` do przefiltrowanej
-kolejki wysyłki, klikane presety filtrów z kart podsumowań oraz mockowane
-scenariusze wykonania akcji
+kolejki wysyłki, klikane presety filtrów z kart podsumowań i metryk oraz
+mockowane scenariusze wykonania akcji
 `Oznacz gotowe do wysyłki`, `Oznacz jako wysłane`, `Zamontuj komponent`,
 `Zamknij krytyczne NCR` oraz `Zapisz final test PASS` i
 `Zapisz komponentowy QC PASS`.
