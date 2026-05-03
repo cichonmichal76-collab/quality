@@ -837,20 +837,6 @@ describe("QcStationPage", () => {
         });
       }
 
-      if (url.endsWith("/api/files/upload") && method === "POST") {
-        return jsonResponse({
-          id: "FILE-FAIL-001",
-          related_entity_type: "QC_RUN",
-          related_entity_id: "QC-WEB-FAIL",
-          file_name: "evidence.jpg",
-          file_path: "/storage/qc/evidence.jpg",
-          file_type: "image/jpeg",
-          file_hash: "hash-fail-001",
-          uploaded_by: "QCOP-DEMO-LOCAL",
-          created_at: "2026-05-03T08:18:00Z",
-        });
-      }
-
       if (url.endsWith("/steps/STEP-FAIL-001/result") && method === "POST") {
         return jsonResponse({
           id: "STEP-RESULT-FAIL-001",
@@ -972,30 +958,10 @@ describe("QcStationPage", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Zapisz kontrole QC" }));
-    await screen.findByText(
-      "Ta checklista wymaga dodania przynajmniej jednego zdjecia dowodowego.",
-    );
-
-    const evidenceFile = new File(["evidence"], "evidence.jpg", {
-      type: "image/jpeg",
-    });
-    fireEvent.change(screen.getByLabelText(/Zdjecia dowodowe/), {
-      target: { files: [evidenceFile] },
-    });
-
-    await screen.findByTestId("qc-evidence-list");
-    fireEvent.click(screen.getByRole("button", { name: "Zapisz kontrole QC" }));
-
     await screen.findByText(/Kontrola zakonczona FAIL/);
     expect(
       screen.getByText("Status biezacy").closest(".detail-card")?.textContent,
     ).toContain("Rework Required");
-    expect(screen.getByText("evidence.jpg")).toBeInTheDocument();
-
-    const uploadCall = fetchMock.mock.calls.find(
-      ([url]) => String(url) === "/api/files/upload",
-    );
-    expect(uploadCall).toBeDefined();
 
     const completeCall = fetchMock.mock.calls.find(([url]) =>
       String(url).endsWith("/complete"),

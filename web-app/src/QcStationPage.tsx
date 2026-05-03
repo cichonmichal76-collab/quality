@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { ChangeEvent, FormEvent } from "react";
+import type { FormEvent } from "react";
 
 import {
   addQcStepResult,
@@ -21,11 +21,9 @@ import {
   releaseQcItemForRework,
   reserveQcItem,
   rfidLogin,
-  uploadQcRunEvidence,
 } from "./api";
 import { QcReferenceImage } from "./QcReferenceImage";
 import type {
-  FileRead,
   LoadState,
   NonconformityRead,
   OperatorRead,
@@ -185,7 +183,6 @@ export function QcStationPage() {
   const [failureDisposition, setFailureDisposition] = useState<
     "OPEN_CRITICAL_NCR" | "REWORK_REQUIRED" | "BLOCKED"
   >("OPEN_CRITICAL_NCR");
-  const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
   const [submitState, setSubmitState] = useState<LoadState>("idle");
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
@@ -218,7 +215,6 @@ export function QcStationPage() {
   const stepPreviews = buildStepPreviews(steps, stepDrafts);
   const referenceOverlayAreas = buildStationOverlayAreas(steps);
   const predictedRunResult = deriveDraftRunResult(steps, stepDrafts);
-  const requiresEvidencePhoto = steps.some((step) => step.requires_photo);
   const shouldShowReworkPanel =
     !!selectedItem &&
     (openCriticalNcrs.length > 0 ||
@@ -676,7 +672,6 @@ export function QcStationPage() {
     setFailureReason("");
     setFailureComment("");
     setFailureDisposition("OPEN_CRITICAL_NCR");
-    setEvidenceFiles([]);
     setOpenCriticalNcrs([]);
     setOpenCriticalNcrsState("idle");
     setOpenCriticalNcrsError(null);
@@ -848,7 +843,6 @@ export function QcStationPage() {
     setFailureReason("");
     setFailureComment("");
     setFailureDisposition("OPEN_CRITICAL_NCR");
-    setEvidenceFiles([]);
     setReworkAction("");
     setReworkActionState("idle");
     setReworkActionError(null);
@@ -1053,22 +1047,6 @@ export function QcStationPage() {
     setWaitingItemsSort("OLDEST");
   };
 
-  const handleEvidenceFilesChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const nextFiles = Array.from(event.target.files ?? []);
-    if (nextFiles.length === 0) {
-      return;
-    }
-
-    setEvidenceFiles((currentFiles) => [...currentFiles, ...nextFiles]);
-    event.target.value = "";
-  };
-
-  const handleRemoveEvidenceFile = (fileIndex: number) => {
-    setEvidenceFiles((currentFiles) =>
-      currentFiles.filter((_, index) => index !== fileIndex),
-    );
-  };
-
   const handleReleaseForRework = async () => {
     const trimmedApiBaseUrl = apiBaseUrl.trim();
     const normalizedReworkAction = normalizeOptionalString(reworkAction);
@@ -1220,12 +1198,6 @@ export function QcStationPage() {
       }
     }
 
-    if (requiresEvidencePhoto && evidenceFiles.length === 0) {
-      setSubmitState("error");
-      setSubmitError("Ta checklista wymaga dodania przynajmniej jednego zdjecia dowodowego.");
-      return;
-    }
-
     setSubmitState("loading");
 
     try {
@@ -1249,17 +1221,6 @@ export function QcStationPage() {
         operator_id: authState.operatorId,
         work_session_id: authState.workSessionId,
       });
-
-      const uploadedEvidence: FileRead[] = [];
-      for (const evidenceFile of evidenceFiles) {
-        const uploaded = await uploadQcRunEvidence(
-          trimmedApiBaseUrl,
-          runId,
-          evidenceFile,
-          authState.operatorId,
-        );
-        uploadedEvidence.push(uploaded);
-      }
 
       for (const preparedStep of preparedSteps) {
         await addQcStepResult(
@@ -1287,8 +1248,8 @@ export function QcStationPage() {
       setSubmitState("loaded");
       setSubmitSuccess(
         completed.result === "PASS"
-          ? `Kontrola zakonczona PASS. Komponent ${refreshedItem.item_serial_number} ma teraz status ${refreshedItem.current_status}.${uploadedEvidence.length > 0 ? ` Zapisano ${uploadedEvidence.length} plik(ow) dowodowych.` : ""}`
-          : `Kontrola zakonczona FAIL. Komponent ${refreshedItem.item_serial_number} ma teraz status ${refreshedItem.current_status}.${uploadedEvidence.length > 0 ? ` Zapisano ${uploadedEvidence.length} plik(ow) dowodowych.` : ""}`,
+          ? `Kontrola zakonczona PASS. Komponent ${refreshedItem.item_serial_number} ma teraz status ${refreshedItem.current_status}.`
+          : `Kontrola zakonczona FAIL. Komponent ${refreshedItem.item_serial_number} ma teraz status ${refreshedItem.current_status}.`,
       );
     } catch (error) {
       setSubmitState("error");
@@ -1308,7 +1269,6 @@ export function QcStationPage() {
     setFailureReason("");
     setFailureComment("");
     setFailureDisposition("OPEN_CRITICAL_NCR");
-    setEvidenceFiles([]);
     setReworkAction("");
     setReworkActionState("idle");
     setReworkActionError(null);
@@ -1676,7 +1636,6 @@ export function QcStationPage() {
                         setFailureReason("");
                         setFailureComment("");
                         setFailureDisposition("OPEN_CRITICAL_NCR");
-                        setEvidenceFiles([]);
                         setReworkAction("");
                         setReworkActionState("idle");
                         setReworkActionError(null);
@@ -2464,7 +2423,7 @@ export function QcStationPage() {
             {selectedItem ? (
               <div className="detail-inline-card qc-run-decision-card">
                 <div className="detail-inline-header">
-                  <strong>4. Decyzja i dowody kontroli</strong>
+                  <strong>4. Decyzja kontroli</strong>
                   <span
                     className={`status-badge ${
                       predictedRunResult === "FAIL" ? "state-error" : "state-loaded"
@@ -2474,22 +2433,11 @@ export function QcStationPage() {
                   </span>
                 </div>
                 <p>
-                  System przewiduje wynik na podstawie aktualnych krokow. Operator moze
-                  dolaczyc zdjecia dowodowe, a dla FAIL musi wskazac powod i komentarz.
+                  System przewiduje wynik na podstawie aktualnych krokow. Operator
+                  wykonuje kontrole na podstawie zdjecia pogladowego od administratora,
+                  a dla FAIL musi wskazac powod i komentarz.
                 </p>
                 <div className="qc-station-form-grid">
-                  <label className="field">
-                    <span>
-                      Zdjecia dowodowe
-                      {requiresEvidencePhoto ? " (wymagane)" : " (opcjonalne)"}
-                    </span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      onChange={handleEvidenceFilesChange}
-                    />
-                  </label>
                   {predictedRunResult === "FAIL" ? (
                     <label className="field">
                       <span>Powod niezgodnosci</span>
@@ -2550,36 +2498,12 @@ export function QcStationPage() {
                     </span>
                   </div>
                 ) : null}
-                {evidenceFiles.length > 0 ? (
-                  <div className="qc-evidence-list" data-testid="qc-evidence-list">
-                    {evidenceFiles.map((file, index) => (
-                      <div
-                        key={`${file.name}-${file.size}-${index}`}
-                        className="qc-evidence-item"
-                      >
-                        <div className="qc-evidence-item-copy">
-                          <strong>{file.name}</strong>
-                          <span>{formatEvidenceFileSize(file.size)}</span>
-                        </div>
-                        <button
-                          className="ghost-button"
-                          type="button"
-                          onClick={() => handleRemoveEvidenceFile(index)}
-                        >
-                          Usun
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="details-inline-actions">
-                    <span className="action-hint">
-                      {requiresEvidencePhoto
-                        ? "Co najmniej jedno zdjecie jest wymagane przez aktywna checkliste."
-                        : "Mozesz dolaczyc zdjecia kontrolowanego elementu jako dowod wykonania kontroli."}
-                    </span>
-                  </div>
-                )}
+                <div className="details-inline-actions">
+                  <span className="action-hint">
+                    Operator nie dodaje zdjec do runu QC. Jedynym obrazem na stanowisku
+                    jest zdjecie pogladowe zdefiniowane przez administratora.
+                  </span>
+                </div>
               </div>
             ) : null}
 
@@ -3108,16 +3032,6 @@ function parseOptionalMeasurementValue(value: string): number | null {
 
   const measurementValue = Number(normalizedValue);
   return Number.isFinite(measurementValue) ? measurementValue : null;
-}
-
-function formatEvidenceFileSize(bytes: number): string {
-  if (bytes < 1024) {
-    return `${bytes} B`;
-  }
-  if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`;
-  }
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function normalizeOptionalString(value: string): string | null {
