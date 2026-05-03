@@ -16,9 +16,11 @@ from app.schemas import (
     MachineCreate,
     OperatorLoginRequest,
     OperatorCreate,
+    OperatorUpdate,
     RfidLoginRequest,
     WorkSessionCloseRequest,
     WorkstationCreate,
+    WorkstationUpdate,
 )
 
 PRODUCTION_SESSION_ROLES = {"ADMIN", "PRODUCTION_OPERATOR", "QUALITY_INSPECTOR"}
@@ -196,6 +198,69 @@ def create_workstation(db: Session, payload: WorkstationCreate) -> Workstation:
         raise HTTPException(status_code=409, detail="Workstation already exists")
     workstation = Workstation(**payload.model_dump())
     db.add(workstation)
+    db.commit()
+    db.refresh(workstation)
+    return workstation
+
+
+def update_operator(db: Session, operator_id: str, payload: OperatorUpdate) -> Operator:
+    operator = repository.get_operator_by_id(db, operator_id)
+    if not operator:
+        raise HTTPException(status_code=404, detail="Operator not found")
+
+    updates = payload.model_dump(exclude_unset=True)
+    if "login_name" in updates:
+        normalized_login_name = normalize_login_name(updates["login_name"], operator.operator_id)
+        existing_operator = repository.get_operator_by_login(db, normalized_login_name)
+        if existing_operator and existing_operator.operator_id != operator.operator_id:
+            raise HTTPException(status_code=409, detail="Operator login already exists")
+        operator.login_name = normalized_login_name
+
+    if "password" in updates:
+        password = updates["password"]
+        if password is None or not password.strip():
+            raise HTTPException(status_code=400, detail="Operator password cannot be empty")
+        operator.password_hash = hash_operator_password(password)
+
+    if "rfid_uid_hash" in updates:
+        rfid_uid_hash = updates["rfid_uid_hash"]
+        if rfid_uid_hash:
+            existing_rfid_operator = repository.get_operator_by_rfid(db, rfid_uid_hash)
+            if existing_rfid_operator and existing_rfid_operator.operator_id != operator.operator_id:
+                raise HTTPException(status_code=409, detail="Operator RFID already exists")
+        operator.rfid_uid_hash = rfid_uid_hash
+
+    if "full_name" in updates:
+        operator.full_name = updates["full_name"]
+    if "role" in updates:
+        operator.role = updates["role"]
+    if "is_active" in updates:
+        operator.is_active = updates["is_active"]
+
+    db.commit()
+    db.refresh(operator)
+    return operator
+
+
+def update_workstation(
+    db: Session,
+    workstation_id: str,
+    payload: WorkstationUpdate,
+) -> Workstation:
+    workstation = repository.get_workstation_by_id(db, workstation_id)
+    if not workstation:
+        raise HTTPException(status_code=404, detail="Workstation not found")
+
+    updates = payload.model_dump(exclude_unset=True)
+    if "name" in updates:
+        workstation.name = updates["name"]
+    if "area" in updates:
+        workstation.area = updates["area"]
+    if "station_type" in updates:
+        workstation.station_type = updates["station_type"]
+    if "is_active" in updates:
+        workstation.is_active = updates["is_active"]
+
     db.commit()
     db.refresh(workstation)
     return workstation

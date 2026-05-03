@@ -199,6 +199,23 @@ i uzyc:
 - RFID `QCRFID-DEMO-LOCAL`
 - barcode `QCBC-DEMO-LOCAL`
 
+## Administracja QC
+
+Trasa `/admin` daje prosty panel do zarzadzania:
+- operatorami
+- loginami i RFID operatorow
+- aktywnoscia operatorow
+- stanowiskami QC
+- aktywnoscia stanowisk QC
+
+Panel pozwala:
+- dodac nowego operatora
+- edytowac role, login, haslo i RFID operatora
+- dezaktywowac operatora bez kasowania rekordu
+- dodac nowe stanowisko QC
+- edytowac nazwe, obszar i typ stanowiska
+- wylaczyc stanowisko z uzycia przez ustawienie `is_active=false`
+
 ## Walidacja
 
 ```bash

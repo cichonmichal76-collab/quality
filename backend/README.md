@@ -176,8 +176,11 @@ Wersje BOM mają też teraz jawne lineage przez `source_template_id` i `replaced
 
 - `GET /health`
 - `POST /api/operators`
+- `PATCH /api/operators/{operator_id}`
 - `POST /api/workstations`
+- `PATCH /api/workstations/{workstation_id}`
 - `POST /api/machines`
+- `POST /api/auth/operator-login`
 - `POST /api/auth/rfid-login`
 - `GET /api/work-sessions`
 - `POST /api/work-sessions/{work_session_id}/close`

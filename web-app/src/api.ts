@@ -58,6 +58,25 @@ export interface OperatorRead {
   created_at: string;
 }
 
+export interface OperatorCreatePayload {
+  operator_id: string;
+  full_name: string;
+  role: string;
+  login_name?: string | null;
+  password?: string | null;
+  rfid_uid_hash?: string | null;
+  is_active?: boolean;
+}
+
+export interface OperatorUpdatePayload {
+  full_name?: string;
+  role?: string;
+  login_name?: string | null;
+  password?: string | null;
+  rfid_uid_hash?: string | null;
+  is_active?: boolean;
+}
+
 export interface WorkstationRead {
   id: string;
   workstation_id: string;
@@ -65,6 +84,20 @@ export interface WorkstationRead {
   area: string | null;
   station_type: string | null;
   is_active: boolean;
+}
+
+export interface WorkstationCreatePayload {
+  workstation_id: string;
+  name: string;
+  area?: string | null;
+  station_type?: string | null;
+}
+
+export interface WorkstationUpdatePayload {
+  name?: string;
+  area?: string | null;
+  station_type?: string | null;
+  is_active?: boolean;
 }
 
 export interface WorkSessionRead {
@@ -642,12 +675,62 @@ export async function listWorkstations(
   );
 }
 
+export async function createWorkstation(
+  apiBaseUrl: string,
+  payload: WorkstationCreatePayload,
+  signal?: AbortSignal,
+): Promise<WorkstationRead> {
+  return postJson<WorkstationRead>(
+    joinApiUrl(apiBaseUrl, "/workstations"),
+    payload,
+    signal,
+  );
+}
+
+export async function updateWorkstation(
+  apiBaseUrl: string,
+  workstationId: string,
+  payload: WorkstationUpdatePayload,
+  signal?: AbortSignal,
+): Promise<WorkstationRead> {
+  return patchJson<WorkstationRead>(
+    joinApiUrl(apiBaseUrl, `/workstations/${encodeURIComponent(workstationId)}`),
+    payload,
+    signal,
+  );
+}
+
 export async function listOperators(
   apiBaseUrl: string,
   signal?: AbortSignal,
 ): Promise<OperatorRead[]> {
   return fetchJson<OperatorRead[]>(
     joinApiUrl(apiBaseUrl, "/operators"),
+    signal,
+  );
+}
+
+export async function createOperator(
+  apiBaseUrl: string,
+  payload: OperatorCreatePayload,
+  signal?: AbortSignal,
+): Promise<OperatorRead> {
+  return postJson<OperatorRead>(
+    joinApiUrl(apiBaseUrl, "/operators"),
+    payload,
+    signal,
+  );
+}
+
+export async function updateOperator(
+  apiBaseUrl: string,
+  operatorId: string,
+  payload: OperatorUpdatePayload,
+  signal?: AbortSignal,
+): Promise<OperatorRead> {
+  return patchJson<OperatorRead>(
+    joinApiUrl(apiBaseUrl, `/operators/${encodeURIComponent(operatorId)}`),
+    payload,
     signal,
   );
 }

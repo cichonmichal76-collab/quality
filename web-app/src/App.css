@@ -497,6 +497,44 @@ select:focus {
   gap: 16px;
 }
 
+.admin-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+  gap: 18px;
+}
+
+.admin-list-card,
+.admin-form-card {
+  display: grid;
+  gap: 16px;
+}
+
+.admin-list {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-row {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-form-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.checkbox-field input {
+  width: 18px;
+  height: 18px;
+}
+
 .metrics-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1282,6 +1320,7 @@ td span {
   .hero,
   .filters-grid,
   .metrics-grid,
+  .admin-grid,
   .qc-login-grid,
   .qc-station-grid,
   .qc-station-form-grid,
@@ -1307,6 +1346,7 @@ td span {
   .hero,
   .filters-grid,
   .metrics-grid,
+  .admin-grid,
   .qc-login-grid,
   .qc-station-grid,
   .qc-station-form-grid,

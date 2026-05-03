@@ -11,11 +11,13 @@ from app.schemas import (
     OperatorLoginRequest,
     OperatorCreate,
     OperatorRead,
+    OperatorUpdate,
     RfidLoginRequest,
     WorkSessionCloseRequest,
     WorkSessionRead,
     WorkstationCreate,
     WorkstationRead,
+    WorkstationUpdate,
 )
 
 router = APIRouter(tags=["auth-rfid"])
@@ -29,6 +31,15 @@ def create_operator(payload: OperatorCreate, db: Session = Depends(get_db)):
 @router.get("/operators", response_model=list[OperatorRead])
 def list_operators(db: Session = Depends(get_db)):
     return repository.list_operators(db)
+
+
+@router.patch("/operators/{operator_id}", response_model=OperatorRead)
+def update_operator(
+    operator_id: str,
+    payload: OperatorUpdate,
+    db: Session = Depends(get_db),
+):
+    return service.update_operator(db, operator_id, payload)
 
 
 @router.post("/auth/operator-login", response_model=WorkSessionRead)
@@ -63,6 +74,15 @@ def create_workstation(payload: WorkstationCreate, db: Session = Depends(get_db)
 @router.get("/workstations", response_model=list[WorkstationRead])
 def list_workstations(db: Session = Depends(get_db)):
     return repository.list_workstations(db)
+
+
+@router.patch("/workstations/{workstation_id}", response_model=WorkstationRead)
+def update_workstation(
+    workstation_id: str,
+    payload: WorkstationUpdate,
+    db: Session = Depends(get_db),
+):
+    return service.update_workstation(db, workstation_id, payload)
 
 
 @router.post("/machines", response_model=MachineRead)

@@ -715,6 +715,15 @@ class OperatorCreate(BaseModel):
     is_active: bool = True
 
 
+class OperatorUpdate(BaseModel):
+    full_name: str | None = None
+    role: str | None = None
+    login_name: str | None = None
+    password: str | None = None
+    rfid_uid_hash: str | None = None
+    is_active: bool | None = None
+
+
 class OperatorRead(BaseModel):
     id: str
     operator_id: str
@@ -780,6 +789,13 @@ class WorkstationCreate(BaseModel):
     name: str
     area: str | None = None
     station_type: str | None = None
+
+
+class WorkstationUpdate(BaseModel):
+    name: str | None = None
+    area: str | None = None
+    station_type: str | None = None
+    is_active: bool | None = None
 
 
 class WorkstationRead(WorkstationCreate):

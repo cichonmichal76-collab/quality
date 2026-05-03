@@ -5,7 +5,9 @@ import {
   buildQuery,
   completeQcRun,
   createFinalTest,
+  createOperator,
   createQcRun,
+  createWorkstation,
   getProductionItemByBarcode,
   getServiceSession,
   joinApiUrl,
@@ -22,6 +24,8 @@ import {
   scanAssemblyComponent,
   updateDeviceStatus,
   updateNonconformityStatus,
+  updateOperator,
+  updateWorkstation,
 } from "./api";
 
 afterEach(() => {
@@ -222,6 +226,84 @@ describe("listWorkstations", () => {
   });
 });
 
+describe("createWorkstation", () => {
+  it("tworzy nowe stanowisko QC", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => ({
+        workstation_id: "QCWS-NEW",
+        name: "Nowe stanowisko",
+        area: "QA",
+        station_type: "QC",
+        is_active: true,
+      }),
+    } satisfies Partial<Response>);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const payload = await createWorkstation("/api", {
+      workstation_id: "QCWS-NEW",
+      name: "Nowe stanowisko",
+      area: "QA",
+      station_type: "QC",
+    });
+
+    expect(payload.workstation_id).toBe("QCWS-NEW");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/workstations",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          workstation_id: "QCWS-NEW",
+          name: "Nowe stanowisko",
+          area: "QA",
+          station_type: "QC",
+        }),
+      }),
+    );
+  });
+});
+
+describe("updateWorkstation", () => {
+  it("aktualizuje stanowisko QC", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => ({
+        workstation_id: "QCWS-DEMO",
+        name: "Linia QC 2",
+        area: "LAB",
+        station_type: "FINAL_QC",
+        is_active: false,
+      }),
+    } satisfies Partial<Response>);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const payload = await updateWorkstation("/api", "QCWS-DEMO", {
+      name: "Linia QC 2",
+      area: "LAB",
+      station_type: "FINAL_QC",
+      is_active: false,
+    });
+
+    expect(payload.is_active).toBe(false);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/workstations/QCWS-DEMO",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({
+          name: "Linia QC 2",
+          area: "LAB",
+          station_type: "FINAL_QC",
+          is_active: false,
+        }),
+      }),
+    );
+  });
+});
+
 describe("listOperators", () => {
   it("pobiera operatorów do filtrowania sesji final test", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
@@ -244,6 +326,97 @@ describe("listOperators", () => {
       "/api/operators",
       expect.objectContaining({
         headers: { Accept: "application/json" },
+      }),
+    );
+  });
+});
+
+describe("createOperator", () => {
+  it("tworzy operatora do stanowiska QC", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => ({
+        operator_id: "QCOP-NEW",
+        full_name: "Nowy operator",
+        role: "QUALITY_INSPECTOR",
+        login_name: "qc-new",
+        rfid_uid_hash: "RFID-NEW",
+        is_active: true,
+      }),
+    } satisfies Partial<Response>);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const payload = await createOperator("/api", {
+      operator_id: "QCOP-NEW",
+      full_name: "Nowy operator",
+      role: "QUALITY_INSPECTOR",
+      login_name: "qc-new",
+      password: "Secret123!",
+      rfid_uid_hash: "RFID-NEW",
+      is_active: true,
+    });
+
+    expect(payload.login_name).toBe("qc-new");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/operators",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          operator_id: "QCOP-NEW",
+          full_name: "Nowy operator",
+          role: "QUALITY_INSPECTOR",
+          login_name: "qc-new",
+          password: "Secret123!",
+          rfid_uid_hash: "RFID-NEW",
+          is_active: true,
+        }),
+      }),
+    );
+  });
+});
+
+describe("updateOperator", () => {
+  it("aktualizuje operatora, login i aktywnosc", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => ({
+        operator_id: "QCOP-DEMO",
+        full_name: "Starszy operator",
+        role: "QUALITY_MANAGER",
+        login_name: "qc-manager",
+        rfid_uid_hash: "RFID-UPD",
+        is_active: false,
+      }),
+    } satisfies Partial<Response>);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const payload = await updateOperator("/api", "QCOP-DEMO", {
+      full_name: "Starszy operator",
+      role: "QUALITY_MANAGER",
+      login_name: "qc-manager",
+      password: "NewSecret123!",
+      rfid_uid_hash: "RFID-UPD",
+      is_active: false,
+    });
+
+    expect(payload.role).toBe("QUALITY_MANAGER");
+    expect(payload.is_active).toBe(false);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/operators/QCOP-DEMO",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({
+          full_name: "Starszy operator",
+          role: "QUALITY_MANAGER",
+          login_name: "qc-manager",
+          password: "NewSecret123!",
+          rfid_uid_hash: "RFID-UPD",
+          is_active: false,
+        }),
       }),
     );
   });

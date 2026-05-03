@@ -2688,6 +2688,94 @@ def test_operator_password_login_creates_and_reuses_work_session():
     assert "OPERATOR_LOGIN_REUSED" in event_types
 
 
+def test_admin_can_update_operator_and_workstation():
+    operator_id = unique_id("OP")
+    workstation_id = unique_id("WS")
+
+    operator_response = client.post(
+        "/api/operators",
+        json={
+            "operator_id": operator_id,
+            "full_name": "Initial Operator",
+            "role": "QUALITY_INSPECTOR",
+            "login_name": f"admin-{uuid4().hex[:6]}",
+            "password": "Secret123!",
+            "rfid_uid_hash": unique_id("RFID"),
+        },
+    )
+    assert operator_response.status_code == 200
+
+    workstation_response = client.post(
+        "/api/workstations",
+        json={
+            "workstation_id": workstation_id,
+            "name": "Initial QC Station",
+            "area": "QA",
+            "station_type": "QC",
+        },
+    )
+    assert workstation_response.status_code == 200
+
+    updated_operator = client.patch(
+        f"/api/operators/{operator_id}",
+        json={
+            "full_name": "Updated Operator",
+            "role": "QUALITY_MANAGER",
+            "login_name": f"updated-{uuid4().hex[:6]}",
+            "password": "NewSecret123!",
+            "rfid_uid_hash": unique_id("RFID"),
+            "is_active": False,
+        },
+    )
+    assert updated_operator.status_code == 200
+    assert updated_operator.json()["full_name"] == "Updated Operator"
+    assert updated_operator.json()["role"] == "QUALITY_MANAGER"
+    assert updated_operator.json()["is_active"] is False
+
+    updated_workstation = client.patch(
+        f"/api/workstations/{workstation_id}",
+        json={
+            "name": "Updated QC Station",
+            "area": "LAB",
+            "station_type": "FINAL_QC",
+            "is_active": False,
+        },
+    )
+    assert updated_workstation.status_code == 200
+    assert updated_workstation.json()["name"] == "Updated QC Station"
+    assert updated_workstation.json()["area"] == "LAB"
+    assert updated_workstation.json()["station_type"] == "FINAL_QC"
+    assert updated_workstation.json()["is_active"] is False
+
+    listed_operators = client.get("/api/operators")
+    assert listed_operators.status_code == 200
+    assert any(
+        row["operator_id"] == operator_id
+        and row["full_name"] == "Updated Operator"
+        and row["is_active"] is False
+        for row in listed_operators.json()
+    )
+
+    listed_workstations = client.get("/api/workstations")
+    assert listed_workstations.status_code == 200
+    assert any(
+        row["workstation_id"] == workstation_id
+        and row["name"] == "Updated QC Station"
+        and row["is_active"] is False
+        for row in listed_workstations.json()
+    )
+
+    login_blocked = client.post(
+        "/api/auth/operator-login",
+        json={
+            "login": updated_operator.json()["login_name"],
+            "password": "NewSecret123!",
+            "workstation_id": workstation_id,
+        },
+    )
+    assert login_blocked.status_code == 401
+
+
 def test_traceability_operations_pick_up_active_work_session_context():
     session = start_work_session()
 

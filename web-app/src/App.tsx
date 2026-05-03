@@ -46,6 +46,7 @@ import {
   labelForCode,
   percentage,
 } from "./dashboard";
+import { AdminPage } from "./AdminPage";
 import { QcStationPage } from "./QcStationPage";
 
 import "./App.css";
@@ -176,6 +177,7 @@ const URL_SERVICE_SESSION_ID_KEY = `${URL_SERVICE_PREFIX}session_id`;
 const DEVICE_DETAILS_PATH_PREFIX = "/devices/";
 const SERVICE_SESSION_DETAILS_PATH_PREFIX = "/service-sessions/";
 const QC_STATION_PATH = "/qc-station";
+const ADMIN_PATH = "/admin";
 const DEVICE_DETAILS_SECTION_IDS = {
   actions: "akcje",
   shipmentGate: "bramka-wysylki",
@@ -399,6 +401,10 @@ const DEFAULT_SERVICE_FILTERS: ServiceFilters = {
 };
 
 export function App() {
+  if (isAdminPath(window.location.pathname)) {
+    return <AdminPage />;
+  }
+
   if (isQcStationPath(window.location.pathname)) {
     return <QcStationPage />;
   }
@@ -2702,6 +2708,9 @@ function DashboardApp() {
             </button>
             <a className="ghost-button view-shortcut-link" href={QC_STATION_PATH}>
               System kontroli jakosci
+            </a>
+            <a className="ghost-button view-shortcut-link" href={ADMIN_PATH}>
+              Administracja
             </a>
           </nav>
 
@@ -8195,6 +8204,10 @@ function buildServiceSessionPackageHref(
 
 function isQcStationPath(pathname: string): boolean {
   return pathname === QC_STATION_PATH || pathname === `${QC_STATION_PATH}/`;
+}
+
+function isAdminPath(pathname: string): boolean {
+  return pathname === ADMIN_PATH || pathname === `${ADMIN_PATH}/`;
 }
 
 function readDevicePageSerial(pathname: string): string | null {
