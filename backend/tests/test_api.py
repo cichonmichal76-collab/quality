@@ -3023,7 +3023,13 @@ def test_qc_run_fail_updates_item_and_creates_ncr():
     assert step_result.status_code == 200
     assert step_result.json()["status"] == "FAIL"
 
-    completed = client.post(f"/api/qc-runs/{run_id}/complete", data={})
+    completed = client.post(
+        f"/api/qc-runs/{run_id}/complete",
+        data={
+            "failure_reason": "DIMENSION_OUT_OF_RANGE",
+            "failure_comment": "Width measured above upper limit",
+        },
+    )
     assert completed.status_code == 200
     assert completed.json()["result"] == "FAIL"
 
@@ -3033,7 +3039,21 @@ def test_qc_run_fail_updates_item_and_creates_ncr():
 
     ncr = client.get("/api/nonconformities")
     assert ncr.status_code == 200
-    assert any(row["ncr_id"] == f"NCR-QC-{run_id}" for row in ncr.json())
+    created_ncr = next(row for row in ncr.json() if row["ncr_id"] == f"NCR-QC-{run_id}")
+    assert created_ncr["description"] == (
+        "QC failed: DIMENSION_OUT_OF_RANGE. Width measured above upper limit"
+    )
+
+    audit = client.get(f"/api/audit-events?entity_type=QC_RUN&entity_id={run_id}")
+    assert audit.status_code == 200
+    completed_event = next(
+        row for row in audit.json() if row["event_type"] == "QC_RUN_COMPLETED"
+    )
+    assert completed_event["payload"]["failure_reason"] == "DIMENSION_OUT_OF_RANGE"
+    assert (
+        completed_event["payload"]["failure_comment"]
+        == "Width measured above upper limit"
+    )
 
 
 def test_qc_run_pass_updates_item_status():

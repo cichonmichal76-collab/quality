@@ -542,6 +542,288 @@ describe("QcStationPage", () => {
     expect(screen.getByDisplayValue("QCBC-DEMO-QUEUE")).toBeInTheDocument();
     expect(screen.getByText(/1 oczekuje/i)).toBeInTheDocument();
   });
+
+  it("dobiera checkliste po typie komponentu i wymaga danych dla FAIL", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+
+      if (url.endsWith("/api/operators")) {
+        return jsonResponse([
+          {
+            id: "OP-ROW-001",
+            operator_id: "QCOP-DEMO-LOCAL",
+            full_name: "Demo QC Inspector",
+            role: "QUALITY_INSPECTOR",
+            login_name: "qc-demo-local",
+            rfid_uid_hash: "QCRFID-DEMO-LOCAL",
+            is_active: true,
+            created_at: "2026-05-03T08:00:00Z",
+          },
+        ]);
+      }
+
+      if (url.endsWith("/api/workstations")) {
+        return jsonResponse([
+          {
+            id: "WS-ROW-001",
+            workstation_id: "QCWS-DEMO-LOCAL",
+            name: "QC Station Demo",
+            area: "QA",
+            station_type: "QC",
+            is_active: true,
+          },
+        ]);
+      }
+
+      if (url.endsWith("/api/qc-checklists")) {
+        return jsonResponse([
+          {
+            id: "CHK-GENERIC",
+            checklist_code: "QC-GENERIC",
+            name: "Checklista ogolna",
+            process_stage: "COMPONENT_QC",
+            version: "1.0",
+            device_type: null,
+            variant_code: null,
+            component_type: null,
+            skip_component_qc: false,
+            reference_image_file_id: null,
+            is_active: true,
+            created_at: "2026-05-03T08:00:00Z",
+          },
+          {
+            id: "CHK-SEAL",
+            checklist_code: "QC-SEAL",
+            name: "Kontrola silikonu",
+            process_stage: "COMPONENT_QC",
+            version: "1.0",
+            device_type: null,
+            variant_code: null,
+            component_type: "SILICONE_PACK",
+            skip_component_qc: false,
+            reference_image_file_id: null,
+            is_active: true,
+            created_at: "2026-05-03T08:00:00Z",
+          },
+        ]);
+      }
+
+      if (url.includes("/api/qc-waiting-items")) {
+        return jsonResponse([
+          {
+            id: "ITEM-ROW-FAIL",
+            item_serial_number: "QCITEM-DEMO-FAIL",
+            barcode_value: "QCBC-DEMO-FAIL",
+            item_type: "SILICONE_PACK",
+            part_number: "PN-SIL-001",
+            revision: "A",
+            drawing_number: null,
+            drawing_revision: null,
+            production_order: null,
+            material_batch: null,
+            machine_id: null,
+            created_by_operator_id: "QCOP-DEMO-LOCAL",
+            current_status: "REWORK_REQUIRED",
+            produced_at: "2026-05-03T08:16:00Z",
+            created_at: "2026-05-03T08:16:00Z",
+          },
+        ]);
+      }
+
+      if (url.endsWith("/api/auth/operator-login") && method === "POST") {
+        return jsonResponse({
+          id: "SESSION-ROW-FAIL",
+          work_session_id: "WS-QA-FAIL",
+          operator_id: "QCOP-DEMO-LOCAL",
+          workstation_id: "QCWS-DEMO-LOCAL",
+          machine_id: null,
+          status: "ACTIVE",
+          started_at: "2026-05-03T08:10:00Z",
+          ended_at: null,
+        });
+      }
+
+      if (url.endsWith("/api/qc-checklists/QC-GENERIC/steps")) {
+        return jsonResponse([]);
+      }
+
+      if (url.endsWith("/api/qc-checklists/QC-SEAL/steps")) {
+        return jsonResponse([
+          {
+            id: "STEP-FAIL-001",
+            checklist_id: "CHK-SEAL",
+            step_order: 1,
+            title: "Udokumentuj stan powloki",
+            instruction: "Sprawdz czy silikon nie ma pekniec i sladow zabrudzen.",
+            control_area: "Powierzchnia worka",
+            evaluation_mode: "MANUAL",
+            result_input_label: null,
+            region_x: null,
+            region_y: null,
+            region_width: null,
+            region_height: null,
+            requires_photo: true,
+            requires_measurement: false,
+            blocking_on_fail: true,
+            expected_value: null,
+            unit: null,
+            tolerance_min: null,
+            tolerance_max: null,
+          },
+        ]);
+      }
+
+      if (url.endsWith("/api/qc-runs") && method === "POST") {
+        return jsonResponse({
+          id: "QC-ROW-FAIL",
+          run_id: "QC-WEB-FAIL",
+          item_serial_number: "QCITEM-DEMO-FAIL",
+          barcode_value: "QCBC-DEMO-FAIL",
+          checklist_id: "CHK-SEAL",
+          process_stage: "COMPONENT_QC",
+          work_session_id: "WS-QA-FAIL",
+          operator_id: "QCOP-DEMO-LOCAL",
+          status: "IN_PROGRESS",
+          result: null,
+          started_at: "2026-05-03T08:17:00Z",
+          ended_at: null,
+        });
+      }
+
+      if (url.endsWith("/api/files/upload") && method === "POST") {
+        return jsonResponse({
+          id: "FILE-FAIL-001",
+          related_entity_type: "QC_RUN",
+          related_entity_id: "QC-WEB-FAIL",
+          file_name: "evidence.jpg",
+          file_path: "/storage/qc/evidence.jpg",
+          file_type: "image/jpeg",
+          file_hash: "hash-fail-001",
+          uploaded_by: "QCOP-DEMO-LOCAL",
+          created_at: "2026-05-03T08:18:00Z",
+        });
+      }
+
+      if (url.endsWith("/steps/STEP-FAIL-001/result") && method === "POST") {
+        return jsonResponse({
+          id: "STEP-RESULT-FAIL-001",
+          qc_run_id: "QC-WEB-FAIL",
+          step_id: "STEP-FAIL-001",
+          status: "FAIL",
+          comment: "Rysa na worku silikonowym",
+        });
+      }
+
+      if (url.endsWith("/complete") && method === "POST") {
+        return jsonResponse({
+          id: "QC-ROW-FAIL",
+          run_id: "QC-WEB-FAIL",
+          item_serial_number: "QCITEM-DEMO-FAIL",
+          barcode_value: "QCBC-DEMO-FAIL",
+          checklist_id: "CHK-SEAL",
+          process_stage: "COMPONENT_QC",
+          work_session_id: "WS-QA-FAIL",
+          operator_id: "QCOP-DEMO-LOCAL",
+          status: "COMPLETED",
+          result: "FAIL",
+          started_at: "2026-05-03T08:17:00Z",
+          ended_at: "2026-05-03T08:19:00Z",
+        });
+      }
+
+      if (url.endsWith("/api/production-items/by-barcode/QCBC-DEMO-FAIL")) {
+        return jsonResponse({
+          id: "ITEM-ROW-FAIL",
+          item_serial_number: "QCITEM-DEMO-FAIL",
+          barcode_value: "QCBC-DEMO-FAIL",
+          item_type: "SILICONE_PACK",
+          part_number: "PN-SIL-001",
+          revision: "A",
+          drawing_number: null,
+          drawing_revision: null,
+          production_order: null,
+          material_batch: null,
+          machine_id: null,
+          created_by_operator_id: "QCOP-DEMO-LOCAL",
+          current_status: "QC_FAILED",
+          produced_at: "2026-05-03T08:16:00Z",
+          created_at: "2026-05-03T08:16:00Z",
+        });
+      }
+
+      throw new Error(`Unexpected request: ${method} ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.replaceState(null, "", "/qc-station");
+
+    render(<App />);
+
+    await screen.findByText(/Logowanie operatora/);
+
+    fireEvent.change(screen.getByPlaceholderText("np. qc-demo-local"), {
+      target: { value: "qc-demo-local" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Haslo operatora"), {
+      target: { value: "qc-demo-local-123" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Wejdz do aplikacji" }));
+
+    await screen.findByText("Sesja stanowiskowa");
+    fireEvent.click(screen.getByRole("button", { name: /QCITEM-DEMO-FAIL/i }));
+
+    await screen.findByText(/Aktywna checklista: Kontrola silikonu/);
+    await screen.findByText("Udokumentuj stan powloki");
+
+    fireEvent.change(screen.getByLabelText("Wynik kroku"), {
+      target: { value: "FAIL" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Zapisz kontrole QC" }));
+    await screen.findByText("Dla wyniku FAIL wybierz powod niezgodnosci.");
+
+    fireEvent.change(screen.getByLabelText("Powod niezgodnosci"), {
+      target: { value: "VISUAL_DEFECT" },
+    });
+    fireEvent.change(screen.getByLabelText("Komentarz do FAIL"), {
+      target: { value: "Rysa na worku silikonowym" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Zapisz kontrole QC" }));
+    await screen.findByText(
+      "Ta checklista wymaga dodania przynajmniej jednego zdjecia dowodowego.",
+    );
+
+    const evidenceFile = new File(["evidence"], "evidence.jpg", {
+      type: "image/jpeg",
+    });
+    fireEvent.change(screen.getByLabelText(/Zdjecia dowodowe/), {
+      target: { files: [evidenceFile] },
+    });
+
+    await screen.findByTestId("qc-evidence-list");
+    fireEvent.click(screen.getByRole("button", { name: "Zapisz kontrole QC" }));
+
+    await screen.findByText(/Kontrola zakonczona FAIL/);
+    await screen.findByText("Qc Failed");
+    expect(screen.getByText("evidence.jpg")).toBeInTheDocument();
+
+    const uploadCall = fetchMock.mock.calls.find(
+      ([url]) => String(url) === "/api/files/upload",
+    );
+    expect(uploadCall).toBeDefined();
+
+    const completeCall = fetchMock.mock.calls.find(([url]) =>
+      String(url).endsWith("/complete"),
+    );
+    expect(String((completeCall?.[1] as RequestInit).body)).toContain(
+      "failure_reason=VISUAL_DEFECT",
+    );
+    expect(String((completeCall?.[1] as RequestInit).body)).toContain(
+      "failure_comment=Rysa+na+worku+silikonowym",
+    );
+  });
 });
 
 function jsonResponse(payload: unknown): Response {

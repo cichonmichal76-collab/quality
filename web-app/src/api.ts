@@ -523,6 +523,12 @@ export interface QcRunRead extends QcRunCreatePayload {
   ended_at: string | null;
 }
 
+export interface CompleteQcRunOptions {
+  result?: "PASS" | "FAIL";
+  failure_reason?: string;
+  failure_comment?: string;
+}
+
 export interface QcStepResultCreatePayload {
   status: string;
   measurement_value?: number;
@@ -548,6 +554,18 @@ export interface QcStepResultRead extends QcStepResultCreatePayload {
   id: string;
   qc_run_id: string;
   step_id: string;
+  created_at: string;
+}
+
+export interface FileRead {
+  id: string;
+  related_entity_type: string;
+  related_entity_id: string;
+  file_name: string;
+  file_path: string;
+  file_type?: string | null;
+  file_hash?: string | null;
+  uploaded_by?: string | null;
   created_at: string;
 }
 
@@ -1004,6 +1022,28 @@ export async function uploadQcChecklistReferenceImage(
   );
 }
 
+export async function uploadQcRunEvidence(
+  apiBaseUrl: string,
+  runId: string,
+  file: File,
+  uploadedBy?: string,
+  signal?: AbortSignal,
+): Promise<FileRead> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("related_entity_type", "QC_RUN");
+  formData.append("related_entity_id", runId);
+  if (uploadedBy) {
+    formData.append("uploaded_by", uploadedBy);
+  }
+
+  return postMultipart<FileRead>(
+    joinApiUrl(apiBaseUrl, "/files/upload"),
+    formData,
+    signal,
+  );
+}
+
 export async function createQcChecklistStep(
   apiBaseUrl: string,
   checklistCode: string,
@@ -1181,12 +1221,28 @@ export async function createQcRun(
 export async function completeQcRun(
   apiBaseUrl: string,
   runId: string,
-  result?: "PASS" | "FAIL",
+  resultOrOptions?: "PASS" | "FAIL" | CompleteQcRunOptions,
   signal?: AbortSignal,
 ): Promise<QcRunRead> {
+  const options =
+    typeof resultOrOptions === "string"
+      ? { result: resultOrOptions }
+      : (resultOrOptions ?? {});
+  const formBody: Record<string, string> = {};
+
+  if (options.result) {
+    formBody.result = options.result;
+  }
+  if (options.failure_reason?.trim()) {
+    formBody.failure_reason = options.failure_reason.trim();
+  }
+  if (options.failure_comment?.trim()) {
+    formBody.failure_comment = options.failure_comment.trim();
+  }
+
   return postForm<QcRunRead>(
     joinApiUrl(apiBaseUrl, `/qc-runs/${encodeURIComponent(runId)}/complete`),
-    result ? { result } : {},
+    formBody,
     signal,
   );
 }

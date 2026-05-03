@@ -32,6 +32,7 @@ import {
   updateNonconformityStatus,
   updateOperator,
   uploadQcChecklistReferenceImage,
+  uploadQcRunEvidence,
   updateWorkstation,
 } from "./api";
 
@@ -924,6 +925,82 @@ describe("completeQcRun", () => {
         body: "",
       }),
     );
+  });
+  it("wysyla reason i comment dla FAIL z formularza obiektowego", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => ({
+        run_id: "QC-WEB-003",
+        item_serial_number: "FAN-902",
+        barcode_value: "BC-FAN-902",
+        checklist_id: "CHK-003",
+        process_stage: "COMPONENT_QC",
+        work_session_id: "WS-QA-003",
+        id: "QC-ROW-003",
+        status: "COMPLETED",
+        result: "FAIL",
+        started_at: "2026-05-03T09:22:00Z",
+        ended_at: "2026-05-03T09:23:00Z",
+      }),
+    } satisfies Partial<Response>);
+    vi.stubGlobal("fetch", fetchMock);
+
+    await completeQcRun("/api", "QC-WEB-003", {
+      result: "FAIL",
+      failure_reason: " VISUAL_DEFECT ",
+      failure_comment: " Rysa na powierzchni. ",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/qc-runs/QC-WEB-003/complete",
+      expect.objectContaining({
+        method: "POST",
+        body:
+          "result=FAIL&failure_reason=VISUAL_DEFECT&failure_comment=Rysa+na+powierzchni.",
+      }),
+    );
+  });
+});
+
+describe("uploadQcRunEvidence", () => {
+  it("wysyla multipart z plikiem dowodowym dla QC run", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => ({
+        id: "FILE-001",
+        related_entity_type: "QC_RUN",
+        related_entity_id: "QC-WEB-010",
+        file_name: "defect.jpg",
+        file_path: "/storage/qc/defect.jpg",
+        file_type: "image/jpeg",
+        file_hash: "hash-001",
+        uploaded_by: "QCOP-001",
+        created_at: "2026-05-03T09:40:00Z",
+      }),
+    } satisfies Partial<Response>);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const file = new File(["demo"], "defect.jpg", { type: "image/jpeg" });
+    const payload = await uploadQcRunEvidence("/api", "QC-WEB-010", file, "QCOP-001");
+
+    expect(payload.related_entity_id).toBe("QC-WEB-010");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/files/upload",
+      expect.objectContaining({
+        method: "POST",
+      }),
+    );
+    const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(requestInit.body).toBeInstanceOf(FormData);
+    const formData = requestInit.body as FormData;
+    expect(formData.get("related_entity_type")).toBe("QC_RUN");
+    expect(formData.get("related_entity_id")).toBe("QC-WEB-010");
+    expect(formData.get("uploaded_by")).toBe("QCOP-001");
+    expect((formData.get("file") as File | null)?.name).toBe("defect.jpg");
   });
 });
 

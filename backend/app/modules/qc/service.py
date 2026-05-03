@@ -378,10 +378,19 @@ def add_qc_step_result(
     return result
 
 
-def complete_qc_run(db: Session, run_id: str, result: str | None) -> QcRun:
+def complete_qc_run(
+    db: Session,
+    run_id: str,
+    result: str | None,
+    *,
+    failure_reason: str | None = None,
+    failure_comment: str | None = None,
+) -> QcRun:
     run = get_qc_run_or_404(db, run_id)
     final_result = _normalize_run_result(result) or _derive_run_result(db, run)
     completed_at = utc_now()
+    normalized_failure_reason = _normalize_optional_text(failure_reason)
+    normalized_failure_comment = _normalize_optional_text(failure_comment)
     run.result = final_result
     run.status = "COMPLETED"
     run.ended_at = completed_at
@@ -414,17 +423,28 @@ def complete_qc_run(db: Session, run_id: str, result: str | None) -> QcRun:
     if final_result == "FAIL":
         ncr_id = f"NCR-QC-{run.run_id}"
         if not db.query(Nonconformity).filter(Nonconformity.ncr_id == ncr_id).first():
+            failure_description = build_qc_failure_description(
+                normalized_failure_reason,
+                normalized_failure_comment,
+            )
             db.add(
                 Nonconformity(
                     ncr_id=ncr_id,
                     component_serial_number=run.item_serial_number,
                     process_stage=run.process_stage,
-                    description="QC failed",
+                    description=failure_description,
                     severity="CRITICAL",
                     status="OPEN",
                     detected_by=run.operator_id,
                 )
             )
+
+    audit_payload = {"result": final_result}
+    if final_result == "FAIL":
+        if normalized_failure_reason:
+            audit_payload["failure_reason"] = normalized_failure_reason
+        if normalized_failure_comment:
+            audit_payload["failure_comment"] = normalized_failure_comment
 
     record_audit_event(
         db,
@@ -434,7 +454,7 @@ def complete_qc_run(db: Session, run_id: str, result: str | None) -> QcRun:
         operator_id=run.operator_id,
         result=final_result,
         message=f"QC run completed with {final_result}",
-        payload={"result": final_result},
+        payload=audit_payload,
     )
     db.commit()
     db.refresh(run)
@@ -478,6 +498,26 @@ def _normalize_run_result(result: str | None) -> str | None:
     normalized = result.upper()
     mapping = {"OK": "PASS", "NOK": "FAIL"}
     return mapping.get(normalized, normalized)
+
+
+def _normalize_optional_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    return normalized or None
+
+
+def build_qc_failure_description(
+    failure_reason: str | None,
+    failure_comment: str | None,
+) -> str:
+    if failure_reason and failure_comment:
+        return f"QC failed: {failure_reason}. {failure_comment}"
+    if failure_reason:
+        return f"QC failed: {failure_reason}"
+    if failure_comment:
+        return f"QC failed: {failure_comment}"
+    return "QC failed"
 
 
 def _normalize_step_payload(

@@ -499,6 +499,40 @@ select:focus {
   grid-column: 1 / -1;
 }
 
+.qc-run-decision-card {
+  gap: 14px;
+}
+
+.qc-evidence-list {
+  display: grid;
+  gap: 10px;
+}
+
+.qc-evidence-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgb(88 112 135 / 18%);
+  background: rgb(249 251 250 / 88%);
+}
+
+.qc-evidence-item-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.qc-evidence-item-copy strong {
+  color: var(--ink);
+}
+
+.qc-evidence-item-copy span {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
 .qc-result-banner {
   display: grid;
   gap: 6px;

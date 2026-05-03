@@ -152,6 +152,14 @@ def add_qc_step_result(
 def complete_qc_run(
     run_id: str,
     result: str | None = Form(default=None),
+    failure_reason: str | None = Form(default=None),
+    failure_comment: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
-    return service.complete_qc_run(db, run_id, result)
+    return service.complete_qc_run(
+        db,
+        run_id,
+        result,
+        failure_reason=failure_reason,
+        failure_comment=failure_comment,
+    )

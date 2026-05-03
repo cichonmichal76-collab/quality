@@ -14,9 +14,11 @@ import {
   listWorkstations,
   operatorLogin,
   rfidLogin,
+  uploadQcRunEvidence,
 } from "./api";
 import { QcReferenceImage } from "./QcReferenceImage";
 import type {
+  FileRead,
   LoadState,
   OperatorRead,
   ProductionItemRead,
@@ -38,6 +40,13 @@ const QUALITY_ACTION_ALLOWED_ROLES = new Set([
   "QUALITY_INSPECTOR",
   "QUALITY_MANAGER",
 ]);
+const QC_FAILURE_REASON_OPTIONS = [
+  { value: "DIMENSION_OUT_OF_RANGE", label: "Wymiar poza tolerancja" },
+  { value: "VISUAL_DEFECT", label: "Wada wizualna" },
+  { value: "MARKING_MISMATCH", label: "Niezgodne oznaczenie" },
+  { value: "ASSEMBLY_DAMAGE", label: "Uszkodzenie po montazu" },
+  { value: "OTHER", label: "Inny powod" },
+] as const;
 
 type LoginMethod = "PASSWORD" | "RFID";
 
@@ -105,6 +114,9 @@ export function QcStationPage() {
   const [stepsError, setStepsError] = useState<string | null>(null);
   const [steps, setSteps] = useState<QcStepRead[]>([]);
   const [stepDrafts, setStepDrafts] = useState<StepDraftMap>({});
+  const [failureReason, setFailureReason] = useState("");
+  const [failureComment, setFailureComment] = useState("");
+  const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
   const [submitState, setSubmitState] = useState<LoadState>("idle");
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
@@ -134,19 +146,10 @@ export function QcStationPage() {
     activeWorkstations.find(
       (workstation) => workstation.workstation_id === selectedWorkstationId,
     ) ?? null;
-  const waitingItemsComponentType = selectedChecklist?.component_type?.trim() || undefined;
   const stepPreviews = buildStepPreviews(steps, stepDrafts);
   const referenceOverlayAreas = buildStationOverlayAreas(steps);
-  const selectItemForInspection = selectItemForInspectionFactory(
-    setSelectedItem,
-    setBarcodeValue,
-    setLookupState,
-    setLookupError,
-    setSubmitState,
-    setSubmitError,
-    setSubmitSuccess,
-    setCompletedRun,
-  );
+  const predictedRunResult = deriveDraftRunResult(steps, stepDrafts);
+  const requiresEvidencePhoto = steps.some((step) => step.requires_photo);
 
   useEffect(() => {
     localStorage.setItem(API_STORAGE_KEY, apiBaseUrl);
@@ -358,7 +361,6 @@ export function QcStationPage() {
     listQcWaitingItems(
       trimmedApiBaseUrl,
       {
-        component_type: waitingItemsComponentType,
         limit: 25,
       },
       controller.signal,
@@ -387,7 +389,7 @@ export function QcStationPage() {
       isCurrentRequest = false;
       controller.abort();
     };
-  }, [apiBaseUrl, authState, waitingItemsComponentType, waitingItemsReloadKey]);
+  }, [apiBaseUrl, authState, waitingItemsReloadKey]);
 
   useEffect(() => {
     setLookupError(null);
@@ -395,6 +397,9 @@ export function QcStationPage() {
     setSubmitError(null);
     setSubmitSuccess(null);
     setCompletedRun(null);
+    setFailureReason("");
+    setFailureComment("");
+    setEvidenceFiles([]);
   }, [authState, selectedChecklistCode, selectedItem?.barcode_value]);
 
   const handleManualLoginSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -528,6 +533,29 @@ export function QcStationPage() {
     }
   };
 
+  const selectItemForInspection = (item: ProductionItemRead) => {
+    const preferredChecklistCode = resolveChecklistCodeForItem(
+      item,
+      activeChecklists,
+      selectedChecklistCode,
+    );
+
+    if (preferredChecklistCode && preferredChecklistCode !== selectedChecklistCode) {
+      setSelectedChecklistCode(preferredChecklistCode);
+    }
+    setSelectedItem(item);
+    setBarcodeValue(item.barcode_value);
+    setLookupState("loaded");
+    setLookupError(null);
+    setSubmitState("idle");
+    setSubmitError(null);
+    setSubmitSuccess(null);
+    setCompletedRun(null);
+    setFailureReason("");
+    setFailureComment("");
+    setEvidenceFiles([]);
+  };
+
   const handleLookupSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmedApiBaseUrl = apiBaseUrl.trim();
@@ -572,6 +600,22 @@ export function QcStationPage() {
 
   const handlePickWaitingItem = (item: ProductionItemRead) => {
     selectItemForInspection(item);
+  };
+
+  const handleEvidenceFilesChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const nextFiles = Array.from(event.target.files ?? []);
+    if (nextFiles.length === 0) {
+      return;
+    }
+
+    setEvidenceFiles((currentFiles) => [...currentFiles, ...nextFiles]);
+    event.target.value = "";
+  };
+
+  const handleRemoveEvidenceFile = (fileIndex: number) => {
+    setEvidenceFiles((currentFiles) =>
+      currentFiles.filter((_, index) => index !== fileIndex),
+    );
   };
 
   const handleStepDraftChange = (
@@ -636,6 +680,33 @@ export function QcStationPage() {
       preparedSteps.push({ step, payload: preparedStep.payload });
     }
 
+    const finalResult = preparedSteps.some(
+      (preparedStep) => preparedStep.payload.status === "FAIL",
+    )
+      ? "FAIL"
+      : "PASS";
+    const normalizedFailureReason = normalizeOptionalString(failureReason);
+    const normalizedFailureComment = normalizeOptionalString(failureComment);
+
+    if (finalResult === "FAIL") {
+      if (!normalizedFailureReason) {
+        setSubmitState("error");
+        setSubmitError("Dla wyniku FAIL wybierz powod niezgodnosci.");
+        return;
+      }
+      if (!normalizedFailureComment) {
+        setSubmitState("error");
+        setSubmitError("Dla wyniku FAIL wpisz komentarz operatora.");
+        return;
+      }
+    }
+
+    if (requiresEvidencePhoto && evidenceFiles.length === 0) {
+      setSubmitState("error");
+      setSubmitError("Ta checklista wymaga dodania przynajmniej jednego zdjecia dowodowego.");
+      return;
+    }
+
     setSubmitState("loading");
 
     try {
@@ -650,6 +721,17 @@ export function QcStationPage() {
         work_session_id: authState.workSessionId,
       });
 
+      const uploadedEvidence: FileRead[] = [];
+      for (const evidenceFile of evidenceFiles) {
+        const uploaded = await uploadQcRunEvidence(
+          trimmedApiBaseUrl,
+          runId,
+          evidenceFile,
+          authState.operatorId,
+        );
+        uploadedEvidence.push(uploaded);
+      }
+
       for (const preparedStep of preparedSteps) {
         await addQcStepResult(
           trimmedApiBaseUrl,
@@ -659,7 +741,11 @@ export function QcStationPage() {
         );
       }
 
-      const completed = await completeQcRun(trimmedApiBaseUrl, runId);
+      const completed = await completeQcRun(trimmedApiBaseUrl, runId, {
+        result: finalResult,
+        failure_reason: normalizedFailureReason ?? undefined,
+        failure_comment: normalizedFailureComment ?? undefined,
+      });
       const refreshedItem = await getProductionItemByBarcode(
         trimmedApiBaseUrl,
         selectedItem.barcode_value,
@@ -671,8 +757,8 @@ export function QcStationPage() {
       setSubmitState("loaded");
       setSubmitSuccess(
         completed.result === "PASS"
-          ? `Kontrola zakonczona PASS. Komponent ${refreshedItem.item_serial_number} ma teraz status ${refreshedItem.current_status}.`
-          : `Kontrola zakonczona FAIL. Komponent ${refreshedItem.item_serial_number} ma teraz status ${refreshedItem.current_status}.`,
+          ? `Kontrola zakonczona PASS. Komponent ${refreshedItem.item_serial_number} ma teraz status ${refreshedItem.current_status}.${uploadedEvidence.length > 0 ? ` Zapisano ${uploadedEvidence.length} plik(ow) dowodowych.` : ""}`
+          : `Kontrola zakonczona FAIL. Komponent ${refreshedItem.item_serial_number} ma teraz status ${refreshedItem.current_status}.${uploadedEvidence.length > 0 ? ` Zapisano ${uploadedEvidence.length} plik(ow) dowodowych.` : ""}`,
       );
     } catch (error) {
       setSubmitState("error");
@@ -689,6 +775,9 @@ export function QcStationPage() {
     setManualPassword("");
     setBarcodeValue("");
     setRfidUidHash("");
+    setFailureReason("");
+    setFailureComment("");
+    setEvidenceFiles([]);
     setLookupState("idle");
     setLookupError(null);
     setSelectedItem(null);
@@ -1035,6 +1124,9 @@ export function QcStationPage() {
                         setSubmitError(null);
                         setSubmitSuccess(null);
                         setCompletedRun(null);
+                        setFailureReason("");
+                        setFailureComment("");
+                        setEvidenceFiles([]);
                         setBarcodeValue("");
                       }}
                     >
@@ -1045,10 +1137,8 @@ export function QcStationPage() {
               </form>
               <div className="details-inline-actions">
                 <span className="action-hint">
-                  Kolejka pokazuje elementy w statusie `PRODUCED` albo `REWORK_REQUIRED`
-                  {waitingItemsComponentType
-                    ? ` dla typu ${labelForCode(waitingItemsComponentType)}.`
-                    : "."}
+                  Kolejka pokazuje elementy w statusie `PRODUCED` albo `REWORK_REQUIRED`.
+                  Klikniecie detalu moze od razu dobrac wlasciwa checkliste po typie komponentu.
                 </span>
                 <span className={`status-badge state-${waitingItemsState}`}>
                   {waitingItemsState === "loading"
@@ -1180,6 +1270,95 @@ export function QcStationPage() {
                     caption="Zdjecie referencyjne elementu do porownania podczas kontroli."
                   />
                 ) : null}
+              </div>
+            ) : null}
+
+            {selectedItem ? (
+              <div className="detail-inline-card qc-run-decision-card">
+                <div className="detail-inline-header">
+                  <strong>4. Decyzja i dowody kontroli</strong>
+                  <span
+                    className={`status-badge ${
+                      predictedRunResult === "FAIL" ? "state-error" : "state-loaded"
+                    }`}
+                  >
+                    {predictedRunResult}
+                  </span>
+                </div>
+                <p>
+                  System przewiduje wynik na podstawie aktualnych krokow. Operator moze
+                  dolaczyc zdjecia dowodowe, a dla FAIL musi wskazac powod i komentarz.
+                </p>
+                <div className="qc-station-form-grid">
+                  <label className="field">
+                    <span>
+                      Zdjecia dowodowe
+                      {requiresEvidencePhoto ? " (wymagane)" : " (opcjonalne)"}
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handleEvidenceFilesChange}
+                    />
+                  </label>
+                  {predictedRunResult === "FAIL" ? (
+                    <label className="field">
+                      <span>Powod niezgodnosci</span>
+                      <select
+                        value={failureReason}
+                        onChange={(event) => setFailureReason(event.target.value)}
+                      >
+                        <option value="">Wybierz powod FAIL</option>
+                        {QC_FAILURE_REASON_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+                  {predictedRunResult === "FAIL" ? (
+                    <label className="field qc-step-comment-field">
+                      <span>Komentarz do FAIL</span>
+                      <textarea
+                        value={failureComment}
+                        onChange={(event) => setFailureComment(event.target.value)}
+                        placeholder="Opisz co jest niezgodne i dlaczego detal nie przechodzi kontroli."
+                      />
+                    </label>
+                  ) : null}
+                </div>
+                {evidenceFiles.length > 0 ? (
+                  <div className="qc-evidence-list" data-testid="qc-evidence-list">
+                    {evidenceFiles.map((file, index) => (
+                      <div
+                        key={`${file.name}-${file.size}-${index}`}
+                        className="qc-evidence-item"
+                      >
+                        <div className="qc-evidence-item-copy">
+                          <strong>{file.name}</strong>
+                          <span>{formatEvidenceFileSize(file.size)}</span>
+                        </div>
+                        <button
+                          className="ghost-button"
+                          type="button"
+                          onClick={() => handleRemoveEvidenceFile(index)}
+                        >
+                          Usun
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="details-inline-actions">
+                    <span className="action-hint">
+                      {requiresEvidencePhoto
+                        ? "Co najmniej jedno zdjecie jest wymagane przez aktywna checkliste."
+                        : "Mozesz dolaczyc zdjecia kontrolowanego elementu jako dowod wykonania kontroli."}
+                    </span>
+                  </div>
+                )}
               </div>
             ) : null}
 
@@ -1398,28 +1577,6 @@ function buildInitialStepDrafts(steps: QcStepRead[]): StepDraftMap {
   );
 }
 
-function selectItemForInspectionFactory(
-  setSelectedItem: (item: ProductionItemRead | null) => void,
-  setBarcodeValue: (value: string) => void,
-  setLookupState: (state: LoadState) => void,
-  setLookupError: (value: string | null) => void,
-  setSubmitState: (state: LoadState) => void,
-  setSubmitError: (value: string | null) => void,
-  setSubmitSuccess: (value: string | null) => void,
-  setCompletedRun: (value: QcRunRead | null) => void,
-) {
-  return (item: ProductionItemRead) => {
-    setSelectedItem(item);
-    setBarcodeValue(item.barcode_value);
-    setLookupState("loaded");
-    setLookupError(null);
-    setSubmitState("idle");
-    setSubmitError(null);
-    setSubmitSuccess(null);
-    setCompletedRun(null);
-  };
-}
-
 function createDefaultStepDraft(_requiresMeasurement = false): StepDraft {
   return {
     status: "PASS",
@@ -1584,6 +1741,86 @@ function buildStepPreviews(
   return previews;
 }
 
+function deriveDraftRunResult(
+  steps: QcStepRead[],
+  stepDrafts: StepDraftMap,
+): "PASS" | "FAIL" {
+  for (const step of steps) {
+    const draft = stepDrafts[step.id] ?? createDefaultStepDraft(step.requires_measurement);
+    const evaluationMode = normalizeStepEvaluationMode(step);
+
+    if (evaluationMode === "TEXT_MATCH") {
+      const observedValue = normalizeOptionalString(draft.observedValue);
+      const expectedValue = normalizeOptionalString(step.expected_value ?? "");
+      if (
+        observedValue &&
+        expectedValue &&
+        observedValue.toLowerCase() !== expectedValue.toLowerCase()
+      ) {
+        return "FAIL";
+      }
+      continue;
+    }
+
+    if (evaluationMode === "NUMERIC_RANGE" || step.requires_measurement) {
+      if (draft.status === "FAIL") {
+        return "FAIL";
+      }
+
+      const measurementValue = parseOptionalMeasurementValue(draft.measurementValue);
+      if (measurementValue === null) {
+        continue;
+      }
+
+      if (
+        (step.tolerance_min !== null && measurementValue < Number(step.tolerance_min)) ||
+        (step.tolerance_max !== null && measurementValue > Number(step.tolerance_max))
+      ) {
+        return "FAIL";
+      }
+      continue;
+    }
+
+    if (draft.status === "FAIL") {
+      return "FAIL";
+    }
+  }
+
+  return "PASS";
+}
+
+function resolveChecklistCodeForItem(
+  item: ProductionItemRead,
+  activeChecklists: QcChecklistRead[],
+  currentChecklistCode: string,
+): string {
+  const componentChecklists = activeChecklists.filter(
+    (checklist) => checklist.process_stage === "COMPONENT_QC",
+  );
+  const currentChecklist =
+    activeChecklists.find((checklist) => checklist.checklist_code === currentChecklistCode) ??
+    null;
+  const exactMatch =
+    componentChecklists.find((checklist) => checklist.component_type === item.item_type) ??
+    null;
+  if (exactMatch) {
+    return exactMatch.checklist_code;
+  }
+  if (
+    currentChecklist &&
+    (currentChecklist.component_type === item.item_type ||
+      currentChecklist.component_type === null)
+  ) {
+    return currentChecklist.checklist_code;
+  }
+  const genericMatch =
+    componentChecklists.find((checklist) => checklist.component_type === null) ?? null;
+  if (genericMatch) {
+    return genericMatch.checklist_code;
+  }
+  return currentChecklist?.checklist_code ?? activeChecklists[0]?.checklist_code ?? "";
+}
+
 function formatChecklistLabel(checklist: QcChecklistRead): string {
   return `${checklist.name} - ${labelForCode(checklist.process_stage)} - v${checklist.version}`;
 }
@@ -1640,6 +1877,26 @@ function buildStationOverlayAreas(steps: QcStepRead[]) {
       },
     ];
   });
+}
+
+function parseOptionalMeasurementValue(value: string): number | null {
+  const normalizedValue = value.trim().replace(",", ".");
+  if (!normalizedValue) {
+    return null;
+  }
+
+  const measurementValue = Number(normalizedValue);
+  return Number.isFinite(measurementValue) ? measurementValue : null;
+}
+
+function formatEvidenceFileSize(bytes: number): string {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function normalizeOptionalString(value: string): string | null {
