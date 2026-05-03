@@ -709,6 +709,20 @@ test("qc station pozwala zamknac NCR i przywrocic detal do reworku", async ({ pa
                   detected_at: "2026-05-03T08:18:00Z",
                   closed_at: "2026-05-03T08:25:00Z",
                 },
+                {
+                  id: "NCR-ROW-002",
+                  ncr_id: "NCR-QC-REWORK-000",
+                  device_serial_number: null,
+                  component_serial_number: "QCITEM-DEMO-REWORK",
+                  process_stage: "COMPONENT_QC",
+                  description: "Stary NCR po wczesniejszym reworku.",
+                  severity: "CRITICAL",
+                  detected_by: "QCOP-DEMO-LOCAL",
+                  corrective_action: "Starsza akcja korygujaca.",
+                  status: "CLOSED",
+                  detected_at: "2026-05-03T08:05:00Z",
+                  closed_at: "2026-05-03T08:10:00Z",
+                },
               ]
             : [],
         ),
@@ -729,16 +743,30 @@ test("qc station pozwala zamknac NCR i przywrocic detal do reworku", async ({ pa
             checklist_id: "CHK-REWORK",
             process_stage: "COMPONENT_QC",
             work_session_id: "WS-QA-REWORK",
-            operator_id: "QCOP-DEMO-LOCAL",
-            status: "COMPLETED",
-            result: "FAIL",
-            started_at: "2026-05-03T08:17:00Z",
-            ended_at: "2026-05-03T08:19:00Z",
-          },
-        ]),
-      });
-      return;
-    }
+              operator_id: "QCOP-DEMO-LOCAL",
+              status: "COMPLETED",
+              result: "FAIL",
+              started_at: "2026-05-03T08:17:00Z",
+              ended_at: "2026-05-03T08:19:00Z",
+            },
+            {
+              id: "QC-ROW-PASS-OLD",
+              run_id: "QC-WEB-PASS-OLD",
+              item_serial_number: "QCITEM-DEMO-REWORK",
+              barcode_value: "QCBC-DEMO-REWORK",
+              checklist_id: "CHK-REWORK",
+              process_stage: "COMPONENT_QC",
+              work_session_id: "WS-QA-REWORK",
+              operator_id: "QCOP-DEMO-LOCAL",
+              status: "COMPLETED",
+              result: "PASS",
+              started_at: "2026-05-03T08:02:00Z",
+              ended_at: "2026-05-03T08:04:00Z",
+            },
+          ]),
+        });
+        return;
+      }
 
     if (pathname === "/api/qc-runs/QC-WEB-REWORK/details") {
       await route.fulfill({
@@ -797,6 +825,35 @@ test("qc station pozwala zamknac NCR i przywrocic detal do reworku", async ({ pa
               created_at: "2026-05-03T08:18:00Z",
             },
           ],
+        }),
+      });
+      return;
+    }
+
+    if (pathname === "/api/qc-runs/QC-WEB-PASS-OLD/details") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: "QC-ROW-PASS-OLD",
+          run_id: "QC-WEB-PASS-OLD",
+          device_serial_number: null,
+          item_serial_number: "QCITEM-DEMO-REWORK",
+          barcode_value: "QCBC-DEMO-REWORK",
+          checklist_id: "CHK-REWORK",
+          checklist_code: "QC-REWORK",
+          checklist_name: "Kontrola po reworku",
+          process_stage: "COMPONENT_QC",
+          operator_id: "QCOP-DEMO-LOCAL",
+          status: "COMPLETED",
+          result: "PASS",
+          started_at: "2026-05-03T08:02:00Z",
+          ended_at: "2026-05-03T08:04:00Z",
+          failure_reason: null,
+          failure_comment: null,
+          failure_disposition: null,
+          step_results: [],
+          evidence_files: [],
         }),
       });
       return;
@@ -875,14 +932,29 @@ test("qc station pozwala zamknac NCR i przywrocic detal do reworku", async ({ pa
     .fill("Wymieniono obudowe i przygotowano detal do ponownej kontroli.");
   await page.getByRole("button", { name: "Zamknij NCR i przywroc do reworku" }).click();
 
-  await expect(page.getByText(/Zamknieto 1 krytyczne NCR/i)).toBeVisible();
-  await expect(
-    page
-      .locator(".detail-card")
-      .filter({ hasText: "Status biezacy" })
+    await expect(page.getByText(/Zamknieto 1 krytyczne NCR/i)).toBeVisible();
+    await expect(
+      page
+        .locator(".detail-card")
+        .filter({ hasText: "Status biezacy" })
       .getByText(/Rework Required|REWORK_REQUIRED/i),
   ).toBeVisible();
-  await expect(
-    page.getByText("Wymieniono obudowe i przygotowano detal do ponownej kontroli."),
-  ).toBeVisible();
-});
+    await expect(
+      page.getByText("Wymieniono obudowe i przygotowano detal do ponownej kontroli."),
+    ).toBeVisible();
+
+    await page.getByLabel("Filtr historii QC").selectOption("PASS");
+    await expect(page.getByTestId("qc-run-history-list")).toContainText("QC-WEB-PASS-OLD");
+    await expect(page.getByTestId("qc-run-history-list")).not.toContainText("QC-WEB-REWORK");
+
+    await page.getByLabel("Filtr historii QC").selectOption("ALL");
+    await page.getByLabel("Sortowanie historii QC").selectOption("OLDEST");
+    await expect(
+      page.getByTestId("qc-run-history-list").locator("button").first(),
+    ).toContainText("QC-WEB-PASS-OLD");
+
+    await page.getByLabel("Sortowanie zamknietych NCR").selectOption("OLDEST");
+    await expect(
+      page.getByTestId("qc-closed-ncr-list").locator(".qc-evidence-item").first(),
+    ).toContainText("NCR-QC-REWORK-000");
+  });

@@ -100,6 +100,10 @@ interface StepPreview {
   message: string;
 }
 
+type QcRunHistoryFilter = "ALL" | "FAIL" | "PASS";
+type QcRunHistorySort = "NEWEST" | "OLDEST";
+type ClosedCriticalNcrSort = "NEWEST" | "OLDEST";
+
 export function QcStationPage() {
   const [apiBaseUrl, setApiBaseUrl] = useState(
     () => localStorage.getItem(API_STORAGE_KEY) ?? DEFAULT_API_BASE_URL,
@@ -148,6 +152,12 @@ export function QcStationPage() {
     useState<QcRunDetailsRead | null>(null);
   const [qcRunDetailsState, setQcRunDetailsState] = useState<LoadState>("idle");
   const [qcRunDetailsError, setQcRunDetailsError] = useState<string | null>(null);
+  const [qcRunHistoryFilter, setQcRunHistoryFilter] =
+    useState<QcRunHistoryFilter>("ALL");
+  const [qcRunHistorySort, setQcRunHistorySort] =
+    useState<QcRunHistorySort>("NEWEST");
+  const [closedCriticalNcrSort, setClosedCriticalNcrSort] =
+    useState<ClosedCriticalNcrSort>("NEWEST");
   const [reworkAction, setReworkAction] = useState("");
   const [reworkActionState, setReworkActionState] = useState<LoadState>("idle");
   const [reworkActionError, setReworkActionError] = useState<string | null>(null);
@@ -206,6 +216,15 @@ export function QcStationPage() {
     (openCriticalNcrs.length > 0 ||
       selectedItem.current_status === "QC_FAILED" ||
       selectedItem.current_status === "BLOCKED");
+  const filteredQcRunHistory = filterAndSortQcRunHistory(
+    qcRunHistory,
+    qcRunHistoryFilter,
+    qcRunHistorySort,
+  );
+  const sortedClosedCriticalNcrs = sortClosedCriticalNcrs(
+    closedCriticalNcrs,
+    closedCriticalNcrSort,
+  );
 
   useEffect(() => {
     localStorage.setItem(API_STORAGE_KEY, apiBaseUrl);
@@ -560,18 +579,20 @@ export function QcStationPage() {
   }, [apiBaseUrl, authState, selectedItem]);
 
   useEffect(() => {
-    if (qcRunHistory.length === 0) {
+    if (filteredQcRunHistory.length === 0) {
       if (selectedHistoryRunId !== null) {
         setSelectedHistoryRunId(null);
       }
       return;
     }
 
-    const hasSelectedRun = qcRunHistory.some((run) => run.run_id === selectedHistoryRunId);
+    const hasSelectedRun = filteredQcRunHistory.some(
+      (run) => run.run_id === selectedHistoryRunId,
+    );
     if (!hasSelectedRun) {
-      setSelectedHistoryRunId(qcRunHistory[0]?.run_id ?? null);
+      setSelectedHistoryRunId(filteredQcRunHistory[0]?.run_id ?? null);
     }
-  }, [qcRunHistory, selectedHistoryRunId]);
+  }, [filteredQcRunHistory, selectedHistoryRunId]);
 
   useEffect(() => {
     const trimmedApiBaseUrl = apiBaseUrl.trim();
@@ -1662,7 +1683,8 @@ export function QcStationPage() {
                   <div className="detail-inline-header">
                     <strong>2b. Historia kontroli i zamkniete NCR</strong>
                     <span className="status-badge">
-                      {qcRunHistory.length} run / {closedCriticalNcrs.length} NCR
+                      {filteredQcRunHistory.length} / {qcRunHistory.length} run |{" "}
+                      {sortedClosedCriticalNcrs.length} / {closedCriticalNcrs.length} NCR
                     </span>
                   </div>
                   <p>
@@ -1683,7 +1705,7 @@ export function QcStationPage() {
                       <strong>
                         {qcRunHistoryState === "loading"
                           ? "Ladowanie"
-                          : `${qcRunHistory.length} wpis(ow)`}
+                          : `${filteredQcRunHistory.length} / ${qcRunHistory.length}`}
                       </strong>
                     </div>
                     <div className="detail-card">
@@ -1691,14 +1713,59 @@ export function QcStationPage() {
                       <strong>
                         {closedCriticalNcrsState === "loading"
                           ? "Ladowanie"
-                          : `${closedCriticalNcrs.length} wpis(ow)`}
+                          : `${sortedClosedCriticalNcrs.length} / ${closedCriticalNcrs.length}`}
                       </strong>
                     </div>
                   </div>
 
-                    {qcRunHistory.length > 0 ? (
+                  <div className="qc-station-form-grid qc-history-filter-grid">
+                    <label className="field">
+                      <span>Filtr historii QC</span>
+                      <select
+                        aria-label="Filtr historii QC"
+                        value={qcRunHistoryFilter}
+                        onChange={(event) =>
+                          setQcRunHistoryFilter(event.target.value as QcRunHistoryFilter)
+                        }
+                      >
+                        <option value="ALL">Wszystkie runy</option>
+                        <option value="FAIL">Tylko FAIL</option>
+                        <option value="PASS">Tylko PASS</option>
+                      </select>
+                    </label>
+                    <label className="field">
+                      <span>Sortowanie historii QC</span>
+                      <select
+                        aria-label="Sortowanie historii QC"
+                        value={qcRunHistorySort}
+                        onChange={(event) =>
+                          setQcRunHistorySort(event.target.value as QcRunHistorySort)
+                        }
+                      >
+                        <option value="NEWEST">Najnowsze runy</option>
+                        <option value="OLDEST">Najstarsze runy</option>
+                      </select>
+                    </label>
+                    <label className="field">
+                      <span>Sortowanie zamknietych NCR</span>
+                      <select
+                        aria-label="Sortowanie zamknietych NCR"
+                        value={closedCriticalNcrSort}
+                        onChange={(event) =>
+                          setClosedCriticalNcrSort(
+                            event.target.value as ClosedCriticalNcrSort,
+                          )
+                        }
+                      >
+                        <option value="NEWEST">Ostatnie zamkniete NCR</option>
+                        <option value="OLDEST">Najstarsze zamkniete NCR</option>
+                      </select>
+                    </label>
+                  </div>
+
+                    {filteredQcRunHistory.length > 0 ? (
                       <div className="qc-evidence-list" data-testid="qc-run-history-list">
-                        {qcRunHistory.map((run) => (
+                        {filteredQcRunHistory.map((run) => (
                           <button
                             key={run.run_id}
                             type="button"
@@ -1729,10 +1796,10 @@ export function QcStationPage() {
                     ) : (
                       <div className="details-inline-actions">
                         <span className="action-hint">
-                        Brak wczesniejszych runow QC dla tego detalu.
-                      </span>
-                    </div>
-                  )}
+                          Brak runow QC spelniajacych aktywny filtr dla tego detalu.
+                        </span>
+                      </div>
+                    )}
 
                   {closedCriticalNcrsError ? (
                     <div className="error-banner" role="alert">
@@ -1741,9 +1808,9 @@ export function QcStationPage() {
                     </div>
                   ) : null}
 
-                  {closedCriticalNcrs.length > 0 ? (
+                  {sortedClosedCriticalNcrs.length > 0 ? (
                     <div className="qc-evidence-list" data-testid="qc-closed-ncr-list">
-                      {closedCriticalNcrs.map((ncr) => (
+                      {sortedClosedCriticalNcrs.map((ncr) => (
                         <div key={ncr.ncr_id} className="qc-evidence-item">
                           <div className="qc-evidence-item-copy">
                             <strong>{ncr.ncr_id}</strong>
@@ -2653,6 +2720,57 @@ function getErrorMessage(error: unknown, fallback: string): string {
   }
 
   return fallback;
+}
+
+function filterAndSortQcRunHistory(
+  runs: QcRunRead[],
+  filter: QcRunHistoryFilter,
+  sort: QcRunHistorySort,
+): QcRunRead[] {
+  const filteredRuns = runs.filter((run) => {
+    if (filter === "FAIL") {
+      return run.result === "FAIL";
+    }
+    if (filter === "PASS") {
+      return run.result === "PASS";
+    }
+    return true;
+  });
+
+  return [...filteredRuns].sort((left, right) => {
+    const leftTimestamp = Date.parse(left.ended_at ?? left.started_at ?? "");
+    const rightTimestamp = Date.parse(right.ended_at ?? right.started_at ?? "");
+    const normalizedLeftTimestamp = Number.isFinite(leftTimestamp) ? leftTimestamp : 0;
+    const normalizedRightTimestamp = Number.isFinite(rightTimestamp) ? rightTimestamp : 0;
+    if (normalizedLeftTimestamp !== normalizedRightTimestamp) {
+      return sort === "NEWEST"
+        ? normalizedRightTimestamp - normalizedLeftTimestamp
+        : normalizedLeftTimestamp - normalizedRightTimestamp;
+    }
+    return sort === "NEWEST"
+      ? right.run_id.localeCompare(left.run_id, "pl")
+      : left.run_id.localeCompare(right.run_id, "pl");
+  });
+}
+
+function sortClosedCriticalNcrs(
+  ncrs: NonconformityRead[],
+  sort: ClosedCriticalNcrSort,
+): NonconformityRead[] {
+  return [...ncrs].sort((left, right) => {
+    const leftTimestamp = Date.parse(left.closed_at ?? left.detected_at);
+    const rightTimestamp = Date.parse(right.closed_at ?? right.detected_at);
+    const normalizedLeftTimestamp = Number.isFinite(leftTimestamp) ? leftTimestamp : 0;
+    const normalizedRightTimestamp = Number.isFinite(rightTimestamp) ? rightTimestamp : 0;
+    if (normalizedLeftTimestamp !== normalizedRightTimestamp) {
+      return sort === "NEWEST"
+        ? normalizedRightTimestamp - normalizedLeftTimestamp
+        : normalizedLeftTimestamp - normalizedRightTimestamp;
+    }
+    return sort === "NEWEST"
+      ? right.ncr_id.localeCompare(left.ncr_id, "pl")
+      : left.ncr_id.localeCompare(right.ncr_id, "pl");
+  });
 }
 
 function createClientQcRunId(): string {

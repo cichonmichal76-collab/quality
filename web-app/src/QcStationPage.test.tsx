@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 import { App } from "./App";
 
@@ -1198,6 +1198,272 @@ describe("QcStationPage", () => {
       operator_id: "QCOP-DEMO-LOCAL",
       corrective_action:
         "Wymieniono obudowe i przygotowano detal do ponownej kontroli.",
+    });
+  });
+
+  it("filtruje i sortuje historie runow QC oraz zamkniete NCR", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+
+      if (url.endsWith("/api/operators")) {
+        return jsonResponse([
+          {
+            id: "OP-ROW-001",
+            operator_id: "QCOP-DEMO-LOCAL",
+            full_name: "Demo QC Inspector",
+            role: "QUALITY_INSPECTOR",
+            login_name: "qc-demo-local",
+            rfid_uid_hash: "QCRFID-DEMO-LOCAL",
+            is_active: true,
+            created_at: "2026-05-03T08:00:00Z",
+          },
+        ]);
+      }
+
+      if (url.endsWith("/api/workstations")) {
+        return jsonResponse([
+          {
+            id: "WS-ROW-001",
+            workstation_id: "QCWS-DEMO-LOCAL",
+            name: "QC Station Demo",
+            area: "QA",
+            station_type: "QC",
+            is_active: true,
+          },
+        ]);
+      }
+
+      if (url.endsWith("/api/qc-checklists")) {
+        return jsonResponse([
+          {
+            id: "CHK-HISTORY",
+            checklist_code: "QC-HISTORY",
+            name: "Kontrola historii",
+            process_stage: "COMPONENT_QC",
+            version: "1.0",
+            device_type: null,
+            variant_code: null,
+            component_type: "FAN_MODULE",
+            skip_component_qc: false,
+            reference_image_file_id: null,
+            is_active: true,
+            created_at: "2026-05-03T08:00:00Z",
+          },
+        ]);
+      }
+
+      if (url.includes("/api/qc-waiting-items")) {
+        return jsonResponse([
+          {
+            id: "ITEM-ROW-HISTORY",
+            item_serial_number: "QCITEM-DEMO-HISTORY",
+            barcode_value: "QCBC-DEMO-HISTORY",
+            item_type: "FAN_MODULE",
+            part_number: "PN-FAN-HISTORY",
+            revision: "A",
+            drawing_number: null,
+            drawing_revision: null,
+            production_order: null,
+            material_batch: null,
+            machine_id: null,
+            created_by_operator_id: "QCOP-DEMO-LOCAL",
+            current_status: "REWORK_REQUIRED",
+            produced_at: "2026-05-03T08:16:00Z",
+            created_at: "2026-05-03T08:16:00Z",
+          },
+        ]);
+      }
+
+      if (url.endsWith("/api/auth/operator-login") && method === "POST") {
+        return jsonResponse({
+          id: "ROW-SESSION-HISTORY",
+          work_session_id: "WS-QA-HISTORY",
+          operator_id: "QCOP-DEMO-LOCAL",
+          workstation_id: "QCWS-DEMO-LOCAL",
+          machine_id: null,
+          status: "ACTIVE",
+          started_at: "2026-05-03T08:00:00Z",
+          ended_at: null,
+        });
+      }
+
+      if (url.endsWith("/api/qc-checklists/QC-HISTORY/steps")) {
+        return jsonResponse([]);
+      }
+
+      if (url.endsWith("/api/qc-items/QCITEM-DEMO-HISTORY/open-critical-ncrs")) {
+        return jsonResponse([]);
+      }
+
+      if (url.endsWith("/api/qc-items/QCITEM-DEMO-HISTORY/closed-critical-ncrs?limit=10")) {
+        return jsonResponse([
+          {
+            id: "NCR-NEW",
+            ncr_id: "NCR-QC-HISTORY-NEW",
+            device_serial_number: null,
+            component_serial_number: "QCITEM-DEMO-HISTORY",
+            process_stage: "COMPONENT_QC",
+            description: "Newest NCR",
+            severity: "CRITICAL",
+            detected_by: "QCOP-DEMO-LOCAL",
+            corrective_action: "Nowa akcja",
+            status: "CLOSED",
+            detected_at: "2026-05-03T08:18:00Z",
+            closed_at: "2026-05-03T08:30:00Z",
+          },
+          {
+            id: "NCR-OLD",
+            ncr_id: "NCR-QC-HISTORY-OLD",
+            device_serial_number: null,
+            component_serial_number: "QCITEM-DEMO-HISTORY",
+            process_stage: "COMPONENT_QC",
+            description: "Oldest NCR",
+            severity: "CRITICAL",
+            detected_by: "QCOP-DEMO-LOCAL",
+            corrective_action: "Stara akcja",
+            status: "CLOSED",
+            detected_at: "2026-05-03T08:10:00Z",
+            closed_at: "2026-05-03T08:12:00Z",
+          },
+        ]);
+      }
+
+      if (url.endsWith("/api/qc-items/QCITEM-DEMO-HISTORY/runs?limit=10")) {
+        return jsonResponse([
+          {
+            id: "QC-ROW-FAIL-NEW",
+            run_id: "QC-WEB-FAIL-NEW",
+            item_serial_number: "QCITEM-DEMO-HISTORY",
+            barcode_value: "QCBC-DEMO-HISTORY",
+            checklist_id: "CHK-HISTORY",
+            process_stage: "COMPONENT_QC",
+            work_session_id: "WS-QA-HISTORY",
+            operator_id: "QCOP-DEMO-LOCAL",
+            status: "COMPLETED",
+            result: "FAIL",
+            started_at: "2026-05-03T08:28:00Z",
+            ended_at: "2026-05-03T08:29:00Z",
+          },
+          {
+            id: "QC-ROW-PASS-OLD",
+            run_id: "QC-WEB-PASS-OLD",
+            item_serial_number: "QCITEM-DEMO-HISTORY",
+            barcode_value: "QCBC-DEMO-HISTORY",
+            checklist_id: "CHK-HISTORY",
+            process_stage: "COMPONENT_QC",
+            work_session_id: "WS-QA-HISTORY",
+            operator_id: "QCOP-DEMO-LOCAL",
+            status: "COMPLETED",
+            result: "PASS",
+            started_at: "2026-05-03T08:05:00Z",
+            ended_at: "2026-05-03T08:06:00Z",
+          },
+        ]);
+      }
+
+      if (url.endsWith("/api/qc-runs/QC-WEB-FAIL-NEW/details")) {
+        return jsonResponse({
+          id: "QC-ROW-FAIL-NEW",
+          run_id: "QC-WEB-FAIL-NEW",
+          device_serial_number: null,
+          item_serial_number: "QCITEM-DEMO-HISTORY",
+          barcode_value: "QCBC-DEMO-HISTORY",
+          checklist_id: "CHK-HISTORY",
+          checklist_code: "QC-HISTORY",
+          checklist_name: "Kontrola historii",
+          process_stage: "COMPONENT_QC",
+          operator_id: "QCOP-DEMO-LOCAL",
+          status: "COMPLETED",
+          result: "FAIL",
+          started_at: "2026-05-03T08:28:00Z",
+          ended_at: "2026-05-03T08:29:00Z",
+          failure_reason: "VISUAL_DEFECT",
+          failure_comment: "Nowa wada",
+          failure_disposition: "OPEN_CRITICAL_NCR",
+          step_results: [],
+          evidence_files: [],
+        });
+      }
+
+      if (url.endsWith("/api/qc-runs/QC-WEB-PASS-OLD/details")) {
+        return jsonResponse({
+          id: "QC-ROW-PASS-OLD",
+          run_id: "QC-WEB-PASS-OLD",
+          device_serial_number: null,
+          item_serial_number: "QCITEM-DEMO-HISTORY",
+          barcode_value: "QCBC-DEMO-HISTORY",
+          checklist_id: "CHK-HISTORY",
+          checklist_code: "QC-HISTORY",
+          checklist_name: "Kontrola historii",
+          process_stage: "COMPONENT_QC",
+          operator_id: "QCOP-DEMO-LOCAL",
+          status: "COMPLETED",
+          result: "PASS",
+          started_at: "2026-05-03T08:05:00Z",
+          ended_at: "2026-05-03T08:06:00Z",
+          failure_reason: null,
+          failure_comment: null,
+          failure_disposition: null,
+          step_results: [],
+          evidence_files: [],
+        });
+      }
+
+      throw new Error(`Unexpected request: ${method} ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.replaceState(null, "", "/qc-station");
+
+    render(<App />);
+
+    await screen.findByText(/Logowanie operatora/);
+    fireEvent.change(screen.getByPlaceholderText("np. qc-demo-local"), {
+      target: { value: "qc-demo-local" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Haslo operatora"), {
+      target: { value: "qc-demo-local-123" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Wejdz do aplikacji" }));
+
+    await screen.findByText("Sesja stanowiskowa");
+    fireEvent.click(screen.getByRole("button", { name: /QCITEM-DEMO-HISTORY/i }));
+
+    await screen.findByTestId("qc-run-history-list");
+    expect(screen.getByText("QC-WEB-FAIL-NEW")).toBeInTheDocument();
+    expect(screen.getByText("QC-WEB-PASS-OLD")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Filtr historii QC"), {
+      target: { value: "FAIL" },
+    });
+    await waitFor(() => {
+      expect(screen.getByText("QC-WEB-FAIL-NEW")).toBeInTheDocument();
+      expect(screen.queryByText("QC-WEB-PASS-OLD")).not.toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText("Filtr historii QC"), {
+      target: { value: "ALL" },
+    });
+    fireEvent.change(screen.getByLabelText("Sortowanie historii QC"), {
+      target: { value: "OLDEST" },
+    });
+
+    await waitFor(() => {
+      const historyButtons = within(screen.getByTestId("qc-run-history-list")).getAllByRole(
+        "button",
+      );
+      expect(historyButtons[0]).toHaveTextContent("QC-WEB-PASS-OLD");
+    });
+
+    fireEvent.change(screen.getByLabelText("Sortowanie zamknietych NCR"), {
+      target: { value: "OLDEST" },
+    });
+    await waitFor(() => {
+      const ncrRows = within(screen.getByTestId("qc-closed-ncr-list")).getAllByText(
+        /NCR-QC-HISTORY-/,
+      );
+      expect(ncrRows[0]).toHaveTextContent("NCR-QC-HISTORY-OLD");
     });
   });
 });
