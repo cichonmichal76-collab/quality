@@ -18,6 +18,7 @@ from app.modules.auth_rfid.service import QUALITY_SESSION_ROLES, require_active_
 from app.modules.files import service as files_service
 from app.modules.qc import repository
 from app.schemas import (
+    FileRead,
     QcItemReservationRequest,
     QcChecklistCreate,
     QcChecklistUpdate,
@@ -417,31 +418,27 @@ def get_qc_run_details(db: Session, run_id: str) -> QcRunDetailsRead:
     step_results = repository.list_step_results_for_run(db, run.id)
     checklist_steps = repository.list_checklist_steps(db, run.checklist_id) if run.checklist_id else []
     steps_by_id = {step.id: step for step in checklist_steps}
-    detailed_step_results = sorted(
-        [
+    detailed_step_results: list[QcRunStepResultDetailRead] = []
+    for result in step_results:
+        step = steps_by_id.get(result.step_id)
+        detailed_step_results.append(
             QcRunStepResultDetailRead(
                 id=result.id,
                 qc_run_id=result.qc_run_id,
                 step_id=result.step_id,
-                step_order=steps_by_id[result.step_id].step_order if result.step_id in steps_by_id else 0,
-                step_title=steps_by_id[result.step_id].title if result.step_id in steps_by_id else result.step_id,
-                evaluation_mode=steps_by_id[result.step_id].evaluation_mode
-                if result.step_id in steps_by_id
-                else "MANUAL",
-                result_input_label=steps_by_id[result.step_id].result_input_label
-                if result.step_id in steps_by_id
+                step_order=step.step_order if step is not None else 0,
+                step_title=step.title if step is not None else result.step_id,
+                evaluation_mode=step.evaluation_mode if step is not None else "MANUAL",
+                result_input_label=step.result_input_label if step is not None else None,
+                control_area=step.control_area if step is not None else None,
+                expected_value=step.expected_value if step is not None else None,
+                tolerance_min=float(step.tolerance_min)
+                if step is not None and step.tolerance_min is not None
                 else None,
-                control_area=steps_by_id[result.step_id].control_area if result.step_id in steps_by_id else None,
-                expected_value=steps_by_id[result.step_id].expected_value
-                if result.step_id in steps_by_id
+                tolerance_max=float(step.tolerance_max)
+                if step is not None and step.tolerance_max is not None
                 else None,
-                tolerance_min=float(steps_by_id[result.step_id].tolerance_min)
-                if result.step_id in steps_by_id and steps_by_id[result.step_id].tolerance_min is not None
-                else None,
-                tolerance_max=float(steps_by_id[result.step_id].tolerance_max)
-                if result.step_id in steps_by_id and steps_by_id[result.step_id].tolerance_max is not None
-                else None,
-                unit=steps_by_id[result.step_id].unit if result.step_id in steps_by_id else None,
+                unit=step.unit if step is not None else None,
                 status=result.status,
                 measurement_value=float(result.measurement_value)
                 if result.measurement_value is not None
@@ -451,10 +448,8 @@ def get_qc_run_details(db: Session, run_id: str) -> QcRunDetailsRead:
                 mcu_snapshot=result.mcu_snapshot,
                 created_at=result.created_at,
             )
-            for result in step_results
-        ],
-        key=lambda row: (row.step_order, row.created_at, row.id),
-    )
+        )
+    detailed_step_results.sort(key=lambda row: (row.step_order, row.created_at, row.id))
 
     completed_audit_event = repository.get_latest_run_completed_audit_event(db, run.run_id)
     completed_payload = completed_audit_event.payload if completed_audit_event else {}
@@ -482,7 +477,10 @@ def get_qc_run_details(db: Session, run_id: str) -> QcRunDetailsRead:
             completed_payload.get("failure_disposition")
         ),
         step_results=detailed_step_results,
-        evidence_files=repository.list_run_evidence_files(db, run.run_id),
+        evidence_files=[
+            FileRead.model_validate(file)
+            for file in repository.list_run_evidence_files(db, run.run_id)
+        ],
     )
 
 

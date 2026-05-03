@@ -5,6 +5,7 @@ import json
 import re
 from dataclasses import asdict, dataclass
 from datetime import timedelta
+from typing import TypedDict
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
@@ -65,6 +66,23 @@ class DashboardSummary:
 class BomTemplateRef:
     template_id: str
     version: str
+
+
+class QcStationAssets(TypedDict):
+    qc_station_url: str | None
+    qc_station_checklist_code: str | None
+    qc_station_item_serial_number: str | None
+    qc_station_barcode_value: str | None
+    qc_station_login_name: str | None
+    qc_station_password: str | None
+    qc_station_rfid_uid_hash: str | None
+    qc_station_workstation_id: str | None
+
+
+class BomSeedItem(TypedDict):
+    component_type: str
+    quantity_required: int
+    is_required: bool
 
 
 SCENARIO_SERIAL_PREFIXES = {
@@ -128,9 +146,24 @@ def try_get_existing_seed_result(device_type: str) -> SeedResult | None:
         bom_version=DEFAULT_BOM_VERSION,
         shipment_queue_url=f"/api/shipment-readiness?device_type={device_type}",
         component_quality_url=f"/api/component-quality?device_type={device_type}",
+        ready_device_serial_number=scenario_serials["ready_device_serial_number"],
+        assembly_gap_device_serial_number=scenario_serials[
+            "assembly_gap_device_serial_number"
+        ],
+        final_test_gap_device_serial_number=scenario_serials[
+            "final_test_gap_device_serial_number"
+        ],
+        component_qc_gap_device_serial_number=scenario_serials[
+            "component_qc_gap_device_serial_number"
+        ],
+        component_ncr_device_serial_number=scenario_serials[
+            "component_ncr_device_serial_number"
+        ],
+        device_ncr_device_serial_number=scenario_serials[
+            "device_ncr_device_serial_number"
+        ],
         **read_existing_qc_station_assets(device_type),
         verified=False,
-        **scenario_serials,
     )
 
 
@@ -203,7 +236,7 @@ def ensure_active_bom_template(
     device_type: str,
     version: str,
 ) -> BomTemplateRef:
-    bom_items = (
+    bom_items: tuple[BomSeedItem, ...] = (
         {"component_type": "CONTROL_PCB", "quantity_required": 1, "is_required": True},
         {"component_type": "FAN_MODULE", "quantity_required": 1, "is_required": False},
         {"component_type": "IO_MODULE", "quantity_required": 1, "is_required": False},
@@ -349,7 +382,7 @@ def create_qc_passed_item(
     }
 
 
-def read_existing_qc_station_assets(device_type: str) -> dict[str, str | None]:
+def read_existing_qc_station_assets(device_type: str) -> QcStationAssets:
     token = normalize_seed_token(device_type)
     checklist_code = f"QC-STATION-{token}"
     item_serial_number = f"QCITEM-{token}"
@@ -1065,7 +1098,14 @@ def seed_operations_dashboard_demo(
         component_qc_gap_device_serial_number=component_qc_gap_serial,
         component_ncr_device_serial_number=component_ncr_serial,
         device_ncr_device_serial_number=device_ncr_serial,
-        **qc_station_assets,
+        qc_station_url=qc_station_assets["qc_station_url"],
+        qc_station_checklist_code=qc_station_assets["qc_station_checklist_code"],
+        qc_station_item_serial_number=qc_station_assets["qc_station_item_serial_number"],
+        qc_station_barcode_value=qc_station_assets["qc_station_barcode_value"],
+        qc_station_login_name=qc_station_assets["qc_station_login_name"],
+        qc_station_password=qc_station_assets["qc_station_password"],
+        qc_station_rfid_uid_hash=qc_station_assets["qc_station_rfid_uid_hash"],
+        qc_station_workstation_id=qc_station_assets["qc_station_workstation_id"],
         verified=verify,
     )
 
