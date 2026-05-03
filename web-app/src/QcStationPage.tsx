@@ -17,7 +17,9 @@ import {
   listQcChecklistSteps,
   listWorkstations,
   operatorLogin,
+  releaseQcItemReservation,
   releaseQcItemForRework,
+  reserveQcItem,
   rfidLogin,
   uploadQcRunEvidence,
 } from "./api";
@@ -144,6 +146,9 @@ export function QcStationPage() {
     useState<WaitingItemsFilter>("ALL");
   const [waitingItemsSort, setWaitingItemsSort] =
     useState<WaitingItemsSort>("OLDEST");
+  const [reservationState, setReservationState] = useState<LoadState>("idle");
+  const [reservationError, setReservationError] = useState<string | null>(null);
+  const [reservationSuccess, setReservationSuccess] = useState<string | null>(null);
   const [openCriticalNcrsState, setOpenCriticalNcrsState] = useState<LoadState>("idle");
   const [openCriticalNcrsError, setOpenCriticalNcrsError] = useState<string | null>(null);
   const [openCriticalNcrs, setOpenCriticalNcrs] = useState<NonconformityRead[]>([]);
@@ -222,6 +227,12 @@ export function QcStationPage() {
     (openCriticalNcrs.length > 0 ||
       selectedItem.current_status === "QC_FAILED" ||
       selectedItem.current_status === "BLOCKED");
+  const selectedItemReservedByOtherOperator =
+    !!authState && !!selectedItem && isProductionItemReservedByOtherOperator(selectedItem, authState.operatorId);
+  const selectedItemReservedByCurrentOperator =
+    !!authState &&
+    !!selectedItem &&
+    selectedItem.qc_reserved_by_operator_id === authState.operatorId;
   const filteredWaitingItems = filterAndSortWaitingItems(
     waitingItems,
     waitingItemsFilter,
@@ -833,6 +844,9 @@ export function QcStationPage() {
     setReworkActionState("idle");
     setReworkActionError(null);
     setReworkActionSuccess(null);
+    setReservationState("idle");
+    setReservationError(null);
+    setReservationSuccess(null);
   };
 
   const handleLookupSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -846,6 +860,8 @@ export function QcStationPage() {
     setCompletedRun(null);
     setReworkActionError(null);
     setReworkActionSuccess(null);
+    setReservationError(null);
+    setReservationSuccess(null);
 
     if (!trimmedApiBaseUrl) {
       setLookupState("error");
@@ -869,6 +885,14 @@ export function QcStationPage() {
 
     try {
       const item = await getProductionItemByBarcode(trimmedApiBaseUrl, trimmedBarcodeValue);
+      if (isProductionItemReservedByOtherOperator(item, authState.operatorId)) {
+        setSelectedItem(null);
+        setLookupState("error");
+        setLookupError(
+          `Komponent jest zarezerwowany przez operatora ${item.qc_reserved_by_operator_id}.`,
+        );
+        return;
+      }
       selectItemForInspection(item);
     } catch (error) {
       setSelectedItem(null);
@@ -880,7 +904,77 @@ export function QcStationPage() {
   };
 
   const handlePickWaitingItem = (item: ProductionItemRead) => {
+    if (!authState) {
+      return;
+    }
+    if (isProductionItemReservedByOtherOperator(item, authState.operatorId)) {
+      setLookupState("error");
+      setLookupError(
+        `Komponent jest zarezerwowany przez operatora ${item.qc_reserved_by_operator_id}.`,
+      );
+      return;
+    }
     selectItemForInspection(item);
+  };
+
+  const handleReserveSelectedItem = async () => {
+    const trimmedApiBaseUrl = apiBaseUrl.trim();
+    if (!trimmedApiBaseUrl || !authState || !selectedItem) {
+      return;
+    }
+
+    setReservationState("loading");
+    setReservationError(null);
+    setReservationSuccess(null);
+
+    try {
+      const reservedItem = await reserveQcItem(trimmedApiBaseUrl, selectedItem.item_serial_number, {
+        work_session_id: authState.workSessionId,
+        operator_id: authState.operatorId,
+      });
+      setSelectedItem(reservedItem);
+      setWaitingItemsReloadKey((currentValue) => currentValue + 1);
+      setReservationState("loaded");
+      setReservationSuccess(
+        `Detal ${reservedItem.item_serial_number} zostal zarezerwowany na stanowisku ${authState.workstationName}.`,
+      );
+    } catch (error) {
+      setReservationState("error");
+      setReservationError(
+        getErrorMessage(error, "Nie udalo sie zarezerwowac detalu do kontroli."),
+      );
+    }
+  };
+
+  const handleReleaseSelectedItemReservation = async () => {
+    const trimmedApiBaseUrl = apiBaseUrl.trim();
+    if (!trimmedApiBaseUrl || !authState || !selectedItem) {
+      return;
+    }
+
+    setReservationState("loading");
+    setReservationError(null);
+    setReservationSuccess(null);
+
+    try {
+      const releasedItem = await releaseQcItemReservation(
+        trimmedApiBaseUrl,
+        selectedItem.item_serial_number,
+        {
+          work_session_id: authState.workSessionId,
+          operator_id: authState.operatorId,
+        },
+      );
+      setSelectedItem(releasedItem);
+      setWaitingItemsReloadKey((currentValue) => currentValue + 1);
+      setReservationState("loaded");
+      setReservationSuccess(`Zwolniono rezerwacje detalu ${releasedItem.item_serial_number}.`);
+    } catch (error) {
+      setReservationState("error");
+      setReservationError(
+        getErrorMessage(error, "Nie udalo sie zwolnic rezerwacji detalu."),
+      );
+    }
   };
 
   const applyHistoryPreset = (preset: "LATEST_FAIL" | "LATEST_PASS" | "POST_LATEST_REWORK" | "RESET") => {
@@ -1041,6 +1135,14 @@ export function QcStationPage() {
       return;
     }
 
+    if (isProductionItemReservedByOtherOperator(selectedItem, authState.operatorId)) {
+      setSubmitState("error");
+      setSubmitError(
+        `Komponent jest zarezerwowany przez operatora ${selectedItem.qc_reserved_by_operator_id}.`,
+      );
+      return;
+    }
+
     if (!selectedChecklist) {
       setSubmitState("error");
       setSubmitError("Wybierz checkliste QC.");
@@ -1094,11 +1196,21 @@ export function QcStationPage() {
     setSubmitState("loading");
 
     try {
+      const reservedItem =
+        selectedItem.qc_reserved_by_operator_id === authState.operatorId
+          ? selectedItem
+          : await reserveQcItem(trimmedApiBaseUrl, selectedItem.item_serial_number, {
+              work_session_id: authState.workSessionId,
+              operator_id: authState.operatorId,
+            });
+      setSelectedItem(reservedItem);
+      setWaitingItemsReloadKey((currentValue) => currentValue + 1);
+
       const runId = createClientQcRunId();
       await createQcRun(trimmedApiBaseUrl, {
         run_id: runId,
-        item_serial_number: selectedItem.item_serial_number,
-        barcode_value: selectedItem.barcode_value,
+        item_serial_number: reservedItem.item_serial_number,
+        barcode_value: reservedItem.barcode_value,
         checklist_id: selectedChecklist.id,
         process_stage: selectedChecklist.process_stage,
         operator_id: authState.operatorId,
@@ -1133,7 +1245,7 @@ export function QcStationPage() {
       });
       const refreshedItem = await getProductionItemByBarcode(
         trimmedApiBaseUrl,
-        selectedItem.barcode_value,
+        reservedItem.barcode_value,
       );
 
       setSelectedItem(refreshedItem);
@@ -1174,6 +1286,9 @@ export function QcStationPage() {
     setWaitingItems([]);
     setWaitingItemsState("idle");
     setWaitingItemsError(null);
+    setReservationState("idle");
+    setReservationError(null);
+    setReservationSuccess(null);
     setSubmitState("idle");
     setSubmitError(null);
     setSubmitSuccess(null);
@@ -1232,6 +1347,9 @@ export function QcStationPage() {
     setReworkActionState("idle");
     setReworkActionError(null);
     setReworkActionSuccess(null);
+    setReservationState("idle");
+    setReservationError(null);
+    setReservationSuccess(null);
   };
 
   return (
@@ -1530,6 +1648,9 @@ export function QcStationPage() {
                         setReworkActionState("idle");
                         setReworkActionError(null);
                         setReworkActionSuccess(null);
+                        setReservationState("idle");
+                        setReservationError(null);
+                        setReservationSuccess(null);
                         setBarcodeValue("");
                       }}
                     >
@@ -1624,12 +1745,16 @@ export function QcStationPage() {
                   {filteredWaitingItems.map((item) => {
                     const isSelected =
                       selectedItem?.item_serial_number === item.item_serial_number;
+                    const isReservedByOtherOperator =
+                      !!authState &&
+                      isProductionItemReservedByOtherOperator(item, authState.operatorId);
                     return (
                       <button
                         key={item.item_serial_number}
                         className={`qc-waiting-item${isSelected ? " is-selected" : ""}`}
                         type="button"
                         onClick={() => handlePickWaitingItem(item)}
+                        disabled={isReservedByOtherOperator}
                       >
                         <div className="qc-waiting-item-copy">
                           <strong>{item.item_serial_number}</strong>
@@ -1639,6 +1764,9 @@ export function QcStationPage() {
                         </div>
                         <div className="qc-waiting-item-meta">
                           <span>{labelForCode(item.current_status)}</span>
+                          {item.qc_reserved_by_operator_id ? (
+                            <span>Zarezerwowane: {item.qc_reserved_by_operator_id}</span>
+                          ) : null}
                           <span>{formatDateTime(item.produced_at ?? item.created_at)}</span>
                         </div>
                       </button>
@@ -1670,6 +1798,14 @@ export function QcStationPage() {
                     <span>Barcode</span>
                     <strong>{selectedItem.barcode_value}</strong>
                   </div>
+                  <div className="detail-card">
+                    <span>Rezerwacja QC</span>
+                    <strong>
+                      {selectedItem.qc_reserved_by_operator_id
+                        ? `${selectedItem.qc_reserved_by_operator_id} @ ${selectedItem.qc_reserved_by_workstation_id ?? "brak stanowiska"}`
+                        : "Brak rezerwacji"}
+                    </strong>
+                  </div>
                 </div>
               ) : (
                 <div className="empty-state">
@@ -1679,6 +1815,52 @@ export function QcStationPage() {
                   </span>
                 </div>
               )}
+              {selectedItem ? (
+                <div className="details-inline-actions">
+                  {selectedItemReservedByCurrentOperator ? (
+                    <button
+                      className="ghost-button"
+                      type="button"
+                      onClick={handleReleaseSelectedItemReservation}
+                    >
+                      Zwolnij rezerwacje
+                    </button>
+                  ) : (
+                    <button
+                      className="ghost-button"
+                      type="button"
+                      onClick={handleReserveSelectedItem}
+                      disabled={selectedItemReservedByOtherOperator}
+                    >
+                      Zarezerwuj detal
+                    </button>
+                  )}
+                  <span className={`status-badge state-${reservationState}`}>
+                    {reservationState === "loading"
+                      ? "Rezerwuje"
+                      : reservationState === "loaded"
+                        ? "Rezerwacja OK"
+                        : reservationState === "error"
+                          ? "Blad rezerwacji"
+                          : selectedItemReservedByCurrentOperator
+                            ? "Zarezerwowany przeze mnie"
+                            : selectedItemReservedByOtherOperator
+                              ? "Zarezerwowany przez innego"
+                              : "Bez rezerwacji"}
+                  </span>
+                </div>
+              ) : null}
+              {reservationError ? (
+                <div className="error-banner" role="alert">
+                  <strong>Nie udalo sie obsluzyc rezerwacji detalu.</strong>
+                  <span>{reservationError}</span>
+                </div>
+              ) : null}
+              {reservationSuccess ? (
+                <div className="success-banner" role="status">
+                  <strong>{reservationSuccess}</strong>
+                </div>
+              ) : null}
 
               {shouldShowReworkPanel ? (
                 <div className="detail-inline-card qc-run-decision-card">
@@ -2930,6 +3112,13 @@ function filterAndSortWaitingItems(
       ? right.item_serial_number.localeCompare(left.item_serial_number, "pl")
       : left.item_serial_number.localeCompare(right.item_serial_number, "pl");
   });
+}
+
+function isProductionItemReservedByOtherOperator(
+  item: ProductionItemRead,
+  operatorId: string,
+): boolean {
+  return !!item.qc_reserved_by_operator_id && item.qc_reserved_by_operator_id !== operatorId;
 }
 
 function getLatestClosedCriticalNcrTimestamp(

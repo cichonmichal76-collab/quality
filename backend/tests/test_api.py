@@ -3452,6 +3452,93 @@ def test_qc_waiting_items_queue_returns_only_components_requiring_qc():
     assert filtered_rows[0]["item_type"] == "FAN_MODULE"
 
 
+def test_qc_item_reservation_marks_item_and_blocks_other_operator():
+    production_session = start_work_session(role="PRODUCTION_OPERATOR")
+    quality_session = start_work_session(role="QUALITY_INSPECTOR")
+    second_quality_session = start_work_session(role="QUALITY_MANAGER")
+
+    checklist = client.post(
+        "/api/qc-checklists",
+        json={
+            "checklist_code": unique_id("CHK"),
+            "name": "Kontrola rezerwacji",
+            "process_stage": "COMPONENT_QC",
+            "version": "1.0",
+            "component_type": "FAN_MODULE",
+        },
+    )
+    assert checklist.status_code == 200
+
+    item_serial_number = unique_id("ITEM")
+    barcode_value = unique_id("BC")
+    created = client.post(
+        "/api/production-items",
+        json={
+            "item_serial_number": item_serial_number,
+            "barcode_value": barcode_value,
+            "item_type": "FAN_MODULE",
+            "work_session_id": production_session["work_session_id"],
+            "workstation_id": production_session["workstation_id"],
+        },
+    )
+    assert created.status_code == 200
+
+    produced = client.patch(
+        f"/api/production-items/{item_serial_number}/status",
+        json={"current_status": "PRODUCED"},
+    )
+    assert produced.status_code == 200
+
+    reserved = client.post(
+        f"/api/qc-items/{item_serial_number}/reserve",
+        json={
+            "work_session_id": quality_session["work_session_id"],
+            "operator_id": quality_session["operator_id"],
+        },
+    )
+    assert reserved.status_code == 200
+    assert reserved.json()["qc_reserved_by_operator_id"] == quality_session["operator_id"]
+    assert reserved.json()["qc_reserved_by_workstation_id"] == quality_session["workstation_id"]
+    assert reserved.json()["qc_reserved_at"] is not None
+
+    queue = client.get("/api/qc-waiting-items?component_type=FAN_MODULE")
+    assert queue.status_code == 200
+    reserved_row = next(
+        row for row in queue.json() if row["item_serial_number"] == item_serial_number
+    )
+    assert reserved_row["qc_reserved_by_operator_id"] == quality_session["operator_id"]
+
+    blocked = client.post(
+        f"/api/qc-items/{item_serial_number}/reserve",
+        json={
+            "work_session_id": second_quality_session["work_session_id"],
+            "operator_id": second_quality_session["operator_id"],
+        },
+    )
+    assert blocked.status_code == 409
+    assert "already reserved" in blocked.json()["detail"]
+
+    released = client.post(
+        f"/api/qc-items/{item_serial_number}/release-reservation",
+        json={
+            "work_session_id": quality_session["work_session_id"],
+            "operator_id": quality_session["operator_id"],
+        },
+    )
+    assert released.status_code == 200
+    assert released.json()["qc_reserved_by_operator_id"] is None
+    assert released.json()["qc_reserved_by_workstation_id"] is None
+    assert released.json()["qc_reserved_at"] is None
+
+    audit = client.get(
+        f"/api/audit-events?entity_type=PRODUCTION_ITEM&entity_id={item_serial_number}"
+    )
+    assert audit.status_code == 200
+    event_types = {row["event_type"] for row in audit.json()}
+    assert "QC_ITEM_RESERVED" in event_types
+    assert "QC_ITEM_RESERVATION_RELEASED" in event_types
+
+
 def test_qc_run_pass_updates_installed_component_snapshot_and_queue_state():
     device_type = unique_id("DT")
     ensure_device_bom_template(device_type, component_type="CONTROL_PCB")

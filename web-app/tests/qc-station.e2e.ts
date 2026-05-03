@@ -202,6 +202,34 @@ test("qc station starts from login screen and supports RFID entry", async ({ pag
       return;
     }
 
+    if (pathname === "/api/qc-items/QCITEM-DEMO-LOCAL/reserve" && method === "POST") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: "ITEM-ROW-001",
+          item_serial_number: "QCITEM-DEMO-LOCAL",
+          barcode_value: "QCBC-DEMO-LOCAL",
+          item_type: "FAN_MODULE",
+          part_number: "PN-FAN-001",
+          revision: "A",
+          drawing_number: null,
+          drawing_revision: null,
+          production_order: null,
+          material_batch: null,
+          machine_id: null,
+          created_by_operator_id: "QCOP-DEMO-LOCAL",
+          qc_reserved_by_operator_id: "QCOP-DEMO-LOCAL",
+          qc_reserved_by_workstation_id: "QCWS-DEMO-LOCAL",
+          qc_reserved_at: "2026-05-03T08:10:30Z",
+          current_status: "PRODUCED",
+          produced_at: "2026-05-03T08:10:00Z",
+          created_at: "2026-05-03T08:10:00Z",
+        }),
+      });
+      return;
+    }
+
     if (pathname === "/api/qc-runs" && method === "POST") {
       await route.fulfill({
         status: 200,

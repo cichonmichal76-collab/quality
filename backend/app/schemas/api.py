@@ -633,6 +633,11 @@ class QcReworkReleaseRequest(BaseModel):
     corrective_action: str
 
 
+class QcItemReservationRequest(BaseModel):
+    work_session_id: str
+    operator_id: str | None = None
+
+
 class QcStepResultCreate(BaseModel):
     status: str
     measurement_value: float | None = None
@@ -968,6 +973,9 @@ class ProductionItemCreate(ProductionItemBase):
 
 class ProductionItemRead(ProductionItemBase):
     id: str
+    qc_reserved_by_operator_id: str | None = None
+    qc_reserved_by_workstation_id: str | None = None
+    qc_reserved_at: datetime | None = None
     produced_at: datetime | None = None
     created_at: datetime
 

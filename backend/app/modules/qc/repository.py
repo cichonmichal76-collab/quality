@@ -92,6 +92,17 @@ def list_waiting_production_items(
     )
 
 
+def get_production_item_by_serial(
+    db: Session,
+    item_serial_number: str,
+) -> ProductionItem | None:
+    return (
+        db.query(ProductionItem)
+        .filter(ProductionItem.item_serial_number == item_serial_number)
+        .first()
+    )
+
+
 def list_checklist_steps(db: Session, checklist_id: str) -> list[QcStep]:
     return (
         db.query(QcStep)

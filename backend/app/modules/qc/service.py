@@ -18,6 +18,7 @@ from app.modules.auth_rfid.service import QUALITY_SESSION_ROLES, require_active_
 from app.modules.files import service as files_service
 from app.modules.qc import repository
 from app.schemas import (
+    QcItemReservationRequest,
     QcChecklistCreate,
     QcChecklistUpdate,
     QcProductComponentConfigRead,
@@ -34,6 +35,7 @@ from app.schemas import (
 
 ALLOWED_EVALUATION_MODES = {"MANUAL", "NUMERIC_RANGE", "TEXT_MATCH"}
 QC_WAITING_ITEM_STATUSES = {"PRODUCED", "REWORK_REQUIRED"}
+QC_RESERVABLE_ITEM_STATUSES = QC_WAITING_ITEM_STATUSES | {"QC_IN_PROGRESS", "QC_FAILED", "BLOCKED"}
 QC_FAILURE_DISPOSITIONS = {
     "OPEN_CRITICAL_NCR",
     "REWORK_REQUIRED",
@@ -538,6 +540,7 @@ def complete_qc_run(
             item.current_status = resolve_failed_item_status(normalized_failure_disposition)
             if final_result == "PASS":
                 item.current_status = "QC_PASSED"
+            _clear_item_qc_reservation(item)
 
         installed_links = db.query(AssemblyLink).filter(
             AssemblyLink.child_item_serial_number == run.item_serial_number,
@@ -634,6 +637,7 @@ def release_item_for_rework(
         closed_ncr_ids.append(ncr.ncr_id)
 
     item.current_status = "REWORK_REQUIRED"
+    _clear_item_qc_reservation(item)
 
     installed_links = db.query(AssemblyLink).filter(
         AssemblyLink.child_item_serial_number == item_serial_number,
@@ -758,12 +762,121 @@ def get_production_item_or_404(
     db: Session,
     item_serial_number: str,
 ) -> ProductionItem:
-    item = db.query(ProductionItem).filter(
-        ProductionItem.item_serial_number == item_serial_number
-    ).first()
+    item = repository.get_production_item_by_serial(db, item_serial_number)
     if not item:
         raise HTTPException(status_code=404, detail="Production item not found")
     return item
+
+
+def reserve_item_for_qc(
+    db: Session,
+    item_serial_number: str,
+    payload: QcItemReservationRequest,
+) -> ProductionItem:
+    item = get_production_item_or_404(db, item_serial_number)
+    work_session = require_active_work_session(
+        db,
+        payload.work_session_id,
+        operator_id=payload.operator_id,
+        allowed_roles=QUALITY_SESSION_ROLES,
+    )
+    operator_id = payload.operator_id or work_session.operator_id
+
+    if item.current_status not in QC_RESERVABLE_ITEM_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail="Production item is not available for QC reservation",
+        )
+
+    if item.qc_reserved_by_operator_id and item.qc_reserved_by_operator_id != operator_id:
+        raise HTTPException(
+            status_code=409,
+            detail="Production item is already reserved by another QC operator",
+        )
+
+    previous_operator_id = item.qc_reserved_by_operator_id
+    previous_workstation_id = item.qc_reserved_by_workstation_id
+    previous_reserved_at = item.qc_reserved_at.isoformat() if item.qc_reserved_at else None
+
+    item.qc_reserved_by_operator_id = operator_id
+    item.qc_reserved_by_workstation_id = work_session.workstation_id
+    item.qc_reserved_at = utc_now()
+
+    record_audit_event(
+        db,
+        event_type="QC_ITEM_RESERVED",
+        entity_type="PRODUCTION_ITEM",
+        entity_id=item_serial_number,
+        work_session=work_session,
+        operator_id=operator_id,
+        result=item.current_status,
+        message=f"Production item {item_serial_number} reserved for QC",
+        payload={
+            "previous_reserved_by_operator_id": previous_operator_id,
+            "previous_reserved_by_workstation_id": previous_workstation_id,
+            "previous_reserved_at": previous_reserved_at,
+            "current_reserved_by_operator_id": item.qc_reserved_by_operator_id,
+            "current_reserved_by_workstation_id": item.qc_reserved_by_workstation_id,
+            "current_reserved_at": item.qc_reserved_at.isoformat(),
+        },
+    )
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+def release_item_reservation(
+    db: Session,
+    item_serial_number: str,
+    payload: QcItemReservationRequest,
+) -> ProductionItem:
+    item = get_production_item_or_404(db, item_serial_number)
+    work_session = require_active_work_session(
+        db,
+        payload.work_session_id,
+        operator_id=payload.operator_id,
+        allowed_roles=QUALITY_SESSION_ROLES,
+    )
+    operator_id = payload.operator_id or work_session.operator_id
+
+    if item.qc_reserved_by_operator_id and item.qc_reserved_by_operator_id != operator_id:
+        raise HTTPException(
+            status_code=409,
+            detail="Production item reservation belongs to another QC operator",
+        )
+
+    previous_operator_id = item.qc_reserved_by_operator_id
+    previous_workstation_id = item.qc_reserved_by_workstation_id
+    previous_reserved_at = item.qc_reserved_at.isoformat() if item.qc_reserved_at else None
+
+    item.qc_reserved_by_operator_id = None
+    item.qc_reserved_by_workstation_id = None
+    item.qc_reserved_at = None
+
+    record_audit_event(
+        db,
+        event_type="QC_ITEM_RESERVATION_RELEASED",
+        entity_type="PRODUCTION_ITEM",
+        entity_id=item_serial_number,
+        work_session=work_session,
+        operator_id=operator_id,
+        result=item.current_status,
+        message=f"Production item {item_serial_number} reservation released",
+        payload={
+            "previous_reserved_by_operator_id": previous_operator_id,
+            "previous_reserved_by_workstation_id": previous_workstation_id,
+            "previous_reserved_at": previous_reserved_at,
+        },
+    )
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+def _clear_item_qc_reservation(item: ProductionItem) -> None:
+    item.qc_reserved_by_operator_id = None
+    item.qc_reserved_by_workstation_id = None
+    item.qc_reserved_at = None
 
 
 def _normalize_step_payload(

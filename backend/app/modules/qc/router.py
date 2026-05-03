@@ -9,6 +9,7 @@ from app.schemas import (
     ProductionItemRead,
     QcChecklistCreate,
     QcChecklistRead,
+    QcItemReservationRequest,
     QcChecklistUpdate,
     QcProductConfigurationRead,
     QcReworkReleaseRequest,
@@ -95,6 +96,30 @@ def list_qc_runs_for_item(
     db: Session = Depends(get_db),
 ):
     return service.list_qc_runs_for_item(db, item_serial_number, limit=limit)
+
+
+@router.post(
+    "/qc-items/{item_serial_number}/reserve",
+    response_model=ProductionItemRead,
+)
+def reserve_item_for_qc(
+    item_serial_number: str,
+    payload: QcItemReservationRequest,
+    db: Session = Depends(get_db),
+):
+    return service.reserve_item_for_qc(db, item_serial_number, payload)
+
+
+@router.post(
+    "/qc-items/{item_serial_number}/release-reservation",
+    response_model=ProductionItemRead,
+)
+def release_item_reservation(
+    item_serial_number: str,
+    payload: QcItemReservationRequest,
+    db: Session = Depends(get_db),
+):
+    return service.release_item_reservation(db, item_serial_number, payload)
 
 
 @router.post(

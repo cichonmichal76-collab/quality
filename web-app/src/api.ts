@@ -124,6 +124,9 @@ export interface ProductionItemRead {
   material_batch: string | null;
   machine_id: string | null;
   created_by_operator_id: string | null;
+  qc_reserved_by_operator_id?: string | null;
+  qc_reserved_by_workstation_id?: string | null;
+  qc_reserved_at?: string | null;
   current_status: string;
   produced_at: string | null;
   created_at: string;
@@ -565,6 +568,11 @@ export interface QcReworkReleasePayload {
   work_session_id: string;
   operator_id?: string;
   corrective_action: string;
+}
+
+export interface QcItemReservationPayload {
+  work_session_id: string;
+  operator_id?: string;
 }
 
 export interface QcStepResultCreatePayload {
@@ -1100,6 +1108,38 @@ export async function releaseQcItemForRework(
     joinApiUrl(
       apiBaseUrl,
       `/qc-items/${encodeURIComponent(itemSerialNumber)}/release-for-rework`,
+    ),
+    payload,
+    signal,
+  );
+}
+
+export async function reserveQcItem(
+  apiBaseUrl: string,
+  itemSerialNumber: string,
+  payload: QcItemReservationPayload,
+  signal?: AbortSignal,
+): Promise<ProductionItemRead> {
+  return postJson<ProductionItemRead>(
+    joinApiUrl(
+      apiBaseUrl,
+      `/qc-items/${encodeURIComponent(itemSerialNumber)}/reserve`,
+    ),
+    payload,
+    signal,
+  );
+}
+
+export async function releaseQcItemReservation(
+  apiBaseUrl: string,
+  itemSerialNumber: string,
+  payload: QcItemReservationPayload,
+  signal?: AbortSignal,
+): Promise<ProductionItemRead> {
+  return postJson<ProductionItemRead>(
+    joinApiUrl(
+      apiBaseUrl,
+      `/qc-items/${encodeURIComponent(itemSerialNumber)}/release-reservation`,
     ),
     payload,
     signal,

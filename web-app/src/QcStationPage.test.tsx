@@ -167,6 +167,29 @@ describe("QcStationPage", () => {
         });
       }
 
+      if (url.endsWith("/api/qc-items/QCITEM-DEMO-LOCAL/reserve") && method === "POST") {
+        return jsonResponse({
+          id: "ITEM-ROW-001",
+          item_serial_number: "QCITEM-DEMO-LOCAL",
+          barcode_value: "QCBC-DEMO-LOCAL",
+          item_type: "FAN_MODULE",
+          part_number: "PN-FAN-001",
+          revision: "A",
+          drawing_number: null,
+          drawing_revision: null,
+          production_order: null,
+          material_batch: null,
+          machine_id: null,
+          created_by_operator_id: "QCOP-DEMO-LOCAL",
+          qc_reserved_by_operator_id: "QCOP-DEMO-LOCAL",
+          qc_reserved_by_workstation_id: "QCWS-DEMO-LOCAL",
+          qc_reserved_at: "2026-05-03T08:10:30Z",
+          current_status: "PRODUCED",
+          produced_at: "2026-05-03T08:10:00Z",
+          created_at: "2026-05-03T08:10:00Z",
+        });
+      }
+
       if (url.endsWith("/api/qc-runs") && method === "POST") {
         return jsonResponse({
           id: "QC-ROW-001",
@@ -804,6 +827,29 @@ describe("QcStationPage", () => {
           material_batch: null,
           machine_id: null,
           created_by_operator_id: "QCOP-DEMO-LOCAL",
+          current_status: "REWORK_REQUIRED",
+          produced_at: "2026-05-03T08:16:00Z",
+          created_at: "2026-05-03T08:16:00Z",
+        });
+      }
+
+      if (url.endsWith("/api/qc-items/QCITEM-DEMO-FAIL/reserve") && method === "POST") {
+        return jsonResponse({
+          id: "ITEM-ROW-FAIL",
+          item_serial_number: "QCITEM-DEMO-FAIL",
+          barcode_value: "QCBC-DEMO-FAIL",
+          item_type: "SILICONE_PACK",
+          part_number: "PN-SIL-001",
+          revision: "A",
+          drawing_number: null,
+          drawing_revision: null,
+          production_order: null,
+          material_batch: null,
+          machine_id: null,
+          created_by_operator_id: "QCOP-DEMO-LOCAL",
+          qc_reserved_by_operator_id: "QCOP-DEMO-LOCAL",
+          qc_reserved_by_workstation_id: "QCWS-DEMO-LOCAL",
+          qc_reserved_at: "2026-05-03T08:16:30Z",
           current_status: "REWORK_REQUIRED",
           produced_at: "2026-05-03T08:16:00Z",
           created_at: "2026-05-03T08:16:00Z",
