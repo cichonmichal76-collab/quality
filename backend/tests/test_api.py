@@ -6533,6 +6533,16 @@ def test_service_session_queue_supports_filters_and_pagination(tmp_path, monkeyp
         uploads[0]["session_id"]
     ]
 
+    reuploaded_filtered = client.get("/api/service-sessions/queue?only_reuploaded=true")
+    assert reuploaded_filtered.status_code == 200
+    reuploaded_payload = reuploaded_filtered.json()
+    assert reuploaded_payload["filters"]["only_reuploaded"] is True
+    assert reuploaded_payload["total_sessions"] == 1
+    assert reuploaded_payload["reuploaded_sessions"] == 1
+    assert [row["session_id"] for row in reuploaded_payload["sessions"]] == [
+        uploads[0]["session_id"]
+    ]
+
     invalid_sort = client.get("/api/service-sessions/queue?sort_by=unsupported")
     assert invalid_sort.status_code == 400
     assert invalid_sort.json()["detail"] == "Unsupported service session sort field"

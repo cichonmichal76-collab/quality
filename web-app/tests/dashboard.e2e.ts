@@ -104,12 +104,19 @@ test("dashboard renders mocked commissioning queue and applies trigger preset", 
   await page.route("**/api/service-sessions/queue**", async (route) => {
     const requestUrl = new URL(route.request().url());
     const triggerSource = requestUrl.searchParams.get("client_trigger_source");
-    const sessions =
-      triggerSource === "AUTO_NETWORK"
-        ? baseSessions.filter(
-            (session) => session.client_trigger_source === "AUTO_NETWORK",
-          )
-        : baseSessions;
+    const onlyReuploaded =
+      requestUrl.searchParams.get("only_reuploaded") === "true";
+    let sessions = baseSessions;
+
+    if (triggerSource === "AUTO_NETWORK") {
+      sessions = sessions.filter(
+        (session) => session.client_trigger_source === "AUTO_NETWORK",
+      );
+    }
+
+    if (onlyReuploaded) {
+      sessions = sessions.filter((session) => session.upload_count > 1);
+    }
 
     await route.fulfill({
       status: 200,
@@ -177,6 +184,116 @@ test("dashboard renders mocked commissioning queue and applies trigger preset", 
   await expect(page).toHaveURL(/svc_client_trigger_source=AUTO_NETWORK/);
   await expect(page.locator(".table-card tbody tr")).toHaveCount(1);
   await expect(serviceTable.getByText("SVC-002")).toBeVisible();
+});
+
+test("dashboard applies reuploaded preset in commissioning queue", async ({
+  page,
+}) => {
+  const baseSessions = [
+    {
+      session_id: "SVC-001",
+      device_serial_number: "SVC-DEVICE-001",
+      device_type: "DEMO-SVC",
+      technician_id: "TECH-001",
+      result: "PASS",
+      upload_status: "UPLOADED",
+      upload_count: 1,
+      firmware_version: "1.2.3",
+      bootloader_version: "0.9.0",
+      client_attempt_id: "ATTEMPT-001",
+      client_attempt_number: 1,
+      client_trigger_source: "MANUAL",
+      upload_correlation_id: "CORR-001",
+      uploaded_at: "2026-05-03T08:10:00Z",
+      created_at: "2026-05-03T08:00:00Z",
+    },
+    {
+      session_id: "SVC-002",
+      device_serial_number: "SVC-DEVICE-002",
+      device_type: "DEMO-SVC",
+      technician_id: "TECH-002",
+      result: "HOLD",
+      upload_status: "UPLOADED",
+      upload_count: 2,
+      firmware_version: "1.2.4",
+      bootloader_version: "0.9.1",
+      client_attempt_id: "ATTEMPT-002",
+      client_attempt_number: 2,
+      client_trigger_source: "AUTO_NETWORK",
+      upload_correlation_id: "CORR-002",
+      uploaded_at: "2026-05-03T09:10:00Z",
+      created_at: "2026-05-03T09:00:00Z",
+    },
+  ];
+
+  await page.route("**/api/service-sessions/queue**", async (route) => {
+    const requestUrl = new URL(route.request().url());
+    const onlyReuploaded =
+      requestUrl.searchParams.get("only_reuploaded") === "true";
+    const sessions = onlyReuploaded
+      ? baseSessions.filter((session) => session.upload_count > 1)
+      : baseSessions;
+
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        total_sessions: sessions.length,
+        reuploaded_sessions: sessions.filter((session) => session.upload_count > 1)
+          .length,
+        returned_count: sessions.length,
+        offset: 0,
+        limit: 100,
+        has_more: false,
+        next_offset: null,
+        filters: onlyReuploaded ? { only_reuploaded: true } : {},
+        upload_status_summary: [{ upload_status: "UPLOADED", session_count: sessions.length }],
+        result_summary: [
+          { result: "PASS", session_count: sessions.filter((session) => session.result === "PASS").length },
+          { result: "HOLD", session_count: sessions.filter((session) => session.result === "HOLD").length },
+        ].filter((item) => item.session_count > 0),
+        device_type_summary: [
+          { device_type: "DEMO-SVC", session_count: sessions.length },
+        ],
+        technician_summary: sessions.map((session) => ({
+          technician_id: session.technician_id,
+          session_count: 1,
+        })),
+        trigger_source_summary: [
+          {
+            client_trigger_source: "MANUAL",
+            session_count: sessions.filter(
+              (session) => session.client_trigger_source === "MANUAL",
+            ).length,
+          },
+          {
+            client_trigger_source: "AUTO_NETWORK",
+            session_count: sessions.filter(
+              (session) => session.client_trigger_source === "AUTO_NETWORK",
+            ).length,
+          },
+        ].filter((item) => item.session_count > 0),
+        sessions,
+      }),
+    });
+  });
+
+  await page.goto("/");
+
+  await expect(page.getByText("API OK")).toBeVisible();
+
+  await page.getByRole("button", { name: "Commissioning i serwis" }).click();
+
+  const serviceTable = page.locator(".table-card");
+  await expect(page.locator(".table-card tbody tr")).toHaveCount(2);
+
+  await page.getByRole("button", { name: "Reuploadowane" }).click();
+
+  await expect(page).toHaveURL(/view=service/);
+  await expect(page).toHaveURL(/svc_only_reuploaded=true/);
+  await expect(page.locator(".table-card tbody tr")).toHaveCount(1);
+  await expect(serviceTable.getByText("SVC-002")).toBeVisible();
+  await expect(serviceTable.getByText("SVC-001")).not.toBeVisible();
 });
 
 test("dashboard restores selected commissioning session after reload", async ({

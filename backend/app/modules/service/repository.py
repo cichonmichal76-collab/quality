@@ -28,6 +28,7 @@ def list_service_sessions_queue(
     technician_id: str | None = None,
     client_attempt_id: str | None = None,
     upload_correlation_id: str | None = None,
+    only_reuploaded: bool = False,
     result: str | None = None,
     upload_status: str | None = None,
     client_trigger_source: str | None = None,
@@ -43,6 +44,7 @@ def list_service_sessions_queue(
         technician_id=technician_id,
         client_attempt_id=client_attempt_id,
         upload_correlation_id=upload_correlation_id,
+        only_reuploaded=only_reuploaded,
         result=result,
         upload_status=upload_status,
         client_trigger_source=client_trigger_source,
@@ -72,6 +74,7 @@ def list_service_sessions_queue(
             "technician_id": technician_id,
             "client_attempt_id": client_attempt_id,
             "upload_correlation_id": upload_correlation_id,
+            "only_reuploaded": only_reuploaded,
             "result": result,
             "upload_status": upload_status,
             "client_trigger_source": client_trigger_source,
@@ -117,6 +120,7 @@ def _apply_service_session_filters(
     technician_id: str | None = None,
     client_attempt_id: str | None = None,
     upload_correlation_id: str | None = None,
+    only_reuploaded: bool = False,
     result: str | None = None,
     upload_status: str | None = None,
     client_trigger_source: str | None = None,
@@ -131,6 +135,8 @@ def _apply_service_session_filters(
         query = query.filter(ServiceSession.client_attempt_id == client_attempt_id)
     if upload_correlation_id:
         query = query.filter(ServiceSession.upload_correlation_id == upload_correlation_id)
+    if only_reuploaded:
+        query = query.filter(ServiceSession.upload_count > 1)
     if result:
         query = query.filter(ServiceSession.result == result)
     if upload_status:

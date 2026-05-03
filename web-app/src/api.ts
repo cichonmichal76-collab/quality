@@ -597,6 +597,7 @@ export async function listServiceSessionsQueue(
     technician_id?: string;
     client_attempt_id?: string;
     upload_correlation_id?: string;
+    only_reuploaded?: boolean;
     result?: string;
     upload_status?: string;
     client_trigger_source?: string;

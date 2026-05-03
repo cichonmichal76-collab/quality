@@ -6025,6 +6025,61 @@ describe("App", () => {
       }),
     );
   });
+
+  it("applies reuploaded filter from commissioning metrics", async () => {
+    const reuploadedOnlyPayload: ServiceSessionQueue = {
+      ...serviceQueuePayload,
+      total_sessions: 1,
+      reuploaded_sessions: 1,
+      returned_count: 1,
+      filters: {
+        only_reuploaded: true,
+      },
+      result_summary: [{ result: "PASS", session_count: 1 }],
+      technician_summary: [{ technician_id: "TECH-A", session_count: 1 }],
+      trigger_source_summary: [
+        {
+          client_trigger_source: "AUTO_NETWORK",
+          session_count: 1,
+        },
+      ],
+      sessions: [serviceQueuePayload.sessions[0]],
+    };
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(createJsonResponse(shipmentPayload))
+      .mockResolvedValueOnce(createJsonResponse(serviceQueuePayload))
+      .mockResolvedValueOnce(createJsonResponse(reuploadedOnlyPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("SHIP-001")).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Commissioning i serwis" }),
+    );
+
+    expect(await screen.findByText("SVC-001")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Reuploadowane$/i }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/service-sessions/queue?only_reuploaded=true&sort_by=uploaded_at&sort_desc=true&limit=100",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+    expect(screen.getByLabelText("Tylko reuploadowane")).toBeChecked();
+    expect(
+      screen.getByRole("button", {
+        name: /Usuń filtr: Tylko reuploadowane/i,
+      }),
+    ).toBeInTheDocument();
+  });
 });
 
 

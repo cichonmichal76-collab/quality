@@ -133,6 +133,7 @@ backend pod `http://127.0.0.1:8000`.
   blokującymi, drawer szczegółów urządzenia i paginacja wyników.
 - `Commissioning i serwis` - kolejka sesji commissioning, status uploadu,
   wynik sesji, trigger synchronizacji, `Attempt ID`, `Correlation ID`,
+  szybki filtr `Tylko reuploadowane` i klikalna metryka `Reuploadowane`,
   liczba reuploadów, technik,
   firmware/bootloader, eksport CSV, drawer szczegółów sesji po `session_id`
   oraz przejście do szczegółów urządzenia po numerze seryjnym. Drawer sesji

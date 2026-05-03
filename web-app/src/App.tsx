@@ -256,6 +256,7 @@ interface ServiceFilters {
   technician_id: string;
   client_attempt_id: string;
   upload_correlation_id: string;
+  only_reuploaded: boolean;
   result: string;
   upload_status: string;
   client_trigger_source: string;
@@ -382,6 +383,7 @@ const DEFAULT_SERVICE_FILTERS: ServiceFilters = {
   technician_id: "",
   client_attempt_id: "",
   upload_correlation_id: "",
+  only_reuploaded: false,
   result: "",
   upload_status: "",
   client_trigger_source: "",
@@ -2873,6 +2875,11 @@ export function App() {
                     client_trigger_source: clientTriggerSource,
                   })
                 }
+                onSelectReuploadedMetric={() =>
+                  applyServiceSummaryFilter({
+                    only_reuploaded: true,
+                  })
+                }
                 fallbackLimit={serviceFilters.limit}
                 onSelectDevice={selectDevice}
                 onSelectSession={selectServiceSession}
@@ -3259,6 +3266,11 @@ function ServiceFiltersPanel({
           options={SERVICE_TRIGGER_SOURCE_OPTIONS}
           onChange={(value) => onChange("client_trigger_source", value)}
         />
+        <SwitchField
+          label="Tylko reuploadowane"
+          checked={filters.only_reuploaded}
+          onChange={(checked) => onChange("only_reuploaded", checked)}
+        />
         <SelectField
           label="Sortowanie"
           value={filters.sort_by}
@@ -3620,6 +3632,7 @@ function ServiceDashboard({
   onSelectUploadStatus,
   onSelectResult,
   onSelectTriggerSource,
+  onSelectReuploadedMetric,
   fallbackLimit,
   onSelectDevice,
   onSelectSession,
@@ -3633,6 +3646,7 @@ function ServiceDashboard({
   onSelectUploadStatus: (status: string) => void;
   onSelectResult: (result: string) => void;
   onSelectTriggerSource: (triggerSource: string) => void;
+  onSelectReuploadedMetric: () => void;
   fallbackLimit: number;
   onSelectDevice: (device: {
     device_serial_number: string;
@@ -3660,6 +3674,7 @@ function ServiceDashboard({
           value={formatNumber(reuploadedSessions)}
           caption={`${percentage(reuploadedSessions, totalSessions)} kolejki`}
           tone="danger"
+          onClick={onSelectReuploadedMetric}
         />
         <MetricCard
           title="Technicy"
@@ -7046,6 +7061,13 @@ function buildServiceActiveFilterChips(
     });
   }
 
+  if (filters.only_reuploaded) {
+    chips.push({
+      id: "only_reuploaded",
+      label: "Tylko reuploadowane",
+    });
+  }
+
   if (filters.result !== "") {
     chips.push({
       id: "result",
@@ -7309,6 +7331,7 @@ function serviceQueryParams(filters: ServiceFilters): Record<string, QueryValue>
     technician_id: filters.technician_id,
     client_attempt_id: filters.client_attempt_id,
     upload_correlation_id: filters.upload_correlation_id,
+    only_reuploaded: filters.only_reuploaded || undefined,
     result: filters.result,
     upload_status: filters.upload_status,
     client_trigger_source: filters.client_trigger_source,
@@ -7643,6 +7666,11 @@ function readServiceFiltersFromUrl(
       `${URL_SERVICE_PREFIX}upload_correlation_id`,
       baseFilters.upload_correlation_id,
     ),
+    only_reuploaded: readSearchBoolean(
+      searchParams,
+      `${URL_SERVICE_PREFIX}only_reuploaded`,
+      baseFilters.only_reuploaded,
+    ),
     result: readSearchOption(
       searchParams,
       `${URL_SERVICE_PREFIX}result`,
@@ -7874,6 +7902,10 @@ function readStoredServiceFilters(): ServiceFilters {
     upload_correlation_id: readStoredString(
       storedValue.upload_correlation_id,
       DEFAULT_SERVICE_FILTERS.upload_correlation_id,
+    ),
+    only_reuploaded: readStoredBoolean(
+      storedValue.only_reuploaded,
+      DEFAULT_SERVICE_FILTERS.only_reuploaded,
     ),
     result: readStoredOption(
       storedValue.result,
@@ -8810,6 +8842,9 @@ function writeServiceFiltersToSearchParams(
     `${URL_SERVICE_PREFIX}upload_correlation_id`,
     filters.upload_correlation_id,
   );
+  if (filters.only_reuploaded) {
+    searchParams.set(`${URL_SERVICE_PREFIX}only_reuploaded`, "true");
+  }
   setOptionalSearchString(
     searchParams,
     `${URL_SERVICE_PREFIX}result`,
