@@ -575,6 +575,20 @@ export async function listServiceSessions(
   );
 }
 
+export async function getServiceSession(
+  apiBaseUrl: string,
+  sessionId: string,
+  signal?: AbortSignal,
+): Promise<ServiceSessionRead> {
+  return fetchJson<ServiceSessionRead>(
+    joinApiUrl(
+      apiBaseUrl,
+      `/service-sessions/${encodeURIComponent(sessionId)}`,
+    ),
+    signal,
+  );
+}
+
 export async function listServiceSessionsQueue(
   apiBaseUrl: string,
   params: {

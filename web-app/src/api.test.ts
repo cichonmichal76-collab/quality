@@ -5,8 +5,10 @@ import {
   completeQcRun,
   createFinalTest,
   createQcRun,
+  getServiceSession,
   joinApiUrl,
   listOperators,
+  listServiceSessions,
   listServiceSessionsQueue,
   listWorkSessions,
   optionalBoolean,
@@ -211,6 +213,88 @@ describe("listOperators", () => {
 });
 
 describe("listServiceSessionsQueue", () => {
+  it("pobiera liste sesji commissioning przefiltrowana po serialu urzadzenia", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => [
+        {
+          id: "svc-row-001",
+          session_id: "SVC-001",
+          device_serial_number: "DEVICE-001",
+          device_type: "DEMO-SVC",
+          technician_id: "TECH-A",
+          result: "PASS",
+          firmware_version: "1.0.1",
+          bootloader_version: "0.9.0",
+          package_path: "/tmp/SVC-001.zip",
+          package_hash: "hash-001",
+          upload_status: "UPLOADED",
+          upload_count: 2,
+          client_attempt_id: "ATT-001",
+          client_attempt_number: 2,
+          client_trigger_source: "AUTO_NETWORK",
+          upload_correlation_id: "CORR-001",
+          uploaded_at: "2026-05-03T08:00:00Z",
+          created_at: "2026-05-03T07:30:00Z",
+        },
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const payload = await listServiceSessions("/api", {
+      device_serial_number: "DEVICE-001",
+    });
+
+    expect(payload[0]?.session_id).toBe("SVC-001");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/service-sessions?device_serial_number=DEVICE-001",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+      }),
+    );
+  });
+
+  it("pobiera szczegoly pojedynczej sesji commissioning", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => ({
+        id: "svc-row-001",
+        session_id: "SVC-001",
+        device_serial_number: "DEVICE-001",
+        device_type: "DEMO-SVC",
+        technician_id: "TECH-A",
+        result: "PASS",
+        firmware_version: "1.0.1",
+        bootloader_version: "0.9.0",
+        package_path: "/tmp/SVC-001.zip",
+        package_hash: "hash-001",
+        upload_status: "UPLOADED",
+        upload_count: 2,
+        client_attempt_id: "ATT-001",
+        client_attempt_number: 2,
+        client_trigger_source: "AUTO_NETWORK",
+        upload_correlation_id: "CORR-001",
+        uploaded_at: "2026-05-03T08:00:00Z",
+        created_at: "2026-05-03T07:30:00Z",
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const payload = await getServiceSession("/api", "SVC-001");
+
+    expect(payload.upload_correlation_id).toBe("CORR-001");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/service-sessions/SVC-001",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+      }),
+    );
+  });
+
   it("pobiera kolejke commissioning z filtrami, sortowaniem i paginacja", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

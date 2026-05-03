@@ -52,6 +52,8 @@ const CODE_LABELS: Record<string, string> = {
   recommended_action: "Rekomendowana akcja",
   RUN_COMPONENT_QC_OR_REWORK: "Uruchom QC komponentu / rework",
   RUN_FINAL_TEST: "Uruchom final test",
+  SERVICE_SESSION_PACKAGE_REUPLOADED: "Paczka serwisowa reuploadowana",
+  SERVICE_SESSION_PACKAGE_UPLOADED: "Paczka serwisowa wgrana",
   SHIPMENT_GATE_BLOCKED: "Shipment gate zablokowany",
   SHIPMENT_GATE_PASSED: "Shipment gate zaliczony",
   SHIPPED: "Wysłane",

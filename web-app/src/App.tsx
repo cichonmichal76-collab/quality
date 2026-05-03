@@ -7,6 +7,7 @@ import {
   createFinalTest,
   createQcRun,
   fetchJson,
+  getServiceSession,
   joinApiUrl,
   listAuditEvents,
   listOperators,
@@ -455,6 +456,9 @@ export function App() {
         dashboardUrlState.devicePageSerial,
       ),
   );
+  const [selectedServiceSessionId, setSelectedServiceSessionId] = useState<
+    string | null
+  >(null);
   const [deviceDetails, setDeviceDetails] = useState<DeviceDetailsPayload | null>(
     null,
   );
@@ -463,6 +467,16 @@ export function App() {
   const [deviceDetailsError, setDeviceDetailsError] = useState<string | null>(
     null,
   );
+  const [serviceSessionDetails, setServiceSessionDetails] =
+    useState<ServiceSessionRead | null>(null);
+  const [serviceSessionAudit, setServiceSessionAudit] = useState<AuditEvent[]>(
+    [],
+  );
+  const [serviceSessionDetailsState, setServiceSessionDetailsState] =
+    useState<LoadState>("idle");
+  const [serviceSessionDetailsError, setServiceSessionDetailsError] = useState<
+    string | null
+  >(null);
   const [deviceActionState, setDeviceActionState] = useState<LoadState>("idle");
   const [deviceActionError, setDeviceActionError] = useState<string | null>(
     null,
@@ -1293,11 +1307,17 @@ export function App() {
     device_type: string;
     device_variant_code?: string;
   }) => {
+    setSelectedServiceSessionId(null);
     setSelectedDevice({
       serialNumber: device.device_serial_number,
       deviceType: device.device_type,
       variantCode: device.device_variant_code ?? "",
     });
+  };
+
+  const selectServiceSession = (sessionId: string) => {
+    setSelectedDevice(null);
+    setSelectedServiceSessionId(sessionId);
   };
 
   useEffect(() => {
@@ -1638,6 +1658,81 @@ export function App() {
   }, [apiBaseUrl, refreshVersion, selectedDeviceSerial]);
 
   useEffect(() => {
+    if (!selectedServiceSessionId) {
+      setServiceSessionDetails(null);
+      setServiceSessionAudit([]);
+      setServiceSessionDetailsState("idle");
+      setServiceSessionDetailsError(null);
+      return;
+    }
+
+    if (!apiBaseUrl.trim()) {
+      setServiceSessionDetails(null);
+      setServiceSessionAudit([]);
+      setServiceSessionDetailsState("error");
+      setServiceSessionDetailsError("Podaj bazowy adres API.");
+      return;
+    }
+
+    const controller = new AbortController();
+    let isCurrentRequest = true;
+    const serviceSessionAuditPromise = listAuditEvents(
+      apiBaseUrl.trim(),
+      {
+        entity_type: "SERVICE_SESSION",
+        entity_id: selectedServiceSessionId,
+      },
+      controller.signal,
+    ).catch((error: unknown) => {
+      if (isAbortError(error)) {
+        throw error;
+      }
+
+      return [] as AuditEvent[];
+    });
+
+    setServiceSessionDetails(null);
+    setServiceSessionAudit([]);
+    setServiceSessionDetailsState("loading");
+    setServiceSessionDetailsError(null);
+
+    Promise.all([
+      getServiceSession(
+        apiBaseUrl.trim(),
+        selectedServiceSessionId,
+        controller.signal,
+      ),
+      serviceSessionAuditPromise,
+    ])
+      .then(([serviceSession, auditEvents]) => {
+        if (!isCurrentRequest) {
+          return;
+        }
+
+        setServiceSessionDetails(serviceSession);
+        setServiceSessionAudit(auditEvents);
+        setServiceSessionDetailsState("loaded");
+      })
+      .catch((error: unknown) => {
+        if (!isCurrentRequest || isAbortError(error)) {
+          return;
+        }
+
+        setServiceSessionDetails(null);
+        setServiceSessionAudit([]);
+        setServiceSessionDetailsState("error");
+        setServiceSessionDetailsError(
+          error instanceof Error ? error.message : String(error),
+        );
+      });
+
+    return () => {
+      isCurrentRequest = false;
+      controller.abort();
+    };
+  }, [apiBaseUrl, refreshVersion, selectedServiceSessionId]);
+
+  useEffect(() => {
     if (
       !shouldLoadActionContext ||
       (!selectedDeviceSerial && !requiresBulkComponentQcActionContext)
@@ -1700,6 +1795,12 @@ export function App() {
     selectedDeviceSerial,
     shouldLoadActionContext,
   ]);
+
+  useEffect(() => {
+    if (activeView !== "service" && selectedServiceSessionId !== null) {
+      setSelectedServiceSessionId(null);
+    }
+  }, [activeView, selectedServiceSessionId]);
 
   useEffect(() => {
     if (finalTestSessionOptions.length === 0) {
@@ -2235,6 +2336,11 @@ export function App() {
     setSelectedQualitySessionId("");
     setSelectedAssemblyComponentType("");
     setAssemblyBarcodeValue("");
+    setSelectedServiceSessionId(null);
+    setServiceSessionDetails(null);
+    setServiceSessionAudit([]);
+    setServiceSessionDetailsState("idle");
+    setServiceSessionDetailsError(null);
     setSelectedShipmentSerials([]);
     setShipmentBulkActionState("idle");
     setShipmentBulkActionError(null);
@@ -2679,7 +2785,9 @@ export function App() {
                 }
                 fallbackLimit={serviceFilters.limit}
                 onSelectDevice={selectDevice}
+                onSelectSession={selectServiceSession}
                 selectedDeviceSerial={selectedDeviceSerial}
+                selectedSessionId={selectedServiceSessionId}
               />
             </>
           )}
@@ -2689,6 +2797,18 @@ export function App() {
               {...deviceDetailsViewProps}
               devicePageHref={selectedDevicePageHref}
               onClose={() => setSelectedDevice(null)}
+            />
+          ) : null}
+          {selectedServiceSessionId ? (
+            <ServiceSessionDetailsDrawer
+              apiBaseUrl={apiBaseUrl.trim()}
+              sessionId={selectedServiceSessionId}
+              session={serviceSessionDetails}
+              auditEvents={serviceSessionAudit}
+              loadState={serviceSessionDetailsState}
+              errorMessage={serviceSessionDetailsError}
+              onShowDevice={selectDevice}
+              onClose={() => setSelectedServiceSessionId(null)}
             />
           ) : null}
         </section>
@@ -3403,7 +3523,9 @@ function ServiceDashboard({
   onSelectTriggerSource,
   fallbackLimit,
   onSelectDevice,
+  onSelectSession,
   selectedDeviceSerial,
+  selectedSessionId,
 }: {
   apiBaseUrl: string;
   data: ServiceSessionQueue | null;
@@ -3418,7 +3540,9 @@ function ServiceDashboard({
     device_type: string;
     device_variant_code?: string;
   }) => void;
+  onSelectSession: (sessionId: string) => void;
   selectedDeviceSerial: string | null;
+  selectedSessionId: string | null;
 }) {
   const totalSessions = data?.total_sessions ?? 0;
   const reuploadedSessions = data?.reuploaded_sessions ?? 0;
@@ -3486,7 +3610,9 @@ function ServiceDashboard({
         sessions={data?.sessions ?? []}
         isLoading={isLoading}
         onSelectDevice={onSelectDevice}
+        onSelectSession={onSelectSession}
         selectedDeviceSerial={selectedDeviceSerial}
+        selectedSessionId={selectedSessionId}
       />
       <PaginationBar
         label="kolejki commissioning"
@@ -4114,7 +4240,9 @@ function ServiceSessionTable({
   sessions,
   isLoading,
   onSelectDevice,
+  onSelectSession,
   selectedDeviceSerial,
+  selectedSessionId,
 }: {
   apiBaseUrl: string;
   sessions: ServiceSessionRead[];
@@ -4124,7 +4252,9 @@ function ServiceSessionTable({
     device_type: string;
     device_variant_code?: string;
   }) => void;
+  onSelectSession: (sessionId: string) => void;
   selectedDeviceSerial: string | null;
+  selectedSessionId: string | null;
 }) {
   if (sessions.length === 0) {
     return (
@@ -4163,6 +4293,11 @@ function ServiceSessionTable({
           <tbody>
             {sessions.map((session) => {
               const isSelected =
+                selectedSessionId === session.session_id ||
+                selectedDeviceSerial === session.device_serial_number;
+              const isSessionSelected =
+                selectedSessionId === session.session_id;
+              const isDeviceSelected =
                 selectedDeviceSerial === session.device_serial_number;
 
               return (
@@ -4171,14 +4306,21 @@ function ServiceSessionTable({
                   className={isSelected ? "table-row-selected" : undefined}
                 >
                   <td>
-                    <strong>{session.session_id}</strong>
+                    <button
+                      className={`row-link ${isSessionSelected ? "is-selected" : ""}`}
+                      type="button"
+                      onClick={() => onSelectSession(session.session_id)}
+                      aria-pressed={isSessionSelected}
+                    >
+                      {session.session_id}
+                    </button>
                     <div className="table-subcopy">
                       Uploady: {formatNumber(session.upload_count)}
                     </div>
                   </td>
                   <td className="serial-cell">
                     <button
-                      className={`row-link ${isSelected ? "is-selected" : ""}`}
+                      className={`row-link ${isDeviceSelected ? "is-selected" : ""}`}
                       type="button"
                       onClick={() =>
                         onSelectDevice({
@@ -4186,7 +4328,7 @@ function ServiceSessionTable({
                           device_type: session.device_type ?? "",
                         })
                       }
-                      aria-pressed={isSelected}
+                      aria-pressed={isDeviceSelected}
                     >
                       {session.device_serial_number}
                     </button>
@@ -4229,6 +4371,265 @@ function ServiceSessionTable({
         </table>
       </div>
     </section>
+  );
+}
+
+function ServiceSessionDetailsDrawer({
+  apiBaseUrl,
+  sessionId,
+  session,
+  auditEvents,
+  loadState,
+  errorMessage,
+  onShowDevice,
+  onClose,
+}: {
+  apiBaseUrl: string;
+  sessionId: string;
+  session: ServiceSessionRead | null;
+  auditEvents: AuditEvent[];
+  loadState: LoadState;
+  errorMessage: string | null;
+  onShowDevice: (device: {
+    device_serial_number: string;
+    device_type: string;
+    device_variant_code?: string;
+  }) => void;
+  onClose: () => void;
+}) {
+  const detailHeadingId = "service-session-details-title";
+  const deviceSerialNumber = session?.device_serial_number ?? "Brak danych";
+  const deviceType = session?.device_type ?? "Brak danych";
+  const sessionResult = session?.result ?? null;
+  const uploadStatus = session?.upload_status ?? null;
+  const clientTriggerSource = session?.client_trigger_source ?? null;
+  const uploadCount = session?.upload_count ?? 0;
+  const firmwareVersion = session?.firmware_version ?? "Brak danych";
+  const bootloaderVersion = session?.bootloader_version ?? "Brak danych";
+
+  return (
+    <>
+      <button
+        className="drawer-backdrop"
+        type="button"
+        aria-label="Zamknij szczegóły sesji commissioning"
+        onClick={onClose}
+      />
+      <aside
+        className="details-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={detailHeadingId}
+      >
+        <div className="details-drawer-header">
+          <div>
+            <p className="eyebrow">Szczegóły sesji commissioning</p>
+            <h2 id={detailHeadingId}>{sessionId}</h2>
+            <p className="details-subtitle">
+              {deviceSerialNumber} · {deviceType}
+            </p>
+          </div>
+          <div className="details-header-actions">
+            {session ? (
+              <button
+                className="ghost-button"
+                type="button"
+                onClick={() =>
+                  onShowDevice({
+                    device_serial_number: session.device_serial_number,
+                    device_type: session.device_type ?? "",
+                  })
+                }
+              >
+                Pokaż urządzenie
+              </button>
+            ) : null}
+            <button className="ghost-button" type="button" onClick={onClose}>
+              Zamknij
+            </button>
+          </div>
+        </div>
+
+        {loadState === "loading" ? (
+          <section className="details-section">
+            <strong>Ładowanie szczegółów sesji...</strong>
+            <span className="empty-copy">
+              Pobieram metadane uploadu, retry klienta i historię audytu.
+            </span>
+          </section>
+        ) : errorMessage ? (
+          <section className="details-section error-banner" role="alert">
+            <strong>Nie udało się pobrać szczegółów sesji.</strong>
+            <span>{errorMessage}</span>
+          </section>
+        ) : session ? (
+          <div className="details-content">
+            <section className="details-grid">
+              <DetailCard
+                label="Status uploadu"
+                value={labelForCode(uploadStatus)}
+              />
+              <DetailCard
+                label="Wynik commissioning"
+                value={labelForCode(sessionResult)}
+              />
+              <DetailCard
+                label="Trigger synchronizacji"
+                value={labelForCode(clientTriggerSource)}
+              />
+              <DetailCard
+                label="Uploady backendu"
+                value={formatNumber(uploadCount)}
+              />
+              <DetailCard
+                label="Firmware"
+                value={firmwareVersion}
+              />
+              <DetailCard
+                label="Bootloader"
+                value={bootloaderVersion}
+              />
+            </section>
+
+            <DetailsSection title="Metadane synchronizacji">
+              <DetailsKeyGrid
+                items={[
+                  { label: "Urządzenie", value: deviceSerialNumber },
+                  { label: "Typ urządzenia", value: deviceType },
+                  {
+                    label: "Technik",
+                    value: session.technician_id ?? "Brak danych",
+                  },
+                  {
+                    label: "Attempt ID",
+                    value: session.client_attempt_id ?? "Brak danych",
+                  },
+                  {
+                    label: "Numer próby klienta",
+                    value:
+                      session.client_attempt_number !== null
+                        ? formatNumber(session.client_attempt_number)
+                        : "Brak danych",
+                  },
+                  {
+                    label: "Correlation ID",
+                    value: session.upload_correlation_id ?? "Brak danych",
+                  },
+                  {
+                    label: "Hash paczki",
+                    value: session.package_hash ?? "Brak danych",
+                  },
+                  {
+                    label: "Utworzono",
+                    value: formatDateTime(session.created_at),
+                  },
+                  {
+                    label: "Ostatni upload",
+                    value: formatDateTime(session.uploaded_at),
+                  },
+                ]}
+              />
+              <TagList
+                items={[
+                  session.package_path
+                    ? `Plik: ${session.package_path}`
+                    : "",
+                ].filter((value) => value !== "")}
+                emptyLabel="Brak dodatkowych ścieżek pakietu."
+                compact
+              />
+              <div className="details-inline-actions">
+                <a
+                  className="details-record-link"
+                  href={buildServiceSessionPackageHref(apiBaseUrl, session.session_id)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Pobierz paczkę ZIP
+                </a>
+              </div>
+            </DetailsSection>
+
+            <DetailsSection title="Historia audytu synchronizacji">
+              {auditEvents.length > 0 ? (
+                <div className="detail-history-list">
+                  {auditEvents.map((event) => {
+                    const uploadCountFromPayload =
+                      typeof event.payload?.upload_count === "number"
+                        ? event.payload.upload_count
+                        : null;
+                    const clientTriggerSourceFromPayload =
+                      typeof event.payload?.client_trigger_source === "string"
+                        ? event.payload.client_trigger_source
+                        : null;
+                    const clientAttemptNumber =
+                      typeof event.payload?.client_attempt_number === "number"
+                        ? event.payload.client_attempt_number
+                        : null;
+                    const uploadCorrelationId =
+                      typeof event.payload?.upload_correlation_id === "string"
+                        ? event.payload.upload_correlation_id
+                        : null;
+                    const packageHash =
+                      typeof event.payload?.package_hash === "string"
+                        ? event.payload.package_hash
+                        : null;
+                    const clientAttemptId =
+                      typeof event.payload?.client_attempt_id === "string"
+                        ? event.payload.client_attempt_id
+                        : null;
+
+                    return (
+                      <article className="detail-history-card" key={event.id}>
+                        <div className="detail-inline-header">
+                          <CodePill value={event.event_type} />
+                          <CodePill value={event.result} />
+                        </div>
+                        <strong>{formatDateTime(event.created_at)}</strong>
+                        <p>{event.message ?? "Bez komunikatu."}</p>
+                        <span>
+                          Trigger klienta: {labelForCode(clientTriggerSourceFromPayload)}
+                          {clientAttemptNumber !== null
+                            ? ` · próba ${formatNumber(clientAttemptNumber)}`
+                            : ""}
+                        </span>
+                        <span>
+                          Licznik uploadów backendu:{" "}
+                          {uploadCountFromPayload !== null
+                            ? formatNumber(uploadCountFromPayload)
+                            : "Brak danych"}
+                        </span>
+                        <TagList
+                          items={[
+                            uploadCorrelationId
+                              ? `Correlation ID: ${uploadCorrelationId}`
+                              : "",
+                            clientAttemptId
+                              ? `Attempt ID: ${clientAttemptId}`
+                              : "",
+                            packageHash ? `Hash: ${packageHash}` : "",
+                          ].filter((value) => value !== "")}
+                          emptyLabel="Brak dodatkowych metadanych synchronizacji."
+                          compact
+                        />
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="empty-copy">
+                  Brak historii audytu dla tej sesji commissioning.
+                </p>
+              )}
+            </DetailsSection>
+          </div>
+        ) : (
+          <section className="details-section">
+            <strong>Nie znaleziono danych sesji.</strong>
+          </section>
+        )}
+      </aside>
+    </>
   );
 }
 

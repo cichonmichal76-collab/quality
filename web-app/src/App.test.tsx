@@ -269,6 +269,42 @@ const serviceQueuePayload: ServiceSessionQueue = {
   ],
 };
 
+const serviceSessionDetailsPayload: ServiceSessionRead = {
+  ...serviceQueuePayload.sessions[0],
+  technician_id: "TECH-DETAIL-001",
+  firmware_version: "1.0.9",
+  bootloader_version: "0.9.9",
+  package_hash: "hash-detail-001",
+  client_attempt_id: "ATT-DETAIL-001",
+  client_attempt_number: 3,
+  client_trigger_source: "DEFERRED_WORKER",
+  upload_correlation_id: "CORR-DETAIL-001",
+};
+
+const serviceSessionDetailsAuditPayload: AuditEvent[] = [
+  {
+    id: "AUD-SVC-001",
+    event_type: "SERVICE_SESSION_PACKAGE_REUPLOADED",
+    entity_type: "SERVICE_SESSION",
+    entity_id: "SVC-001",
+    work_session_id: null,
+    operator_id: "TECH-DETAIL-001",
+    workstation_id: null,
+    machine_id: null,
+    result: "UPLOADED",
+    message: "Service session package reuploaded",
+    payload: {
+      upload_count: 3,
+      package_hash: "hash-detail-001",
+      upload_correlation_id: "CORR-DETAIL-001",
+      client_attempt_id: "ATT-DETAIL-001",
+      client_attempt_number: 3,
+      client_trigger_source: "DEFERRED_WORKER",
+    },
+    created_at: "2026-05-03T09:15:00Z",
+  },
+];
+
 const shipmentDetailsPayload: DeviceShipmentReadiness = {
   ...shipmentPayload.devices[0],
   has_critical_open_ncr: true,
@@ -5715,6 +5751,78 @@ describe("App", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     expect(fetchMock).toHaveBeenLastCalledWith(
       "/api/service-sessions/queue?sort_by=uploaded_at&sort_desc=true&limit=100",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+  });
+
+  it("opens commissioning session details drawer from service queue", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url === "/api/shipment-readiness?sort_by=created_at&sort_desc=true&limit=100") {
+        return Promise.resolve(createJsonResponse(shipmentPayload));
+      }
+
+      if (url === "/api/service-sessions/queue?sort_by=uploaded_at&sort_desc=true&limit=100") {
+        return Promise.resolve(createJsonResponse(serviceQueuePayload));
+      }
+
+      if (url === "/api/service-sessions/SVC-001") {
+        return Promise.resolve(createJsonResponse(serviceSessionDetailsPayload));
+      }
+
+      if (
+        url ===
+        "/api/audit-events?entity_type=SERVICE_SESSION&entity_id=SVC-001"
+      ) {
+        return Promise.resolve(createJsonResponse(serviceSessionAuditPayload));
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("SHIP-001")).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Commissioning i serwis" }),
+    );
+
+    expect(await screen.findByText("SVC-001")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "SVC-001" }));
+
+    const drawer = await screen.findByRole("dialog");
+    expect(
+      within(drawer).getByRole("heading", { name: "SVC-001" }),
+    ).toBeInTheDocument();
+    expect(
+      within(drawer).getByText("Szczegóły sesji commissioning"),
+    ).toBeInTheDocument();
+    expect(within(drawer).getByText("TECH-DETAIL-001")).toBeInTheDocument();
+    expect(
+      within(drawer).getByText("Service session package reuploaded"),
+    ).toBeInTheDocument();
+    expect(
+      within(drawer).getByRole("link", { name: "Pobierz paczkę ZIP" }),
+    ).toHaveAttribute("href", "/api/service-sessions/SVC-001/package");
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/service-sessions/SVC-001",
+        expect.objectContaining({
+          headers: { Accept: "application/json" },
+          signal: expect.any(AbortSignal),
+        }),
+      ),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/audit-events?entity_type=SERVICE_SESSION&entity_id=SVC-001",
       expect.objectContaining({
         headers: { Accept: "application/json" },
         signal: expect.any(AbortSignal),

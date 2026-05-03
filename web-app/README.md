@@ -133,8 +133,8 @@ backend pod `http://127.0.0.1:8000`.
   blokującymi, drawer szczegółów urządzenia i paginacja wyników.
 - `Commissioning i serwis` - kolejka sesji commissioning, status uploadu,
   wynik sesji, trigger synchronizacji, liczba reuploadów, technik,
-  firmware/bootloader, eksport CSV i przejście do szczegółów urządzenia po
-  numerze seryjnym.
+  firmware/bootloader, eksport CSV, drawer szczegółów sesji po `session_id`
+  oraz przejście do szczegółów urządzenia po numerze seryjnym.
 
 Pełny widok urządzenia zawiera też skróty do gotowych, przefiltrowanych
 kolejek powiązanych z bieżącym problemem, np. do tej samej blokady
@@ -166,8 +166,8 @@ urządzenia z kolejki komponentów, przejście z sekcji `BOM` do przefiltrowanej
 kolejki wysyłki, klikane presety filtrów z kart podsumowań i metryk oraz
 zdejmowanie pojedynczych chipów aktywnych filtrów, a także kopiowanie linku
 bieżącego widoku do schowka, eksport całej aktywnej kolejki do CSV,
-auto-odświeżanie aktywnej kolejki, mockowany widok `Commissioning i serwis`
-oraz mockowane scenariusze wykonania akcji
+auto-odświeżanie aktywnej kolejki, mockowany widok `Commissioning i serwis`,
+mockowany drawer szczegółów sesji commissioning oraz mockowane scenariusze wykonania akcji
 `Oznacz gotowe do wysyłki`, `Oznacz jako wysłane`, `Zamontuj komponent`,
 `Zamknij krytyczne NCR`, `Zapisz final test PASS` oraz
 `Zapisz komponentowy QC PASS`.
