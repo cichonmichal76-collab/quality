@@ -3224,6 +3224,12 @@ def test_qc_item_can_close_open_ncr_and_return_to_rework():
     assert len(ncr_rows.json()) == 1
     assert ncr_rows.json()[0]["ncr_id"] == f"NCR-QC-{run_id}"
 
+    run_history = client.get(f"/api/qc-items/{item_serial_number}/runs?limit=5")
+    assert run_history.status_code == 200
+    assert len(run_history.json()) == 1
+    assert run_history.json()[0]["run_id"] == run_id
+    assert run_history.json()[0]["result"] == "FAIL"
+
     released = client.post(
         f"/api/qc-items/{item_serial_number}/release-for-rework",
         json={
@@ -3247,6 +3253,17 @@ def test_qc_item_can_close_open_ncr_and_return_to_rework():
     after_release_rows = client.get(f"/api/qc-items/{item_serial_number}/open-critical-ncrs")
     assert after_release_rows.status_code == 200
     assert after_release_rows.json() == []
+
+    closed_ncr_rows = client.get(
+        f"/api/qc-items/{item_serial_number}/closed-critical-ncrs?limit=5"
+    )
+    assert closed_ncr_rows.status_code == 200
+    assert len(closed_ncr_rows.json()) == 1
+    assert closed_ncr_rows.json()[0]["ncr_id"] == f"NCR-QC-{run_id}"
+    assert (
+        closed_ncr_rows.json()[0]["corrective_action"]
+        == "Replaced housing and queued for reinspection"
+    )
 
     audit = client.get(
         f"/api/audit-events?entity_type=PRODUCTION_ITEM&entity_id={item_serial_number}"

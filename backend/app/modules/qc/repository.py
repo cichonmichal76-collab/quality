@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 
-from app.models import ProductionItem, QcChecklist, QcRun, QcStep, QcStepResult
+from app.models import Nonconformity, ProductionItem, QcChecklist, QcRun, QcStep, QcStepResult
 
 
 def get_checklist_by_code(db: Session, checklist_code: str) -> QcChecklist | None:
@@ -94,6 +94,40 @@ def list_checklist_steps(db: Session, checklist_id: str) -> list[QcStep]:
 
 def get_qc_run(db: Session, run_id: str) -> QcRun | None:
     return db.query(QcRun).filter(QcRun.run_id == run_id).first()
+
+
+def list_qc_runs_for_item(
+    db: Session,
+    item_serial_number: str,
+    *,
+    limit: int,
+) -> list[QcRun]:
+    return (
+        db.query(QcRun)
+        .filter(QcRun.item_serial_number == item_serial_number)
+        .order_by(QcRun.started_at.desc(), QcRun.id.desc())
+        .limit(limit)
+        .all()
+    )
+
+
+def list_closed_critical_ncrs_for_item(
+    db: Session,
+    item_serial_number: str,
+    *,
+    limit: int,
+) -> list[Nonconformity]:
+    return (
+        db.query(Nonconformity)
+        .filter(
+            Nonconformity.component_serial_number == item_serial_number,
+            Nonconformity.severity == "CRITICAL",
+            Nonconformity.status == "CLOSED",
+        )
+        .order_by(Nonconformity.closed_at.desc(), Nonconformity.detected_at.desc())
+        .limit(limit)
+        .all()
+    )
 
 
 def get_qc_step(db: Session, step_id: str) -> QcStep | None:

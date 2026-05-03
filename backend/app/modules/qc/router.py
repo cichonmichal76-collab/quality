@@ -68,6 +68,34 @@ def list_open_critical_ncrs_for_item(
     return service.list_open_critical_ncrs_for_item(db, item_serial_number)
 
 
+@router.get(
+    "/qc-items/{item_serial_number}/closed-critical-ncrs",
+    response_model=list[NonconformityRead],
+)
+def list_closed_critical_ncrs_for_item(
+    item_serial_number: str,
+    limit: int = 10,
+    db: Session = Depends(get_db),
+):
+    return service.list_closed_critical_ncrs_for_item(
+        db,
+        item_serial_number,
+        limit=limit,
+    )
+
+
+@router.get(
+    "/qc-items/{item_serial_number}/runs",
+    response_model=list[QcRunRead],
+)
+def list_qc_runs_for_item(
+    item_serial_number: str,
+    limit: int = 10,
+    db: Session = Depends(get_db),
+):
+    return service.list_qc_runs_for_item(db, item_serial_number, limit=limit)
+
+
 @router.post(
     "/qc-items/{item_serial_number}/release-for-rework",
     response_model=ProductionItemRead,

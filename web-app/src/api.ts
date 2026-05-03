@@ -1014,6 +1014,40 @@ export async function listQcItemOpenCriticalNcrs(
   );
 }
 
+export async function listQcItemClosedCriticalNcrs(
+  apiBaseUrl: string,
+  itemSerialNumber: string,
+  limit = 10,
+  signal?: AbortSignal,
+): Promise<NonconformityRead[]> {
+  return fetchJson<NonconformityRead[]>(
+    joinApiUrl(
+      apiBaseUrl,
+      `/qc-items/${encodeURIComponent(itemSerialNumber)}/closed-critical-ncrs${buildQuery({
+        limit,
+      })}`,
+    ),
+    signal,
+  );
+}
+
+export async function listQcRunsForItem(
+  apiBaseUrl: string,
+  itemSerialNumber: string,
+  limit = 10,
+  signal?: AbortSignal,
+): Promise<QcRunRead[]> {
+  return fetchJson<QcRunRead[]>(
+    joinApiUrl(
+      apiBaseUrl,
+      `/qc-items/${encodeURIComponent(itemSerialNumber)}/runs${buildQuery({
+        limit,
+      })}`,
+    ),
+    signal,
+  );
+}
+
 export async function releaseQcItemForRework(
   apiBaseUrl: string,
   itemSerialNumber: string,

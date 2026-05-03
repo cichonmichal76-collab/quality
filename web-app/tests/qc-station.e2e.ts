@@ -661,6 +661,59 @@ test("qc station pozwala zamknac NCR i przywrocic detal do reworku", async ({ pa
       return;
     }
 
+    if (pathname === "/api/qc-items/QCITEM-DEMO-REWORK/closed-critical-ncrs") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(
+          releasedForRework
+            ? [
+                {
+                  id: "NCR-ROW-001",
+                  ncr_id: "NCR-QC-REWORK-001",
+                  device_serial_number: null,
+                  component_serial_number: "QCITEM-DEMO-REWORK",
+                  process_stage: "COMPONENT_QC",
+                  description: "QC failed: VISUAL_DEFECT. Pekniecie obudowy.",
+                  severity: "CRITICAL",
+                  detected_by: "QCOP-DEMO-LOCAL",
+                  corrective_action:
+                    "Wymieniono obudowe i przygotowano detal do ponownej kontroli.",
+                  status: "CLOSED",
+                  detected_at: "2026-05-03T08:18:00Z",
+                  closed_at: "2026-05-03T08:25:00Z",
+                },
+              ]
+            : [],
+        ),
+      });
+      return;
+    }
+
+    if (pathname === "/api/qc-items/QCITEM-DEMO-REWORK/runs") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          {
+            id: "QC-ROW-REWORK",
+            run_id: "QC-WEB-REWORK",
+            item_serial_number: "QCITEM-DEMO-REWORK",
+            barcode_value: "QCBC-DEMO-REWORK",
+            checklist_id: "CHK-REWORK",
+            process_stage: "COMPONENT_QC",
+            work_session_id: "WS-QA-REWORK",
+            operator_id: "QCOP-DEMO-LOCAL",
+            status: "COMPLETED",
+            result: "FAIL",
+            started_at: "2026-05-03T08:17:00Z",
+            ended_at: "2026-05-03T08:19:00Z",
+          },
+        ]),
+      });
+      return;
+    }
+
     if (pathname === "/api/qc-items/QCITEM-DEMO-REWORK/release-for-rework" && method === "POST") {
       releasedForRework = true;
       await route.fulfill({
@@ -700,6 +753,7 @@ test("qc station pozwala zamknac NCR i przywrocic detal do reworku", async ({ pa
   await page.getByRole("button", { name: /QCITEM-DEMO-REWORK/i }).click();
 
   await expect(page.getByText("NCR-QC-REWORK-001")).toBeVisible();
+  await expect(page.getByText("QC-WEB-REWORK")).toBeVisible();
 
   await page.getByRole("button", { name: "Zamknij NCR i przywroc do reworku" }).click();
   await expect(
@@ -717,5 +771,8 @@ test("qc station pozwala zamknac NCR i przywrocic detal do reworku", async ({ pa
       .locator(".detail-card")
       .filter({ hasText: "Status biezacy" })
       .getByText(/Rework Required|REWORK_REQUIRED/i),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Wymieniono obudowe i przygotowano detal do ponownej kontroli."),
   ).toBeVisible();
 });

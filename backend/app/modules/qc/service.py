@@ -240,6 +240,36 @@ def list_open_critical_ncrs_for_item(
     )
 
 
+def list_closed_critical_ncrs_for_item(
+    db: Session,
+    item_serial_number: str,
+    *,
+    limit: int = 10,
+) -> list[Nonconformity]:
+    get_production_item_or_404(db, item_serial_number)
+    normalized_limit = max(1, min(limit, 50))
+    return repository.list_closed_critical_ncrs_for_item(
+        db,
+        item_serial_number,
+        limit=normalized_limit,
+    )
+
+
+def list_qc_runs_for_item(
+    db: Session,
+    item_serial_number: str,
+    *,
+    limit: int = 10,
+) -> list[QcRun]:
+    get_production_item_or_404(db, item_serial_number)
+    normalized_limit = max(1, min(limit, 50))
+    return repository.list_qc_runs_for_item(
+        db,
+        item_serial_number,
+        limit=normalized_limit,
+    )
+
+
 def get_qc_product_configuration(
     db: Session,
     device_type: str,

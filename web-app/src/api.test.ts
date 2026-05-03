@@ -15,10 +15,12 @@ import {
   getProductionItemByBarcode,
   getServiceSession,
   joinApiUrl,
+  listQcItemClosedCriticalNcrs,
   listQcItemOpenCriticalNcrs,
   listOperators,
   listQcChecklists,
   listQcChecklistSteps,
+  listQcRunsForItem,
   listServiceSessions,
   listServiceSessionsQueue,
   listWorkstations,
@@ -235,6 +237,61 @@ describe("qc item rework helpers", () => {
     expect(payload).toHaveLength(1);
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/qc-items/ITEM-001/open-critical-ncrs",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+      }),
+    );
+  });
+
+  it("pobiera zamkniete krytyczne NCR dla komponentu z limitem", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => [
+        {
+          ncr_id: "NCR-QC-CLOSED-001",
+          component_serial_number: "ITEM-001",
+          severity: "CRITICAL",
+          status: "CLOSED",
+        },
+      ],
+    } satisfies Partial<Response>);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const payload = await listQcItemClosedCriticalNcrs("/api", "ITEM-001", 5);
+
+    expect(payload).toHaveLength(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/qc-items/ITEM-001/closed-critical-ncrs?limit=5",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+      }),
+    );
+  });
+
+  it("pobiera historie QC run dla komponentu", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => [
+        {
+          run_id: "QCRUN-001",
+          item_serial_number: "ITEM-001",
+          process_stage: "COMPONENT_QC",
+          status: "COMPLETED",
+          result: "PASS",
+        },
+      ],
+    } satisfies Partial<Response>);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const payload = await listQcRunsForItem("/api", "ITEM-001", 8);
+
+    expect(payload).toHaveLength(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/qc-items/ITEM-001/runs?limit=8",
       expect.objectContaining({
         headers: { Accept: "application/json" },
       }),

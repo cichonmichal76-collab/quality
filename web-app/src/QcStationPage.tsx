@@ -7,7 +7,9 @@ import {
   createQcRun,
   getProductionItemByBarcode,
   joinApiUrl,
+  listQcItemClosedCriticalNcrs,
   listQcItemOpenCriticalNcrs,
+  listQcRunsForItem,
   listQcWaitingItems,
   listOperators,
   listQcChecklists,
@@ -133,6 +135,12 @@ export function QcStationPage() {
   const [openCriticalNcrsState, setOpenCriticalNcrsState] = useState<LoadState>("idle");
   const [openCriticalNcrsError, setOpenCriticalNcrsError] = useState<string | null>(null);
   const [openCriticalNcrs, setOpenCriticalNcrs] = useState<NonconformityRead[]>([]);
+  const [closedCriticalNcrsState, setClosedCriticalNcrsState] = useState<LoadState>("idle");
+  const [closedCriticalNcrsError, setClosedCriticalNcrsError] = useState<string | null>(null);
+  const [closedCriticalNcrs, setClosedCriticalNcrs] = useState<NonconformityRead[]>([]);
+  const [qcRunHistoryState, setQcRunHistoryState] = useState<LoadState>("idle");
+  const [qcRunHistoryError, setQcRunHistoryError] = useState<string | null>(null);
+  const [qcRunHistory, setQcRunHistory] = useState<QcRunRead[]>([]);
   const [reworkAction, setReworkAction] = useState("");
   const [reworkActionState, setReworkActionState] = useState<LoadState>("idle");
   const [reworkActionError, setReworkActionError] = useState<string | null>(null);
@@ -478,6 +486,72 @@ export function QcStationPage() {
   }, [apiBaseUrl, authState, selectedItem]);
 
   useEffect(() => {
+    const trimmedApiBaseUrl = apiBaseUrl.trim();
+    if (!trimmedApiBaseUrl || !authState || !selectedItem) {
+      setClosedCriticalNcrs([]);
+      setClosedCriticalNcrsState("idle");
+      setClosedCriticalNcrsError(null);
+      setQcRunHistory([]);
+      setQcRunHistoryState("idle");
+      setQcRunHistoryError(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    let isCurrentRequest = true;
+    setClosedCriticalNcrsState("loading");
+    setClosedCriticalNcrsError(null);
+    setQcRunHistoryState("loading");
+    setQcRunHistoryError(null);
+
+    Promise.all([
+      listQcItemClosedCriticalNcrs(
+        trimmedApiBaseUrl,
+        selectedItem.item_serial_number,
+        10,
+        controller.signal,
+      ),
+      listQcRunsForItem(
+        trimmedApiBaseUrl,
+        selectedItem.item_serial_number,
+        10,
+        controller.signal,
+      ),
+    ])
+      .then(([closedNcrRows, qcRunRows]) => {
+        if (!isCurrentRequest) {
+          return;
+        }
+
+        setClosedCriticalNcrs(closedNcrRows);
+        setClosedCriticalNcrsState("loaded");
+        setQcRunHistory(qcRunRows);
+        setQcRunHistoryState("loaded");
+      })
+      .catch((error: unknown) => {
+        if (!isCurrentRequest || controller.signal.aborted) {
+          return;
+        }
+
+        const message = getErrorMessage(
+          error,
+          "Nie udalo sie pobrac historii kontroli albo zamknietych NCR dla detalu.",
+        );
+        setClosedCriticalNcrs([]);
+        setClosedCriticalNcrsState("error");
+        setClosedCriticalNcrsError(message);
+        setQcRunHistory([]);
+        setQcRunHistoryState("error");
+        setQcRunHistoryError(message);
+      });
+
+    return () => {
+      isCurrentRequest = false;
+      controller.abort();
+    };
+  }, [apiBaseUrl, authState, selectedItem]);
+
+  useEffect(() => {
     setLookupError(null);
     setSubmitState("idle");
     setSubmitError(null);
@@ -490,6 +564,12 @@ export function QcStationPage() {
     setOpenCriticalNcrs([]);
     setOpenCriticalNcrsState("idle");
     setOpenCriticalNcrsError(null);
+    setClosedCriticalNcrs([]);
+    setClosedCriticalNcrsState("idle");
+    setClosedCriticalNcrsError(null);
+    setQcRunHistory([]);
+    setQcRunHistoryState("idle");
+    setQcRunHistoryError(null);
     setReworkAction("");
     setReworkActionState("idle");
     setReworkActionError(null);
@@ -1507,6 +1587,103 @@ export function QcStationPage() {
                       </span>
                     </div>
                   ) : null}
+                </div>
+              ) : null}
+
+              {selectedItem ? (
+                <div className="detail-inline-card qc-run-decision-card">
+                  <div className="detail-inline-header">
+                    <strong>2b. Historia kontroli i zamkniete NCR</strong>
+                    <span className="status-badge">
+                      {qcRunHistory.length} run / {closedCriticalNcrs.length} NCR
+                    </span>
+                  </div>
+                  <p>
+                    Podglad ostatnich kontroli tego samego detalu i zamknietych NCR po
+                    wykonanych poprawkach.
+                  </p>
+
+                  {qcRunHistoryError ? (
+                    <div className="error-banner" role="alert">
+                      <strong>Nie udalo sie pobrac historii kontroli.</strong>
+                      <span>{qcRunHistoryError}</span>
+                    </div>
+                  ) : null}
+
+                  <div className="details-grid qc-station-item-grid">
+                    <div className="detail-card">
+                      <span>Historia QC</span>
+                      <strong>
+                        {qcRunHistoryState === "loading"
+                          ? "Ladowanie"
+                          : `${qcRunHistory.length} wpis(ow)`}
+                      </strong>
+                    </div>
+                    <div className="detail-card">
+                      <span>Zamkniete NCR</span>
+                      <strong>
+                        {closedCriticalNcrsState === "loading"
+                          ? "Ladowanie"
+                          : `${closedCriticalNcrs.length} wpis(ow)`}
+                      </strong>
+                    </div>
+                  </div>
+
+                  {qcRunHistory.length > 0 ? (
+                    <div className="qc-evidence-list" data-testid="qc-run-history-list">
+                      {qcRunHistory.map((run) => (
+                        <div key={run.run_id} className="qc-evidence-item">
+                          <div className="qc-evidence-item-copy">
+                            <strong>{run.run_id}</strong>
+                            <span>
+                              {labelForCode(run.process_stage)} | {labelForCode(run.status)} |{" "}
+                              {labelForCode(run.result ?? "IN_PROGRESS")}
+                            </span>
+                            <span>
+                              {formatDateTime(run.started_at)}{" "}
+                              {run.ended_at ? `-> ${formatDateTime(run.ended_at)}` : ""}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="details-inline-actions">
+                      <span className="action-hint">
+                        Brak wczesniejszych runow QC dla tego detalu.
+                      </span>
+                    </div>
+                  )}
+
+                  {closedCriticalNcrsError ? (
+                    <div className="error-banner" role="alert">
+                      <strong>Nie udalo sie pobrac zamknietych NCR.</strong>
+                      <span>{closedCriticalNcrsError}</span>
+                    </div>
+                  ) : null}
+
+                  {closedCriticalNcrs.length > 0 ? (
+                    <div className="qc-evidence-list" data-testid="qc-closed-ncr-list">
+                      {closedCriticalNcrs.map((ncr) => (
+                        <div key={ncr.ncr_id} className="qc-evidence-item">
+                          <div className="qc-evidence-item-copy">
+                            <strong>{ncr.ncr_id}</strong>
+                            <span>
+                              Zamkniete:{" "}
+                              {ncr.closed_at ? formatDateTime(ncr.closed_at) : "brak daty"}
+                            </span>
+                            <span>{ncr.corrective_action ?? "Brak zapisanej akcji korygujacej."}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="details-inline-actions">
+                      <span className="action-hint">
+                        Brak zamknietych krytycznych NCR dla tego detalu.
+                      </span>
+                    </div>
+                  )}
                 </div>
               ) : null}
             </div>
