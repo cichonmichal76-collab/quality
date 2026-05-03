@@ -7,7 +7,6 @@ import {
   createQcRun,
   getQcRunDetails,
   getProductionItemByBarcode,
-  joinApiUrl,
   listQcItemClosedCriticalNcrs,
   listQcItemOpenCriticalNcrs,
   listQcRunsForItem,
@@ -24,7 +23,8 @@ import {
 } from "./api";
 import { QcStationHistoryPanel } from "./QcStationHistoryPanel";
 import { QcStationLoginScreen } from "./QcStationLoginScreen";
-import { QcReferenceImage } from "./QcReferenceImage";
+import { QcStationQueuePanel } from "./QcStationQueuePanel";
+import { QcStationRunPanel } from "./QcStationRunPanel";
 import type {
   LoadState,
   NonconformityRead,
@@ -36,7 +36,7 @@ import type {
   QcStepRead,
   WorkstationRead,
 } from "./api";
-import { formatDateTime, labelForCode } from "./dashboard";
+import { labelForCode } from "./dashboard";
 
 const API_STORAGE_KEY = "servicetrace.web.apiBaseUrl";
 const QC_AUTH_STORAGE_KEY = "servicetrace.web.qcStationAuth";
@@ -1515,791 +1515,126 @@ export function QcStationPage() {
               </div>
             </div>
 
-            <div className="filters-card">
-              <div className="section-heading">
-                <h2>2. Skan detalu i kolejka QC</h2>
-                <span className={`status-badge state-${lookupState}`}>
-                  {lookupState === "loading"
-                    ? "Szukam"
-                    : lookupState === "loaded"
-                      ? "Detal OK"
-                      : lookupState === "error"
-                        ? "Blad"
-                        : "Gotowy"}
-                </span>
-              </div>
-              <form className="qc-station-lookup-form" onSubmit={handleLookupSubmit}>
-                <label className="field">
-                  <span>Barcode komponentu</span>
-                  <input
-                    value={barcodeValue}
-                    onChange={(event) => setBarcodeValue(event.target.value)}
-                    placeholder="np. BC-DEMO-001"
+            <QcStationQueuePanel
+              authStateOperatorId={authState?.operatorId ?? null}
+              barcodeValue={barcodeValue}
+              lookupState={lookupState}
+              lookupError={lookupError}
+              waitingItemsState={waitingItemsState}
+              waitingItemsError={waitingItemsError}
+              waitingItems={waitingItems}
+              filteredWaitingItems={filteredWaitingItems}
+              waitingItemsReservationSummary={waitingItemsReservationSummary}
+              waitingItemsFilter={waitingItemsFilter}
+              waitingItemsReservationFilter={waitingItemsReservationFilter}
+              waitingItemsSort={waitingItemsSort}
+              selectedItem={selectedItem}
+              selectedItemReservedByOtherOperator={selectedItemReservedByOtherOperator}
+              selectedItemReservedByCurrentOperator={selectedItemReservedByCurrentOperator}
+              reservationState={reservationState}
+              reservationError={reservationError}
+              reservationSuccess={reservationSuccess}
+              shouldShowReworkPanel={shouldShowReworkPanel}
+              openCriticalNcrsState={openCriticalNcrsState}
+              openCriticalNcrsError={openCriticalNcrsError}
+              openCriticalNcrs={openCriticalNcrs}
+              canReleaseSelectedItemForRework={canReleaseSelectedItemForRework}
+              reworkAction={reworkAction}
+              reworkActionState={reworkActionState}
+              reworkActionError={reworkActionError}
+              reworkActionSuccess={reworkActionSuccess}
+              onBarcodeValueChange={setBarcodeValue}
+              onLookupSubmit={handleLookupSubmit}
+              onResetSelectedItem={() => {
+                setSelectedItem(null);
+                setLookupState("idle");
+                setLookupError(null);
+                setSubmitError(null);
+                setSubmitSuccess(null);
+                setCompletedRun(null);
+                setFailureReason("");
+                setFailureComment("");
+                setFailureDisposition("OPEN_CRITICAL_NCR");
+                setReworkAction("");
+                setReworkActionState("idle");
+                setReworkActionError(null);
+                setReworkActionSuccess(null);
+                setReservationState("idle");
+                setReservationError(null);
+                setReservationSuccess(null);
+                setBarcodeValue("");
+              }}
+              onApplyWaitingItemsPreset={applyWaitingItemsPreset}
+              onWaitingItemsFilterChange={setWaitingItemsFilter}
+              onWaitingItemsReservationFilterChange={setWaitingItemsReservationFilter}
+              onWaitingItemsSortChange={setWaitingItemsSort}
+              onPickWaitingItem={handlePickWaitingItem}
+              onReserveSelectedItem={handleReserveSelectedItem}
+              onReleaseSelectedItemReservation={handleReleaseSelectedItemReservation}
+              onReworkActionChange={setReworkAction}
+              onReleaseForRework={handleReleaseForRework}
+              isWaitingItemReservedByOtherOperator={isProductionItemReservedByOtherOperator}
+              formatWaitingItemReservationLabel={formatWaitingItemReservationLabel}
+              historyPanel={
+                selectedItem ? (
+                  <QcStationHistoryPanel
+                    apiBaseUrl={apiBaseUrl}
+                    filteredQcRunHistory={filteredQcRunHistory}
+                    qcRunHistory={qcRunHistory}
+                    qcRunHistoryError={qcRunHistoryError}
+                    qcRunHistoryState={qcRunHistoryState}
+                    sortedClosedCriticalNcrs={sortedClosedCriticalNcrs}
+                    closedCriticalNcrs={closedCriticalNcrs}
+                    closedCriticalNcrsError={closedCriticalNcrsError}
+                    closedCriticalNcrsState={closedCriticalNcrsState}
+                    qcRunHistoryFilter={qcRunHistoryFilter}
+                    qcRunHistorySort={qcRunHistorySort}
+                    closedCriticalNcrSort={closedCriticalNcrSort}
+                    selectedHistoryRunId={selectedHistoryRunId}
+                    selectedHistoryRunDetails={selectedHistoryRunDetails}
+                    qcRunDetailsState={qcRunDetailsState}
+                    qcRunDetailsError={qcRunDetailsError}
+                    onApplyHistoryPreset={applyHistoryPreset}
+                    onQcRunHistoryFilterChange={setQcRunHistoryFilter}
+                    onQcRunHistorySortChange={setQcRunHistorySort}
+                    onClosedCriticalNcrSortChange={setClosedCriticalNcrSort}
+                    onSelectedHistoryRunIdChange={setSelectedHistoryRunId}
                   />
-                </label>
-                <div className="details-inline-actions">
-                  <button className="primary-button" type="submit">
-                    Pobierz detal
-                  </button>
-                  {selectedItem ? (
-                    <button
-                      className="ghost-button"
-                      type="button"
-                      onClick={() => {
-                        setSelectedItem(null);
-                        setLookupState("idle");
-                        setLookupError(null);
-                        setSubmitError(null);
-                        setSubmitSuccess(null);
-                        setCompletedRun(null);
-                        setFailureReason("");
-                        setFailureComment("");
-                        setFailureDisposition("OPEN_CRITICAL_NCR");
-                        setReworkAction("");
-                        setReworkActionState("idle");
-                        setReworkActionError(null);
-                        setReworkActionSuccess(null);
-                        setReservationState("idle");
-                        setReservationError(null);
-                        setReservationSuccess(null);
-                        setBarcodeValue("");
-                      }}
-                    >
-                      Nowy detal
-                    </button>
-                  ) : null}
-                </div>
-              </form>
-              <div className="details-inline-actions">
-                <span className="action-hint">
-                  Kolejka pokazuje elementy w statusie `PRODUCED` albo `REWORK_REQUIRED`.
-                  Klikniecie detalu moze od razu dobrac wlasciwa checkliste po typie komponentu.
-                </span>
-                <span className={`status-badge state-${waitingItemsState}`}>
-                  {waitingItemsState === "loading"
-                    ? "Kolejka laduje"
-                    : waitingItemsState === "loaded"
-                      ? `${filteredWaitingItems.length}/${waitingItems.length} oczekuje`
-                      : waitingItemsState === "error"
-                        ? "Blad kolejki"
-                        : "Kolejka idle"}
-                </span>
-              </div>
-              <div className="detail-card-grid" data-testid="qc-waiting-summary">
-                <div className="detail-card" data-testid="qc-waiting-summary-all">
-                  <span>Wszystkie</span>
-                  <strong>{waitingItemsReservationSummary.all}</strong>
-                </div>
-                <div className="detail-card" data-testid="qc-waiting-summary-unreserved">
-                  <span>Wolne detale</span>
-                  <strong>{waitingItemsReservationSummary.unreserved}</strong>
-                </div>
-                <div className="detail-card" data-testid="qc-waiting-summary-mine">
-                  <span>Moje rezerwacje</span>
-                  <strong>{waitingItemsReservationSummary.mine}</strong>
-                </div>
-                <div className="detail-card" data-testid="qc-waiting-summary-other">
-                  <span>Cudze rezerwacje</span>
-                  <strong>{waitingItemsReservationSummary.otherReserved}</strong>
-                </div>
-              </div>
-              <div className="qc-station-form-grid qc-history-filter-grid">
-                <div className="details-inline-actions qc-history-preset-actions">
-                  <button
-                    className="ghost-button"
-                    type="button"
-                    onClick={() => applyWaitingItemsPreset("PRODUCED")}
-                  >
-                    Nowe sztuki
-                  </button>
-                  <button
-                    className="ghost-button"
-                    type="button"
-                    onClick={() => applyWaitingItemsPreset("REWORK_REQUIRED")}
-                  >
-                    Rework
-                  </button>
-                  <button
-                    className="ghost-button"
-                    type="button"
-                    onClick={() => applyWaitingItemsPreset("MINE")}
-                  >
-                    Moje rezerwacje
-                  </button>
-                  <button
-                    className="ghost-button"
-                    type="button"
-                    onClick={() => applyWaitingItemsPreset("UNRESERVED")}
-                  >
-                    Wolne detale
-                  </button>
-                  <button
-                    className="ghost-button"
-                    type="button"
-                    onClick={() => applyWaitingItemsPreset("OTHER_RESERVED")}
-                  >
-                    Cudze rezerwacje
-                  </button>
-                  <button
-                    className="ghost-button"
-                    type="button"
-                    onClick={() => applyWaitingItemsPreset("RESET")}
-                  >
-                    Reset kolejki
-                  </button>
-                </div>
-                <label className="field">
-                  <span>Status kolejki QC</span>
-                  <select
-                    aria-label="Status kolejki QC"
-                    value={waitingItemsFilter}
-                    onChange={(event) =>
-                      setWaitingItemsFilter(event.target.value as WaitingItemsFilter)
-                    }
-                  >
-                    <option value="ALL">Wszystkie sztuki</option>
-                    <option value="PRODUCED">Tylko nowe sztuki</option>
-                    <option value="REWORK_REQUIRED">Tylko rework</option>
-                  </select>
-                </label>
-                <label className="field">
-                  <span>Filtr rezerwacji QC</span>
-                  <select
-                    aria-label="Filtr rezerwacji QC"
-                    value={waitingItemsReservationFilter}
-                    onChange={(event) =>
-                      setWaitingItemsReservationFilter(
-                        event.target.value as WaitingItemsReservationFilter,
-                      )
-                    }
-                  >
-                    <option value="ALL">Wszystkie rezerwacje</option>
-                    <option value="UNRESERVED">Tylko wolne detale</option>
-                    <option value="MINE">Tylko moje rezerwacje</option>
-                    <option value="OTHER_RESERVED">Tylko cudze rezerwacje</option>
-                  </select>
-                </label>
-                <label className="field">
-                  <span>Sortowanie kolejki QC</span>
-                  <select
-                    aria-label="Sortowanie kolejki QC"
-                    value={waitingItemsSort}
-                    onChange={(event) =>
-                      setWaitingItemsSort(event.target.value as WaitingItemsSort)
-                    }
-                  >
-                    <option value="OLDEST">Najstarsze najpierw</option>
-                    <option value="NEWEST">Najnowsze najpierw</option>
-                  </select>
-                </label>
-              </div>
-              {waitingItemsError ? (
-                <div className="error-banner" role="alert">
-                  <strong>Nie udalo sie pobrac kolejki QC.</strong>
-                  <span>{waitingItemsError}</span>
-                </div>
-              ) : null}
-              {filteredWaitingItems.length === 0 ? (
-                <div className="empty-state qc-waiting-empty-state">
-                  <strong>Brak komponentow spelniajacych filtr kolejki QC</strong>
-                  <span>
-                    Zmien filtr albo poczekaj na nowe detale, aby zobaczyc elementy
-                    gotowe do kontroli bez przepisywania barcode.
-                  </span>
-                </div>
-              ) : (
-                <div className="qc-waiting-list" data-testid="qc-waiting-list">
-                  {filteredWaitingItems.map((item) => {
-                    const isSelected =
-                      selectedItem?.item_serial_number === item.item_serial_number;
-                    const isReservedByOtherOperator =
-                      !!authState &&
-                      isProductionItemReservedByOtherOperator(item, authState.operatorId);
-                    return (
-                      <button
-                        key={item.item_serial_number}
-                        className={`qc-waiting-item${isSelected ? " is-selected" : ""}`}
-                        type="button"
-                        onClick={() => handlePickWaitingItem(item)}
-                        disabled={isReservedByOtherOperator}
-                      >
-                        <div className="qc-waiting-item-copy">
-                          <strong>{item.item_serial_number}</strong>
-                          <span>
-                            {labelForCode(item.item_type)} | {item.barcode_value}
-                          </span>
-                        </div>
-                        <div className="qc-waiting-item-meta">
-                          <span>{labelForCode(item.current_status)}</span>
-                          {item.qc_reserved_by_operator_id ? (
-                            <span>
-                              Zarezerwowane: {formatWaitingItemReservationLabel(item)}
-                            </span>
-                          ) : (
-                            <span>Wolny detal</span>
-                          )}
-                          <span>{formatDateTime(item.produced_at ?? item.created_at)}</span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-              {lookupError ? (
-                <div className="error-banner" role="alert">
-                  <strong>Nie udalo sie pobrac komponentu.</strong>
-                  <span>{lookupError}</span>
-                </div>
-              ) : null}
-              {selectedItem ? (
-                <div className="details-grid qc-station-item-grid">
-                  <div className="detail-card">
-                    <span>Serial komponentu</span>
-                    <strong>{selectedItem.item_serial_number}</strong>
-                  </div>
-                  <div className="detail-card">
-                    <span>Status biezacy</span>
-                    <strong>{labelForCode(selectedItem.current_status)}</strong>
-                  </div>
-                  <div className="detail-card">
-                    <span>Typ komponentu</span>
-                    <strong>{labelForCode(selectedItem.item_type)}</strong>
-                  </div>
-                  <div className="detail-card">
-                    <span>Barcode</span>
-                    <strong>{selectedItem.barcode_value}</strong>
-                  </div>
-                  <div className="detail-card">
-                    <span>Rezerwacja QC</span>
-                    <strong>
-                      {selectedItem.qc_reserved_by_operator_id
-                        ? `${selectedItem.qc_reserved_by_operator_id} @ ${selectedItem.qc_reserved_by_workstation_id ?? "brak stanowiska"}`
-                        : "Brak rezerwacji"}
-                    </strong>
-                  </div>
-                </div>
-              ) : (
-                <div className="empty-state">
-                  <strong>Brak wybranego komponentu</strong>
-                  <span>
-                    Zeskanuj barcode, aby pobrac detal do kontroli i zapisac wynik QC.
-                  </span>
-                </div>
-              )}
-              {selectedItem ? (
-                <div className="details-inline-actions">
-                  {selectedItemReservedByCurrentOperator ? (
-                    <button
-                      className="ghost-button"
-                      type="button"
-                      onClick={handleReleaseSelectedItemReservation}
-                    >
-                      Zwolnij rezerwacje
-                    </button>
-                  ) : (
-                    <button
-                      className="ghost-button"
-                      type="button"
-                      onClick={handleReserveSelectedItem}
-                      disabled={selectedItemReservedByOtherOperator}
-                    >
-                      Zarezerwuj detal
-                    </button>
-                  )}
-                  <span className={`status-badge state-${reservationState}`}>
-                    {reservationState === "loading"
-                      ? "Rezerwuje"
-                      : reservationState === "loaded"
-                        ? "Rezerwacja OK"
-                        : reservationState === "error"
-                          ? "Blad rezerwacji"
-                          : selectedItemReservedByCurrentOperator
-                            ? "Zarezerwowany przeze mnie"
-                            : selectedItemReservedByOtherOperator
-                              ? "Zarezerwowany przez innego"
-                              : "Bez rezerwacji"}
-                  </span>
-                </div>
-              ) : null}
-              {reservationError ? (
-                <div className="error-banner" role="alert">
-                  <strong>Nie udalo sie obsluzyc rezerwacji detalu.</strong>
-                  <span>{reservationError}</span>
-                </div>
-              ) : null}
-              {reservationSuccess ? (
-                <div className="success-banner" role="status">
-                  <strong>{reservationSuccess}</strong>
-                </div>
-              ) : null}
-
-              {shouldShowReworkPanel ? (
-                <div className="detail-inline-card qc-run-decision-card">
-                  <div className="detail-inline-header">
-                    <strong>2a. NCR i decyzja rework</strong>
-                    <span className={`status-badge state-${openCriticalNcrsState}`}>
-                      {openCriticalNcrsState === "loading"
-                        ? "Sprawdzam NCR"
-                        : openCriticalNcrs.length > 0
-                          ? `${openCriticalNcrs.length} NCR`
-                          : selectedItem?.current_status === "REWORK_REQUIRED"
-                            ? "Rework gotowy"
-                            : "Brak otwartego NCR"}
-                    </span>
-                  </div>
-                  <p>
-                    Ten panel sluzy do domkniecia krytycznych NCR po poprawkach i
-                    przywrocenia detalu do kolejki ponownej kontroli.
-                  </p>
-
-                  {openCriticalNcrsError ? (
-                    <div className="error-banner" role="alert">
-                      <strong>Nie udalo sie pobrac NCR dla detalu.</strong>
-                      <span>{openCriticalNcrsError}</span>
-                    </div>
-                  ) : null}
-
-                  {openCriticalNcrs.length > 0 ? (
-                    <div className="qc-evidence-list">
-                      {openCriticalNcrs.map((ncr) => (
-                        <div key={ncr.ncr_id} className="qc-evidence-item">
-                          <div className="qc-evidence-item-copy">
-                            <strong>{ncr.ncr_id}</strong>
-                            <span>
-                              {labelForCode(ncr.severity)} | {labelForCode(ncr.status)} |{" "}
-                              {labelForCode(ncr.process_stage ?? "QC")}
-                            </span>
-                            <span>{ncr.description}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="details-inline-actions">
-                      <span className="action-hint">
-                        {selectedItem?.current_status === "REWORK_REQUIRED"
-                          ? "Detal jest juz oznaczony do reworku i pozostaje w kolejce ponownej kontroli."
-                          : "Dla tego detalu nie ma obecnie otwartego krytycznego NCR."}
-                      </span>
-                    </div>
-                  )}
-
-                  {canReleaseSelectedItemForRework ? (
-                    <div className="qc-station-form-grid">
-                      <label className="field qc-step-comment-field">
-                        <span>Akcja korygujaca po reworku</span>
-                        <textarea
-                          value={reworkAction}
-                          onChange={(event) => setReworkAction(event.target.value)}
-                          placeholder="Opisz wykonany rework, naprawe albo decyzje serwisowa przed ponowna kontrola."
-                        />
-                      </label>
-                    </div>
-                  ) : null}
-
-                  {reworkActionError ? (
-                    <div className="error-banner" role="alert">
-                      <strong>Nie udalo sie przygotowac detalu do reworku.</strong>
-                      <span>{reworkActionError}</span>
-                    </div>
-                  ) : null}
-
-                  {reworkActionSuccess ? (
-                    <div className="qc-auth-banner" role="status">
-                      <strong>{reworkActionSuccess}</strong>
-                    </div>
-                  ) : null}
-
-                  {canReleaseSelectedItemForRework ? (
-                    <div className="details-inline-actions">
-                      <button
-                        className="primary-button"
-                        type="button"
-                        disabled={reworkActionState === "loading"}
-                        onClick={handleReleaseForRework}
-                      >
-                        {openCriticalNcrs.length > 0
-                          ? "Zamknij NCR i przywroc do reworku"
-                          : "Przywroc detal do reworku"}
-                      </button>
-                      <span className={`status-badge state-${reworkActionState}`}>
-                        {reworkActionState === "loading"
-                          ? "Zapisuje"
-                          : reworkActionState === "loaded"
-                            ? "Rework OK"
-                            : reworkActionState === "error"
-                              ? "Blad"
-                              : "Gotowe"}
-                      </span>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {selectedItem ? (
-                <QcStationHistoryPanel
-                  apiBaseUrl={apiBaseUrl}
-                  filteredQcRunHistory={filteredQcRunHistory}
-                  qcRunHistory={qcRunHistory}
-                  qcRunHistoryError={qcRunHistoryError}
-                  qcRunHistoryState={qcRunHistoryState}
-                  sortedClosedCriticalNcrs={sortedClosedCriticalNcrs}
-                  closedCriticalNcrs={closedCriticalNcrs}
-                  closedCriticalNcrsError={closedCriticalNcrsError}
-                  closedCriticalNcrsState={closedCriticalNcrsState}
-                  qcRunHistoryFilter={qcRunHistoryFilter}
-                  qcRunHistorySort={qcRunHistorySort}
-                  closedCriticalNcrSort={closedCriticalNcrSort}
-                  selectedHistoryRunId={selectedHistoryRunId}
-                  selectedHistoryRunDetails={selectedHistoryRunDetails}
-                  qcRunDetailsState={qcRunDetailsState}
-                  qcRunDetailsError={qcRunDetailsError}
-                  onApplyHistoryPreset={applyHistoryPreset}
-                  onQcRunHistoryFilterChange={setQcRunHistoryFilter}
-                  onQcRunHistorySortChange={setQcRunHistorySort}
-                  onClosedCriticalNcrSortChange={setClosedCriticalNcrSort}
-                  onSelectedHistoryRunIdChange={setSelectedHistoryRunId}
-                />
-              ) : null}
-            </div>
+                ) : null
+              }
+            />
           </section>
 
-          <section className="details-section qc-station-run-section">
-            <div className="section-heading">
-              <h2>3. Wykonanie kontroli</h2>
-              <span className={`status-badge state-${stepsState}`}>
-                {stepsState === "loading"
-                  ? "Ladowanie krokow"
-                  : stepsState === "loaded"
-                    ? "Checklista gotowa"
-                    : stepsState === "error"
-                      ? "Blad krokow"
-                      : "Oczekuje"}
-              </span>
-            </div>
-
-            {stepsError ? (
-              <div className="error-banner" role="alert">
-                <strong>Nie udalo sie zaladowac checklisty.</strong>
-                <span>{stepsError}</span>
-              </div>
-            ) : null}
-
-            {selectedChecklist ? (
-              <div className="detail-inline-card">
-                <div className="detail-inline-header">
-                  <strong>{selectedChecklist.name}</strong>
-                  <span className="status-badge">
-                    {labelForCode(selectedChecklist.process_stage)}
-                  </span>
-                </div>
-                <p>
-                  Kod {selectedChecklist.checklist_code}, wersja {selectedChecklist.version}.
-                </p>
-                {selectedChecklist.reference_image_file_id ? (
-                  <QcReferenceImage
-                    imageUrl={joinApiUrl(
-                      apiBaseUrl.trim(),
-                      `/files/${encodeURIComponent(selectedChecklist.reference_image_file_id)}`,
-                    )}
-                    imageAlt={`Wzorzec kontroli ${selectedChecklist.name}`}
-                    areas={referenceOverlayAreas}
-                    caption="Zdjecie referencyjne elementu do porownania podczas kontroli."
-                  />
-                ) : null}
-              </div>
-            ) : null}
-
-            {selectedItem ? (
-              <div className="detail-inline-card qc-run-decision-card">
-                <div className="detail-inline-header">
-                  <strong>4. Decyzja kontroli</strong>
-                  <span
-                    className={`status-badge ${
-                      predictedRunResult === "FAIL" ? "state-error" : "state-loaded"
-                    }`}
-                  >
-                    {predictedRunResult}
-                  </span>
-                </div>
-                <p>
-                  System przewiduje wynik na podstawie aktualnych krokow. Operator
-                  wykonuje kontrole na podstawie zdjecia pogladowego od administratora,
-                  a dla FAIL musi wskazac powod i komentarz.
-                </p>
-                <div className="qc-station-form-grid">
-                  {predictedRunResult === "FAIL" ? (
-                    <label className="field">
-                      <span>Powod niezgodnosci</span>
-                      <select
-                        value={failureReason}
-                        onChange={(event) => setFailureReason(event.target.value)}
-                      >
-                        <option value="">Wybierz powod FAIL</option>
-                        {QC_FAILURE_REASON_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  ) : null}
-                  {predictedRunResult === "FAIL" ? (
-                    <label className="field">
-                      <span>Decyzja po FAIL</span>
-                      <select
-                        value={failureDisposition}
-                        onChange={(event) =>
-                          setFailureDisposition(
-                            event.target.value as
-                              | "OPEN_CRITICAL_NCR"
-                              | "REWORK_REQUIRED"
-                              | "BLOCKED",
-                          )
-                        }
-                      >
-                        {QC_FAILURE_DISPOSITION_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  ) : null}
-                  {predictedRunResult === "FAIL" ? (
-                    <label className="field qc-step-comment-field">
-                      <span>Komentarz do FAIL</span>
-                      <textarea
-                        value={failureComment}
-                        onChange={(event) => setFailureComment(event.target.value)}
-                        placeholder="Opisz co jest niezgodne i dlaczego detal nie przechodzi kontroli."
-                      />
-                    </label>
-                  ) : null}
-                </div>
-                {predictedRunResult === "FAIL" ? (
-                  <div className="details-inline-actions">
-                    <span className="action-hint">
-                      {
-                        QC_FAILURE_DISPOSITION_OPTIONS.find(
-                          (option) => option.value === failureDisposition,
-                        )?.hint
-                      }
-                    </span>
-                  </div>
-                ) : null}
-                <div className="details-inline-actions">
-                  <span className="action-hint">
-                    Operator nie dodaje zdjec do runu QC. Jedynym obrazem na stanowisku
-                    jest zdjecie pogladowe zdefiniowane przez administratora.
-                  </span>
-                </div>
-              </div>
-            ) : null}
-
-            {steps.length === 0 ? (
-              <div className="empty-state">
-                <strong>Brak krokow do wykonania</strong>
-                <span>
-                  Wybierz aktywna checkliste QC z krokami pomiarowymi albo kontrolnymi.
-                </span>
-              </div>
-            ) : (
-              <div className="qc-step-list">
-                {steps.map((step, index) => {
-                  const draft = stepDrafts[step.id] ?? createDefaultStepDraft();
-                  const preview = stepPreviews[step.id] ?? null;
-                  const evaluationMode = normalizeStepEvaluationMode(step);
-                  const isNumericRange = evaluationMode === "NUMERIC_RANGE";
-                  const isTextMatch = evaluationMode === "TEXT_MATCH";
-                  const isManualFail = isNumericRange && draft.status === "FAIL";
-
-                  return (
-                    <article key={step.id} className="qc-step-card">
-                      <div className="qc-step-card-header">
-                        <div>
-                          <p className="eyebrow">Krok {index + 1}</p>
-                          <h3>{step.title}</h3>
-                        </div>
-                        <div className="details-inline-actions">
-                          {isNumericRange ? (
-                            <span className="status-badge">Pomiar wymagany</span>
-                          ) : isTextMatch ? (
-                            <span className="status-badge">Porownanie tekstu</span>
-                          ) : (
-                            <span className="status-badge">Kontrola reczna</span>
-                          )}
-                          {step.blocking_on_fail ? (
-                            <span className="status-badge state-error">Fail blokuje</span>
-                          ) : null}
-                          {step.requires_photo ? (
-                            <span className="status-badge">Zdjecie wymagane</span>
-                          ) : null}
-                        </div>
-                      </div>
-                      {step.instruction ? (
-                        <p className="details-subtitle">{step.instruction}</p>
-                      ) : null}
-                      <div className="qc-step-meta">
-                        {step.control_area ? <span>Obszar: {step.control_area}</span> : null}
-                        {step.region_x != null &&
-                        step.region_y != null &&
-                        step.region_width != null &&
-                        step.region_height != null ? (
-                          <span>
-                            Region: X {step.region_x}% | Y {step.region_y}% | S {step.region_width}%
-                            {" "}W {step.region_height}%
-                          </span>
-                        ) : null}
-                        {step.expected_value ? (
-                          <span>Oczekiwane: {step.expected_value}</span>
-                        ) : null}
-                        {step.unit ? <span>Jednostka: {step.unit}</span> : null}
-                        {step.tolerance_min !== null || step.tolerance_max !== null ? (
-                          <span>{formatTolerance(step)}</span>
-                        ) : null}
-                      </div>
-                      <div className="qc-step-form-grid">
-                        {!isTextMatch ? (
-                          <label className="field">
-                            <span>
-                              {isNumericRange ? "Tryb wyniku kroku" : "Wynik kroku"}
-                            </span>
-                            <select
-                              value={draft.status}
-                              onChange={(event) =>
-                                handleStepDraftChange(step.id, "status", event.target.value)
-                              }
-                            >
-                              {isNumericRange ? (
-                                <>
-                                  <option value="PASS">Zalicz wedlug pomiaru</option>
-                                  <option value="FAIL">Oznacz FAIL recznie</option>
-                                </>
-                              ) : (
-                                <>
-                                  <option value="PASS">PASS</option>
-                                  <option value="FAIL">FAIL</option>
-                                </>
-                              )}
-                            </select>
-                          </label>
-                        ) : null}
-                        {isNumericRange ? (
-                          <label className="field">
-                            <span>
-                              {(step.result_input_label || "Pomiar") +
-                                (step.unit ? ` (${step.unit})` : "")}
-                            </span>
-                            <input
-                              value={draft.measurementValue}
-                              onChange={(event) =>
-                                handleStepDraftChange(
-                                  step.id,
-                                  "measurementValue",
-                                  event.target.value,
-                                )
-                              }
-                              inputMode="decimal"
-                              placeholder="np. 24.95"
-                              disabled={isManualFail}
-                            />
-                          </label>
-                        ) : null}
-                        {isTextMatch ? (
-                          <label className="field">
-                            <span>{step.result_input_label || "Wynik kontroli"}</span>
-                            <input
-                              value={draft.observedValue}
-                              onChange={(event) =>
-                                handleStepDraftChange(
-                                  step.id,
-                                  "observedValue",
-                                  event.target.value,
-                                )
-                              }
-                              placeholder="Wpisz odczyt lub wynik obserwacji"
-                            />
-                          </label>
-                        ) : null}
-                        <label className="field qc-step-comment-field">
-                          <span>Komentarz operatora</span>
-                          <input
-                            value={draft.comment}
-                            onChange={(event) =>
-                              handleStepDraftChange(step.id, "comment", event.target.value)
-                            }
-                            placeholder="Opcjonalna notatka albo numer przyrzadu"
-                          />
-                        </label>
-                      </div>
-                      {isNumericRange || isTextMatch ? (
-                        <div className="details-inline-actions">
-                          {isNumericRange && isManualFail ? (
-                            <span className="inline-feedback-badge state-error">
-                              FAIL zostanie zapisany recznie bez automatyki tolerancji.
-                            </span>
-                          ) : preview ? (
-                            <span className={`inline-feedback-badge state-${preview.kind}`}>
-                              {preview.message}
-                            </span>
-                          ) : (
-                            <span className="action-hint">
-                              {isNumericRange
-                                ? "Wpisz pomiar, a wynik kroku zostanie porownany z tolerancja."
-                                : "Wpisz obserwowany wynik, a system porowna go z wartoscia oczekiwana."}
-                            </span>
-                          )}
-                        </div>
-                      ) : null}
-                    </article>
-                  );
-                })}
-              </div>
-            )}
-
-            {submitError ? (
-              <div className="error-banner" role="alert">
-                <strong>Kontrola nie zostala zapisana.</strong>
-                <span>{submitError}</span>
-              </div>
-            ) : null}
-
-            {submitSuccess ? (
-              <div className="qc-result-banner">
-                <strong>{submitSuccess}</strong>
-                {completedRun ? (
-                  <span>
-                    Run {completedRun.run_id} zakonczyl sie wynikiem {completedRun.result}
-                    {completedRun.ended_at
-                      ? ` o ${formatDateTime(completedRun.ended_at)}`
-                      : ""}.
-                  </span>
-                ) : null}
-              </div>
-            ) : null}
-
-            <div className="qc-station-toolbar">
-              <button
-                className="primary-button"
-                type="button"
-                onClick={handleSubmitRun}
-                disabled={
-                  submitState === "loading" ||
-                  !selectedItem ||
-                  !selectedChecklist ||
-                  !authState ||
-                  steps.length === 0
-                }
-              >
-                {submitState === "loading" ? "Zapisuje kontrole..." : "Zapisz kontrole QC"}
-              </button>
-              <span className="action-hint">
-                Po wyniku PASS backend ustawi komponent na `QC_PASSED`, wiec montaz
-                dopusci go do dalszych etapow. FAIL ustawi `QC_FAILED` i moze otworzyc NCR.
-              </span>
-            </div>
-          </section>
+          <QcStationRunPanel
+            apiBaseUrl={apiBaseUrl}
+            stepsState={stepsState}
+            stepsError={stepsError}
+            selectedChecklist={selectedChecklist}
+            referenceOverlayAreas={referenceOverlayAreas}
+            selectedItem={selectedItem}
+            predictedRunResult={predictedRunResult}
+            failureReason={failureReason}
+            failureComment={failureComment}
+            failureDisposition={failureDisposition}
+            steps={steps}
+            stepDrafts={stepDrafts}
+            stepPreviews={stepPreviews}
+            submitError={submitError}
+            submitSuccess={submitSuccess}
+            completedRun={completedRun}
+            submitState={submitState}
+            authStatePresent={!!authState}
+            onFailureReasonChange={setFailureReason}
+            onFailureDispositionChange={setFailureDisposition}
+            onFailureCommentChange={setFailureComment}
+            onStepDraftChange={handleStepDraftChange}
+            onSubmitRun={handleSubmitRun}
+            createDefaultStepDraft={() => createDefaultStepDraft()}
+            normalizeStepEvaluationMode={normalizeStepEvaluationMode}
+            formatTolerance={formatTolerance}
+            failureReasonOptions={QC_FAILURE_REASON_OPTIONS}
+            failureDispositionOptions={QC_FAILURE_DISPOSITION_OPTIONS}
+          />
         </>
       )}
     </main>
