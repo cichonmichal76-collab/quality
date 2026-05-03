@@ -172,6 +172,7 @@ const URL_COMPONENT_PREFIX = "comp_";
 const URL_SERVICE_PREFIX = "svc_";
 const URL_SERVICE_SESSION_ID_KEY = `${URL_SERVICE_PREFIX}session_id`;
 const DEVICE_DETAILS_PATH_PREFIX = "/devices/";
+const SERVICE_SESSION_DETAILS_PATH_PREFIX = "/service-sessions/";
 const DEVICE_DETAILS_SECTION_IDS = {
   actions: "akcje",
   shipmentGate: "bramka-wysylki",
@@ -306,6 +307,8 @@ interface DashboardUrlState {
   searchParams: URLSearchParams;
   isDevicePage: boolean;
   devicePageSerial: string | null;
+  isServiceSessionPage: boolean;
+  serviceSessionPageId: string | null;
 }
 
 interface ActiveFilterChip {
@@ -314,7 +317,7 @@ interface ActiveFilterChip {
 }
 
 interface CopyFeedbackState {
-  scope: "dashboard" | "device";
+  scope: "dashboard" | "device" | "service";
   tone: "success" | "error";
   message: string;
 }
@@ -385,6 +388,7 @@ const DEFAULT_SERVICE_FILTERS: ServiceFilters = {
 export function App() {
   const dashboardUrlState = readDashboardUrlState();
   const isDevicePage = dashboardUrlState.isDevicePage;
+  const isServiceSessionPage = dashboardUrlState.isServiceSessionPage;
   const [activeView, setActiveView] = useState<DashboardMode>(() => {
     return dashboardUrlState.activeView ?? readStoredDashboardMode();
   });
@@ -652,6 +656,17 @@ export function App() {
   const selectedDevicePageHref = selectedDevice
     ? buildDashboardLocationHref({
         pathname: buildDeviceDetailsPath(selectedDevice.serialNumber),
+        activeView,
+        shipmentFilters,
+        componentFilters,
+        serviceFilters,
+        selectedDevice,
+        selectedServiceSessionId,
+      })
+    : null;
+  const selectedServiceSessionPageHref = selectedServiceSessionId
+    ? buildDashboardLocationHref({
+        pathname: buildServiceSessionDetailsPath(selectedServiceSessionId),
         activeView,
         shipmentFilters,
         componentFilters,
@@ -1809,10 +1824,14 @@ export function App() {
   ]);
 
   useEffect(() => {
-    if (activeView !== "service" && selectedServiceSessionId !== null) {
+    if (
+      !isServiceSessionPage &&
+      activeView !== "service" &&
+      selectedServiceSessionId !== null
+    ) {
       setSelectedServiceSessionId(null);
     }
-  }, [activeView, selectedServiceSessionId]);
+  }, [activeView, isServiceSessionPage, selectedServiceSessionId]);
 
   useEffect(() => {
     if (finalTestSessionOptions.length === 0) {
@@ -2348,11 +2367,13 @@ export function App() {
     setSelectedQualitySessionId("");
     setSelectedAssemblyComponentType("");
     setAssemblyBarcodeValue("");
-    setSelectedServiceSessionId(null);
-    setServiceSessionDetails(null);
-    setServiceSessionAudit([]);
-    setServiceSessionDetailsState("idle");
-    setServiceSessionDetailsError(null);
+    if (!isServiceSessionPage) {
+      setSelectedServiceSessionId(null);
+      setServiceSessionDetails(null);
+      setServiceSessionAudit([]);
+      setServiceSessionDetailsState("idle");
+      setServiceSessionDetailsError(null);
+    }
     setSelectedShipmentSerials([]);
     setShipmentBulkActionState("idle");
     setShipmentBulkActionError(null);
@@ -2425,6 +2446,17 @@ export function App() {
         onRecordComponentQcFail: () => recordSelectedComponentQc("FAIL"),
         onCloseDeviceCriticalNcrs: closeSelectedDeviceCriticalNcrs,
         onCloseComponentCriticalNcrs: closeSelectedComponentCriticalNcrs,
+      }
+    : null;
+  const serviceSessionDetailsViewProps = selectedServiceSessionId
+    ? {
+        apiBaseUrl: apiBaseUrl.trim(),
+        sessionId: selectedServiceSessionId,
+        session: serviceSessionDetails,
+        auditEvents: serviceSessionAudit,
+        loadState: serviceSessionDetailsState,
+        errorMessage: serviceSessionDetailsError,
+        onShowDevice: selectDevice,
       }
     : null;
 
@@ -2567,6 +2599,40 @@ export function App() {
           <DeviceDetailsPage
             {...deviceDetailsViewProps}
             devicePageHref={selectedDevicePageHref}
+          />
+        </section>
+      ) : isServiceSessionPage && serviceSessionDetailsViewProps ? (
+        <section className="workspace">
+          <div className="device-page-bar">
+            <div className="device-page-actions">
+              <a className="ghost-button button-link" href={dashboardHref}>
+                WrĂłÄ‡ do dashboardu
+              </a>
+              <button
+                className="ghost-button"
+                type="button"
+                onClick={() => {
+                  void copyCurrentLink("service");
+                }}
+              >
+                Kopiuj link sesji
+              </button>
+              {copyFeedback?.scope === "service" ? (
+                <InlineFeedbackBadge
+                  message={copyFeedback.message}
+                  tone={copyFeedback.tone}
+                />
+              ) : null}
+            </div>
+            <span className="empty-copy">
+              PeĹ‚ny widok sesji commissioning zachowuje kontekst filtrĂłw i
+              aktywnej kolejki, wiÄ™c moĹĽesz wrĂłciÄ‡ dokĹ‚adnie do miejsca, z
+              ktĂłrego wszedĹ‚eĹ›.
+            </span>
+          </div>
+          <ServiceSessionDetailsPage
+            {...serviceSessionDetailsViewProps}
+            sessionPageHref={selectedServiceSessionPageHref}
           />
         </section>
       ) : (
@@ -2811,15 +2877,10 @@ export function App() {
               onClose={() => setSelectedDevice(null)}
             />
           ) : null}
-          {selectedServiceSessionId ? (
+          {selectedServiceSessionId && serviceSessionDetailsViewProps ? (
             <ServiceSessionDetailsDrawer
-              apiBaseUrl={apiBaseUrl.trim()}
-              sessionId={selectedServiceSessionId}
-              session={serviceSessionDetails}
-              auditEvents={serviceSessionAudit}
-              loadState={serviceSessionDetailsState}
-              errorMessage={serviceSessionDetailsError}
-              onShowDevice={selectDevice}
+              {...serviceSessionDetailsViewProps}
+              sessionPageHref={selectedServiceSessionPageHref}
               onClose={() => setSelectedServiceSessionId(null)}
             />
           ) : null}
@@ -4394,6 +4455,7 @@ function ServiceSessionDetailsDrawer({
   loadState,
   errorMessage,
   onShowDevice,
+  sessionPageHref,
   onClose,
 }: {
   apiBaseUrl: string;
@@ -4407,6 +4469,7 @@ function ServiceSessionDetailsDrawer({
     device_type: string;
     device_variant_code?: string;
   }) => void;
+  sessionPageHref: string | null;
   onClose: () => void;
 }) {
   const detailHeadingId = "service-session-details-title";
@@ -4455,6 +4518,11 @@ function ServiceSessionDetailsDrawer({
               >
                 Pokaż urządzenie
               </button>
+            ) : null}
+            {sessionPageHref ? (
+              <a className="ghost-button button-link" href={sessionPageHref}>
+                Pełna strona
+              </a>
             ) : null}
             <button className="ghost-button" type="button" onClick={onClose}>
               Zamknij
@@ -4642,6 +4710,223 @@ function ServiceSessionDetailsDrawer({
         )}
       </aside>
     </>
+  );
+}
+
+function ServiceSessionDetailsPage({
+  apiBaseUrl,
+  sessionId,
+  session,
+  auditEvents,
+  loadState,
+  errorMessage,
+}: {
+  apiBaseUrl: string;
+  sessionId: string;
+  session: ServiceSessionRead | null;
+  auditEvents: AuditEvent[];
+  loadState: LoadState;
+  errorMessage: string | null;
+  onShowDevice: (device: {
+    device_serial_number: string;
+    device_type: string;
+    device_variant_code?: string;
+  }) => void;
+  sessionPageHref: string | null;
+}) {
+  const detailHeadingId = "service-session-page-title";
+  const deviceSerialNumber = session?.device_serial_number ?? "Brak danych";
+  const deviceType = session?.device_type ?? "Brak danych";
+  const sessionResult = session?.result ?? null;
+  const uploadStatus = session?.upload_status ?? null;
+  const clientTriggerSource = session?.client_trigger_source ?? null;
+  const uploadCount = session?.upload_count ?? 0;
+  const firmwareVersion = session?.firmware_version ?? "Brak danych";
+  const bootloaderVersion = session?.bootloader_version ?? "Brak danych";
+
+  return (
+    <article className="details-page">
+      <div className="details-page-shell">
+        <div className="details-drawer-header">
+          <div>
+            <p className="eyebrow">Pełny widok sesji commissioning</p>
+            <h2 id={detailHeadingId}>{sessionId}</h2>
+            <p className="details-subtitle">
+              {deviceSerialNumber} · {deviceType}
+            </p>
+          </div>
+        </div>
+
+        {loadState === "loading" ? (
+          <section className="details-section">
+            <strong>Ładowanie szczegółów sesji...</strong>
+            <span className="empty-copy">
+              Pobieram metadane uploadu, retry klienta i historię audytu.
+            </span>
+          </section>
+        ) : errorMessage ? (
+          <section className="details-section error-banner" role="alert">
+            <strong>Nie udało się pobrać szczegółów sesji.</strong>
+            <span>{errorMessage}</span>
+          </section>
+        ) : session ? (
+          <div className="details-content">
+            <section className="details-grid">
+              <DetailCard
+                label="Status uploadu"
+                value={labelForCode(uploadStatus)}
+              />
+              <DetailCard
+                label="Wynik commissioning"
+                value={labelForCode(sessionResult)}
+              />
+              <DetailCard
+                label="Trigger synchronizacji"
+                value={labelForCode(clientTriggerSource)}
+              />
+              <DetailCard
+                label="Uploady backendu"
+                value={formatNumber(uploadCount)}
+              />
+              <DetailCard label="Firmware" value={firmwareVersion} />
+              <DetailCard label="Bootloader" value={bootloaderVersion} />
+            </section>
+
+            <DetailsSection title="Metadane synchronizacji">
+              <DetailsKeyGrid
+                items={[
+                  { label: "Urządzenie", value: deviceSerialNumber },
+                  { label: "Typ urządzenia", value: deviceType },
+                  {
+                    label: "Technik",
+                    value: session.technician_id ?? "Brak danych",
+                  },
+                  {
+                    label: "Attempt ID",
+                    value: session.client_attempt_id ?? "Brak danych",
+                  },
+                  {
+                    label: "Numer próby klienta",
+                    value:
+                      session.client_attempt_number !== null
+                        ? formatNumber(session.client_attempt_number)
+                        : "Brak danych",
+                  },
+                  {
+                    label: "Correlation ID",
+                    value: session.upload_correlation_id ?? "Brak danych",
+                  },
+                  {
+                    label: "Hash paczki",
+                    value: session.package_hash ?? "Brak danych",
+                  },
+                  {
+                    label: "Utworzono",
+                    value: formatDateTime(session.created_at),
+                  },
+                  {
+                    label: "Ostatni upload",
+                    value: formatDateTime(session.uploaded_at),
+                  },
+                ]}
+              />
+              <TagList
+                items={[session.package_path ? `Plik: ${session.package_path}` : ""].filter(
+                  (value) => value !== "",
+                )}
+                emptyLabel="Brak dodatkowych ścieżek pakietu."
+                compact
+              />
+              <div className="details-inline-actions">
+                <a
+                  className="details-record-link"
+                  href={buildServiceSessionPackageHref(apiBaseUrl, session.session_id)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Pobierz paczkę ZIP
+                </a>
+              </div>
+            </DetailsSection>
+
+            <DetailsSection title="Historia audytu synchronizacji">
+              {auditEvents.length > 0 ? (
+                <div className="detail-history-list">
+                  {auditEvents.map((event) => {
+                    const uploadCountFromPayload =
+                      typeof event.payload?.upload_count === "number"
+                        ? event.payload.upload_count
+                        : null;
+                    const clientTriggerSourceFromPayload =
+                      typeof event.payload?.client_trigger_source === "string"
+                        ? event.payload.client_trigger_source
+                        : null;
+                    const clientAttemptNumber =
+                      typeof event.payload?.client_attempt_number === "number"
+                        ? event.payload.client_attempt_number
+                        : null;
+                    const uploadCorrelationId =
+                      typeof event.payload?.upload_correlation_id === "string"
+                        ? event.payload.upload_correlation_id
+                        : null;
+                    const packageHash =
+                      typeof event.payload?.package_hash === "string"
+                        ? event.payload.package_hash
+                        : null;
+                    const clientAttemptId =
+                      typeof event.payload?.client_attempt_id === "string"
+                        ? event.payload.client_attempt_id
+                        : null;
+
+                    return (
+                      <article className="detail-history-card" key={event.id}>
+                        <div className="detail-inline-header">
+                          <CodePill value={event.event_type} />
+                          <CodePill value={event.result} />
+                        </div>
+                        <strong>{formatDateTime(event.created_at)}</strong>
+                        <p>{event.message ?? "Bez komunikatu."}</p>
+                        <span>
+                          Trigger klienta: {labelForCode(clientTriggerSourceFromPayload)}
+                          {clientAttemptNumber !== null
+                            ? ` · próba ${formatNumber(clientAttemptNumber)}`
+                            : ""}
+                        </span>
+                        <span>
+                          Licznik uploadów backendu:{" "}
+                          {uploadCountFromPayload !== null
+                            ? formatNumber(uploadCountFromPayload)
+                            : "Brak danych"}
+                        </span>
+                        <TagList
+                          items={[
+                            uploadCorrelationId
+                              ? `Correlation ID: ${uploadCorrelationId}`
+                              : "",
+                            clientAttemptId ? `Attempt ID: ${clientAttemptId}` : "",
+                            packageHash ? `Hash: ${packageHash}` : "",
+                          ].filter((value) => value !== "")}
+                          emptyLabel="Brak dodatkowych metadanych synchronizacji."
+                          compact
+                        />
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="empty-copy">
+                  Brak historii audytu dla tej sesji commissioning.
+                </p>
+              )}
+            </DetailsSection>
+          </div>
+        ) : (
+          <section className="details-section">
+            <strong>Nie znaleziono danych sesji.</strong>
+          </section>
+        )}
+      </div>
+    </article>
   );
 }
 
@@ -7036,7 +7321,8 @@ function readStoredDashboardMode(): DashboardMode {
 function readDashboardUrlState(): DashboardUrlState {
   const searchParams = new URLSearchParams(window.location.search);
   const devicePageSerial = readDevicePageSerial(window.location.pathname);
-  const activeView =
+  const serviceSessionPageId = readServiceSessionPageId(window.location.pathname);
+  const activeViewFromSearch =
     searchParams.get(URL_VIEW_KEY) === "components"
       ? "components"
       : searchParams.get(URL_VIEW_KEY) === "service"
@@ -7044,6 +7330,9 @@ function readDashboardUrlState(): DashboardUrlState {
         : searchParams.get(URL_VIEW_KEY) === "shipment"
           ? "shipment"
           : null;
+  const activeView =
+    activeViewFromSearch ??
+    (serviceSessionPageId !== null ? "service" : null);
 
   return {
     activeView,
@@ -7054,10 +7343,13 @@ function readDashboardUrlState(): DashboardUrlState {
       searchParams,
       activeView,
       devicePageSerial,
+      serviceSessionPageId,
     ),
     searchParams,
     isDevicePage: devicePageSerial !== null,
     devicePageSerial,
+    isServiceSessionPage: serviceSessionPageId !== null,
+    serviceSessionPageId,
   };
 }
 
@@ -7451,7 +7743,12 @@ function readSelectedServiceSessionIdFromUrl(
   searchParams: URLSearchParams,
   activeView: DashboardMode | null,
   devicePageSerial: string | null = null,
+  serviceSessionPageId: string | null = null,
 ): string | null {
+  if (serviceSessionPageId !== null) {
+    return serviceSessionPageId;
+  }
+
   if (activeView !== "service" || devicePageSerial !== null) {
     return null;
   }
@@ -7628,6 +7925,10 @@ function buildDeviceDetailsPath(serialNumber: string): string {
   return `${DEVICE_DETAILS_PATH_PREFIX}${encodeURIComponent(serialNumber)}`;
 }
 
+function buildServiceSessionDetailsPath(sessionId: string): string {
+  return `${SERVICE_SESSION_DETAILS_PATH_PREFIX}${encodeURIComponent(sessionId)}`;
+}
+
 function buildServiceSessionPackageHref(
   apiBaseUrl: string,
   sessionId: string,
@@ -7655,6 +7956,26 @@ function readDevicePageSerial(pathname: string): string | null {
     return decodeURIComponent(encodedSerial);
   } catch {
     return encodedSerial;
+  }
+}
+
+function readServiceSessionPageId(pathname: string): string | null {
+  if (!pathname.startsWith(SERVICE_SESSION_DETAILS_PATH_PREFIX)) {
+    return null;
+  }
+
+  const encodedSessionId = pathname
+    .slice(SERVICE_SESSION_DETAILS_PATH_PREFIX.length)
+    .split("/")[0]
+    ?.trim();
+  if (!encodedSessionId) {
+    return null;
+  }
+
+  try {
+    return decodeURIComponent(encodedSessionId);
+  } catch {
+    return encodedSessionId;
   }
 }
 

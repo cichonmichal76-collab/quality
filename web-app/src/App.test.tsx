@@ -2157,6 +2157,59 @@ describe("App", () => {
     ).toHaveAttribute("href", expect.stringContaining("device_serial=COMP-001"));
   });
 
+  it("opens full commissioning session page directly from route", async () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/service-sessions/SVC-001?view=service&svc_device_type=DEMO-SVC&svc_sort_by=uploaded_at&svc_sort_desc=true&svc_limit=100&svc_offset=0&svc_session_id=SVC-001",
+    );
+
+    const fetchMock = vi.fn((input: string | URL | Request) => {
+      const url = String(input);
+
+      if (
+        url ===
+        "/api/service-sessions/queue?device_type=DEMO-SVC&sort_by=uploaded_at&sort_desc=true&limit=100"
+      ) {
+        return Promise.resolve(createJsonResponse(serviceQueuePayload));
+      }
+
+      if (url === "/api/service-sessions/SVC-001") {
+        return Promise.resolve(createJsonResponse(serviceSessionDetailsPayload));
+      }
+
+      if (
+        url ===
+        "/api/audit-events?entity_type=SERVICE_SESSION&entity_id=SVC-001"
+      ) {
+        return Promise.resolve(createJsonResponse(serviceSessionAuditPayload));
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", { name: "SVC-001" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(
+      screen.getByText("Pełny widok sesji commissioning"),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /dashboardu/i })).toHaveAttribute(
+      "href",
+      expect.stringContaining(
+        "/?view=service&ship_sort_by=created_at&ship_sort_desc=true",
+      ),
+    );
+    expect(screen.getByRole("link", { name: /dashboardu/i })).toHaveAttribute(
+      "href",
+      expect.stringContaining("svc_session_id=SVC-001"),
+    );
+  });
+
   it("copies current dashboard link with active filters", async () => {
     localStorage.setItem(VIEW_STORAGE_KEY, "components");
     localStorage.setItem(
@@ -5856,6 +5909,10 @@ describe("App", () => {
     expect(
       within(drawer).getByRole("link", { name: "Pobierz paczkę ZIP" }),
     ).toHaveAttribute("href", "/api/service-sessions/SVC-001/package");
+    expect(within(drawer).getByRole("link", { name: /strona/i })).toHaveAttribute(
+      "href",
+      expect.stringContaining("/service-sessions/SVC-001?view=service"),
+    );
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(

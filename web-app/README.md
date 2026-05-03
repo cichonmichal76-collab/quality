@@ -134,7 +134,9 @@ backend pod `http://127.0.0.1:8000`.
 - `Commissioning i serwis` - kolejka sesji commissioning, status uploadu,
   wynik sesji, trigger synchronizacji, liczba reuploadów, technik,
   firmware/bootloader, eksport CSV, drawer szczegółów sesji po `session_id`
-  oraz przejście do szczegółów urządzenia po numerze seryjnym.
+  oraz przejście do szczegółów urządzenia po numerze seryjnym. Drawer sesji
+  ma też `Pełną stronę` pod `/service-sessions/{session_id}` z linkiem powrotu
+  do dokładnie tego samego kontekstu dashboardu.
 
 Pełny widok urządzenia zawiera też skróty do gotowych, przefiltrowanych
 kolejek powiązanych z bieżącym problemem, np. do tej samej blokady
