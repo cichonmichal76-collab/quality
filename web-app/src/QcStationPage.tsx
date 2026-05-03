@@ -100,6 +100,8 @@ interface StepPreview {
   message: string;
 }
 
+type WaitingItemsFilter = "ALL" | "PRODUCED" | "REWORK_REQUIRED";
+type WaitingItemsSort = "OLDEST" | "NEWEST";
 type QcRunHistoryFilter = "ALL" | "FAIL" | "PASS" | "POST_LATEST_REWORK";
 type QcRunHistorySort = "NEWEST" | "OLDEST";
 type ClosedCriticalNcrSort = "NEWEST" | "OLDEST";
@@ -138,6 +140,10 @@ export function QcStationPage() {
   const [waitingItemsError, setWaitingItemsError] = useState<string | null>(null);
   const [waitingItems, setWaitingItems] = useState<ProductionItemRead[]>([]);
   const [waitingItemsReloadKey, setWaitingItemsReloadKey] = useState(0);
+  const [waitingItemsFilter, setWaitingItemsFilter] =
+    useState<WaitingItemsFilter>("ALL");
+  const [waitingItemsSort, setWaitingItemsSort] =
+    useState<WaitingItemsSort>("OLDEST");
   const [openCriticalNcrsState, setOpenCriticalNcrsState] = useState<LoadState>("idle");
   const [openCriticalNcrsError, setOpenCriticalNcrsError] = useState<string | null>(null);
   const [openCriticalNcrs, setOpenCriticalNcrs] = useState<NonconformityRead[]>([]);
@@ -216,6 +222,11 @@ export function QcStationPage() {
     (openCriticalNcrs.length > 0 ||
       selectedItem.current_status === "QC_FAILED" ||
       selectedItem.current_status === "BLOCKED");
+  const filteredWaitingItems = filterAndSortWaitingItems(
+    waitingItems,
+    waitingItemsFilter,
+    waitingItemsSort,
+  );
   const filteredQcRunHistory = filterAndSortQcRunHistory(
     qcRunHistory,
     closedCriticalNcrs,
@@ -894,6 +905,25 @@ export function QcStationPage() {
     setClosedCriticalNcrSort("NEWEST");
   };
 
+  const applyWaitingItemsPreset = (
+    preset: "PRODUCED" | "REWORK_REQUIRED" | "RESET",
+  ) => {
+    if (preset === "PRODUCED") {
+      setWaitingItemsFilter("PRODUCED");
+      setWaitingItemsSort("OLDEST");
+      return;
+    }
+
+    if (preset === "REWORK_REQUIRED") {
+      setWaitingItemsFilter("REWORK_REQUIRED");
+      setWaitingItemsSort("OLDEST");
+      return;
+    }
+
+    setWaitingItemsFilter("ALL");
+    setWaitingItemsSort("OLDEST");
+  };
+
   const handleEvidenceFilesChange = (event: ChangeEvent<HTMLInputElement>) => {
     const nextFiles = Array.from(event.target.files ?? []);
     if (nextFiles.length === 0) {
@@ -1517,11 +1547,63 @@ export function QcStationPage() {
                   {waitingItemsState === "loading"
                     ? "Kolejka laduje"
                     : waitingItemsState === "loaded"
-                      ? `${waitingItems.length} oczekuje`
+                      ? `${filteredWaitingItems.length}/${waitingItems.length} oczekuje`
                       : waitingItemsState === "error"
                         ? "Blad kolejki"
                         : "Kolejka idle"}
                 </span>
+              </div>
+              <div className="qc-station-form-grid qc-history-filter-grid">
+                <div className="details-inline-actions qc-history-preset-actions">
+                  <button
+                    className="ghost-button"
+                    type="button"
+                    onClick={() => applyWaitingItemsPreset("PRODUCED")}
+                  >
+                    Nowe sztuki
+                  </button>
+                  <button
+                    className="ghost-button"
+                    type="button"
+                    onClick={() => applyWaitingItemsPreset("REWORK_REQUIRED")}
+                  >
+                    Rework
+                  </button>
+                  <button
+                    className="ghost-button"
+                    type="button"
+                    onClick={() => applyWaitingItemsPreset("RESET")}
+                  >
+                    Reset kolejki
+                  </button>
+                </div>
+                <label className="field">
+                  <span>Filtr kolejki QC</span>
+                  <select
+                    aria-label="Filtr kolejki QC"
+                    value={waitingItemsFilter}
+                    onChange={(event) =>
+                      setWaitingItemsFilter(event.target.value as WaitingItemsFilter)
+                    }
+                  >
+                    <option value="ALL">Wszystkie sztuki</option>
+                    <option value="PRODUCED">Tylko nowe sztuki</option>
+                    <option value="REWORK_REQUIRED">Tylko rework</option>
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Sortowanie kolejki QC</span>
+                  <select
+                    aria-label="Sortowanie kolejki QC"
+                    value={waitingItemsSort}
+                    onChange={(event) =>
+                      setWaitingItemsSort(event.target.value as WaitingItemsSort)
+                    }
+                  >
+                    <option value="OLDEST">Najstarsze najpierw</option>
+                    <option value="NEWEST">Najnowsze najpierw</option>
+                  </select>
+                </label>
               </div>
               {waitingItemsError ? (
                 <div className="error-banner" role="alert">
@@ -1529,17 +1611,17 @@ export function QcStationPage() {
                   <span>{waitingItemsError}</span>
                 </div>
               ) : null}
-              {waitingItems.length === 0 ? (
+              {filteredWaitingItems.length === 0 ? (
                 <div className="empty-state qc-waiting-empty-state">
-                  <strong>Brak komponentow oczekujacych na QC</strong>
+                  <strong>Brak komponentow spelniajacych filtr kolejki QC</strong>
                   <span>
-                    Gdy backend znajdzie detale gotowe do kontroli, pojawia sie tutaj
-                    lista do szybkiego pobrania bez przepisywania barcode.
+                    Zmien filtr albo poczekaj na nowe detale, aby zobaczyc elementy
+                    gotowe do kontroli bez przepisywania barcode.
                   </span>
                 </div>
               ) : (
                 <div className="qc-waiting-list" data-testid="qc-waiting-list">
-                  {waitingItems.map((item) => {
+                  {filteredWaitingItems.map((item) => {
                     const isSelected =
                       selectedItem?.item_serial_number === item.item_serial_number;
                     return (
@@ -2818,6 +2900,35 @@ function filterAndSortQcRunHistory(
     return sort === "NEWEST"
       ? right.run_id.localeCompare(left.run_id, "pl")
       : left.run_id.localeCompare(right.run_id, "pl");
+  });
+}
+
+function filterAndSortWaitingItems(
+  items: ProductionItemRead[],
+  filter: WaitingItemsFilter,
+  sort: WaitingItemsSort,
+): ProductionItemRead[] {
+  const filteredItems = items.filter((item) => {
+    if (filter === "ALL") {
+      return true;
+    }
+
+    return item.current_status === filter;
+  });
+
+  return [...filteredItems].sort((left, right) => {
+    const leftTimestamp = Date.parse(left.produced_at ?? left.created_at);
+    const rightTimestamp = Date.parse(right.produced_at ?? right.created_at);
+    const normalizedLeftTimestamp = Number.isFinite(leftTimestamp) ? leftTimestamp : 0;
+    const normalizedRightTimestamp = Number.isFinite(rightTimestamp) ? rightTimestamp : 0;
+    if (normalizedLeftTimestamp !== normalizedRightTimestamp) {
+      return sort === "NEWEST"
+        ? normalizedRightTimestamp - normalizedLeftTimestamp
+        : normalizedLeftTimestamp - normalizedRightTimestamp;
+    }
+    return sort === "NEWEST"
+      ? right.item_serial_number.localeCompare(left.item_serial_number, "pl")
+      : left.item_serial_number.localeCompare(right.item_serial_number, "pl");
   });
 }
 

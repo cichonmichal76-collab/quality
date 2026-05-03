@@ -425,6 +425,23 @@ test("qc station pozwala pobrac detal z kolejki oczekujacych na QC", async ({ pa
             produced_at: "2026-05-03T08:15:00Z",
             created_at: "2026-05-03T08:15:00Z",
           },
+          {
+            id: "ITEM-ROW-QUEUE-REWORK",
+            item_serial_number: "QCITEM-DEMO-QUEUE-REWORK",
+            barcode_value: "QCBC-DEMO-QUEUE-REWORK",
+            item_type: "FAN_MODULE",
+            part_number: "PN-FAN-003",
+            revision: "C",
+            drawing_number: null,
+            drawing_revision: null,
+            production_order: null,
+            material_batch: null,
+            machine_id: null,
+            created_by_operator_id: "QCOP-DEMO-LOCAL",
+            current_status: "REWORK_REQUIRED",
+            produced_at: "2026-05-03T08:20:00Z",
+            created_at: "2026-05-03T08:20:00Z",
+          },
         ]),
       });
       return;
@@ -502,7 +519,16 @@ test("qc station pozwala pobrac detal z kolejki oczekujacych na QC", async ({ pa
   await page.getByRole("button", { name: "Wejdz do aplikacji" }).click();
 
   await expect(page.getByRole("heading", { name: "Sesja stanowiskowa" })).toBeVisible();
-  await page.getByRole("button", { name: /QCITEM-DEMO-QUEUE/i }).click();
+  await expect(page.getByText("2/2 oczekuje")).toBeVisible();
+
+  await page.getByLabel("Filtr kolejki QC").selectOption("REWORK_REQUIRED");
+  await expect(page.getByText("1/2 oczekuje")).toBeVisible();
+  await expect(page.getByTestId("qc-waiting-list")).toContainText("QCITEM-DEMO-QUEUE-REWORK");
+  await expect(page.locator('[data-testid="qc-waiting-list"] button')).toHaveCount(1);
+
+  await page.getByRole("button", { name: "Reset kolejki" }).click();
+  await expect(page.getByTestId("qc-waiting-list")).toContainText("QCITEM-DEMO-QUEUE");
+  await page.locator('[data-testid="qc-waiting-list"] button').first().click();
 
   await expect(
     page

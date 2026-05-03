@@ -485,6 +485,23 @@ describe("QcStationPage", () => {
             produced_at: "2026-05-03T08:15:00Z",
             created_at: "2026-05-03T08:15:00Z",
           },
+          {
+            id: "ITEM-ROW-QUEUE-REWORK",
+            item_serial_number: "QCITEM-DEMO-QUEUE-REWORK",
+            barcode_value: "QCBC-DEMO-QUEUE-REWORK",
+            item_type: "FAN_MODULE",
+            part_number: "PN-FAN-003",
+            revision: "C",
+            drawing_number: null,
+            drawing_revision: null,
+            production_order: null,
+            material_batch: null,
+            machine_id: null,
+            created_by_operator_id: "QCOP-DEMO-LOCAL",
+            current_status: "REWORK_REQUIRED",
+            produced_at: "2026-05-03T08:20:00Z",
+            created_at: "2026-05-03T08:20:00Z",
+          },
         ]);
       }
 
@@ -555,7 +572,24 @@ describe("QcStationPage", () => {
 
     await screen.findByText("Sesja stanowiskowa");
     await screen.findByTestId("qc-waiting-list");
-    fireEvent.click(screen.getByRole("button", { name: /QCITEM-DEMO-QUEUE/i }));
+    expect(screen.getByText(/2\/2 oczekuje/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Rework" }));
+    await waitFor(() => {
+      const waitingList = screen.getByTestId("qc-waiting-list");
+      expect(within(waitingList).getByText("QCITEM-DEMO-QUEUE-REWORK")).toBeInTheDocument();
+      expect(within(waitingList).queryByText("QCITEM-DEMO-QUEUE")).not.toBeInTheDocument();
+    });
+    expect(screen.getByText(/1\/2 oczekuje/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset kolejki" }));
+    await waitFor(() => {
+      const waitingList = screen.getByTestId("qc-waiting-list");
+      expect(within(waitingList).getByText("QCITEM-DEMO-QUEUE")).toBeInTheDocument();
+      expect(within(waitingList).getByText("QCITEM-DEMO-QUEUE-REWORK")).toBeInTheDocument();
+    });
+
+    fireEvent.click(within(screen.getByTestId("qc-waiting-list")).getAllByRole("button")[0]);
 
     expect(
       screen
@@ -564,7 +598,7 @@ describe("QcStationPage", () => {
         ?.textContent,
     ).toContain("QCITEM-DEMO-QUEUE");
     expect(screen.getByDisplayValue("QCBC-DEMO-QUEUE")).toBeInTheDocument();
-    expect(screen.getByText(/1 oczekuje/i)).toBeInTheDocument();
+    expect(screen.getByText(/2\/2 oczekuje/i)).toBeInTheDocument();
   });
 
   it("dobiera checkliste po typie komponentu i wymaga danych dla FAIL", async () => {
