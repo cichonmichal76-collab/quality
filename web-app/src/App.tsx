@@ -4807,6 +4807,21 @@ function ServiceSessionDetailsPage({
         serviceFilters,
       })
     : [];
+  const devicePageHref = session
+    ? buildDashboardLocationHref({
+        pathname: buildDeviceDetailsPath(session.device_serial_number),
+        activeView: "service",
+        shipmentFilters,
+        componentFilters,
+        serviceFilters,
+        selectedDevice: {
+          serialNumber: session.device_serial_number,
+          deviceType: session.device_type ?? "",
+          variantCode: "",
+        },
+        selectedServiceSessionId: session.session_id,
+      })
+    : null;
 
   return (
     <article className="details-page">
@@ -4819,6 +4834,13 @@ function ServiceSessionDetailsPage({
               {deviceSerialNumber} · {deviceType}
             </p>
           </div>
+          {devicePageHref ? (
+            <div className="details-header-actions">
+              <a className="ghost-button button-link" href={devicePageHref}>
+                Pokaż urządzenie
+              </a>
+            </div>
+          ) : null}
         </div>
 
         {loadState === "loading" ? (

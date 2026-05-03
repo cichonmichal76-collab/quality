@@ -751,6 +751,9 @@ test("dashboard opens full commissioning session page and returns to queue conte
     page.getByText("Pełny widok sesji commissioning"),
   ).toBeVisible();
   await expect(page.getByRole("link", { name: /dashboardu/i })).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Pokaż urządzenie" }),
+  ).toHaveAttribute("href", /\/devices\/SVC-DEVICE-001\?view=service/);
 
   await page.reload();
 

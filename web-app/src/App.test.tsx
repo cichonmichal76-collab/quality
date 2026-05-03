@@ -2231,6 +2231,17 @@ describe("App", () => {
       "href",
       expect.stringContaining("svc_session_id=SVC-001"),
     );
+    const devicePageLink = screen.getByRole("link", {
+      name: "Pokaż urządzenie",
+    });
+    expect(devicePageLink).toHaveAttribute(
+      "href",
+      expect.stringContaining("/devices/SVC-DEVICE-001?view=service"),
+    );
+    expect(devicePageLink).toHaveAttribute(
+      "href",
+      expect.stringContaining("device_serial=SVC-DEVICE-001"),
+    );
     const uploadStatusLink = screen.getByRole("link", {
       name: /statusem uploadu/i,
     });
