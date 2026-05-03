@@ -61,6 +61,11 @@ def test_demo_seed_populates_dashboard_queues(tmp_path):
     payload = json.loads(seed.stdout)
     assert payload["device_type"] == seeded_device_type
     assert payload["verified"] is True
+    assert payload["qc_station_url"] == "/qc-station"
+    assert payload["qc_station_login_name"] == "qc-demo-seed-test"
+    assert payload["qc_station_password"] == "qc-demo-seed-test-123"
+    assert payload["qc_station_rfid_uid_hash"] == "QCRFID-DEMO-SEED-TEST"
+    assert payload["qc_station_workstation_id"] == "QCWS-DEMO-SEED-TEST"
 
     verification_code = f"""
 import json

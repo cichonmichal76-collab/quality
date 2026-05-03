@@ -709,15 +709,30 @@ class OperatorCreate(BaseModel):
     operator_id: str
     full_name: str
     role: str
+    login_name: str | None = None
+    password: str | None = None
     rfid_uid_hash: str | None = None
     is_active: bool = True
 
 
-class OperatorRead(OperatorCreate):
+class OperatorRead(BaseModel):
     id: str
+    operator_id: str
+    full_name: str
+    role: str
+    login_name: str | None = None
+    rfid_uid_hash: str | None = None
+    is_active: bool
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class OperatorLoginRequest(BaseModel):
+    login: str
+    password: str
+    workstation_id: str
+    machine_id: str | None = None
 
 
 class RfidLoginRequest(BaseModel):

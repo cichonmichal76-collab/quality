@@ -2623,6 +2623,71 @@ def test_rfid_work_session_lifecycle_and_audit_events():
     assert "WORK_SESSION_CLOSED" in event_types
 
 
+def test_operator_password_login_creates_and_reuses_work_session():
+    operator_id = unique_id("OP")
+    workstation_id = unique_id("WS")
+    login_name = f"login-{uuid4().hex[:6]}"
+    password = "Secret123!"
+
+    operator_response = client.post(
+        "/api/operators",
+        json={
+            "operator_id": operator_id,
+            "full_name": "QC Inspector",
+            "role": "QUALITY_INSPECTOR",
+            "login_name": login_name,
+            "password": password,
+        },
+    )
+    assert operator_response.status_code == 200
+    assert operator_response.json()["login_name"] == login_name
+
+    workstation_response = client.post(
+        "/api/workstations",
+        json={"workstation_id": workstation_id, "name": "QC Station", "area": "QA"},
+    )
+    assert workstation_response.status_code == 200
+
+    login_response = client.post(
+        "/api/auth/operator-login",
+        json={
+            "login": login_name,
+            "password": password,
+            "workstation_id": workstation_id,
+        },
+    )
+    assert login_response.status_code == 200
+    first_session = login_response.json()
+    assert first_session["operator_id"] == operator_id
+
+    reused_response = client.post(
+        "/api/auth/operator-login",
+        json={
+            "login": login_name,
+            "password": password,
+            "workstation_id": workstation_id,
+        },
+    )
+    assert reused_response.status_code == 200
+    assert reused_response.json()["work_session_id"] == first_session["work_session_id"]
+
+    invalid_password = client.post(
+        "/api/auth/operator-login",
+        json={
+            "login": login_name,
+            "password": "wrong-password",
+            "workstation_id": workstation_id,
+        },
+    )
+    assert invalid_password.status_code == 401
+
+    audit = client.get(f"/api/audit-events?work_session_id={first_session['work_session_id']}")
+    assert audit.status_code == 200
+    event_types = {row["event_type"] for row in audit.json()}
+    assert "OPERATOR_LOGIN" in event_types
+    assert "OPERATOR_LOGIN_REUSED" in event_types
+
+
 def test_traceability_operations_pick_up_active_work_session_context():
     session = start_work_session()
 

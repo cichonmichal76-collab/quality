@@ -2701,7 +2701,7 @@ function DashboardApp() {
               Commissioning i serwis
             </button>
             <a className="ghost-button view-shortcut-link" href={QC_STATION_PATH}>
-              Stanowisko QC
+              System kontroli jakosci
             </a>
           </nav>
 

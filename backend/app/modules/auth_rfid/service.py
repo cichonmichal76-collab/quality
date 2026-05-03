@@ -1,3 +1,6 @@
+import hashlib
+import hmac
+import secrets
 import uuid
 from datetime import timedelta
 
@@ -11,6 +14,7 @@ from app.models import Machine, Operator, WorkSession, Workstation
 from app.modules.auth_rfid import repository
 from app.schemas import (
     MachineCreate,
+    OperatorLoginRequest,
     OperatorCreate,
     RfidLoginRequest,
     WorkSessionCloseRequest,
@@ -20,6 +24,60 @@ from app.schemas import (
 PRODUCTION_SESSION_ROLES = {"ADMIN", "PRODUCTION_OPERATOR", "QUALITY_INSPECTOR"}
 QUALITY_SESSION_ROLES = {"ADMIN", "QUALITY_INSPECTOR", "QUALITY_MANAGER"}
 FINAL_TEST_SESSION_ROLES = {"ADMIN", "FINAL_TEST_OPERATOR", "QUALITY_MANAGER"}
+PASSWORD_HASH_ITERATIONS = 150_000
+
+
+def normalize_login_name(login_name: str | None, operator_id: str) -> str:
+    candidate = (login_name or operator_id).strip().lower()
+    if not candidate:
+        raise HTTPException(status_code=400, detail="Operator login name cannot be empty")
+    return candidate
+
+
+def hash_operator_password(password: str) -> str:
+    password_bytes = password.encode("utf-8")
+    salt = secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        password_bytes,
+        salt.encode("utf-8"),
+        PASSWORD_HASH_ITERATIONS,
+    ).hex()
+    return f"pbkdf2_sha256${PASSWORD_HASH_ITERATIONS}${salt}${digest}"
+
+
+def verify_operator_password(password: str, password_hash: str | None) -> bool:
+    if not password_hash:
+        return False
+
+    try:
+        algorithm, iterations_text, salt, expected_digest = password_hash.split("$", 3)
+    except ValueError:
+        return False
+
+    if algorithm != "pbkdf2_sha256":
+        return False
+
+    try:
+        iterations = int(iterations_text)
+    except ValueError:
+        return False
+
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt.encode("utf-8"),
+        iterations,
+    ).hex()
+    return hmac.compare_digest(digest, expected_digest)
+
+
+def sanitize_operator_login_payload(payload: OperatorLoginRequest) -> dict[str, str | None]:
+    return {
+        "login": payload.login,
+        "workstation_id": payload.workstation_id,
+        "machine_id": payload.machine_id,
+    }
 
 
 def get_work_session_or_404(db: Session, work_session_id: str) -> WorkSession:
@@ -114,7 +172,19 @@ def _mark_session_timed_out(db: Session, session: WorkSession) -> None:
 def create_operator(db: Session, payload: OperatorCreate) -> Operator:
     if repository.get_operator_by_id(db, payload.operator_id):
         raise HTTPException(status_code=409, detail="Operator already exists")
-    operator = Operator(**payload.model_dump())
+    login_name = normalize_login_name(payload.login_name, payload.operator_id)
+    if repository.get_operator_by_login(db, login_name):
+        raise HTTPException(status_code=409, detail="Operator login already exists")
+
+    operator = Operator(
+        operator_id=payload.operator_id,
+        full_name=payload.full_name,
+        role=payload.role,
+        login_name=login_name,
+        password_hash=hash_operator_password(payload.password or payload.operator_id),
+        rfid_uid_hash=payload.rfid_uid_hash,
+        is_active=payload.is_active,
+    )
     db.add(operator)
     db.commit()
     db.refresh(operator)
@@ -141,6 +211,194 @@ def create_machine(db: Session, payload: MachineCreate) -> Machine:
     return machine
 
 
+def _require_active_workstation(
+    db: Session,
+    workstation_id: str,
+    *,
+    operator_id: str | None,
+    machine_id: str | None,
+    failure_event_type: str,
+    failure_payload: dict,
+) -> Workstation:
+    workstation = repository.get_workstation(db, workstation_id)
+    if workstation and workstation.is_active:
+        return workstation
+
+    record_audit_event(
+        db,
+        event_type=failure_event_type,
+        entity_type="WORKSTATION",
+        entity_id=workstation_id,
+        operator_id=operator_id,
+        workstation_id=workstation_id,
+        machine_id=machine_id,
+        result="DENIED",
+        message="Unknown or inactive workstation",
+        payload=failure_payload,
+    )
+    db.commit()
+    raise HTTPException(status_code=400, detail="Unknown or inactive workstation")
+
+
+def _require_active_machine(
+    db: Session,
+    machine_id: str | None,
+    *,
+    operator_id: str | None,
+    workstation_id: str,
+    failure_event_type: str,
+    failure_payload: dict,
+) -> Machine | None:
+    if not machine_id:
+        return None
+
+    machine = repository.get_machine(db, machine_id)
+    if machine and machine.is_active:
+        return machine
+
+    record_audit_event(
+        db,
+        event_type=failure_event_type,
+        entity_type="MACHINE",
+        entity_id=machine_id,
+        operator_id=operator_id,
+        workstation_id=workstation_id,
+        machine_id=machine_id,
+        result="DENIED",
+        message="Unknown or inactive machine",
+        payload=failure_payload,
+    )
+    db.commit()
+    raise HTTPException(status_code=400, detail="Unknown or inactive machine")
+
+
+def _reuse_or_create_work_session(
+    db: Session,
+    *,
+    operator: Operator,
+    workstation_id: str,
+    machine_id: str | None,
+    rfid_uid_hash: str | None,
+    audit_logger,
+    created_event_type: str,
+    reused_event_type: str,
+    created_message: str,
+    reused_message: str,
+    payload: dict,
+) -> WorkSession:
+    session = repository.find_active_session(
+        db,
+        operator_id=operator.operator_id,
+        workstation_id=workstation_id,
+        machine_id=machine_id,
+    )
+    if session:
+        if _session_timed_out(session):
+            _mark_session_timed_out(db, session)
+        else:
+            audit_logger(
+                db,
+                event_type=reused_event_type,
+                entity_type="WORK_SESSION",
+                entity_id=session.work_session_id,
+                work_session=session,
+                result="ACTIVE",
+                message=reused_message,
+                payload=payload,
+            )
+            db.commit()
+            db.refresh(session)
+            return session
+
+    session = WorkSession(
+        work_session_id=f"WS-{uuid.uuid4().hex[:12]}",
+        operator_id=operator.operator_id,
+        workstation_id=workstation_id,
+        machine_id=machine_id,
+        rfid_uid_hash=rfid_uid_hash,
+    )
+    db.add(session)
+    audit_logger(
+        db,
+        event_type=created_event_type,
+        entity_type="WORK_SESSION",
+        entity_id=session.work_session_id,
+        work_session=session,
+        result="ACTIVE",
+        message=created_message,
+        payload=payload,
+    )
+    db.commit()
+    db.refresh(session)
+    return session
+
+
+def operator_login(db: Session, payload: OperatorLoginRequest, *, audit_logger) -> WorkSession:
+    sanitized_payload = sanitize_operator_login_payload(payload)
+    operator = repository.get_operator_by_login(db, payload.login)
+    if not operator or not operator.is_active:
+        record_audit_event(
+            db,
+            event_type="OPERATOR_LOGIN_FAILED",
+            entity_type="WORKSTATION",
+            entity_id=payload.workstation_id,
+            workstation_id=payload.workstation_id,
+            machine_id=payload.machine_id,
+            result="DENIED",
+            message="Unknown or inactive operator login",
+            payload=sanitized_payload,
+        )
+        db.commit()
+        raise HTTPException(status_code=401, detail="Unknown or inactive operator login")
+
+    if not verify_operator_password(payload.password, operator.password_hash):
+        record_audit_event(
+            db,
+            event_type="OPERATOR_LOGIN_FAILED",
+            entity_type="WORKSTATION",
+            entity_id=payload.workstation_id,
+            operator_id=operator.operator_id,
+            workstation_id=payload.workstation_id,
+            machine_id=payload.machine_id,
+            result="DENIED",
+            message="Invalid operator password",
+            payload=sanitized_payload,
+        )
+        db.commit()
+        raise HTTPException(status_code=401, detail="Invalid operator password")
+
+    _require_active_workstation(
+        db,
+        payload.workstation_id,
+        operator_id=operator.operator_id,
+        machine_id=payload.machine_id,
+        failure_event_type="OPERATOR_LOGIN_FAILED",
+        failure_payload=sanitized_payload,
+    )
+    _require_active_machine(
+        db,
+        payload.machine_id,
+        operator_id=operator.operator_id,
+        workstation_id=payload.workstation_id,
+        failure_event_type="OPERATOR_LOGIN_FAILED",
+        failure_payload=sanitized_payload,
+    )
+
+    return _reuse_or_create_work_session(
+        db,
+        operator=operator,
+        workstation_id=payload.workstation_id,
+        machine_id=payload.machine_id,
+        rfid_uid_hash=operator.rfid_uid_hash,
+        audit_logger=audit_logger,
+        created_event_type="OPERATOR_LOGIN",
+        reused_event_type="OPERATOR_LOGIN_REUSED",
+        created_message="Operator login started work session",
+        reused_message="Operator login reused active work session",
+        payload=sanitized_payload,
+    )
+
+
 def rfid_login(db: Session, payload: RfidLoginRequest, *, audit_logger) -> WorkSession:
     operator = repository.get_operator_by_rfid(db, payload.rfid_uid_hash)
     if not operator or not operator.is_active:
@@ -158,86 +416,36 @@ def rfid_login(db: Session, payload: RfidLoginRequest, *, audit_logger) -> WorkS
         db.commit()
         raise HTTPException(status_code=401, detail="Unknown or inactive RFID card")
 
-    workstation = repository.get_workstation(db, payload.workstation_id)
-    if not workstation or not workstation.is_active:
-        record_audit_event(
-            db,
-            event_type="RFID_LOGIN_FAILED",
-            entity_type="WORKSTATION",
-            entity_id=payload.workstation_id,
-            operator_id=operator.operator_id,
-            workstation_id=payload.workstation_id,
-            machine_id=payload.machine_id,
-            result="DENIED",
-            message="Unknown or inactive workstation",
-            payload=payload.model_dump(),
-        )
-        db.commit()
-        raise HTTPException(status_code=400, detail="Unknown or inactive workstation")
-
-    if payload.machine_id:
-        machine = repository.get_machine(db, payload.machine_id)
-        if not machine or not machine.is_active:
-            record_audit_event(
-                db,
-                event_type="RFID_LOGIN_FAILED",
-                entity_type="MACHINE",
-                entity_id=payload.machine_id,
-                operator_id=operator.operator_id,
-                workstation_id=payload.workstation_id,
-                machine_id=payload.machine_id,
-                result="DENIED",
-                message="Unknown or inactive machine",
-                payload=payload.model_dump(),
-            )
-            db.commit()
-            raise HTTPException(status_code=400, detail="Unknown or inactive machine")
-
-    session = repository.find_active_session(
+    _require_active_workstation(
         db,
+        payload.workstation_id,
+        operator_id=operator.operator_id,
+        machine_id=payload.machine_id,
+        failure_event_type="RFID_LOGIN_FAILED",
+        failure_payload=payload.model_dump(),
+    )
+    _require_active_machine(
+        db,
+        payload.machine_id,
         operator_id=operator.operator_id,
         workstation_id=payload.workstation_id,
-        machine_id=payload.machine_id,
+        failure_event_type="RFID_LOGIN_FAILED",
+        failure_payload=payload.model_dump(),
     )
-    if session:
-        if _session_timed_out(session):
-            _mark_session_timed_out(db, session)
-        else:
-            audit_logger(
-                db,
-                event_type="RFID_LOGIN_REUSED",
-                entity_type="WORK_SESSION",
-                entity_id=session.work_session_id,
-                work_session=session,
-                result="ACTIVE",
-                message="RFID login reused active work session",
-                payload=payload.model_dump(),
-            )
-            db.commit()
-            db.refresh(session)
-            return session
 
-    session = WorkSession(
-        work_session_id=f"WS-{uuid.uuid4().hex[:12]}",
-        operator_id=operator.operator_id,
+    return _reuse_or_create_work_session(
+        db,
+        operator=operator,
         workstation_id=payload.workstation_id,
         machine_id=payload.machine_id,
         rfid_uid_hash=payload.rfid_uid_hash,
-    )
-    db.add(session)
-    audit_logger(
-        db,
-        event_type="RFID_LOGIN",
-        entity_type="WORK_SESSION",
-        entity_id=session.work_session_id,
-        work_session=session,
-        result="ACTIVE",
-        message="RFID login started work session",
+        audit_logger=audit_logger,
+        created_event_type="RFID_LOGIN",
+        reused_event_type="RFID_LOGIN_REUSED",
+        created_message="RFID login started work session",
+        reused_message="RFID login reused active work session",
         payload=payload.model_dump(),
     )
-    db.commit()
-    db.refresh(session)
-    return session
 
 
 def close_work_session(

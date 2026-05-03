@@ -8,6 +8,7 @@ from app.modules.auth_rfid import repository, service
 from app.schemas import (
     MachineCreate,
     MachineRead,
+    OperatorLoginRequest,
     OperatorCreate,
     OperatorRead,
     RfidLoginRequest,
@@ -28,6 +29,11 @@ def create_operator(payload: OperatorCreate, db: Session = Depends(get_db)):
 @router.get("/operators", response_model=list[OperatorRead])
 def list_operators(db: Session = Depends(get_db)):
     return repository.list_operators(db)
+
+
+@router.post("/auth/operator-login", response_model=WorkSessionRead)
+def operator_login(payload: OperatorLoginRequest, db: Session = Depends(get_db)):
+    return service.operator_login(db, payload, audit_logger=record_audit_event)
 
 
 @router.post("/auth/rfid-login", response_model=WorkSessionRead)

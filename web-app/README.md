@@ -165,7 +165,12 @@ resolved BOM.
 
 ## Stanowisko QC
 
-Nowa trasa `/qc-station` dowozi brakujacy krok stanowiskowy z PRD:
+Trasa `/qc-station` zaczyna sie teraz od ekranu startowego systemu kontroli jakosci:
+- logowanie loginem i haslem
+- logowanie przez RFID z automatycznym wypelnieniem loginu
+- wejscie do stanowiska QC dopiero po uzyskaniu dostepu
+
+Po zalogowaniu stanowisko dowozi brakujacy krok z PRD:
 - skan barcode komponentu
 - wybor aktywnej checklisty QC
 - wpisanie pomiarow albo wyniku kontroli
@@ -182,9 +187,17 @@ seed przygotowuje tez dane do tego widoku:
 - checklista `QC-STATION-{DEVICE_TYPE}`
 - komponent `QCITEM-{DEVICE_TYPE}`
 - barcode `QCBC-{DEVICE_TYPE}`
+- login `qc-{device_type_lower}`
+- haslo `qc-{device_type_lower}-123`
+- RFID `QCRFID-{DEVICE_TYPE}`
+- stanowisko `QCWS-{DEVICE_TYPE}`
 
 Dla lokalnego `DEMO-LOCAL` mozna od razu otworzyc `/qc-station`
-i zeskanowac `QCBC-DEMO-LOCAL`.
+i uzyc:
+- login `qc-demo-local`
+- haslo `qc-demo-local-123`
+- RFID `QCRFID-DEMO-LOCAL`
+- barcode `QCBC-DEMO-LOCAL`
 
 ## Walidacja
 

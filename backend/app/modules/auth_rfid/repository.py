@@ -1,3 +1,5 @@
+from sqlalchemy import func
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.models import Machine, Operator, WorkSession, Workstation
@@ -45,6 +47,20 @@ def list_work_sessions(db: Session) -> list[WorkSession]:
 
 def get_operator_by_id(db: Session, operator_id: str) -> Operator | None:
     return db.query(Operator).filter(Operator.operator_id == operator_id).first()
+
+
+def get_operator_by_login(db: Session, login: str) -> Operator | None:
+    normalized_login = login.strip().lower()
+    return (
+        db.query(Operator)
+        .filter(
+            or_(
+                func.lower(Operator.login_name) == normalized_login,
+                func.lower(Operator.operator_id) == normalized_login,
+            )
+        )
+        .first()
+    )
 
 
 def list_operators(db: Session) -> list[Operator]:

@@ -461,6 +461,42 @@ select:focus {
   flex-wrap: wrap;
 }
 
+.qc-login-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.qc-login-card {
+  gap: 16px;
+}
+
+.qc-login-stack {
+  display: grid;
+  gap: 14px;
+}
+
+.rfid-listener-input {
+  letter-spacing: 0.08em;
+  font-family: "Cascadia Code", "Consolas", monospace;
+}
+
+.qc-auth-banner {
+  display: grid;
+  gap: 6px;
+  padding: 16px 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(18, 61, 38, 0.2);
+  background:
+    linear-gradient(135deg, rgba(231, 248, 237, 0.96), rgba(243, 250, 246, 0.98));
+  color: #16392a;
+  box-shadow: 0 14px 30px rgba(18, 61, 38, 0.1);
+}
+
+.qc-station-session-card {
+  gap: 16px;
+}
+
 .metrics-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1246,6 +1282,7 @@ td span {
   .hero,
   .filters-grid,
   .metrics-grid,
+  .qc-login-grid,
   .qc-station-grid,
   .qc-station-form-grid,
   .qc-step-form-grid,
@@ -1270,6 +1307,7 @@ td span {
   .hero,
   .filters-grid,
   .metrics-grid,
+  .qc-login-grid,
   .qc-station-grid,
   .qc-station-form-grid,
   .qc-step-form-grid,

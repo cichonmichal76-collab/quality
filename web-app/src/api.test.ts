@@ -14,8 +14,11 @@ import {
   listQcChecklistSteps,
   listServiceSessions,
   listServiceSessionsQueue,
+  listWorkstations,
   listWorkSessions,
+  operatorLogin,
   optionalBoolean,
+  rfidLogin,
   scanAssemblyComponent,
   updateDeviceStatus,
   updateNonconformityStatus,
@@ -189,6 +192,36 @@ describe("listWorkSessions", () => {
   });
 });
 
+describe("listWorkstations", () => {
+  it("pobiera stanowiska do ekranu logowania QC", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => [
+        {
+          workstation_id: "QCWS-DEMO",
+          name: "QC Station",
+          area: "QA",
+          station_type: "QC",
+          is_active: true,
+        },
+      ],
+    } satisfies Partial<Response>);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const payload = await listWorkstations("/api");
+
+    expect(payload[0]?.workstation_id).toBe("QCWS-DEMO");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/workstations",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+      }),
+    );
+  });
+});
+
 describe("listOperators", () => {
   it("pobiera operatorów do filtrowania sesji final test", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
@@ -211,6 +244,78 @@ describe("listOperators", () => {
       "/api/operators",
       expect.objectContaining({
         headers: { Accept: "application/json" },
+      }),
+    );
+  });
+});
+
+describe("operatorLogin", () => {
+  it("wysyla login operatora i zwraca sesje stanowiskowa", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => ({
+        work_session_id: "WS-QC-001",
+        operator_id: "QCOP-DEMO",
+        workstation_id: "QCWS-DEMO",
+        machine_id: null,
+        status: "ACTIVE",
+      }),
+    } satisfies Partial<Response>);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const payload = await operatorLogin("/api", {
+      login: "qc-demo",
+      password: "secret-123",
+      workstation_id: "QCWS-DEMO",
+    });
+
+    expect(payload.work_session_id).toBe("WS-QC-001");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/auth/operator-login",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          login: "qc-demo",
+          password: "secret-123",
+          workstation_id: "QCWS-DEMO",
+        }),
+      }),
+    );
+  });
+});
+
+describe("rfidLogin", () => {
+  it("wysyla odczyt RFID i zwraca sesje stanowiskowa", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => ({
+        work_session_id: "WS-QC-002",
+        operator_id: "QCOP-DEMO",
+        workstation_id: "QCWS-DEMO",
+        machine_id: null,
+        status: "ACTIVE",
+      }),
+    } satisfies Partial<Response>);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const payload = await rfidLogin("/api", {
+      rfid_uid_hash: "QCRFID-DEMO",
+      workstation_id: "QCWS-DEMO",
+    });
+
+    expect(payload.work_session_id).toBe("WS-QC-002");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/auth/rfid-login",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          rfid_uid_hash: "QCRFID-DEMO",
+          workstation_id: "QCWS-DEMO",
+        }),
       }),
     );
   });

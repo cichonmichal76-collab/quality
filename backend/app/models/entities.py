@@ -235,6 +235,8 @@ class Operator(Base):
     operator_id: Mapped[str] = mapped_column(String, unique=True, index=True)
     full_name: Mapped[str] = mapped_column(String)
     role: Mapped[str] = mapped_column(String)
+    login_name: Mapped[str | None] = mapped_column(String, unique=True, index=True, nullable=True)
+    password_hash: Mapped[str | None] = mapped_column(String, nullable=True)
     rfid_uid_hash: Mapped[str | None] = mapped_column(String, unique=True, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)

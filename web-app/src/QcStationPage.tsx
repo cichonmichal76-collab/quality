@@ -9,7 +9,9 @@ import {
   listOperators,
   listQcChecklists,
   listQcChecklistSteps,
-  listWorkSessions,
+  listWorkstations,
+  operatorLogin,
+  rfidLogin,
 } from "./api";
 import type {
   LoadState,
@@ -18,13 +20,15 @@ import type {
   QcChecklistRead,
   QcRunRead,
   QcStepRead,
-  WorkSessionRead,
+  WorkstationRead,
 } from "./api";
 import { formatDateTime, labelForCode } from "./dashboard";
 
 const API_STORAGE_KEY = "servicetrace.web.apiBaseUrl";
-const QUALITY_SESSION_STORAGE_KEY = "servicetrace.web.qualityWorkSessionId";
+const QC_AUTH_STORAGE_KEY = "servicetrace.web.qcStationAuth";
 const QC_CHECKLIST_STORAGE_KEY = "servicetrace.web.qcStationChecklistCode";
+const QC_LOGIN_STORAGE_KEY = "servicetrace.web.qcStationLoginName";
+const QC_WORKSTATION_STORAGE_KEY = "servicetrace.web.qcStationWorkstationId";
 const DEFAULT_API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 const QUALITY_ACTION_ALLOWED_ROLES = new Set([
   "ADMIN",
@@ -32,13 +36,18 @@ const QUALITY_ACTION_ALLOWED_ROLES = new Set([
   "QUALITY_MANAGER",
 ]);
 
-interface ActionWorkSessionOption {
+type LoginMethod = "PASSWORD" | "RFID";
+
+interface QcStationAuthState {
   workSessionId: string;
   operatorId: string;
+  operatorName: string;
+  operatorRole: string;
+  operatorLoginName: string;
   workstationId: string;
+  workstationName: string;
   machineId: string | null;
-  role: string;
-  label: string;
+  loginMethod: LoginMethod;
 }
 
 interface StepDraft {
@@ -58,17 +67,28 @@ export function QcStationPage() {
   const [apiBaseUrl, setApiBaseUrl] = useState(
     () => localStorage.getItem(API_STORAGE_KEY) ?? DEFAULT_API_BASE_URL,
   );
-  const [workSessions, setWorkSessions] = useState<WorkSessionRead[]>([]);
   const [operators, setOperators] = useState<OperatorRead[]>([]);
+  const [workstations, setWorkstations] = useState<WorkstationRead[]>([]);
   const [checklists, setChecklists] = useState<QcChecklistRead[]>([]);
   const [contextState, setContextState] = useState<LoadState>("idle");
   const [contextError, setContextError] = useState<string | null>(null);
-  const [selectedQualitySessionId, setSelectedQualitySessionId] = useState(
-    () => localStorage.getItem(QUALITY_SESSION_STORAGE_KEY) ?? "",
+  const [authState, setAuthState] = useState<QcStationAuthState | null>(
+    () => readStoredAuthState(),
   );
   const [selectedChecklistCode, setSelectedChecklistCode] = useState(
     () => localStorage.getItem(QC_CHECKLIST_STORAGE_KEY) ?? "",
   );
+  const [manualLoginName, setManualLoginName] = useState(
+    () => localStorage.getItem(QC_LOGIN_STORAGE_KEY) ?? "",
+  );
+  const [manualPassword, setManualPassword] = useState("");
+  const [selectedWorkstationId, setSelectedWorkstationId] = useState(
+    () => localStorage.getItem(QC_WORKSTATION_STORAGE_KEY) ?? "",
+  );
+  const [rfidUidHash, setRfidUidHash] = useState("");
+  const [authSubmitState, setAuthSubmitState] = useState<LoadState>("idle");
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authMessage, setAuthMessage] = useState<string | null>(null);
   const [barcodeValue, setBarcodeValue] = useState("");
   const [lookupState, setLookupState] = useState<LoadState>("idle");
   const [lookupError, setLookupError] = useState<string | null>(null);
@@ -82,11 +102,14 @@ export function QcStationPage() {
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
   const [completedRun, setCompletedRun] = useState<QcRunRead | null>(null);
 
-  const qualitySessionOptions = buildActionWorkSessionOptions(
-    workSessions,
-    operators,
-    QUALITY_ACTION_ALLOWED_ROLES,
-  );
+  const activeWorkstations = workstations
+    .filter((workstation) => workstation.is_active)
+    .sort((left, right) =>
+      `${left.area ?? ""}:${left.name}:${left.workstation_id}`.localeCompare(
+        `${right.area ?? ""}:${right.name}:${right.workstation_id}`,
+        "pl",
+      ),
+    );
   const activeChecklists = checklists
     .filter((checklist) => checklist.is_active)
     .sort((left, right) =>
@@ -99,24 +122,15 @@ export function QcStationPage() {
     activeChecklists.find(
       (checklist) => checklist.checklist_code === selectedChecklistCode,
     ) ?? null;
-  const selectedQualitySession =
-    qualitySessionOptions.find(
-      (session) => session.workSessionId === selectedQualitySessionId,
+  const selectedWorkstation =
+    activeWorkstations.find(
+      (workstation) => workstation.workstation_id === selectedWorkstationId,
     ) ?? null;
   const measurementWarnings = buildMeasurementWarnings(steps, stepDrafts);
 
   useEffect(() => {
     localStorage.setItem(API_STORAGE_KEY, apiBaseUrl);
   }, [apiBaseUrl]);
-
-  useEffect(() => {
-    if (selectedQualitySessionId) {
-      localStorage.setItem(QUALITY_SESSION_STORAGE_KEY, selectedQualitySessionId);
-      return;
-    }
-
-    localStorage.removeItem(QUALITY_SESSION_STORAGE_KEY);
-  }, [selectedQualitySessionId]);
 
   useEffect(() => {
     if (selectedChecklistCode) {
@@ -128,12 +142,39 @@ export function QcStationPage() {
   }, [selectedChecklistCode]);
 
   useEffect(() => {
+    if (manualLoginName.trim()) {
+      localStorage.setItem(QC_LOGIN_STORAGE_KEY, manualLoginName.trim());
+      return;
+    }
+
+    localStorage.removeItem(QC_LOGIN_STORAGE_KEY);
+  }, [manualLoginName]);
+
+  useEffect(() => {
+    if (selectedWorkstationId) {
+      localStorage.setItem(QC_WORKSTATION_STORAGE_KEY, selectedWorkstationId);
+      return;
+    }
+
+    localStorage.removeItem(QC_WORKSTATION_STORAGE_KEY);
+  }, [selectedWorkstationId]);
+
+  useEffect(() => {
+    if (authState) {
+      localStorage.setItem(QC_AUTH_STORAGE_KEY, JSON.stringify(authState));
+      return;
+    }
+
+    localStorage.removeItem(QC_AUTH_STORAGE_KEY);
+  }, [authState]);
+
+  useEffect(() => {
     const trimmedApiBaseUrl = apiBaseUrl.trim();
     if (!trimmedApiBaseUrl) {
       setContextState("idle");
-      setContextError("Podaj adres API, aby załadować sesje jakościowe i checklisty.");
-      setWorkSessions([]);
+      setContextError("Podaj adres API, aby zaladowac stanowiska, operatorow i checklisty.");
       setOperators([]);
+      setWorkstations([]);
       setChecklists([]);
       return;
     }
@@ -144,17 +185,17 @@ export function QcStationPage() {
     setContextError(null);
 
     Promise.all([
-      listWorkSessions(trimmedApiBaseUrl, controller.signal),
       listOperators(trimmedApiBaseUrl, controller.signal),
+      listWorkstations(trimmedApiBaseUrl, controller.signal),
       listQcChecklists(trimmedApiBaseUrl, controller.signal),
     ])
-      .then(([sessionRows, operatorRows, checklistRows]) => {
+      .then(([operatorRows, workstationRows, checklistRows]) => {
         if (!isCurrentRequest) {
           return;
         }
 
-        setWorkSessions(sessionRows);
         setOperators(operatorRows);
+        setWorkstations(workstationRows);
         setChecklists(checklistRows);
         setContextState("loaded");
       })
@@ -164,9 +205,11 @@ export function QcStationPage() {
         }
 
         setContextState("error");
-        setContextError(getErrorMessage(error, "Nie udało się załadować kontekstu QC."));
-        setWorkSessions([]);
+        setContextError(
+          getErrorMessage(error, "Nie udalo sie zaladowac kontekstu stanowiska QC."),
+        );
         setOperators([]);
+        setWorkstations([]);
         setChecklists([]);
       });
 
@@ -177,20 +220,20 @@ export function QcStationPage() {
   }, [apiBaseUrl]);
 
   useEffect(() => {
-    if (qualitySessionOptions.length === 0) {
-      if (selectedQualitySessionId !== "") {
-        setSelectedQualitySessionId("");
+    if (activeWorkstations.length === 0) {
+      if (selectedWorkstationId !== "") {
+        setSelectedWorkstationId("");
       }
       return;
     }
 
-    const hasSelectedSession = qualitySessionOptions.some(
-      (session) => session.workSessionId === selectedQualitySessionId,
+    const hasSelectedWorkstation = activeWorkstations.some(
+      (workstation) => workstation.workstation_id === selectedWorkstationId,
     );
-    if (!hasSelectedSession) {
-      setSelectedQualitySessionId(qualitySessionOptions[0].workSessionId);
+    if (!hasSelectedWorkstation) {
+      setSelectedWorkstationId(activeWorkstations[0].workstation_id);
     }
-  }, [qualitySessionOptions, selectedQualitySessionId]);
+  }, [activeWorkstations, selectedWorkstationId]);
 
   useEffect(() => {
     if (activeChecklists.length === 0) {
@@ -209,8 +252,34 @@ export function QcStationPage() {
   }, [activeChecklists, selectedChecklistCode]);
 
   useEffect(() => {
+    if (!authState) {
+      return;
+    }
+
+    const matchingOperator = operators.find(
+      (operator) => operator.operator_id === authState.operatorId,
+    );
+    if (
+      matchingOperator &&
+      !QUALITY_ACTION_ALLOWED_ROLES.has(matchingOperator.role)
+    ) {
+      setAuthState(null);
+      setAuthError("Ten operator nie ma roli dopuszczonej do stanowiska kontroli jakosci.");
+      return;
+    }
+
+    const matchingWorkstation = activeWorkstations.find(
+      (workstation) => workstation.workstation_id === authState.workstationId,
+    );
+    if (!matchingWorkstation && activeWorkstations.length > 0) {
+      setAuthState(null);
+      setAuthError("Zapisane stanowisko nie jest juz aktywne. Zaloguj sie ponownie.");
+    }
+  }, [activeWorkstations, authState, operators]);
+
+  useEffect(() => {
     const trimmedApiBaseUrl = apiBaseUrl.trim();
-    if (!trimmedApiBaseUrl || !selectedChecklistCode) {
+    if (!trimmedApiBaseUrl || !selectedChecklistCode || !authState) {
       setSteps([]);
       setStepDrafts({});
       setStepsState("idle");
@@ -242,7 +311,7 @@ export function QcStationPage() {
         setStepDrafts({});
         setStepsState("error");
         setStepsError(
-          getErrorMessage(error, "Nie udało się załadować kroków checklisty."),
+          getErrorMessage(error, "Nie udalo sie zaladowac krokow checklisty."),
         );
       });
 
@@ -250,14 +319,146 @@ export function QcStationPage() {
       isCurrentRequest = false;
       controller.abort();
     };
-  }, [apiBaseUrl, selectedChecklistCode]);
+  }, [apiBaseUrl, authState, selectedChecklistCode]);
 
   useEffect(() => {
+    setLookupError(null);
     setSubmitState("idle");
     setSubmitError(null);
     setSubmitSuccess(null);
     setCompletedRun(null);
-  }, [selectedChecklistCode, selectedItem?.barcode_value, selectedQualitySessionId]);
+  }, [authState, selectedChecklistCode, selectedItem?.barcode_value]);
+
+  const handleManualLoginSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmedApiBaseUrl = apiBaseUrl.trim();
+    const trimmedLogin = manualLoginName.trim();
+    const trimmedPassword = manualPassword.trim();
+
+    setAuthError(null);
+    setAuthMessage(null);
+
+    if (!trimmedApiBaseUrl) {
+      setAuthSubmitState("error");
+      setAuthError("Podaj adres API przed logowaniem.");
+      return;
+    }
+
+    if (!selectedWorkstationId) {
+      setAuthSubmitState("error");
+      setAuthError("Wybierz stanowisko kontroli jakosci.");
+      return;
+    }
+
+    if (!trimmedLogin || !trimmedPassword) {
+      setAuthSubmitState("error");
+      setAuthError("Uzupelnij login i haslo operatora.");
+      return;
+    }
+
+    const loginCandidate = findOperatorByLogin(operators, trimmedLogin);
+    if (loginCandidate && !QUALITY_ACTION_ALLOWED_ROLES.has(loginCandidate.role)) {
+      setAuthSubmitState("error");
+      setAuthError("Ten operator nie ma uprawnien do systemu kontroli jakosci.");
+      return;
+    }
+
+    setAuthSubmitState("loading");
+
+    try {
+      const session = await operatorLogin(trimmedApiBaseUrl, {
+        login: trimmedLogin,
+        password: trimmedPassword,
+        workstation_id: selectedWorkstationId,
+      });
+      const operator =
+        loginCandidate ??
+        operators.find((candidate) => candidate.operator_id === session.operator_id) ??
+        null;
+      handleSuccessfulLogin({
+        session,
+        method: "PASSWORD",
+        operator,
+      });
+      setManualPassword("");
+      setAuthSubmitState("loaded");
+      setAuthMessage("Logowanie operatora zakonczone. Sesja stanowiskowa jest aktywna.");
+    } catch (error) {
+      setAuthSubmitState("error");
+      setAuthError(
+        getErrorMessage(error, "Nie udalo sie zalogowac operatora na stanowisku QC."),
+      );
+    }
+  };
+
+  const handleRfidSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmedApiBaseUrl = apiBaseUrl.trim();
+    const trimmedRfidUidHash = rfidUidHash.trim();
+
+    setAuthError(null);
+    setAuthMessage(null);
+
+    if (!trimmedApiBaseUrl) {
+      setAuthSubmitState("error");
+      setAuthError("Podaj adres API przed logowaniem RFID.");
+      return;
+    }
+
+    if (!selectedWorkstationId) {
+      setAuthSubmitState("error");
+      setAuthError("Wybierz stanowisko przed przylozeniem karty RFID.");
+      return;
+    }
+
+    if (!trimmedRfidUidHash) {
+      setAuthSubmitState("error");
+      setAuthError("Przyluz karte albo wpisz odczyt RFID.");
+      return;
+    }
+
+    const operatorCandidate = operators.find(
+      (operator) => operator.rfid_uid_hash === trimmedRfidUidHash,
+    );
+    if (
+      operatorCandidate &&
+      !QUALITY_ACTION_ALLOWED_ROLES.has(operatorCandidate.role)
+    ) {
+      setAuthSubmitState("error");
+      setAuthError("Karta RFID nalezy do operatora bez dostepu do systemu QC.");
+      return;
+    }
+
+    setAuthSubmitState("loading");
+
+    try {
+      const session = await rfidLogin(trimmedApiBaseUrl, {
+        rfid_uid_hash: trimmedRfidUidHash,
+        workstation_id: selectedWorkstationId,
+      });
+      const operator =
+        operatorCandidate ??
+        operators.find((candidate) => candidate.operator_id === session.operator_id) ??
+        null;
+      if (operator) {
+        setManualLoginName(operator.login_name ?? operator.operator_id);
+      }
+      setManualPassword("********");
+      handleSuccessfulLogin({
+        session,
+        method: "RFID",
+        operator,
+      });
+      setRfidUidHash("");
+      setAuthSubmitState("loaded");
+      setAuthMessage("RFID rozpoznane. Pola logowania zostaly wypelnione automatycznie.");
+    } catch (error) {
+      setAuthSubmitState("error");
+      setAuthError(
+        getErrorMessage(error, "Nie udalo sie zalogowac przez RFID na stanowisku QC."),
+      );
+    }
+  };
 
   const handleLookupSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -272,6 +473,12 @@ export function QcStationPage() {
     if (!trimmedApiBaseUrl) {
       setLookupState("error");
       setLookupError("Podaj adres API przed skanem.");
+      return;
+    }
+
+    if (!authState) {
+      setLookupState("error");
+      setLookupError("Najpierw zaloguj operatora na stanowisku QC.");
       return;
     }
 
@@ -324,6 +531,12 @@ export function QcStationPage() {
       return;
     }
 
+    if (!authState) {
+      setSubmitState("error");
+      setSubmitError("Najpierw zaloguj operatora na stanowisku.");
+      return;
+    }
+
     if (!selectedItem) {
       setSubmitState("error");
       setSubmitError("Najpierw zeskanuj komponent do kontroli.");
@@ -332,19 +545,13 @@ export function QcStationPage() {
 
     if (!selectedChecklist) {
       setSubmitState("error");
-      setSubmitError("Wybierz checklistę QC.");
-      return;
-    }
-
-    if (!selectedQualitySession) {
-      setSubmitState("error");
-      setSubmitError("Wybierz aktywną sesję jakościową.");
+      setSubmitError("Wybierz checkliste QC.");
       return;
     }
 
     if (steps.length === 0) {
       setSubmitState("error");
-      setSubmitError("Wybrana checklista nie ma żadnych kroków do zapisania.");
+      setSubmitError("Wybrana checklista nie ma zadnych krokow do zapisania.");
       return;
     }
 
@@ -369,8 +576,8 @@ export function QcStationPage() {
         barcode_value: selectedItem.barcode_value,
         checklist_id: selectedChecklist.id,
         process_stage: selectedChecklist.process_stage,
-        operator_id: selectedQualitySession.operatorId,
-        work_session_id: selectedQualitySession.workSessionId,
+        operator_id: authState.operatorId,
+        work_session_id: authState.workSessionId,
       });
 
       for (const preparedStep of preparedSteps) {
@@ -393,28 +600,90 @@ export function QcStationPage() {
       setSubmitState("loaded");
       setSubmitSuccess(
         completed.result === "PASS"
-          ? `Kontrola zakończona PASS. Komponent ${refreshedItem.item_serial_number} ma teraz status ${refreshedItem.current_status}.`
-          : `Kontrola zakończona FAIL. Komponent ${refreshedItem.item_serial_number} ma teraz status ${refreshedItem.current_status}.`,
+          ? `Kontrola zakonczona PASS. Komponent ${refreshedItem.item_serial_number} ma teraz status ${refreshedItem.current_status}.`
+          : `Kontrola zakonczona FAIL. Komponent ${refreshedItem.item_serial_number} ma teraz status ${refreshedItem.current_status}.`,
       );
     } catch (error) {
       setSubmitState("error");
       setSubmitError(
-        getErrorMessage(error, "Nie udało się zapisać wyników kontroli QC."),
+        getErrorMessage(error, "Nie udalo sie zapisac wynikow kontroli QC."),
       );
     }
+  };
+
+  const handleLogout = () => {
+    if (authState) {
+      setManualLoginName(authState.operatorLoginName);
+    }
+    setManualPassword("");
+    setBarcodeValue("");
+    setRfidUidHash("");
+    setLookupState("idle");
+    setLookupError(null);
+    setSelectedItem(null);
+    setSubmitState("idle");
+    setSubmitError(null);
+    setSubmitSuccess(null);
+    setCompletedRun(null);
+    setAuthState(null);
+    setAuthMessage("Sesja stanowiskowa zostala wylogowana lokalnie.");
+  };
+
+  const handleSuccessfulLogin = ({
+    session,
+    method,
+    operator,
+  }: {
+    session: {
+      work_session_id: string;
+      operator_id: string;
+      workstation_id: string;
+      machine_id: string | null;
+    };
+    method: LoginMethod;
+    operator: OperatorRead | null;
+  }) => {
+    const workstation =
+      activeWorkstations.find(
+        (candidate) => candidate.workstation_id === session.workstation_id,
+      ) ?? selectedWorkstation;
+    const operatorLoginName =
+      operator?.login_name ?? operator?.operator_id ?? manualLoginName.trim() ?? session.operator_id;
+
+    setAuthState({
+      workSessionId: session.work_session_id,
+      operatorId: session.operator_id,
+      operatorName: operator?.full_name ?? session.operator_id,
+      operatorRole: operator?.role ?? "QUALITY_INSPECTOR",
+      operatorLoginName,
+      workstationId: session.workstation_id,
+      workstationName: workstation?.name ?? session.workstation_id,
+      machineId: session.machine_id,
+      loginMethod: method,
+    });
+    setManualLoginName(operatorLoginName);
+    setSelectedWorkstationId(session.workstation_id);
+    setLookupState("idle");
+    setLookupError(null);
+    setSelectedItem(null);
+    setBarcodeValue("");
+    setSubmitState("idle");
+    setSubmitError(null);
+    setSubmitSuccess(null);
+    setCompletedRun(null);
   };
 
   return (
     <main className="app-shell qc-station-shell">
       <section className="hero qc-station-hero">
         <div className="hero-copy">
-          <p className="eyebrow">Stanowisko operatora jakości</p>
-          <h1>Pomiar komponentu, zapis wyniku i dopuszczenie do dalszych etapów.</h1>
+          <p className="eyebrow">System kontroli jakosci</p>
+          <h1>Ekran startowy i stanowisko pomiarowe dla kontroli komponentu.</h1>
           <p>
-            Ten ekran odwzorowuje brakujący krok stanowiskowy z PRD: operator
-            skanuje detal, wykonuje pomiary lub kontrolę, zapisuje PASS albo FAIL,
-            a backend ustawia status komponentu tak, by montaż widział już tylko
-            części dopuszczone dalej.
+            Operator zaczyna od logowania loginem i haslem albo przez przylozenie
+            karty RFID. Po uzyskaniu dostepu system prowadzi przez skan detalu,
+            checkliste, pomiar i zapis PASS albo FAIL przed dopuszczeniem czesci do
+            dalszych etapow.
           </p>
         </div>
         <div className="control-deck">
@@ -427,21 +696,21 @@ export function QcStationPage() {
             />
           </label>
           <div className="refresh-meta">
-            <span>Widok roboczy: QC komponentu przed montażem</span>
+            <span>Widok roboczy: start logowania + stanowisko QC</span>
             <span>
               Status kontekstu:{" "}
               {contextState === "loading"
-                ? "ładowanie"
+                ? "ladowanie"
                 : contextState === "loaded"
                   ? "gotowe"
                   : contextState === "error"
-                    ? "błąd"
+                    ? "blad"
                     : "oczekuje"}
             </span>
           </div>
           <div className="details-inline-actions">
             <a className="ghost-button button-link" href="/">
-              Wróć do dashboardu
+              Wroc do dashboardu
             </a>
           </div>
         </div>
@@ -449,416 +718,494 @@ export function QcStationPage() {
 
       {contextError ? (
         <section className="error-banner" role="alert">
-          <strong>Nie udało się zbudować kontekstu stanowiska.</strong>
+          <strong>Nie udalo sie zbudowac kontekstu stanowiska.</strong>
           <span>{contextError}</span>
         </section>
       ) : null}
 
-      <section className="qc-station-grid">
-        <div className="filters-card">
-          <div className="section-heading">
-            <h2>1. Kontekst stanowiska</h2>
-            <span className={`status-badge state-${contextState}`}>
-              {contextState === "loading"
-                ? "Ładowanie"
-                : contextState === "loaded"
-                  ? "API OK"
-                  : contextState === "error"
-                    ? "Błąd"
-                    : "Oczekuje"}
-            </span>
-          </div>
-          <div className="qc-station-form-grid">
-            <label className="field">
-              <span>Sesja jakościowa</span>
-              <select
-                value={selectedQualitySessionId}
-                onChange={(event) => setSelectedQualitySessionId(event.target.value)}
-                disabled={qualitySessionOptions.length === 0}
-              >
-                {qualitySessionOptions.length === 0 ? (
-                  <option value="">
-                    {contextState === "loading"
-                      ? "Ładowanie aktywnych sesji..."
-                      : "Brak aktywnej sesji jakościowej"}
-                  </option>
-                ) : (
-                  qualitySessionOptions.map((session) => (
-                    <option key={session.workSessionId} value={session.workSessionId}>
-                      {session.label}
-                    </option>
-                  ))
-                )}
-              </select>
-            </label>
-            <label className="field">
-              <span>Checklista</span>
-              <select
-                value={selectedChecklistCode}
-                onChange={(event) => setSelectedChecklistCode(event.target.value)}
-                disabled={activeChecklists.length === 0}
-              >
-                {activeChecklists.length === 0 ? (
-                  <option value="">
-                    {contextState === "loading"
-                      ? "Ładowanie checklist..."
-                      : "Brak aktywnej checklisty QC"}
-                  </option>
-                ) : (
-                  activeChecklists.map((checklist) => (
-                    <option
-                      key={checklist.checklist_code}
-                      value={checklist.checklist_code}
-                    >
-                      {formatChecklistLabel(checklist)}
-                    </option>
-                  ))
-                )}
-              </select>
-            </label>
-          </div>
-          <div className="details-inline-actions">
-            {qualitySessionOptions.length === 0 && contextState !== "loading" ? (
-              <span className="action-hint">
-                Brak aktywnej sesji z rolą jakościową. Uruchom sesję
-                `QUALITY_INSPECTOR`, `QUALITY_MANAGER` albo `ADMIN`.
-              </span>
-            ) : null}
-            {activeChecklists.length === 0 && contextState !== "loading" ? (
-              <span className="action-hint">
-                Brak aktywnej checklisty QC. Dodaj ją przez API lub seed demo.
-              </span>
-            ) : null}
-          </div>
-        </div>
+      {authError ? (
+        <section className="error-banner" role="alert">
+          <strong>Logowanie do systemu QC nie powiodlo sie.</strong>
+          <span>{authError}</span>
+        </section>
+      ) : null}
 
-        <div className="filters-card">
-          <div className="section-heading">
-            <h2>2. Skan detalu</h2>
-            <span className={`status-badge state-${lookupState}`}>
-              {lookupState === "loading"
-                ? "Szukam"
-                : lookupState === "loaded"
-                  ? "Detal OK"
-                  : lookupState === "error"
-                    ? "Błąd"
-                    : "Gotowy"}
-            </span>
-          </div>
-          <form className="qc-station-lookup-form" onSubmit={handleLookupSubmit}>
-            <label className="field">
-              <span>Barcode komponentu</span>
-              <input
-                value={barcodeValue}
-                onChange={(event) => setBarcodeValue(event.target.value)}
-                placeholder="np. BC-DEMO-001"
-              />
-            </label>
-            <div className="details-inline-actions">
-              <button className="primary-button" type="submit">
-                Pobierz detal
-              </button>
-              {selectedItem ? (
-                <button
-                  className="ghost-button"
-                  type="button"
-                  onClick={() => {
-                    setSelectedItem(null);
-                    setLookupState("idle");
-                    setLookupError(null);
-                    setSubmitError(null);
-                    setSubmitSuccess(null);
-                    setCompletedRun(null);
-                    setBarcodeValue("");
-                  }}
+      {authMessage ? (
+        <section className="qc-auth-banner" role="status">
+          <strong>{authMessage}</strong>
+        </section>
+      ) : null}
+
+      {!authState ? (
+        <section className="qc-login-grid">
+          <article className="filters-card qc-login-card">
+            <div className="section-heading">
+              <h2>1. Logowanie operatora</h2>
+              <span className={`status-badge state-${authSubmitState}`}>
+                {authSubmitState === "loading"
+                  ? "Logowanie"
+                  : authSubmitState === "loaded"
+                    ? "Dostep OK"
+                    : authSubmitState === "error"
+                      ? "Blad"
+                      : "Gotowe"}
+              </span>
+            </div>
+            <form className="qc-login-stack" onSubmit={handleManualLoginSubmit}>
+              <label className="field">
+                <span>Stanowisko QC</span>
+                <select
+                  value={selectedWorkstationId}
+                  onChange={(event) => setSelectedWorkstationId(event.target.value)}
+                  disabled={activeWorkstations.length === 0}
                 >
-                  Nowy detal
+                  {activeWorkstations.length === 0 ? (
+                    <option value="">
+                      {contextState === "loading"
+                        ? "Ladowanie stanowisk..."
+                        : "Brak aktywnego stanowiska QC"}
+                    </option>
+                  ) : (
+                    activeWorkstations.map((workstation) => (
+                      <option
+                        key={workstation.workstation_id}
+                        value={workstation.workstation_id}
+                      >
+                        {formatWorkstationLabel(workstation)}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </label>
+              <label className="field">
+                <span>Login</span>
+                <input
+                  value={manualLoginName}
+                  onChange={(event) => setManualLoginName(event.target.value)}
+                  placeholder="np. qc-demo-local"
+                  autoComplete="username"
+                />
+              </label>
+              <label className="field">
+                <span>Haslo</span>
+                <input
+                  value={manualPassword}
+                  onChange={(event) => setManualPassword(event.target.value)}
+                  placeholder="Haslo operatora"
+                  autoComplete="current-password"
+                  type="password"
+                />
+              </label>
+              <div className="details-inline-actions">
+                <button className="primary-button" type="submit">
+                  Wejdz do aplikacji
                 </button>
-              ) : null}
+              </div>
+            </form>
+          </article>
+
+          <article className="filters-card qc-login-card">
+            <div className="section-heading">
+              <h2>2. Logowanie RFID</h2>
+              <span className="status-badge">Autowypelnienie</span>
             </div>
-          </form>
-          {lookupError ? (
-            <div className="error-banner" role="alert">
-              <strong>Nie udało się pobrać komponentu.</strong>
-              <span>{lookupError}</span>
+            <p className="details-subtitle">
+              Czytnik RFID dzialajacy jako klawiatura moze wpisac UID do aktywnego
+              pola. Po odczycie system wypelni login operatora i od razu przyzna
+              dostep do stanowiska kontroli.
+            </p>
+            <form className="qc-login-stack" onSubmit={handleRfidSubmit}>
+              <label className="field">
+                <span>Odczyt RFID</span>
+                <input
+                  className="rfid-listener-input"
+                  value={rfidUidHash}
+                  onChange={(event) => setRfidUidHash(event.target.value)}
+                  placeholder="Przyluz karte albo wpisz UID"
+                />
+              </label>
+              <div className="details-inline-actions">
+                <button className="ghost-button" type="submit">
+                  Zaloguj przez RFID
+                </button>
+              </div>
+              <span className="action-hint">
+                Dla lokalnego demo seed zwraca dedykowane dane logowania i RFID dla
+                stanowiska QC.
+              </span>
+            </form>
+          </article>
+        </section>
+      ) : (
+        <>
+          <section className="details-section qc-station-session-card">
+            <div className="section-heading">
+              <h2>Sesja stanowiskowa</h2>
+              <div className="details-inline-actions">
+                <span className="status-badge">
+                  {authState.loginMethod === "RFID" ? "RFID" : "LOGIN"}
+                </span>
+                <button className="ghost-button" type="button" onClick={handleLogout}>
+                  Wyloguj
+                </button>
+              </div>
             </div>
-          ) : null}
-          {selectedItem ? (
             <div className="details-grid qc-station-item-grid">
               <div className="detail-card">
-                <span>Serial komponentu</span>
-                <strong>{selectedItem.item_serial_number}</strong>
+                <span>Operator</span>
+                <strong>{authState.operatorName}</strong>
               </div>
               <div className="detail-card">
-                <span>Status bieżący</span>
-                <strong>{labelForCode(selectedItem.current_status)}</strong>
+                <span>Rola</span>
+                <strong>{labelForCode(authState.operatorRole)}</strong>
               </div>
               <div className="detail-card">
-                <span>Typ komponentu</span>
-                <strong>{labelForCode(selectedItem.item_type)}</strong>
+                <span>Login</span>
+                <strong>{authState.operatorLoginName}</strong>
               </div>
               <div className="detail-card">
-                <span>Barcode</span>
-                <strong>{selectedItem.barcode_value}</strong>
+                <span>Stanowisko</span>
+                <strong>{authState.workstationName}</strong>
+              </div>
+              <div className="detail-card">
+                <span>Work session</span>
+                <strong>{authState.workSessionId}</strong>
               </div>
             </div>
-          ) : (
-            <div className="empty-state">
-              <strong>Brak wybranego komponentu</strong>
-              <span>
-                Zeskanuj barcode, aby pobrać detal do kontroli i zapisać wynik QC.
-              </span>
+          </section>
+
+          <section className="qc-station-grid">
+            <div className="filters-card">
+              <div className="section-heading">
+                <h2>1. Kontekst kontroli</h2>
+                <span className={`status-badge state-${contextState}`}>
+                  {contextState === "loading"
+                    ? "Ladowanie"
+                    : contextState === "loaded"
+                      ? "API OK"
+                      : contextState === "error"
+                        ? "Blad"
+                        : "Oczekuje"}
+                </span>
+              </div>
+              <div className="qc-station-form-grid">
+                <label className="field">
+                  <span>Checklista</span>
+                  <select
+                    value={selectedChecklistCode}
+                    onChange={(event) => setSelectedChecklistCode(event.target.value)}
+                    disabled={activeChecklists.length === 0}
+                  >
+                    {activeChecklists.length === 0 ? (
+                      <option value="">
+                        {contextState === "loading"
+                          ? "Ladowanie checklist..."
+                          : "Brak aktywnej checklisty QC"}
+                      </option>
+                    ) : (
+                      activeChecklists.map((checklist) => (
+                        <option
+                          key={checklist.checklist_code}
+                          value={checklist.checklist_code}
+                        >
+                          {formatChecklistLabel(checklist)}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </label>
+              </div>
+              <div className="details-inline-actions">
+                {selectedChecklist ? (
+                  <span className="action-hint">
+                    Aktywna checklista: {selectedChecklist.name} ({selectedChecklist.checklist_code})
+                  </span>
+                ) : null}
+              </div>
             </div>
-          )}
-        </div>
-      </section>
 
-      <section className="details-section qc-station-run-section">
-        <div className="section-heading">
-          <h2>3. Wykonanie kontroli</h2>
-          <span className={`status-badge state-${stepsState}`}>
-            {stepsState === "loading"
-              ? "Ładowanie kroków"
-              : stepsState === "loaded"
-                ? "Checklista gotowa"
-                : stepsState === "error"
-                  ? "Błąd kroków"
-                  : "Oczekuje"}
-          </span>
-        </div>
-
-        {stepsError ? (
-          <div className="error-banner" role="alert">
-            <strong>Nie udało się załadować checklisty.</strong>
-            <span>{stepsError}</span>
-          </div>
-        ) : null}
-
-        {selectedChecklist ? (
-          <div className="detail-inline-card">
-            <div className="detail-inline-header">
-              <strong>{selectedChecklist.name}</strong>
-              <span className="status-badge">
-                {labelForCode(selectedChecklist.process_stage)}
-              </span>
-            </div>
-            <p>
-              Kod {selectedChecklist.checklist_code}, wersja {selectedChecklist.version}.
-            </p>
-          </div>
-        ) : null}
-
-        {steps.length === 0 ? (
-          <div className="empty-state">
-            <strong>Brak kroków do wykonania</strong>
-            <span>
-              Wybierz aktywną checklistę QC z krokami pomiarowymi albo kontrolnymi.
-            </span>
-          </div>
-        ) : (
-          <div className="qc-step-list">
-            {steps.map((step, index) => {
-              const draft = stepDrafts[step.id] ?? createDefaultStepDraft();
-              const preview = measurementWarnings[step.id] ?? null;
-              const isManualFail = step.requires_measurement && draft.status === "FAIL";
-
-              return (
-                <article key={step.id} className="qc-step-card">
-                  <div className="qc-step-card-header">
-                    <div>
-                      <p className="eyebrow">Krok {index + 1}</p>
-                      <h3>{step.title}</h3>
-                    </div>
-                    <div className="details-inline-actions">
-                      {step.requires_measurement ? (
-                        <span className="status-badge">Pomiar wymagany</span>
-                      ) : (
-                        <span className="status-badge">Kontrola binarna</span>
-                      )}
-                      {step.blocking_on_fail ? (
-                        <span className="status-badge state-error">
-                          Fail blokuje
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-                  {step.instruction ? (
-                    <p className="details-subtitle">{step.instruction}</p>
+            <div className="filters-card">
+              <div className="section-heading">
+                <h2>2. Skan detalu</h2>
+                <span className={`status-badge state-${lookupState}`}>
+                  {lookupState === "loading"
+                    ? "Szukam"
+                    : lookupState === "loaded"
+                      ? "Detal OK"
+                      : lookupState === "error"
+                        ? "Blad"
+                        : "Gotowy"}
+                </span>
+              </div>
+              <form className="qc-station-lookup-form" onSubmit={handleLookupSubmit}>
+                <label className="field">
+                  <span>Barcode komponentu</span>
+                  <input
+                    value={barcodeValue}
+                    onChange={(event) => setBarcodeValue(event.target.value)}
+                    placeholder="np. BC-DEMO-001"
+                  />
+                </label>
+                <div className="details-inline-actions">
+                  <button className="primary-button" type="submit">
+                    Pobierz detal
+                  </button>
+                  {selectedItem ? (
+                    <button
+                      className="ghost-button"
+                      type="button"
+                      onClick={() => {
+                        setSelectedItem(null);
+                        setLookupState("idle");
+                        setLookupError(null);
+                        setSubmitError(null);
+                        setSubmitSuccess(null);
+                        setCompletedRun(null);
+                        setBarcodeValue("");
+                      }}
+                    >
+                      Nowy detal
+                    </button>
                   ) : null}
-                  <div className="qc-step-meta">
-                    {step.expected_value ? (
-                      <span>Oczekiwane: {step.expected_value}</span>
-                    ) : null}
-                    {step.unit ? <span>Jednostka: {step.unit}</span> : null}
-                    {step.tolerance_min !== null || step.tolerance_max !== null ? (
-                      <span>{formatTolerance(step)}</span>
-                    ) : null}
+                </div>
+              </form>
+              {lookupError ? (
+                <div className="error-banner" role="alert">
+                  <strong>Nie udalo sie pobrac komponentu.</strong>
+                  <span>{lookupError}</span>
+                </div>
+              ) : null}
+              {selectedItem ? (
+                <div className="details-grid qc-station-item-grid">
+                  <div className="detail-card">
+                    <span>Serial komponentu</span>
+                    <strong>{selectedItem.item_serial_number}</strong>
                   </div>
-                  <div className="qc-step-form-grid">
-                    <label className="field">
-                      <span>
-                        {step.requires_measurement
-                          ? "Tryb wyniku kroku"
-                          : "Wynik kroku"}
-                      </span>
-                      <select
-                        value={draft.status}
-                        onChange={(event) =>
-                          handleStepDraftChange(
-                            step.id,
-                            "status",
-                            event.target.value,
-                          )
-                        }
-                      >
-                        {step.requires_measurement ? (
-                          <>
-                            <option value="PASS">Zalicz według pomiaru</option>
-                            <option value="FAIL">Oznacz FAIL ręcznie</option>
-                          </>
-                        ) : (
-                          <>
-                            <option value="PASS">PASS</option>
-                            <option value="FAIL">FAIL</option>
-                          </>
-                        )}
-                      </select>
-                    </label>
-                    {step.requires_measurement ? (
-                      <label className="field">
-                        <span>
-                          Pomiar {step.unit ? `(${step.unit})` : ""}
-                        </span>
-                        <input
-                          value={draft.measurementValue}
-                          onChange={(event) =>
-                            handleStepDraftChange(
-                              step.id,
-                              "measurementValue",
-                              event.target.value,
-                            )
-                          }
-                          inputMode="decimal"
-                          placeholder="np. 24.95"
-                          disabled={isManualFail}
-                        />
-                      </label>
-                    ) : null}
-                    <label className="field qc-step-comment-field">
-                      <span>Komentarz operatora</span>
-                      <input
-                        value={draft.comment}
-                        onChange={(event) =>
-                          handleStepDraftChange(step.id, "comment", event.target.value)
-                        }
-                        placeholder="Opcjonalna notatka, np. numer przyrządu lub obserwacja."
-                      />
-                    </label>
+                  <div className="detail-card">
+                    <span>Status biezacy</span>
+                    <strong>{labelForCode(selectedItem.current_status)}</strong>
                   </div>
-                  {step.requires_measurement ? (
-                    <div className="details-inline-actions">
-                      {isManualFail ? (
-                        <span className="inline-feedback-badge state-error">
-                          FAIL zostanie zapisany ręcznie bez automatyki tolerancji.
-                        </span>
-                      ) : preview ? (
-                        <span className={`inline-feedback-badge state-${preview.kind}`}>
-                          {preview.message}
-                        </span>
-                      ) : (
-                        <span className="action-hint">
-                          Wpisz pomiar, a wynik kroku zostanie wyliczony na podstawie
-                          tolerancji backendu.
-                        </span>
-                      )}
-                    </div>
-                  ) : null}
-                </article>
-              );
-            })}
-          </div>
-        )}
+                  <div className="detail-card">
+                    <span>Typ komponentu</span>
+                    <strong>{labelForCode(selectedItem.item_type)}</strong>
+                  </div>
+                  <div className="detail-card">
+                    <span>Barcode</span>
+                    <strong>{selectedItem.barcode_value}</strong>
+                  </div>
+                </div>
+              ) : (
+                <div className="empty-state">
+                  <strong>Brak wybranego komponentu</strong>
+                  <span>
+                    Zeskanuj barcode, aby pobrac detal do kontroli i zapisac wynik QC.
+                  </span>
+                </div>
+              )}
+            </div>
+          </section>
 
-        {submitError ? (
-          <div className="error-banner" role="alert">
-            <strong>Kontrola nie została zapisana.</strong>
-            <span>{submitError}</span>
-          </div>
-        ) : null}
-
-        {submitSuccess ? (
-          <div className="qc-result-banner">
-            <strong>{submitSuccess}</strong>
-            {completedRun ? (
-              <span>
-                Run {completedRun.run_id} zakończył się wynikiem {completedRun.result}
-                {completedRun.ended_at
-                  ? ` o ${formatDateTime(completedRun.ended_at)}`
-                  : ""}.
+          <section className="details-section qc-station-run-section">
+            <div className="section-heading">
+              <h2>3. Wykonanie kontroli</h2>
+              <span className={`status-badge state-${stepsState}`}>
+                {stepsState === "loading"
+                  ? "Ladowanie krokow"
+                  : stepsState === "loaded"
+                    ? "Checklista gotowa"
+                    : stepsState === "error"
+                      ? "Blad krokow"
+                      : "Oczekuje"}
               </span>
+            </div>
+
+            {stepsError ? (
+              <div className="error-banner" role="alert">
+                <strong>Nie udalo sie zaladowac checklisty.</strong>
+                <span>{stepsError}</span>
+              </div>
             ) : null}
-          </div>
-        ) : null}
 
-        <div className="qc-station-toolbar">
-          <button
-            className="primary-button"
-            type="button"
-            onClick={handleSubmitRun}
-            disabled={
-              submitState === "loading" ||
-              !selectedItem ||
-              !selectedChecklist ||
-              !selectedQualitySession ||
-              steps.length === 0
-            }
-          >
-            {submitState === "loading"
-              ? "Zapisuję kontrolę..."
-              : "Zapisz kontrolę QC"}
-          </button>
-          <span className="action-hint">
-            Po wyniku PASS backend ustawi komponent na `QC_PASSED`, więc montaż
-            dopuści go do dalszych etapów. FAIL ustawi `QC_FAILED` i może otworzyć NCR.
-          </span>
-        </div>
-      </section>
+            {selectedChecklist ? (
+              <div className="detail-inline-card">
+                <div className="detail-inline-header">
+                  <strong>{selectedChecklist.name}</strong>
+                  <span className="status-badge">
+                    {labelForCode(selectedChecklist.process_stage)}
+                  </span>
+                </div>
+                <p>
+                  Kod {selectedChecklist.checklist_code}, wersja {selectedChecklist.version}.
+                </p>
+              </div>
+            ) : null}
+
+            {steps.length === 0 ? (
+              <div className="empty-state">
+                <strong>Brak krokow do wykonania</strong>
+                <span>
+                  Wybierz aktywna checkliste QC z krokami pomiarowymi albo kontrolnymi.
+                </span>
+              </div>
+            ) : (
+              <div className="qc-step-list">
+                {steps.map((step, index) => {
+                  const draft = stepDrafts[step.id] ?? createDefaultStepDraft();
+                  const preview = measurementWarnings[step.id] ?? null;
+                  const isManualFail = step.requires_measurement && draft.status === "FAIL";
+
+                  return (
+                    <article key={step.id} className="qc-step-card">
+                      <div className="qc-step-card-header">
+                        <div>
+                          <p className="eyebrow">Krok {index + 1}</p>
+                          <h3>{step.title}</h3>
+                        </div>
+                        <div className="details-inline-actions">
+                          {step.requires_measurement ? (
+                            <span className="status-badge">Pomiar wymagany</span>
+                          ) : (
+                            <span className="status-badge">Kontrola binarna</span>
+                          )}
+                          {step.blocking_on_fail ? (
+                            <span className="status-badge state-error">Fail blokuje</span>
+                          ) : null}
+                        </div>
+                      </div>
+                      {step.instruction ? (
+                        <p className="details-subtitle">{step.instruction}</p>
+                      ) : null}
+                      <div className="qc-step-meta">
+                        {step.expected_value ? (
+                          <span>Oczekiwane: {step.expected_value}</span>
+                        ) : null}
+                        {step.unit ? <span>Jednostka: {step.unit}</span> : null}
+                        {step.tolerance_min !== null || step.tolerance_max !== null ? (
+                          <span>{formatTolerance(step)}</span>
+                        ) : null}
+                      </div>
+                      <div className="qc-step-form-grid">
+                        <label className="field">
+                          <span>
+                            {step.requires_measurement ? "Tryb wyniku kroku" : "Wynik kroku"}
+                          </span>
+                          <select
+                            value={draft.status}
+                            onChange={(event) =>
+                              handleStepDraftChange(step.id, "status", event.target.value)
+                            }
+                          >
+                            {step.requires_measurement ? (
+                              <>
+                                <option value="PASS">Zalicz wedlug pomiaru</option>
+                                <option value="FAIL">Oznacz FAIL recznie</option>
+                              </>
+                            ) : (
+                              <>
+                                <option value="PASS">PASS</option>
+                                <option value="FAIL">FAIL</option>
+                              </>
+                            )}
+                          </select>
+                        </label>
+                        {step.requires_measurement ? (
+                          <label className="field">
+                            <span>Pomiar {step.unit ? `(${step.unit})` : ""}</span>
+                            <input
+                              value={draft.measurementValue}
+                              onChange={(event) =>
+                                handleStepDraftChange(
+                                  step.id,
+                                  "measurementValue",
+                                  event.target.value,
+                                )
+                              }
+                              inputMode="decimal"
+                              placeholder="np. 24.95"
+                              disabled={isManualFail}
+                            />
+                          </label>
+                        ) : null}
+                        <label className="field qc-step-comment-field">
+                          <span>Komentarz operatora</span>
+                          <input
+                            value={draft.comment}
+                            onChange={(event) =>
+                              handleStepDraftChange(step.id, "comment", event.target.value)
+                            }
+                            placeholder="Opcjonalna notatka albo numer przyrzadu"
+                          />
+                        </label>
+                      </div>
+                      {step.requires_measurement ? (
+                        <div className="details-inline-actions">
+                          {isManualFail ? (
+                            <span className="inline-feedback-badge state-error">
+                              FAIL zostanie zapisany recznie bez automatyki tolerancji.
+                            </span>
+                          ) : preview ? (
+                            <span className={`inline-feedback-badge state-${preview.kind}`}>
+                              {preview.message}
+                            </span>
+                          ) : (
+                            <span className="action-hint">
+                              Wpisz pomiar, a wynik kroku zostanie porownany z tolerancja.
+                            </span>
+                          )}
+                        </div>
+                      ) : null}
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+
+            {submitError ? (
+              <div className="error-banner" role="alert">
+                <strong>Kontrola nie zostala zapisana.</strong>
+                <span>{submitError}</span>
+              </div>
+            ) : null}
+
+            {submitSuccess ? (
+              <div className="qc-result-banner">
+                <strong>{submitSuccess}</strong>
+                {completedRun ? (
+                  <span>
+                    Run {completedRun.run_id} zakonczyl sie wynikiem {completedRun.result}
+                    {completedRun.ended_at
+                      ? ` o ${formatDateTime(completedRun.ended_at)}`
+                      : ""}.
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
+
+            <div className="qc-station-toolbar">
+              <button
+                className="primary-button"
+                type="button"
+                onClick={handleSubmitRun}
+                disabled={
+                  submitState === "loading" ||
+                  !selectedItem ||
+                  !selectedChecklist ||
+                  !authState ||
+                  steps.length === 0
+                }
+              >
+                {submitState === "loading" ? "Zapisuje kontrole..." : "Zapisz kontrole QC"}
+              </button>
+              <span className="action-hint">
+                Po wyniku PASS backend ustawi komponent na `QC_PASSED`, wiec montaz
+                dopusci go do dalszych etapow. FAIL ustawi `QC_FAILED` i moze otworzyc NCR.
+              </span>
+            </div>
+          </section>
+        </>
+      )}
     </main>
   );
-}
-
-function buildActionWorkSessionOptions(
-  sessions: WorkSessionRead[],
-  operators: OperatorRead[],
-  allowedRoles: Set<string>,
-): ActionWorkSessionOption[] {
-  const operatorsById = new Map(
-    operators.map((operator) => [operator.operator_id, operator]),
-  );
-
-  return sessions
-    .filter((session) => session.status === "ACTIVE" && session.ended_at === null)
-    .map((session) => {
-      const operator = operatorsById.get(session.operator_id);
-
-      if (
-        !operator ||
-        !operator.is_active ||
-        !allowedRoles.has(operator.role)
-      ) {
-        return null;
-      }
-
-      return {
-        workSessionId: session.work_session_id,
-        operatorId: operator.operator_id,
-        workstationId: session.workstation_id,
-        machineId: session.machine_id,
-        role: operator.role,
-        label: `${operator.full_name} · ${labelForCode(operator.role)} · ${session.workstation_id}`,
-      };
-    })
-    .filter((session): session is ActionWorkSessionOption => session !== null);
 }
 
 function buildInitialStepDrafts(steps: QcStepRead[]): StepDraftMap {
@@ -867,11 +1214,11 @@ function buildInitialStepDrafts(steps: QcStepRead[]): StepDraftMap {
   );
 }
 
-function createDefaultStepDraft(requiresMeasurement = false): StepDraft {
+function createDefaultStepDraft(_requiresMeasurement = false): StepDraft {
   return {
     status: "PASS",
     measurementValue: "",
-    comment: requiresMeasurement ? "" : "",
+    comment: "",
   };
 }
 
@@ -897,14 +1244,14 @@ function prepareStepPayload(
     const trimmedMeasurement = safeDraft.measurementValue.trim().replace(",", ".");
     if (!trimmedMeasurement) {
       return {
-        error: `Krok „${step.title}” wymaga pomiaru albo ręcznego FAIL.`,
+        error: `Krok "${step.title}" wymaga pomiaru albo recznego FAIL.`,
       };
     }
 
     const measurementValue = Number(trimmedMeasurement);
     if (!Number.isFinite(measurementValue)) {
       return {
-        error: `Pomiar dla kroku „${step.title}” nie jest poprawną liczbą.`,
+        error: `Pomiar dla kroku "${step.title}" nie jest poprawna liczba.`,
       };
     }
 
@@ -950,7 +1297,7 @@ function buildMeasurementWarnings(
     if (!Number.isFinite(measurementValue)) {
       previews[step.id] = {
         kind: "error",
-        message: "Pomiar nie jest poprawną liczbą.",
+        message: "Pomiar nie jest poprawna liczba.",
       };
       continue;
     }
@@ -961,7 +1308,7 @@ function buildMeasurementWarnings(
     ) {
       previews[step.id] = {
         kind: "error",
-        message: `Poza tolerancją: ${measurementValue} < ${step.tolerance_min}.`,
+        message: `Poza tolerancja: ${measurementValue} < ${step.tolerance_min}.`,
       };
       continue;
     }
@@ -972,14 +1319,14 @@ function buildMeasurementWarnings(
     ) {
       previews[step.id] = {
         kind: "error",
-        message: `Poza tolerancją: ${measurementValue} > ${step.tolerance_max}.`,
+        message: `Poza tolerancja: ${measurementValue} > ${step.tolerance_max}.`,
       };
       continue;
     }
 
     previews[step.id] = {
       kind: "success",
-      message: "Pomiar mieści się w tolerancji.",
+      message: "Pomiar miesci sie w tolerancji.",
     };
   }
 
@@ -987,7 +1334,12 @@ function buildMeasurementWarnings(
 }
 
 function formatChecklistLabel(checklist: QcChecklistRead): string {
-  return `${checklist.name} · ${labelForCode(checklist.process_stage)} · v${checklist.version}`;
+  return `${checklist.name} - ${labelForCode(checklist.process_stage)} - v${checklist.version}`;
+}
+
+function formatWorkstationLabel(workstation: WorkstationRead): string {
+  const area = workstation.area ? `${workstation.area} - ` : "";
+  return `${area}${workstation.name} (${workstation.workstation_id})`;
 }
 
 function formatTolerance(step: QcStepRead): string {
@@ -1021,4 +1373,54 @@ function getErrorMessage(error: unknown, fallback: string): string {
 
 function createClientQcRunId(): string {
   return `QC-WEB-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+}
+
+function findOperatorByLogin(
+  operators: OperatorRead[],
+  loginName: string,
+): OperatorRead | null {
+  const normalizedLogin = loginName.trim().toLowerCase();
+  return (
+    operators.find((operator) => {
+      const candidate = (operator.login_name ?? operator.operator_id).trim().toLowerCase();
+      return candidate === normalizedLogin;
+    }) ?? null
+  );
+}
+
+function readStoredAuthState(): QcStationAuthState | null {
+  const rawValue = localStorage.getItem(QC_AUTH_STORAGE_KEY);
+  if (!rawValue) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(rawValue) as Partial<QcStationAuthState>;
+    if (
+      !parsed.workSessionId ||
+      !parsed.operatorId ||
+      !parsed.operatorName ||
+      !parsed.operatorRole ||
+      !parsed.operatorLoginName ||
+      !parsed.workstationId ||
+      !parsed.workstationName ||
+      !parsed.loginMethod
+    ) {
+      return null;
+    }
+
+    return {
+      workSessionId: parsed.workSessionId,
+      operatorId: parsed.operatorId,
+      operatorName: parsed.operatorName,
+      operatorRole: parsed.operatorRole,
+      operatorLoginName: parsed.operatorLoginName,
+      workstationId: parsed.workstationId,
+      workstationName: parsed.workstationName,
+      machineId: parsed.machineId ?? null,
+      loginMethod: parsed.loginMethod,
+    };
+  } catch {
+    return null;
+  }
 }

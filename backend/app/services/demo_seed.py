@@ -18,8 +18,10 @@ from app.models import (
     Device,
     DeviceBomItem,
     DeviceBomTemplate,
+    Operator,
     ProductionItem,
     QcChecklist,
+    Workstation,
 )
 
 DEFAULT_DEVICE_TYPE = "DEMO-OPS"
@@ -42,6 +44,10 @@ class SeedResult:
     qc_station_checklist_code: str | None = None
     qc_station_item_serial_number: str | None = None
     qc_station_barcode_value: str | None = None
+    qc_station_login_name: str | None = None
+    qc_station_password: str | None = None
+    qc_station_rfid_uid_hash: str | None = None
+    qc_station_workstation_id: str | None = None
     verified: bool = False
 
 
@@ -348,6 +354,10 @@ def read_existing_qc_station_assets(device_type: str) -> dict[str, str | None]:
     checklist_code = f"QC-STATION-{token}"
     item_serial_number = f"QCITEM-{token}"
     barcode_value = f"QCBC-{token}"
+    login_name = f"qc-{token.lower()}"
+    password = f"qc-{token.lower()}-123"
+    rfid_uid_hash = f"QCRFID-{token}"
+    workstation_id = f"QCWS-{token}"
 
     with SessionLocal() as db:
         checklist_exists = (
@@ -365,12 +375,91 @@ def read_existing_qc_station_assets(device_type: str) -> dict[str, str | None]:
             .first()
             is not None
         )
+        operator_exists = (
+            db.query(Operator)
+            .filter(
+                Operator.login_name == login_name,
+                Operator.rfid_uid_hash == rfid_uid_hash,
+            )
+            .first()
+            is not None
+        )
+        workstation_exists = (
+            db.query(Workstation)
+            .filter(Workstation.workstation_id == workstation_id)
+            .first()
+            is not None
+        )
 
     return {
         "qc_station_url": "/qc-station" if checklist_exists and item_exists else None,
         "qc_station_checklist_code": checklist_code if checklist_exists else None,
         "qc_station_item_serial_number": item_serial_number if item_exists else None,
         "qc_station_barcode_value": barcode_value if item_exists else None,
+        "qc_station_login_name": login_name if operator_exists else None,
+        "qc_station_password": password if operator_exists else None,
+        "qc_station_rfid_uid_hash": rfid_uid_hash if operator_exists else None,
+        "qc_station_workstation_id": workstation_id if workstation_exists else None,
+    }
+
+
+def ensure_qc_station_access(client: TestClient, *, device_type: str) -> dict[str, str]:
+    token = normalize_seed_token(device_type)
+    operator_id = f"QCOP-{token}"
+    login_name = f"qc-{token.lower()}"
+    password = f"qc-{token.lower()}-123"
+    rfid_uid_hash = f"QCRFID-{token}"
+    workstation_id = f"QCWS-{token}"
+
+    with SessionLocal() as db:
+        operator_exists = (
+            db.query(Operator)
+            .filter(Operator.operator_id == operator_id)
+            .first()
+            is not None
+        )
+        workstation_exists = (
+            db.query(Workstation)
+            .filter(Workstation.workstation_id == workstation_id)
+            .first()
+            is not None
+        )
+
+    if not operator_exists:
+        ensure_ok(
+            client.post(
+                "/api/operators",
+                json={
+                    "operator_id": operator_id,
+                    "full_name": f"QC Inspector {device_type}",
+                    "role": "QUALITY_INSPECTOR",
+                    "login_name": login_name,
+                    "password": password,
+                    "rfid_uid_hash": rfid_uid_hash,
+                },
+            ),
+            f"create QC station operator {operator_id}",
+        )
+
+    if not workstation_exists:
+        ensure_ok(
+            client.post(
+                "/api/workstations",
+                json={
+                    "workstation_id": workstation_id,
+                    "name": f"QC Station {device_type}",
+                    "area": "QA",
+                    "station_type": "QC",
+                },
+            ),
+            f"create QC station workstation {workstation_id}",
+        )
+
+    return {
+        "qc_station_login_name": login_name,
+        "qc_station_password": password,
+        "qc_station_rfid_uid_hash": rfid_uid_hash,
+        "qc_station_workstation_id": workstation_id,
     }
 
 
@@ -380,6 +469,7 @@ def ensure_qc_station_assets(
     *,
     device_type: str,
 ) -> dict[str, str]:
+    access_assets = ensure_qc_station_access(client, device_type=device_type)
     token = normalize_seed_token(device_type)
     checklist_code = f"QC-STATION-{token}"
     item_serial_number = f"QCITEM-{token}"
@@ -476,6 +566,7 @@ def ensure_qc_station_assets(
         "qc_station_checklist_code": checklist_code,
         "qc_station_item_serial_number": item_serial_number,
         "qc_station_barcode_value": barcode_value,
+        **access_assets,
     }
 
 

@@ -52,9 +52,19 @@ export interface OperatorRead {
   operator_id: string;
   full_name: string;
   role: string;
+  login_name?: string | null;
   rfid_uid_hash: string | null;
   is_active: boolean;
   created_at: string;
+}
+
+export interface WorkstationRead {
+  id: string;
+  workstation_id: string;
+  name: string;
+  area: string | null;
+  station_type: string | null;
+  is_active: boolean;
 }
 
 export interface WorkSessionRead {
@@ -386,6 +396,19 @@ export interface QcStepResultCreatePayload {
   mcu_snapshot?: Record<string, unknown>;
 }
 
+export interface OperatorLoginPayload {
+  login: string;
+  password: string;
+  workstation_id: string;
+  machine_id?: string;
+}
+
+export interface RfidLoginPayload {
+  rfid_uid_hash: string;
+  workstation_id: string;
+  machine_id?: string;
+}
+
 export interface QcStepResultRead extends QcStepResultCreatePayload {
   id: string;
   qc_run_id: string;
@@ -609,12 +632,46 @@ export async function listWorkSessions(
   );
 }
 
+export async function listWorkstations(
+  apiBaseUrl: string,
+  signal?: AbortSignal,
+): Promise<WorkstationRead[]> {
+  return fetchJson<WorkstationRead[]>(
+    joinApiUrl(apiBaseUrl, "/workstations"),
+    signal,
+  );
+}
+
 export async function listOperators(
   apiBaseUrl: string,
   signal?: AbortSignal,
 ): Promise<OperatorRead[]> {
   return fetchJson<OperatorRead[]>(
     joinApiUrl(apiBaseUrl, "/operators"),
+    signal,
+  );
+}
+
+export async function operatorLogin(
+  apiBaseUrl: string,
+  payload: OperatorLoginPayload,
+  signal?: AbortSignal,
+): Promise<WorkSessionRead> {
+  return postJson<WorkSessionRead>(
+    joinApiUrl(apiBaseUrl, "/auth/operator-login"),
+    payload,
+    signal,
+  );
+}
+
+export async function rfidLogin(
+  apiBaseUrl: string,
+  payload: RfidLoginPayload,
+  signal?: AbortSignal,
+): Promise<WorkSessionRead> {
+  return postJson<WorkSessionRead>(
+    joinApiUrl(apiBaseUrl, "/auth/rfid-login"),
+    payload,
     signal,
   );
 }

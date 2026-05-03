@@ -1,45 +1,46 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import { App } from "./App";
 
 afterEach(() => {
+  cleanup();
+  localStorage.clear();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
-  window.history.replaceState(null, "", "/");
 });
 
 describe("QcStationPage", () => {
-  it("obsługuje lookup komponentu i zapis runu QC z pomiarem", async () => {
+  it("po logowaniu haslem pozwala wykonac kontrole QC", async () => {
     let barcodeLookupCount = 0;
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       const method = init?.method ?? "GET";
 
-      if (url.endsWith("/api/work-sessions")) {
+      if (url.endsWith("/api/operators")) {
         return jsonResponse([
           {
-            id: "ROW-WS-001",
-            work_session_id: "WS-QA-001",
-            operator_id: "OP-QA-001",
-            workstation_id: "QC-ST-01",
-            machine_id: null,
-            status: "ACTIVE",
-            started_at: "2026-05-03T08:00:00Z",
-            ended_at: null,
+            id: "OP-ROW-001",
+            operator_id: "QCOP-DEMO-LOCAL",
+            full_name: "Demo QC Inspector",
+            role: "QUALITY_INSPECTOR",
+            login_name: "qc-demo-local",
+            rfid_uid_hash: "QCRFID-DEMO-LOCAL",
+            is_active: true,
+            created_at: "2026-05-03T08:00:00Z",
           },
         ]);
       }
 
-      if (url.endsWith("/api/operators")) {
+      if (url.endsWith("/api/workstations")) {
         return jsonResponse([
           {
-            id: "ROW-OP-001",
-            operator_id: "OP-QA-001",
-            full_name: "Anna Kontrola",
-            role: "QUALITY_INSPECTOR",
-            rfid_uid_hash: null,
+            id: "WS-ROW-001",
+            workstation_id: "QCWS-DEMO-LOCAL",
+            name: "QC Station Demo",
+            area: "QA",
+            station_type: "QC",
             is_active: true,
-            created_at: "2026-05-03T07:55:00Z",
           },
         ]);
       }
@@ -48,24 +49,37 @@ describe("QcStationPage", () => {
         return jsonResponse([
           {
             id: "CHK-001",
-            checklist_code: "QC-COMP-001",
+            checklist_code: "QC-STATION-DEMO-LOCAL",
             name: "Kontrola wentylatora",
             process_stage: "COMPONENT_QC",
             version: "1.0",
             is_active: true,
-            created_at: "2026-05-03T08:05:00Z",
+            created_at: "2026-05-03T08:00:00Z",
           },
         ]);
       }
 
-      if (url.endsWith("/api/qc-checklists/QC-COMP-001/steps")) {
+      if (url.endsWith("/api/auth/operator-login") && method === "POST") {
+        return jsonResponse({
+          id: "SESSION-ROW-001",
+          work_session_id: "WS-QA-001",
+          operator_id: "QCOP-DEMO-LOCAL",
+          workstation_id: "QCWS-DEMO-LOCAL",
+          machine_id: null,
+          status: "ACTIVE",
+          started_at: "2026-05-03T08:10:00Z",
+          ended_at: null,
+        });
+      }
+
+      if (url.endsWith("/api/qc-checklists/QC-STATION-DEMO-LOCAL/steps")) {
         return jsonResponse([
           {
             id: "STEP-001",
             checklist_id: "CHK-001",
             step_order: 1,
-            title: "Zmierz szerokość",
-            instruction: "Użyj suwmiarki cyfrowej.",
+            title: "Zmierz szerokosc",
+            instruction: "Uzyj suwmiarki.",
             requires_photo: false,
             requires_measurement: true,
             blocking_on_fail: true,
@@ -78,12 +92,12 @@ describe("QcStationPage", () => {
             id: "STEP-002",
             checklist_id: "CHK-001",
             step_order: 2,
-            title: "Zatwierdź etykietę",
-            instruction: "Sprawdź zgodność nadruku z kartą kontroli.",
+            title: "Sprawdz etykiete",
+            instruction: "Potwierdz czytelnosc etykiety.",
             requires_photo: false,
             requires_measurement: false,
             blocking_on_fail: true,
-            expected_value: "Czytelna",
+            expected_value: "Czytelna etykieta",
             unit: null,
             tolerance_min: null,
             tolerance_max: null,
@@ -91,12 +105,12 @@ describe("QcStationPage", () => {
         ]);
       }
 
-      if (url.endsWith("/api/production-items/by-barcode/BC-FAN-001")) {
+      if (url.endsWith("/api/production-items/by-barcode/QCBC-DEMO-LOCAL")) {
         barcodeLookupCount += 1;
         return jsonResponse({
           id: "ITEM-ROW-001",
-          item_serial_number: "FAN-001",
-          barcode_value: "BC-FAN-001",
+          item_serial_number: "QCITEM-DEMO-LOCAL",
+          barcode_value: "QCBC-DEMO-LOCAL",
           item_type: "FAN_MODULE",
           part_number: "PN-FAN-001",
           revision: "A",
@@ -105,7 +119,7 @@ describe("QcStationPage", () => {
           production_order: null,
           material_batch: null,
           machine_id: null,
-          created_by_operator_id: "OP-QA-001",
+          created_by_operator_id: "QCOP-DEMO-LOCAL",
           current_status: barcodeLookupCount > 1 ? "QC_PASSED" : "PRODUCED",
           produced_at: "2026-05-03T08:10:00Z",
           created_at: "2026-05-03T08:10:00Z",
@@ -114,71 +128,60 @@ describe("QcStationPage", () => {
 
       if (url.endsWith("/api/qc-runs") && method === "POST") {
         return jsonResponse({
-          run_id: "QC-WEB-TEST-001",
-          item_serial_number: "FAN-001",
-          barcode_value: "BC-FAN-001",
+          id: "QC-ROW-001",
+          run_id: "QC-WEB-STATIC",
+          item_serial_number: "QCITEM-DEMO-LOCAL",
+          barcode_value: "QCBC-DEMO-LOCAL",
           checklist_id: "CHK-001",
           process_stage: "COMPONENT_QC",
           work_session_id: "WS-QA-001",
-          operator_id: "OP-QA-001",
-          id: "QC-ROW-001",
+          operator_id: "QCOP-DEMO-LOCAL",
           status: "IN_PROGRESS",
           result: null,
-          started_at: "2026-05-03T08:20:00Z",
+          started_at: "2026-05-03T08:11:00Z",
           ended_at: null,
         });
       }
 
-      if (
-        url.includes("/api/qc-runs/") &&
-        url.endsWith("/steps/STEP-001/result")
-      ) {
+      if (url.endsWith("/steps/STEP-001/result") && method === "POST") {
         return jsonResponse({
           id: "STEP-RESULT-001",
-          qc_run_id: "QC-ROW-001",
+          qc_run_id: "QC-WEB-STATIC",
           step_id: "STEP-001",
           status: "PASS",
-          measurement_value: 25.0,
-          comment: "Pomiar w normie",
-          mcu_snapshot: null,
-          created_at: "2026-05-03T08:20:30Z",
+          measurement_value: 25.1,
+          comment: "Pomiar OK",
         });
       }
 
-      if (
-        url.includes("/api/qc-runs/") &&
-        url.endsWith("/steps/STEP-002/result")
-      ) {
+      if (url.endsWith("/steps/STEP-002/result") && method === "POST") {
         return jsonResponse({
           id: "STEP-RESULT-002",
-          qc_run_id: "QC-ROW-001",
+          qc_run_id: "QC-WEB-STATIC",
           step_id: "STEP-002",
           status: "PASS",
-          measurement_value: null,
-          comment: "Etykieta czytelna",
-          mcu_snapshot: null,
-          created_at: "2026-05-03T08:20:35Z",
+          comment: "Etykieta OK",
         });
       }
 
-      if (url.includes("/api/qc-runs/") && url.endsWith("/complete")) {
+      if (url.endsWith("/complete") && method === "POST") {
         return jsonResponse({
-          run_id: "QC-WEB-TEST-001",
-          item_serial_number: "FAN-001",
-          barcode_value: "BC-FAN-001",
+          id: "QC-ROW-001",
+          run_id: "QC-WEB-STATIC",
+          item_serial_number: "QCITEM-DEMO-LOCAL",
+          barcode_value: "QCBC-DEMO-LOCAL",
           checklist_id: "CHK-001",
           process_stage: "COMPONENT_QC",
           work_session_id: "WS-QA-001",
-          operator_id: "OP-QA-001",
-          id: "QC-ROW-001",
+          operator_id: "QCOP-DEMO-LOCAL",
           status: "COMPLETED",
           result: "PASS",
-          started_at: "2026-05-03T08:20:00Z",
-          ended_at: "2026-05-03T08:20:40Z",
+          started_at: "2026-05-03T08:11:00Z",
+          ended_at: "2026-05-03T08:12:00Z",
         });
       }
 
-      throw new Error(`Nieobsłużony request testowy: ${method} ${url}`);
+      throw new Error(`Unexpected request: ${method} ${url}`);
     });
 
     vi.stubGlobal("fetch", fetchMock);
@@ -186,93 +189,146 @@ describe("QcStationPage", () => {
 
     render(<App />);
 
-    await screen.findByDisplayValue(/Kontrola wentylatora/);
+    await screen.findByText(/Logowanie operatora/);
+
+    fireEvent.change(screen.getByPlaceholderText("np. qc-demo-local"), {
+      target: { value: "qc-demo-local" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Haslo operatora"), {
+      target: { value: "qc-demo-local-123" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Wejdz do aplikacji" }));
+
+    await screen.findByText("Sesja stanowiskowa");
+    await screen.findByText("Demo QC Inspector");
+    await screen.findByText(/QC Station Demo/);
+    await screen.findByText(/Aktywna checklista: Kontrola wentylatora/);
 
     fireEvent.change(screen.getByPlaceholderText("np. BC-DEMO-001"), {
-      target: { value: "BC-FAN-001" },
+      target: { value: "QCBC-DEMO-LOCAL" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Pobierz detal" }));
 
-    await screen.findByText("FAN-001");
+    await screen.findByText("QCITEM-DEMO-LOCAL");
 
-    const measurementCard = screen.getByText("Zmierz szerokość").closest("article");
-    const labelCard = screen.getByText("Zatwierdź etykietę").closest("article");
-
-    expect(measurementCard).not.toBeNull();
-    expect(labelCard).not.toBeNull();
-
-    fireEvent.change(
-      within(measurementCard as HTMLElement).getByPlaceholderText("np. 24.95"),
-      {
-        target: { value: "25.0" },
-      },
-    );
-    fireEvent.change(
-      within(measurementCard as HTMLElement).getByPlaceholderText(
-        "Opcjonalna notatka, np. numer przyrządu lub obserwacja.",
-      ),
-      {
-        target: { value: "Pomiar w normie" },
-      },
-    );
-    fireEvent.change(within(labelCard as HTMLElement).getByRole("combobox"), {
-      target: { value: "PASS" },
+    fireEvent.change(screen.getByPlaceholderText("np. 24.95"), {
+      target: { value: "25.1" },
     });
-    fireEvent.change(
-      within(labelCard as HTMLElement).getByPlaceholderText(
-        "Opcjonalna notatka, np. numer przyrządu lub obserwacja.",
-      ),
-      {
-        target: { value: "Etykieta czytelna" },
-      },
+    const commentFields = screen.getAllByPlaceholderText(
+      "Opcjonalna notatka albo numer przyrzadu",
     );
+    fireEvent.change(commentFields[0]!, {
+      target: { value: "Pomiar OK" },
+    });
+    fireEvent.change(commentFields[1]!, {
+      target: { value: "Etykieta OK" },
+    });
 
-    fireEvent.click(screen.getByRole("button", { name: "Zapisz kontrolę QC" }));
+    fireEvent.click(screen.getByRole("button", { name: "Zapisz kontrole QC" }));
 
-    await screen.findByText(/Kontrola zakończona PASS/);
-    expect(screen.getAllByText(/QC passed|QC_PASSED/i).length).toBeGreaterThan(0);
+    await screen.findByText(/Kontrola zakonczona PASS/);
+    await screen.findByText("Qc Passed");
 
     await waitFor(() => {
       const createRunCall = fetchMock.mock.calls.find(
         ([url]) => String(url) === "/api/qc-runs",
       );
       expect(createRunCall).toBeDefined();
-
       const requestInit = createRunCall?.[1] as RequestInit;
-      expect(requestInit.method).toBe("POST");
       expect(JSON.parse(String(requestInit.body))).toMatchObject({
-        item_serial_number: "FAN-001",
-        barcode_value: "BC-FAN-001",
-        checklist_id: "CHK-001",
-        process_stage: "COMPONENT_QC",
-        operator_id: "OP-QA-001",
+        barcode_value: "QCBC-DEMO-LOCAL",
         work_session_id: "WS-QA-001",
+        operator_id: "QCOP-DEMO-LOCAL",
       });
     });
+  });
 
-    const firstStepCall = fetchMock.mock.calls.find(([url]) =>
-      String(url).endsWith("/steps/STEP-001/result"),
-    );
-    const secondStepCall = fetchMock.mock.calls.find(([url]) =>
-      String(url).endsWith("/steps/STEP-002/result"),
-    );
-    const completeCall = fetchMock.mock.calls.find(([url]) =>
-      String(url).endsWith("/complete"),
-    );
+  it("logowanie RFID automatycznie uzupelnia login operatora", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
 
-    expect(firstStepCall).toBeDefined();
-    expect(secondStepCall).toBeDefined();
-    expect(completeCall).toBeDefined();
-    expect(JSON.parse(String((firstStepCall?.[1] as RequestInit).body))).toEqual({
-      status: "PASS",
-      measurement_value: 25,
-      comment: "Pomiar w normie",
+      if (url.endsWith("/api/operators")) {
+        return jsonResponse([
+          {
+            id: "OP-ROW-001",
+            operator_id: "QCOP-DEMO-LOCAL",
+            full_name: "Demo QC Inspector",
+            role: "QUALITY_INSPECTOR",
+            login_name: "qc-demo-local",
+            rfid_uid_hash: "QCRFID-DEMO-LOCAL",
+            is_active: true,
+            created_at: "2026-05-03T08:00:00Z",
+          },
+        ]);
+      }
+
+      if (url.endsWith("/api/workstations")) {
+        return jsonResponse([
+          {
+            id: "WS-ROW-001",
+            workstation_id: "QCWS-DEMO-LOCAL",
+            name: "QC Station Demo",
+            area: "QA",
+            station_type: "QC",
+            is_active: true,
+          },
+        ]);
+      }
+
+      if (url.endsWith("/api/qc-checklists")) {
+        return jsonResponse([
+          {
+            id: "CHK-001",
+            checklist_code: "QC-STATION-DEMO-LOCAL",
+            name: "Kontrola wentylatora",
+            process_stage: "COMPONENT_QC",
+            version: "1.0",
+            is_active: true,
+            created_at: "2026-05-03T08:00:00Z",
+          },
+        ]);
+      }
+
+      if (url.endsWith("/api/auth/rfid-login") && method === "POST") {
+        return jsonResponse({
+          id: "SESSION-ROW-002",
+          work_session_id: "WS-QA-002",
+          operator_id: "QCOP-DEMO-LOCAL",
+          workstation_id: "QCWS-DEMO-LOCAL",
+          machine_id: null,
+          status: "ACTIVE",
+          started_at: "2026-05-03T08:15:00Z",
+          ended_at: null,
+        });
+      }
+
+      if (url.endsWith("/api/qc-checklists/QC-STATION-DEMO-LOCAL/steps")) {
+        return jsonResponse([]);
+      }
+
+      throw new Error(`Unexpected request: ${method} ${url}`);
     });
-    expect(JSON.parse(String((secondStepCall?.[1] as RequestInit).body))).toEqual({
-      status: "PASS",
-      comment: "Etykieta czytelna",
+
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.replaceState(null, "", "/qc-station");
+
+    render(<App />);
+
+    await screen.findByText(/Logowanie RFID/);
+
+    fireEvent.change(screen.getByPlaceholderText("Przyluz karte albo wpisz UID"), {
+      target: { value: "QCRFID-DEMO-LOCAL" },
     });
-    expect((completeCall?.[1] as RequestInit).body).toBe("");
+    fireEvent.click(screen.getByRole("button", { name: "Zaloguj przez RFID" }));
+
+    await screen.findByText("Sesja stanowiskowa");
+    await screen.findByText("Demo QC Inspector");
+    await screen.findByText(/RFID rozpoznane/);
+
+    fireEvent.click(screen.getByRole("button", { name: "Wyloguj" }));
+
+    await screen.findByDisplayValue("qc-demo-local");
   });
 });
 

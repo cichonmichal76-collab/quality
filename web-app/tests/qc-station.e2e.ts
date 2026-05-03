@@ -1,31 +1,12 @@
 import { expect, test } from "@playwright/test";
 
-test("qc station supports barcode lookup and qc completion", async ({ page }) => {
+test("qc station starts from login screen and supports RFID entry", async ({ page }) => {
   let barcodeLookupCount = 0;
 
   await page.route("**/api/**", async (route) => {
     const url = new URL(route.request().url());
     const pathname = url.pathname;
-
-    if (pathname === "/api/work-sessions") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([
-          {
-            id: "ROW-WS-001",
-            work_session_id: "WS-QA-001",
-            operator_id: "OP-QA-001",
-            workstation_id: "QC-ST-01",
-            machine_id: null,
-            status: "ACTIVE",
-            started_at: "2026-05-03T08:00:00Z",
-            ended_at: null,
-          },
-        ]),
-      });
-      return;
-    }
+    const method = route.request().method();
 
     if (pathname === "/api/operators") {
       await route.fulfill({
@@ -34,12 +15,31 @@ test("qc station supports barcode lookup and qc completion", async ({ page }) =>
         body: JSON.stringify([
           {
             id: "ROW-OP-001",
-            operator_id: "OP-QA-001",
+            operator_id: "QCOP-DEMO-LOCAL",
             full_name: "Anna Kontrola",
             role: "QUALITY_INSPECTOR",
-            rfid_uid_hash: null,
+            login_name: "qc-demo-local",
+            rfid_uid_hash: "QCRFID-DEMO-LOCAL",
             is_active: true,
             created_at: "2026-05-03T07:55:00Z",
+          },
+        ]),
+      });
+      return;
+    }
+
+    if (pathname === "/api/workstations") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          {
+            id: "ROW-WS-001",
+            workstation_id: "QCWS-DEMO-LOCAL",
+            name: "QC Station Demo",
+            area: "QA",
+            station_type: "QC",
+            is_active: true,
           },
         ]),
       });
@@ -53,7 +53,7 @@ test("qc station supports barcode lookup and qc completion", async ({ page }) =>
         body: JSON.stringify([
           {
             id: "CHK-001",
-            checklist_code: "QC-COMP-001",
+            checklist_code: "QC-STATION-DEMO-LOCAL",
             name: "Kontrola wentylatora",
             process_stage: "COMPONENT_QC",
             version: "1.0",
@@ -65,7 +65,25 @@ test("qc station supports barcode lookup and qc completion", async ({ page }) =>
       return;
     }
 
-    if (pathname === "/api/qc-checklists/QC-COMP-001/steps") {
+    if (pathname === "/api/auth/rfid-login" && method === "POST") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: "ROW-SESSION-001",
+          work_session_id: "WS-QA-001",
+          operator_id: "QCOP-DEMO-LOCAL",
+          workstation_id: "QCWS-DEMO-LOCAL",
+          machine_id: null,
+          status: "ACTIVE",
+          started_at: "2026-05-03T08:00:00Z",
+          ended_at: null,
+        }),
+      });
+      return;
+    }
+
+    if (pathname === "/api/qc-checklists/QC-STATION-DEMO-LOCAL/steps") {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -74,8 +92,8 @@ test("qc station supports barcode lookup and qc completion", async ({ page }) =>
             id: "STEP-001",
             checklist_id: "CHK-001",
             step_order: 1,
-            title: "Zmierz szerokość",
-            instruction: "Użyj suwmiarki cyfrowej.",
+            title: "Zmierz szerokosc",
+            instruction: "Uzyj suwmiarki cyfrowej.",
             requires_photo: false,
             requires_measurement: true,
             blocking_on_fail: true,
@@ -88,8 +106,8 @@ test("qc station supports barcode lookup and qc completion", async ({ page }) =>
             id: "STEP-002",
             checklist_id: "CHK-001",
             step_order: 2,
-            title: "Zatwierdź etykietę",
-            instruction: "Sprawdź zgodność nadruku z kartą kontroli.",
+            title: "Zatwierdz etykiete",
+            instruction: "Sprawdz zgodnosc nadruku z karta kontroli.",
             requires_photo: false,
             requires_measurement: false,
             blocking_on_fail: true,
@@ -103,15 +121,15 @@ test("qc station supports barcode lookup and qc completion", async ({ page }) =>
       return;
     }
 
-    if (pathname === "/api/production-items/by-barcode/BC-FAN-001") {
+    if (pathname === "/api/production-items/by-barcode/QCBC-DEMO-LOCAL") {
       barcodeLookupCount += 1;
       await route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
           id: "ITEM-ROW-001",
-          item_serial_number: "FAN-001",
-          barcode_value: "BC-FAN-001",
+          item_serial_number: "QCITEM-DEMO-LOCAL",
+          barcode_value: "QCBC-DEMO-LOCAL",
           item_type: "FAN_MODULE",
           part_number: "PN-FAN-001",
           revision: "A",
@@ -120,7 +138,7 @@ test("qc station supports barcode lookup and qc completion", async ({ page }) =>
           production_order: null,
           material_batch: null,
           machine_id: null,
-          created_by_operator_id: "OP-QA-001",
+          created_by_operator_id: "QCOP-DEMO-LOCAL",
           current_status: barcodeLookupCount > 1 ? "QC_PASSED" : "PRODUCED",
           produced_at: "2026-05-03T08:10:00Z",
           created_at: "2026-05-03T08:10:00Z",
@@ -129,18 +147,18 @@ test("qc station supports barcode lookup and qc completion", async ({ page }) =>
       return;
     }
 
-    if (pathname === "/api/qc-runs" && route.request().method() === "POST") {
+    if (pathname === "/api/qc-runs" && method === "POST") {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
           run_id: "QC-WEB-E2E-001",
-          item_serial_number: "FAN-001",
-          barcode_value: "BC-FAN-001",
+          item_serial_number: "QCITEM-DEMO-LOCAL",
+          barcode_value: "QCBC-DEMO-LOCAL",
           checklist_id: "CHK-001",
           process_stage: "COMPONENT_QC",
           work_session_id: "WS-QA-001",
-          operator_id: "OP-QA-001",
+          operator_id: "QCOP-DEMO-LOCAL",
           id: "QC-ROW-001",
           status: "IN_PROGRESS",
           result: null,
@@ -154,7 +172,7 @@ test("qc station supports barcode lookup and qc completion", async ({ page }) =>
     if (
       pathname.startsWith("/api/qc-runs/") &&
       pathname.endsWith("/result") &&
-      route.request().method() === "POST"
+      method === "POST"
     ) {
       const requestBody = JSON.parse(route.request().postData() ?? "{}");
       const stepId = pathname.split("/").at(-2) ?? "STEP-UNKNOWN";
@@ -182,12 +200,12 @@ test("qc station supports barcode lookup and qc completion", async ({ page }) =>
         contentType: "application/json",
         body: JSON.stringify({
           run_id: "QC-WEB-E2E-001",
-          item_serial_number: "FAN-001",
-          barcode_value: "BC-FAN-001",
+          item_serial_number: "QCITEM-DEMO-LOCAL",
+          barcode_value: "QCBC-DEMO-LOCAL",
           checklist_id: "CHK-001",
           process_stage: "COMPONENT_QC",
           work_session_id: "WS-QA-001",
-          operator_id: "OP-QA-001",
+          operator_id: "QCOP-DEMO-LOCAL",
           id: "QC-ROW-001",
           status: "COMPLETED",
           result: "PASS",
@@ -203,37 +221,43 @@ test("qc station supports barcode lookup and qc completion", async ({ page }) =>
 
   await page.goto("/qc-station");
 
-  await expect(page.getByRole("heading", { name: /Pomiar komponentu/i })).toBeVisible();
-  await page.getByPlaceholder("np. BC-DEMO-001").fill("BC-FAN-001");
+  await expect(page.getByText("System kontroli jakosci")).toBeVisible();
+  await expect(page.getByText("Logowanie RFID")).toBeVisible();
+
+  await page.getByPlaceholder("Przyluz karte albo wpisz UID").fill("QCRFID-DEMO-LOCAL");
+  await page.getByRole("button", { name: "Zaloguj przez RFID" }).click();
+
+  await expect(page.getByText("Sesja stanowiskowa")).toBeVisible();
+  await expect(page.getByText("Anna Kontrola")).toBeVisible();
+  await expect(page.getByText(/RFID rozpoznane/i)).toBeVisible();
+
+  await page.getByPlaceholder("np. BC-DEMO-001").fill("QCBC-DEMO-LOCAL");
   await page.getByRole("button", { name: "Pobierz detal" }).click();
 
   await expect(
     page
       .locator(".detail-card")
       .filter({ hasText: "Serial komponentu" })
-      .getByText("FAN-001", { exact: true }),
+      .getByText("QCITEM-DEMO-LOCAL", { exact: true }),
   ).toBeVisible();
+
   await page.getByPlaceholder("np. 24.95").fill("25.0");
   await page
-    .getByPlaceholder(
-      "Opcjonalna notatka, np. numer przyrządu lub obserwacja.",
-    )
+    .getByPlaceholder("Opcjonalna notatka albo numer przyrzadu")
     .first()
     .fill("Pomiar w normie");
   await page
-    .getByPlaceholder(
-      "Opcjonalna notatka, np. numer przyrządu lub obserwacja.",
-    )
+    .getByPlaceholder("Opcjonalna notatka albo numer przyrzadu")
     .nth(1)
     .fill("Etykieta czytelna");
 
-  await page.getByRole("button", { name: "Zapisz kontrolę QC" }).click();
+  await page.getByRole("button", { name: "Zapisz kontrole QC" }).click();
 
-  await expect(page.getByText(/Kontrola zakończona PASS/)).toBeVisible();
+  await expect(page.getByText(/Kontrola zakonczona PASS/)).toBeVisible();
   await expect(
     page
       .locator(".detail-card")
-      .filter({ hasText: "Status bieżący" })
+      .filter({ hasText: "Status biezacy" })
       .getByText(/QC passed|QC_PASSED/i),
   ).toBeVisible();
 });
