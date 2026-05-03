@@ -175,7 +175,7 @@ describe("AdminPage", () => {
     await screen.findByText("NIEAKTYWNE");
   });
 
-  it("konfiguruje kontrole komponentu z BOM wraz ze zdjeciem i krokiem tekstowym", async () => {
+  it("konfiguruje kontrole komponentu z BOM wraz ze zdjeciem i rysowaniem obszaru na obrazie", async () => {
     let configurationLoaded = false;
     const operators: Array<Record<string, unknown>> = [];
     const workstations: Array<Record<string, unknown>> = [];
@@ -394,24 +394,37 @@ describe("AdminPage", () => {
         target: { value: "A2-70" },
       },
     );
-    fireEvent.change(screen.getByPlaceholderText("np. 12"), {
-      target: { value: "62" },
-    });
-    fireEvent.change(screen.getByPlaceholderText("np. 18"), {
-      target: { value: "58" },
-    });
-    fireEvent.change(screen.getByPlaceholderText("np. 36"), {
-      target: { value: "20" },
-    });
-    fireEvent.change(screen.getByPlaceholderText("np. 24"), {
-      target: { value: "16" },
-    });
-
     const file = new File(["demo-image"], "screw.png", { type: "image/png" });
     fireEvent.change(screen.getByLabelText("Zdjecie referencyjne elementu"), {
       target: { files: [file] },
     });
+
+    const stage = screen.getByTestId("qc-reference-stage");
+    Object.defineProperty(stage, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({
+        x: 0,
+        y: 0,
+        left: 0,
+        top: 0,
+        right: 200,
+        bottom: 100,
+        width: 200,
+        height: 100,
+        toJSON: () => "",
+      }),
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Ustaw z obrazu" }));
+    fireEvent.mouseDown(stage, { button: 0, clientX: 40, clientY: 20 });
+    fireEvent.mouseMove(window, { clientX: 140, clientY: 60 });
+    fireEvent.mouseUp(window, { clientX: 140, clientY: 60 });
+
     await screen.findByText("K1");
+    expect((screen.getByPlaceholderText("np. 12") as HTMLInputElement).value).toBe("20");
+    expect((screen.getByPlaceholderText("np. 18") as HTMLInputElement).value).toBe("20");
+    expect((screen.getByPlaceholderText("np. 36") as HTMLInputElement).value).toBe("50");
+    expect((screen.getByPlaceholderText("np. 24") as HTMLInputElement).value).toBe("40");
 
     fireEvent.click(screen.getByRole("button", { name: "Zapisz konfiguracje produktu QC" }));
 
@@ -424,10 +437,10 @@ describe("AdminPage", () => {
     );
     expect(createStepCall).toBeDefined();
     expect(JSON.parse(String((createStepCall?.[1] as RequestInit).body))).toMatchObject({
-      region_x: 62,
-      region_y: 58,
-      region_width: 20,
-      region_height: 16,
+      region_x: 20,
+      region_y: 20,
+      region_width: 50,
+      region_height: 40,
     });
   });
 });

@@ -1291,6 +1291,11 @@ td span {
   width: min(100%, 420px);
 }
 
+.qc-reference-stage.is-interactive {
+  cursor: crosshair;
+  user-select: none;
+}
+
 .qc-reference-image {
   display: block;
   width: 100%;
@@ -1314,6 +1319,20 @@ td span {
   box-shadow: 0 0 0 1px rgb(255 255 255 / 75%);
 }
 
+.qc-reference-region.is-active {
+  border-color: rgb(34 107 95 / 92%);
+  background: rgb(34 107 95 / 14%);
+  box-shadow:
+    0 0 0 2px rgb(255 255 255 / 82%),
+    0 0 0 4px rgb(34 107 95 / 18%);
+}
+
+.qc-reference-region.is-draft {
+  border-style: dashed;
+  border-color: rgb(34 107 95 / 78%);
+  background: rgb(34 107 95 / 12%);
+}
+
 .qc-reference-region-label {
   position: absolute;
   top: -12px;
@@ -1327,10 +1346,24 @@ td span {
   letter-spacing: 0.04em;
 }
 
+.qc-reference-helper {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
 .qc-step-region-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
+}
+
+.qc-step-region-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
 }
 
 .qc-step-region-summary {

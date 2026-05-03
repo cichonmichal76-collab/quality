@@ -107,6 +107,7 @@ test("admin page creates operator and updates workstation", async ({ page }) => 
 
 test("admin page configures product qc for bom component", async ({ page }) => {
   let configurationLoaded = false;
+  let createdStepPayload: Record<string, unknown> | null = null;
 
   await page.route("**/api/operators", async (route) => {
     await route.fulfill({
@@ -182,6 +183,7 @@ test("admin page configures product qc for bom component", async ({ page }) => {
 
   await page.route("**/api/qc-checklists/QC-DEMO-OPS-DEFAULT-SCREW-M4/steps", async (route) => {
     if (route.request().method() === "POST") {
+      createdStepPayload = route.request().postDataJSON() as Record<string, unknown>;
       configurationLoaded = true;
       await route.fulfill({
         status: 200,
@@ -316,19 +318,55 @@ test("admin page configures product qc for bom component", async ({ page }) => {
   await page.getByLabel("Tryb oceny").selectOption("TEXT_MATCH");
   await page.getByPlaceholder("np. Wpisz odczyt oznaczenia").fill("Wpisz oznaczenie");
   await page.getByPlaceholder("np. A2-70 albo Czytelna etykieta").fill("A2-70");
-  await page.getByPlaceholder("np. 12").fill("62");
-  await page.getByPlaceholder("np. 18").fill("58");
-  await page.getByPlaceholder("np. 36").fill("20");
-  await page.getByPlaceholder("np. 24").fill("16");
   await page.getByLabel("Zdjecie referencyjne elementu").setInputFiles({
     name: "screw.png",
     mimeType: "image/png",
-    buffer: Buffer.from("demo-image"),
+    buffer: Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO2m3f4AAAAASUVORK5CYII=",
+      "base64",
+    ),
   });
-  await expect(page.getByText("K1")).toBeVisible();
+  const stage = page.getByTestId("qc-reference-stage");
+  await expect(stage).toBeVisible();
+  await page.getByRole("button", { name: "Ustaw z obrazu" }).click();
+  const stageBounds = await stage.boundingBox();
+  if (!stageBounds) {
+    throw new Error("Brak wymiarow sceny obrazu referencyjnego.");
+  }
+  await stage.dispatchEvent("mousedown", {
+    button: 0,
+    clientX: stageBounds.x + stageBounds.width * 0.2,
+    clientY: stageBounds.y + stageBounds.height * 0.2,
+  });
+  await stage.dispatchEvent("mousemove", {
+    button: 0,
+    clientX: stageBounds.x + stageBounds.width * 0.7,
+    clientY: stageBounds.y + stageBounds.height * 0.6,
+  });
+  await stage.dispatchEvent("mouseup", {
+    button: 0,
+    clientX: stageBounds.x + stageBounds.width * 0.7,
+    clientY: stageBounds.y + stageBounds.height * 0.6,
+  });
+  const regionX = Number(await page.getByPlaceholder("np. 12").inputValue());
+  const regionY = Number(await page.getByPlaceholder("np. 18").inputValue());
+  const regionWidth = Number(await page.getByPlaceholder("np. 36").inputValue());
+  const regionHeight = Number(await page.getByPlaceholder("np. 24").inputValue());
+  expect(regionX).toBeGreaterThan(19);
+  expect(regionX).toBeLessThan(21);
+  expect(regionY).toBeGreaterThan(0);
+  expect(regionWidth).toBeGreaterThan(49);
+  expect(regionWidth).toBeLessThan(51);
+  expect(regionHeight).toBeGreaterThan(0);
 
   await page.getByRole("button", { name: "Zapisz konfiguracje produktu QC" }).click();
 
   await expect(page.getByText(/Zapisano konfiguracje QC dla SCREW_M4/)).toBeVisible();
   await expect(page.getByText("SKONFIGUROWANY")).toBeVisible();
+  expect(Number(createdStepPayload?.region_x)).toBeGreaterThan(19);
+  expect(Number(createdStepPayload?.region_x)).toBeLessThan(21);
+  expect(Number(createdStepPayload?.region_y)).toBeGreaterThan(0);
+  expect(Number(createdStepPayload?.region_width)).toBeGreaterThan(49);
+  expect(Number(createdStepPayload?.region_width)).toBeLessThan(51);
+  expect(Number(createdStepPayload?.region_height)).toBeGreaterThan(0);
 });

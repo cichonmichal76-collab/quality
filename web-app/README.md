@@ -221,6 +221,8 @@ Panel pozwala:
 - zdefiniowac kroki kontroli z opisem, `control area`, trybem oceny i etykieta pola wyniku
 - naniesc na zdjecie referencyjne prostokatny obszar kontroli przez pola `X`, `Y`,
   `Szerokosc` i `Wysokosc` liczone w procentach obrazu
+- ustawic ten sam obszar szybciej przez klikniecie `Ustaw z obrazu` i przeciagniecie
+  myszka bezposrednio po zdjeciu referencyjnym
 - ustawic wartosci oczekiwane i granice dla trybow `TEXT_MATCH` oraz `NUMERIC_RANGE`
 
 Konfiguracja `Produkt QC` sluzy do zbudowania planu kontroli na podstawie BOM.

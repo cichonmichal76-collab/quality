@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import type { ChangeEvent, FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { ChangeEvent, FormEvent, MouseEvent as ReactMouseEvent } from "react";
 
 import {
   createQcChecklist,
@@ -63,6 +63,14 @@ interface StepEditorState {
   toleranceMax: string;
 }
 
+interface StepRegionDragState {
+  localId: string;
+  startX: number;
+  startY: number;
+  currentX: number;
+  currentY: number;
+}
+
 export function QcProductConfigPanel({ apiBaseUrl }: QcProductConfigPanelProps) {
   const [deviceType, setDeviceType] = useState("");
   const [variantCode, setVariantCode] = useState("DEFAULT");
@@ -80,9 +88,18 @@ export function QcProductConfigPanel({ apiBaseUrl }: QcProductConfigPanelProps) 
   const [deletedStepIds, setDeletedStepIds] = useState<string[]>([]);
   const [selectedReferenceImage, setSelectedReferenceImage] = useState<File | null>(null);
   const [referencePreviewUrl, setReferencePreviewUrl] = useState<string | null>(null);
+  const [activeRegionStepId, setActiveRegionStepId] = useState<string | null>(null);
+  const [dragRegion, setDragRegion] = useState<StepRegionDragState | null>(null);
+  const referenceStageRef = useRef<HTMLDivElement | null>(null);
+  const dragRegionRef = useRef<StepRegionDragState | null>(null);
 
   const selectedComponent =
     configuration?.items.find((item) => item.component_type === selectedComponentType) ?? null;
+  const activeRegionStep =
+    stepDrafts.find((step) => step.localId === activeRegionStepId) ?? null;
+  const activeRegionStepNumber = activeRegionStep
+    ? stepDrafts.findIndex((step) => step.localId === activeRegionStep.localId) + 1
+    : null;
   const controlledCount =
     configuration?.items.filter((item) => item.checklist_code && !item.skip_component_qc).length ??
     0;
@@ -111,6 +128,12 @@ export function QcProductConfigPanel({ apiBaseUrl }: QcProductConfigPanelProps) 
     };
   }, [selectedReferenceImage]);
 
+  useEffect(() => {
+    if (activeRegionStepId && !stepDrafts.some((step) => step.localId === activeRegionStepId)) {
+      setActiveRegionStepId(null);
+    }
+  }, [activeRegionStepId, stepDrafts]);
+
   const checklistPreviewUrl = useMemo(() => {
     if (referencePreviewUrl) {
       return referencePreviewUrl;
@@ -128,6 +151,60 @@ export function QcProductConfigPanel({ apiBaseUrl }: QcProductConfigPanelProps) 
     () => buildDraftOverlayAreas(stepDrafts),
     [stepDrafts],
   );
+  const draftOverlayArea = useMemo(() => {
+    if (!dragRegion) {
+      return null;
+    }
+    const matchingStepIndex = stepDrafts.findIndex((step) => step.localId === dragRegion.localId);
+    if (matchingStepIndex < 0) {
+      return null;
+    }
+    const matchingStep = stepDrafts[matchingStepIndex]!;
+    const region = buildPercentRegion(
+      dragRegion.startX,
+      dragRegion.startY,
+      dragRegion.currentX,
+      dragRegion.currentY,
+    );
+    return {
+      id: `draft-${dragRegion.localId}`,
+      label: `K${matchingStepIndex + 1}`,
+      title: matchingStep.title || `Krok ${matchingStepIndex + 1}`,
+      x: region.x,
+      y: region.y,
+      width: region.width,
+      height: region.height,
+    };
+  }, [dragRegion, stepDrafts]);
+  const referenceHelperText = checklistPreviewUrl
+    ? activeRegionStep
+      ? dragRegion?.localId === activeRegionStep.localId
+        ? `Rysujesz obszar dla kroku ${activeRegionStepNumber}. Zwolnij przycisk myszy, aby zapisac prostokat.`
+        : `Aktywny krok ${activeRegionStepNumber}. Kliknij i przeciagnij po obrazie, aby ustawic obszar kontroli.`
+      : "Mozesz wpisac procenty recznie albo kliknac `Ustaw z obrazu` przy wybranym kroku."
+    : "Dodaj albo wgraj zdjecie referencyjne, aby rysowac obszary kontroli bezposrednio na obrazie.";
+
+  useEffect(() => {
+    if (!dragRegion) {
+      return;
+    }
+
+    function handleWindowMouseMove(event: MouseEvent) {
+      updateDragRegionPoint(event.clientX, event.clientY);
+    }
+
+    function handleWindowMouseUp(event: MouseEvent) {
+      const point = getStagePercentPoint(referenceStageRef.current, event.clientX, event.clientY);
+      finishRegionDrag(point);
+    }
+
+    window.addEventListener("mousemove", handleWindowMouseMove);
+    window.addEventListener("mouseup", handleWindowMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleWindowMouseMove);
+      window.removeEventListener("mouseup", handleWindowMouseUp);
+    };
+  }, [dragRegion]);
 
   async function handleLoadConfiguration(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -189,6 +266,8 @@ export function QcProductConfigPanel({ apiBaseUrl }: QcProductConfigPanelProps) 
       setStepDrafts([]);
       setDeletedStepIds([]);
       setSelectedReferenceImage(null);
+      setActiveRegionStepId(null);
+      replaceDragRegion(null);
       setEditorState("idle");
       setEditorError(null);
     } catch (error) {
@@ -202,6 +281,8 @@ export function QcProductConfigPanel({ apiBaseUrl }: QcProductConfigPanelProps) 
       setStepDrafts([]);
       setDeletedStepIds([]);
       setSelectedReferenceImage(null);
+      setActiveRegionStepId(null);
+      replaceDragRegion(null);
       setEditorState("idle");
       setEditorError(null);
     }
@@ -220,6 +301,8 @@ export function QcProductConfigPanel({ apiBaseUrl }: QcProductConfigPanelProps) 
     setSaveSuccess(null);
     setSelectedReferenceImage(null);
     setDeletedStepIds([]);
+    setActiveRegionStepId(null);
+    replaceDragRegion(null);
 
     try {
       if (!component.checklist_code) {
@@ -306,7 +389,138 @@ export function QcProductConfigPanel({ apiBaseUrl }: QcProductConfigPanelProps) 
     );
   }
 
+  function replaceDragRegion(next: StepRegionDragState | null) {
+    dragRegionRef.current = next;
+    setDragRegion(next);
+  }
+
+  function updateDragRegion(
+    updater: (current: StepRegionDragState | null) => StepRegionDragState | null,
+  ) {
+    setDragRegion((current) => {
+      const next = updater(current);
+      dragRegionRef.current = next;
+      return next;
+    });
+  }
+
+  function handleActivateRegionStep(localId: string) {
+    replaceDragRegion(null);
+    setActiveRegionStepId((current) => (current === localId ? null : localId));
+  }
+
+  function handleClearStepRegion(localId: string) {
+    if (dragRegionRef.current?.localId === localId) {
+      replaceDragRegion(null);
+    }
+    setStepDrafts((current) =>
+      current.map((step) =>
+        step.localId === localId
+          ? {
+              ...step,
+              regionX: "",
+              regionY: "",
+              regionWidth: "",
+              regionHeight: "",
+            }
+          : step,
+      ),
+    );
+  }
+
+  function applyRegionToStep(
+    localId: string,
+    region: { x: number; y: number; width: number; height: number },
+  ) {
+    setStepDrafts((current) =>
+      current.map((step) =>
+        step.localId === localId
+          ? {
+              ...step,
+              regionX: formatPercentValue(region.x),
+              regionY: formatPercentValue(region.y),
+              regionWidth: formatPercentValue(region.width),
+              regionHeight: formatPercentValue(region.height),
+            }
+          : step,
+      ),
+    );
+  }
+
+  function handleReferenceStageMouseDown(event: ReactMouseEvent<HTMLDivElement>) {
+    if (event.button !== 0 || !activeRegionStepId || !checklistPreviewUrl) {
+      return;
+    }
+    const point = getStagePercentPoint(referenceStageRef.current, event.clientX, event.clientY);
+    if (!point) {
+      return;
+    }
+    event.preventDefault();
+    setSaveError(null);
+    replaceDragRegion({
+      localId: activeRegionStepId,
+      startX: point.x,
+      startY: point.y,
+      currentX: point.x,
+      currentY: point.y,
+    });
+  }
+
+  function updateDragRegionPoint(clientX: number, clientY: number) {
+    const point = getStagePercentPoint(referenceStageRef.current, clientX, clientY);
+    if (!point) {
+      return;
+    }
+    updateDragRegion((current) =>
+      current
+        ? {
+            ...current,
+            currentX: point.x,
+            currentY: point.y,
+          }
+        : current,
+    );
+  }
+
+  function handleReferenceStageMouseMove(event: ReactMouseEvent<HTMLDivElement>) {
+    if (!dragRegionRef.current) {
+      return;
+    }
+    updateDragRegionPoint(event.clientX, event.clientY);
+  }
+
+  function handleReferenceStageMouseUp(event: ReactMouseEvent<HTMLDivElement>) {
+    if (!dragRegionRef.current) {
+      return;
+    }
+    const point = getStagePercentPoint(referenceStageRef.current, event.clientX, event.clientY);
+    finishRegionDrag(point);
+  }
+
+  function finishRegionDrag(finalPoint: { x: number; y: number } | null) {
+    const currentDragRegion = dragRegionRef.current;
+    if (!currentDragRegion) {
+      return;
+    }
+    const endpoint = finalPoint ?? {
+      x: currentDragRegion.currentX,
+      y: currentDragRegion.currentY,
+    };
+    const region = buildPercentRegion(
+      currentDragRegion.startX,
+      currentDragRegion.startY,
+      endpoint.x,
+      endpoint.y,
+    );
+    applyRegionToStep(currentDragRegion.localId, region);
+    replaceDragRegion(null);
+  }
+
   function handleRemoveStep(localId: string) {
+    if (activeRegionStepId === localId) {
+      setActiveRegionStepId(null);
+      replaceDragRegion(null);
+    }
     setStepDrafts((current) => {
       const removed = current.find((step) => step.localId === localId);
       if (removed?.id) {
@@ -739,11 +953,19 @@ export function QcProductConfigPanel({ apiBaseUrl }: QcProductConfigPanelProps) 
                   imageUrl={checklistPreviewUrl}
                   imageAlt={`Wzorzec kontroli ${selectedComponent.component_type}`}
                   areas={referenceOverlayAreas}
+                  activeAreaId={activeRegionStepId}
+                  draftArea={draftOverlayArea}
                   caption={
                     selectedReferenceImage
                       ? `Nowy plik: ${selectedReferenceImage.name}`
                       : `ID pliku: ${checklistForm.referenceImageFileId}`
                   }
+                  helperText={referenceHelperText}
+                  interactive={Boolean(activeRegionStepId)}
+                  stageRef={referenceStageRef}
+                  onStageMouseDown={handleReferenceStageMouseDown}
+                  onStageMouseMove={handleReferenceStageMouseMove}
+                  onStageMouseUp={handleReferenceStageMouseUp}
                 />
               </div>
             ) : null}
@@ -947,6 +1169,43 @@ export function QcProductConfigPanel({ apiBaseUrl }: QcProductConfigPanelProps) 
                             Wpisz prostokat jako procent zdjecia: punkt startu `X/Y` i rozmiar
                             `Szerokosc/Wysokosc`. Puste pola oznaczaja brak wizualnego obszaru.
                           </p>
+                          <div className="qc-step-region-actions">
+                            <button
+                              className="ghost-button"
+                              type="button"
+                              onClick={() => handleActivateRegionStep(step.localId)}
+                              disabled={!checklistPreviewUrl}
+                            >
+                              {activeRegionStepId === step.localId
+                                ? "Wylacz rysowanie"
+                                : "Ustaw z obrazu"}
+                            </button>
+                            <button
+                              className="ghost-button"
+                              type="button"
+                              onClick={() => handleClearStepRegion(step.localId)}
+                              disabled={!hasCompleteStepRegion(step)}
+                            >
+                              Wyczysc obszar
+                            </button>
+                            <span
+                              className={`status-badge${
+                                activeRegionStepId === step.localId
+                                  ? " state-loading"
+                                  : hasCompleteStepRegion(step)
+                                    ? " state-loaded"
+                                    : ""
+                              }`}
+                            >
+                              {activeRegionStepId === step.localId
+                                ? dragRegion?.localId === step.localId
+                                  ? "RYSOWANIE"
+                                  : "AKTYWNY KROK"
+                                : hasCompleteStepRegion(step)
+                                  ? "OBSZAR USTAWIONY"
+                                  : "BRAK OBSZARU"}
+                            </span>
+                          </div>
                         </div>
                         <label className="field checkbox-field">
                           <input
@@ -1253,6 +1512,69 @@ function buildDraftOverlayAreas(stepDrafts: StepEditorState[]) {
       },
     ];
   });
+}
+
+function hasCompleteStepRegion(step: StepEditorState): boolean {
+  return (
+    parseOptionalNumber(step.regionX) !== null &&
+    parseOptionalNumber(step.regionY) !== null &&
+    parseOptionalNumber(step.regionWidth) !== null &&
+    parseOptionalNumber(step.regionHeight) !== null
+  );
+}
+
+const MIN_DRAWN_REGION_SIZE = 0.5;
+const MAX_DRAW_POINT = 100 - MIN_DRAWN_REGION_SIZE;
+
+function formatPercentValue(value: number): string {
+  const roundedValue = Math.round(value * 100) / 100;
+  return Number.isInteger(roundedValue)
+    ? String(roundedValue)
+    : roundedValue.toFixed(2).replace(/\.?0+$/, "");
+}
+
+function getStagePercentPoint(
+  stageElement: HTMLDivElement | null,
+  clientX: number,
+  clientY: number,
+): { x: number; y: number } | null {
+  if (!stageElement) {
+    return null;
+  }
+
+  const bounds = stageElement.getBoundingClientRect();
+  if (bounds.width <= 0 || bounds.height <= 0) {
+    return null;
+  }
+
+  const normalizedX = ((clientX - bounds.left) / bounds.width) * 100;
+  const normalizedY = ((clientY - bounds.top) / bounds.height) * 100;
+  return {
+    x: clamp(normalizedX, 0, MAX_DRAW_POINT),
+    y: clamp(normalizedY, 0, MAX_DRAW_POINT),
+  };
+}
+
+function buildPercentRegion(
+  startX: number,
+  startY: number,
+  endX: number,
+  endY: number,
+): { x: number; y: number; width: number; height: number } {
+  const x = Math.min(startX, endX);
+  const y = Math.min(startY, endY);
+  const width = clamp(Math.abs(endX - startX), MIN_DRAWN_REGION_SIZE, 100 - x);
+  const height = clamp(Math.abs(endY - startY), MIN_DRAWN_REGION_SIZE, 100 - y);
+  return {
+    x,
+    y,
+    width,
+    height,
+  };
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }
 
 function normalizeEvaluationMode(
