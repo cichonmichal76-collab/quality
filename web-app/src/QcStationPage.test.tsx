@@ -53,6 +53,11 @@ describe("QcStationPage", () => {
             name: "Kontrola wentylatora",
             process_stage: "COMPONENT_QC",
             version: "1.0",
+            device_type: null,
+            variant_code: null,
+            component_type: null,
+            skip_component_qc: false,
+            reference_image_file_id: "FILE-REF-001",
             is_active: true,
             created_at: "2026-05-03T08:00:00Z",
           },
@@ -80,6 +85,9 @@ describe("QcStationPage", () => {
             step_order: 1,
             title: "Zmierz szerokosc",
             instruction: "Uzyj suwmiarki.",
+            control_area: "Obudowa wentylatora",
+            evaluation_mode: "NUMERIC_RANGE",
+            result_input_label: "Wynik szerokosci",
             requires_photo: false,
             requires_measurement: true,
             blocking_on_fail: true,
@@ -94,10 +102,13 @@ describe("QcStationPage", () => {
             step_order: 2,
             title: "Sprawdz etykiete",
             instruction: "Potwierdz czytelnosc etykiety.",
+            control_area: "Etykieta",
+            evaluation_mode: "TEXT_MATCH",
+            result_input_label: "Wpisz odczyt etykiety",
             requires_photo: false,
             requires_measurement: false,
             blocking_on_fail: true,
-            expected_value: "Czytelna etykieta",
+            expected_value: "A2-70",
             unit: null,
             tolerance_min: null,
             tolerance_max: null,
@@ -160,6 +171,7 @@ describe("QcStationPage", () => {
           qc_run_id: "QC-WEB-STATIC",
           step_id: "STEP-002",
           status: "PASS",
+          observed_value: "A2-70",
           comment: "Etykieta OK",
         });
       }
@@ -203,6 +215,7 @@ describe("QcStationPage", () => {
     await screen.findByText("Demo QC Inspector");
     await screen.findByText(/QC Station Demo/);
     await screen.findByText(/Aktywna checklista: Kontrola wentylatora/);
+    expect(screen.getByAltText(/Wzorzec kontroli Kontrola wentylatora/i)).toBeInTheDocument();
 
     fireEvent.change(screen.getByPlaceholderText("np. BC-DEMO-001"), {
       target: { value: "QCBC-DEMO-LOCAL" },
@@ -219,6 +232,9 @@ describe("QcStationPage", () => {
     );
     fireEvent.change(commentFields[0]!, {
       target: { value: "Pomiar OK" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Wpisz odczyt lub wynik obserwacji"), {
+      target: { value: "A2-70" },
     });
     fireEvent.change(commentFields[1]!, {
       target: { value: "Etykieta OK" },
@@ -240,6 +256,16 @@ describe("QcStationPage", () => {
         work_session_id: "WS-QA-001",
         operator_id: "QCOP-DEMO-LOCAL",
       });
+    });
+
+    const textStepCall = fetchMock.mock.calls.find(([url]) =>
+      String(url).endsWith("/steps/STEP-002/result"),
+    );
+    expect(textStepCall).toBeDefined();
+    expect(JSON.parse(String((textStepCall?.[1] as RequestInit).body))).toMatchObject({
+      status: "PASS",
+      observed_value: "A2-70",
+      comment: "Etykieta OK",
     });
   });
 
@@ -284,6 +310,11 @@ describe("QcStationPage", () => {
             name: "Kontrola wentylatora",
             process_stage: "COMPONENT_QC",
             version: "1.0",
+            device_type: null,
+            variant_code: null,
+            component_type: null,
+            skip_component_qc: false,
+            reference_image_file_id: null,
             is_active: true,
             created_at: "2026-05-03T08:00:00Z",
           },

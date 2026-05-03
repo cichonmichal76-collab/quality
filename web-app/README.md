@@ -215,6 +215,17 @@ Panel pozwala:
 - dodac nowe stanowisko QC
 - edytowac nazwe, obszar i typ stanowiska
 - wylaczyc stanowisko z uzycia przez ustawienie `is_active=false`
+- wejsc do zakladki `Produkt QC` i pobrac komponenty BOM dla wybranego `device_type`
+- oznaczyc komponent jako `Pomin kontrole`, jesli dla tej pozycji nie ma byc osobnego gate QC
+- dodac obraz referencyjny kontrolowanego elementu
+- zdefiniowac kroki kontroli z opisem, `control area`, trybem oceny i etykieta pola wyniku
+- ustawic wartosci oczekiwane i granice dla trybow `TEXT_MATCH` oraz `NUMERIC_RANGE`
+
+Konfiguracja `Produkt QC` sluzy do zbudowania planu kontroli na podstawie BOM.
+Kazdy komponent moze miec osobna checkliste albo moze zostac jawnie oznaczony jako
+pomijany w kontroli. Skonfigurowane kroki sa potem widoczne na stanowisku
+`/qc-station`, gdzie operator wpisuje wartosci zmierzone lub odczytane, a system
+sam wylicza `PASS` albo `FAIL` dla krokow automatycznych.
 
 ## Walidacja
 

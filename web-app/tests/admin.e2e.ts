@@ -104,3 +104,218 @@ test("admin page creates operator and updates workstation", async ({ page }) => 
   await expect(page.getByText("Stacja koncowa QC")).toBeVisible();
   await expect(page.getByText("NIEAKTYWNE")).toBeVisible();
 });
+
+test("admin page configures product qc for bom component", async ({ page }) => {
+  let configurationLoaded = false;
+
+  await page.route("**/api/operators", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([]),
+    });
+  });
+
+  await page.route("**/api/workstations", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([]),
+    });
+  });
+
+  await page.route(
+    "**/api/qc-product-configurations/DEMO-OPS?variant_code=DEFAULT",
+    async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          device_type: "DEMO-OPS",
+          variant_code: "DEFAULT",
+          items: [
+            {
+              component_type: "SCREW_M4",
+              substitution_group: null,
+              required_part_number: "M4-12",
+              required_revision: null,
+              required_drawing_number: null,
+              required_drawing_revision: null,
+              quantity_required: 4,
+              is_required: true,
+              checklist_code: configurationLoaded ? "QC-DEMO-OPS-DEFAULT-SCREW-M4" : null,
+              checklist_name: configurationLoaded ? "Kontrola sruby M4" : null,
+              checklist_version: configurationLoaded ? "1.0" : null,
+              checklist_is_active: configurationLoaded,
+              skip_component_qc: false,
+              reference_image_file_id: configurationLoaded ? "FILE-001" : null,
+              configured_step_count: configurationLoaded ? 1 : 0,
+            },
+          ],
+        }),
+      });
+    },
+  );
+
+  await page.route("**/api/qc-checklists?device_type=DEMO-OPS**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([
+        {
+          id: "CHK-001",
+          checklist_code: "QC-DEMO-OPS-DEFAULT-SCREW-M4",
+          name: "Kontrola sruby M4",
+          process_stage: "COMPONENT_QC",
+          version: "1.0",
+          device_type: "DEMO-OPS",
+          variant_code: "DEFAULT",
+          component_type: "SCREW_M4",
+          skip_component_qc: false,
+          reference_image_file_id: "FILE-001",
+          is_active: true,
+          created_at: "2026-05-03T11:00:00Z",
+        },
+      ]),
+    });
+  });
+
+  await page.route("**/api/qc-checklists/QC-DEMO-OPS-DEFAULT-SCREW-M4/steps", async (route) => {
+    if (route.request().method() === "POST") {
+      configurationLoaded = true;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: "STEP-001",
+          checklist_id: "CHK-001",
+          step_order: 1,
+          title: "Zweryfikuj oznaczenie",
+          instruction: "Porownaj oznaczenie z wzorcem.",
+          control_area: "Glowka sruby",
+          evaluation_mode: "TEXT_MATCH",
+          result_input_label: "Wpisz oznaczenie",
+          requires_photo: false,
+          requires_measurement: false,
+          blocking_on_fail: true,
+          expected_value: "A2-70",
+          unit: null,
+          tolerance_min: null,
+          tolerance_max: null,
+        }),
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([
+        {
+          id: "STEP-001",
+          checklist_id: "CHK-001",
+          step_order: 1,
+          title: "Zweryfikuj oznaczenie",
+          instruction: "Porownaj oznaczenie z wzorcem.",
+          control_area: "Glowka sruby",
+          evaluation_mode: "TEXT_MATCH",
+          result_input_label: "Wpisz oznaczenie",
+          requires_photo: false,
+          requires_measurement: false,
+          blocking_on_fail: true,
+          expected_value: "A2-70",
+          unit: null,
+          tolerance_min: null,
+          tolerance_max: null,
+        },
+      ]),
+    });
+  });
+
+  await page.route("**/api/qc-checklists", async (route) => {
+    if (route.request().method() === "POST") {
+      configurationLoaded = true;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: "CHK-001",
+          checklist_code: "QC-DEMO-OPS-DEFAULT-SCREW-M4",
+          name: "Kontrola sruby M4",
+          process_stage: "COMPONENT_QC",
+          version: "1.0",
+          device_type: "DEMO-OPS",
+          variant_code: "DEFAULT",
+          component_type: "SCREW_M4",
+          skip_component_qc: false,
+          reference_image_file_id: null,
+          is_active: true,
+          created_at: "2026-05-03T11:00:00Z",
+        }),
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.route(
+    "**/api/qc-checklists/QC-DEMO-OPS-DEFAULT-SCREW-M4/reference-image",
+    async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: "CHK-001",
+          checklist_code: "QC-DEMO-OPS-DEFAULT-SCREW-M4",
+          name: "Kontrola sruby M4",
+          process_stage: "COMPONENT_QC",
+          version: "1.0",
+          device_type: "DEMO-OPS",
+          variant_code: "DEFAULT",
+          component_type: "SCREW_M4",
+          skip_component_qc: false,
+          reference_image_file_id: "FILE-001",
+          is_active: true,
+          created_at: "2026-05-03T11:00:00Z",
+        }),
+      });
+    },
+  );
+
+  await page.route("**/api/files/FILE-001", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "image/png",
+      body: "demo-image",
+    });
+  });
+
+  await page.goto("/admin");
+
+  await page.getByRole("button", { name: "Produkt QC" }).click();
+  await page.getByLabel("Typ produktu").fill("DEMO-OPS");
+  await page.getByRole("button", { name: "Pobierz komponenty BOM" }).click();
+
+  await expect(page.locator(".status-badge", { hasText: "BRAK KONFIGURACJI" })).toBeVisible();
+  await page.getByRole("button", { name: "Skonfiguruj" }).click();
+  await page.getByLabel("Nazwa checklisty").fill("Kontrola sruby M4");
+  await page.getByRole("button", { name: "Dodaj krok" }).click();
+  await page.getByPlaceholder("np. Sprawdz dlugosc sruby").fill("Zweryfikuj oznaczenie");
+  await page
+    .getByPlaceholder("Opisz procedure i sposob kontroli dla operatora.")
+    .fill("Porownaj oznaczenie z wzorcem.");
+  await page.getByPlaceholder("np. Glowka sruby / gwint / etykieta").fill("Glowka sruby");
+  await page.getByLabel("Tryb oceny").selectOption("TEXT_MATCH");
+  await page.getByPlaceholder("np. Wpisz odczyt oznaczenia").fill("Wpisz oznaczenie");
+  await page.getByPlaceholder("np. A2-70 albo Czytelna etykieta").fill("A2-70");
+  await page.getByLabel("Zdjecie referencyjne elementu").setInputFiles({
+    name: "screw.png",
+    mimeType: "image/png",
+    buffer: Buffer.from("demo-image"),
+  });
+
+  await page.getByRole("button", { name: "Zapisz konfiguracje produktu QC" }).click();
+
+  await expect(page.getByText(/Zapisano konfiguracje QC dla SCREW_M4/)).toBeVisible();
+  await expect(page.getByText("SKONFIGUROWANY")).toBeVisible();
+});

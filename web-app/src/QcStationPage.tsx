@@ -6,6 +6,7 @@ import {
   completeQcRun,
   createQcRun,
   getProductionItemByBarcode,
+  joinApiUrl,
   listOperators,
   listQcChecklists,
   listQcChecklistSteps,
@@ -53,12 +54,13 @@ interface QcStationAuthState {
 interface StepDraft {
   status: "PASS" | "FAIL";
   measurementValue: string;
+  observedValue: string;
   comment: string;
 }
 
 type StepDraftMap = Record<string, StepDraft>;
 
-interface MeasurementPreview {
+interface StepPreview {
   kind: "success" | "error";
   message: string;
 }
@@ -111,7 +113,7 @@ export function QcStationPage() {
       ),
     );
   const activeChecklists = checklists
-    .filter((checklist) => checklist.is_active)
+    .filter((checklist) => checklist.is_active && !checklist.skip_component_qc)
     .sort((left, right) =>
       `${left.process_stage}:${left.name}:${left.version}`.localeCompare(
         `${right.process_stage}:${right.name}:${right.version}`,
@@ -126,7 +128,7 @@ export function QcStationPage() {
     activeWorkstations.find(
       (workstation) => workstation.workstation_id === selectedWorkstationId,
     ) ?? null;
-  const measurementWarnings = buildMeasurementWarnings(steps, stepDrafts);
+  const stepPreviews = buildStepPreviews(steps, stepDrafts);
 
   useEffect(() => {
     localStorage.setItem(API_STORAGE_KEY, apiBaseUrl);
@@ -1037,6 +1039,21 @@ export function QcStationPage() {
                 <p>
                   Kod {selectedChecklist.checklist_code}, wersja {selectedChecklist.version}.
                 </p>
+                {selectedChecklist.reference_image_file_id ? (
+                  <div className="qc-reference-inline">
+                    <img
+                      className="qc-reference-image"
+                      src={joinApiUrl(
+                        apiBaseUrl.trim(),
+                        `/files/${encodeURIComponent(selectedChecklist.reference_image_file_id)}`,
+                      )}
+                      alt={`Wzorzec kontroli ${selectedChecklist.name}`}
+                    />
+                    <p className="details-subtitle">
+                      Zdjecie referencyjne elementu do porownania podczas kontroli.
+                    </p>
+                  </div>
+                ) : null}
               </div>
             ) : null}
 
@@ -1051,8 +1068,11 @@ export function QcStationPage() {
               <div className="qc-step-list">
                 {steps.map((step, index) => {
                   const draft = stepDrafts[step.id] ?? createDefaultStepDraft();
-                  const preview = measurementWarnings[step.id] ?? null;
-                  const isManualFail = step.requires_measurement && draft.status === "FAIL";
+                  const preview = stepPreviews[step.id] ?? null;
+                  const evaluationMode = normalizeStepEvaluationMode(step);
+                  const isNumericRange = evaluationMode === "NUMERIC_RANGE";
+                  const isTextMatch = evaluationMode === "TEXT_MATCH";
+                  const isManualFail = isNumericRange && draft.status === "FAIL";
 
                   return (
                     <article key={step.id} className="qc-step-card">
@@ -1062,13 +1082,18 @@ export function QcStationPage() {
                           <h3>{step.title}</h3>
                         </div>
                         <div className="details-inline-actions">
-                          {step.requires_measurement ? (
+                          {isNumericRange ? (
                             <span className="status-badge">Pomiar wymagany</span>
+                          ) : isTextMatch ? (
+                            <span className="status-badge">Porownanie tekstu</span>
                           ) : (
-                            <span className="status-badge">Kontrola binarna</span>
+                            <span className="status-badge">Kontrola reczna</span>
                           )}
                           {step.blocking_on_fail ? (
                             <span className="status-badge state-error">Fail blokuje</span>
+                          ) : null}
+                          {step.requires_photo ? (
+                            <span className="status-badge">Zdjecie wymagane</span>
                           ) : null}
                         </div>
                       </div>
@@ -1076,6 +1101,7 @@ export function QcStationPage() {
                         <p className="details-subtitle">{step.instruction}</p>
                       ) : null}
                       <div className="qc-step-meta">
+                        {step.control_area ? <span>Obszar: {step.control_area}</span> : null}
                         {step.expected_value ? (
                           <span>Oczekiwane: {step.expected_value}</span>
                         ) : null}
@@ -1085,32 +1111,37 @@ export function QcStationPage() {
                         ) : null}
                       </div>
                       <div className="qc-step-form-grid">
-                        <label className="field">
-                          <span>
-                            {step.requires_measurement ? "Tryb wyniku kroku" : "Wynik kroku"}
-                          </span>
-                          <select
-                            value={draft.status}
-                            onChange={(event) =>
-                              handleStepDraftChange(step.id, "status", event.target.value)
-                            }
-                          >
-                            {step.requires_measurement ? (
-                              <>
-                                <option value="PASS">Zalicz wedlug pomiaru</option>
-                                <option value="FAIL">Oznacz FAIL recznie</option>
-                              </>
-                            ) : (
-                              <>
-                                <option value="PASS">PASS</option>
-                                <option value="FAIL">FAIL</option>
-                              </>
-                            )}
-                          </select>
-                        </label>
-                        {step.requires_measurement ? (
+                        {!isTextMatch ? (
                           <label className="field">
-                            <span>Pomiar {step.unit ? `(${step.unit})` : ""}</span>
+                            <span>
+                              {isNumericRange ? "Tryb wyniku kroku" : "Wynik kroku"}
+                            </span>
+                            <select
+                              value={draft.status}
+                              onChange={(event) =>
+                                handleStepDraftChange(step.id, "status", event.target.value)
+                              }
+                            >
+                              {isNumericRange ? (
+                                <>
+                                  <option value="PASS">Zalicz wedlug pomiaru</option>
+                                  <option value="FAIL">Oznacz FAIL recznie</option>
+                                </>
+                              ) : (
+                                <>
+                                  <option value="PASS">PASS</option>
+                                  <option value="FAIL">FAIL</option>
+                                </>
+                              )}
+                            </select>
+                          </label>
+                        ) : null}
+                        {isNumericRange ? (
+                          <label className="field">
+                            <span>
+                              {(step.result_input_label || "Pomiar") +
+                                (step.unit ? ` (${step.unit})` : "")}
+                            </span>
                             <input
                               value={draft.measurementValue}
                               onChange={(event) =>
@@ -1126,6 +1157,22 @@ export function QcStationPage() {
                             />
                           </label>
                         ) : null}
+                        {isTextMatch ? (
+                          <label className="field">
+                            <span>{step.result_input_label || "Wynik kontroli"}</span>
+                            <input
+                              value={draft.observedValue}
+                              onChange={(event) =>
+                                handleStepDraftChange(
+                                  step.id,
+                                  "observedValue",
+                                  event.target.value,
+                                )
+                              }
+                              placeholder="Wpisz odczyt lub wynik obserwacji"
+                            />
+                          </label>
+                        ) : null}
                         <label className="field qc-step-comment-field">
                           <span>Komentarz operatora</span>
                           <input
@@ -1137,9 +1184,9 @@ export function QcStationPage() {
                           />
                         </label>
                       </div>
-                      {step.requires_measurement ? (
+                      {isNumericRange || isTextMatch ? (
                         <div className="details-inline-actions">
-                          {isManualFail ? (
+                          {isNumericRange && isManualFail ? (
                             <span className="inline-feedback-badge state-error">
                               FAIL zostanie zapisany recznie bez automatyki tolerancji.
                             </span>
@@ -1149,7 +1196,9 @@ export function QcStationPage() {
                             </span>
                           ) : (
                             <span className="action-hint">
-                              Wpisz pomiar, a wynik kroku zostanie porownany z tolerancja.
+                              {isNumericRange
+                                ? "Wpisz pomiar, a wynik kroku zostanie porownany z tolerancja."
+                                : "Wpisz obserwowany wynik, a system porowna go z wartoscia oczekiwana."}
                             </span>
                           )}
                         </div>
@@ -1218,6 +1267,7 @@ function createDefaultStepDraft(_requiresMeasurement = false): StepDraft {
   return {
     status: "PASS",
     measurementValue: "",
+    observedValue: "",
     comment: "",
   };
 }
@@ -1226,12 +1276,36 @@ function prepareStepPayload(
   step: QcStepRead,
   draft: StepDraft | undefined,
 ):
-  | { payload: { status: "PASS" | "FAIL"; measurement_value?: number; comment?: string } }
+  | {
+      payload: {
+        status: "PASS" | "FAIL";
+        measurement_value?: number;
+        observed_value?: string;
+        comment?: string;
+      };
+    }
   | { error: string } {
   const safeDraft = draft ?? createDefaultStepDraft(step.requires_measurement);
   const normalizedComment = normalizeOptionalString(safeDraft.comment);
+  const observedValue = normalizeOptionalString(safeDraft.observedValue);
+  const evaluationMode = normalizeStepEvaluationMode(step);
 
-  if (step.requires_measurement) {
+  if (evaluationMode === "TEXT_MATCH") {
+    if (!observedValue) {
+      return {
+        error: `Krok "${step.title}" wymaga wpisania obserwowanego wyniku.`,
+      };
+    }
+    return {
+      payload: {
+        status: "PASS",
+        observed_value: observedValue,
+        ...(normalizedComment ? { comment: normalizedComment } : {}),
+      },
+    };
+  }
+
+  if (evaluationMode === "NUMERIC_RANGE" || step.requires_measurement) {
     if (safeDraft.status === "FAIL") {
       return {
         payload: {
@@ -1272,14 +1346,34 @@ function prepareStepPayload(
   };
 }
 
-function buildMeasurementWarnings(
+function buildStepPreviews(
   steps: QcStepRead[],
   stepDrafts: StepDraftMap,
-): Record<string, MeasurementPreview> {
-  const previews: Record<string, MeasurementPreview> = {};
+): Record<string, StepPreview> {
+  const previews: Record<string, StepPreview> = {};
 
   for (const step of steps) {
-    if (!step.requires_measurement) {
+    const evaluationMode = normalizeStepEvaluationMode(step);
+    if (evaluationMode === "TEXT_MATCH") {
+      const draft = stepDrafts[step.id];
+      const observedValue = draft?.observedValue.trim();
+      if (!observedValue || !step.expected_value) {
+        continue;
+      }
+      const normalizedObservedValue = observedValue.toLowerCase();
+      const normalizedExpectedValue = step.expected_value.trim().toLowerCase();
+
+      previews[step.id] = {
+        kind: normalizedObservedValue === normalizedExpectedValue ? "success" : "error",
+        message:
+          normalizedObservedValue === normalizedExpectedValue
+            ? "Wynik zgadza sie z wartoscia oczekiwana."
+            : "Wynik rozni sie od wartosci oczekiwanej.",
+      };
+      continue;
+    }
+
+    if (!(evaluationMode === "NUMERIC_RANGE" || step.requires_measurement)) {
       continue;
     }
 
@@ -1356,6 +1450,14 @@ function formatTolerance(step: QcStepRead): string {
   }
 
   return "Bez tolerancji liczbowej";
+}
+
+function normalizeStepEvaluationMode(step: QcStepRead): "MANUAL" | "NUMERIC_RANGE" | "TEXT_MATCH" {
+  const normalizedMode = step.evaluation_mode?.toUpperCase();
+  if (normalizedMode === "NUMERIC_RANGE" || normalizedMode === "TEXT_MATCH") {
+    return normalizedMode;
+  }
+  return step.requires_measurement ? "NUMERIC_RANGE" : "MANUAL";
 }
 
 function normalizeOptionalString(value: string): string | null {

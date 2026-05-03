@@ -9,6 +9,7 @@ import {
   updateOperator,
   updateWorkstation,
 } from "./api";
+import { QcProductConfigPanel } from "./QcProductConfigPanel";
 import type {
   LoadState,
   OperatorCreatePayload,
@@ -29,7 +30,7 @@ const ROLE_OPTIONS = [
   "FINAL_TEST_OPERATOR",
 ] as const;
 
-type AdminTab = "operators" | "workstations";
+type AdminTab = "operators" | "workstations" | "productQc";
 
 interface OperatorFormState {
   operator_id: string;
@@ -315,8 +316,9 @@ export function AdminPage() {
           <p className="eyebrow">Administracja QC</p>
           <h1>Panel do zarzadzania operatorami i stanowiskami kontroli jakosci.</h1>
           <p>
-            Tutaj mozna dodawac i edytowac operatorow, loginy, RFID oraz stanowiska
-            QC bez recznego wywolywania endpointow API.
+            Tutaj mozna dodawac i edytowac operatorow, loginy, RFID, stanowiska QC
+            oraz konfiguracje kontroli dla komponentow z BOM bez recznego wywolywania
+            endpointow API.
           </p>
         </div>
         <div className="control-deck">
@@ -329,7 +331,7 @@ export function AdminPage() {
             />
           </label>
           <div className="refresh-meta">
-            <span>Panel: Operatorzy + Stanowiska QC</span>
+            <span>Panel: Operatorzy + Stanowiska QC + Produkt QC</span>
             <span>
               Status danych: {loadState === "loading" ? "ladowanie" : loadState}
             </span>
@@ -381,6 +383,13 @@ export function AdminPage() {
           >
             Stanowiska QC
           </button>
+          <button
+            className={activeTab === "productQc" ? "is-active" : ""}
+            type="button"
+            onClick={() => setActiveTab("productQc")}
+          >
+            Produkt QC
+          </button>
         </nav>
 
         <div className="summary-grid">
@@ -393,6 +402,11 @@ export function AdminPage() {
             <span>Stanowiska QC</span>
             <strong>{workstationCount}</strong>
             <small>Aktywne: {activeWorkstationCount}</small>
+          </div>
+          <div className="metric-card">
+            <span>Produkt QC</span>
+            <strong>{activeTab === "productQc" ? "BOM" : "3"}</strong>
+            <small>Konfiguracja kontroli komponentow</small>
           </div>
         </div>
 
@@ -566,7 +580,7 @@ export function AdminPage() {
               </form>
             </div>
           </section>
-        ) : (
+        ) : activeTab === "workstations" ? (
           <section className="admin-grid">
             <div className="filters-card admin-list-card">
               <div className="section-heading">
@@ -707,6 +721,8 @@ export function AdminPage() {
               </form>
             </div>
           </section>
+        ) : (
+          <QcProductConfigPanel apiBaseUrl={apiBaseUrl} />
         )}
       </section>
     </main>

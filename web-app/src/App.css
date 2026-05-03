@@ -1260,6 +1260,42 @@ td span {
   font-size: 0.88rem;
 }
 
+.field textarea {
+  min-height: 110px;
+  resize: vertical;
+}
+
+.field textarea,
+.field input,
+.field select {
+  font: inherit;
+}
+
+.admin-row.is-selected {
+  border-color: rgb(34 107 95 / 38%);
+  box-shadow: 0 0 0 2px rgb(34 107 95 / 10%);
+}
+
+.qc-reference-image-card {
+  gap: 10px;
+}
+
+.qc-reference-inline {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.qc-reference-image {
+  width: min(100%, 420px);
+  max-height: 280px;
+  object-fit: contain;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgb(255 255 255 / 90%);
+  padding: 10px;
+}
+
 .details-shortcut-list.is-compact .details-queue-link {
   padding: 10px 12px;
 }

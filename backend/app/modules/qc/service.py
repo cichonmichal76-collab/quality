@@ -1,4 +1,4 @@
-from fastapi import HTTPException
+from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from app.core.audit import record_audit_event
@@ -13,21 +13,84 @@ from app.models import (
     QcStep,
     QcStepResult,
 )
+from app.modules.assembly import service as assembly_service
 from app.modules.auth_rfid.service import QUALITY_SESSION_ROLES, require_active_work_session
+from app.modules.files import service as files_service
 from app.modules.qc import repository
 from app.schemas import (
     QcChecklistCreate,
+    QcChecklistUpdate,
+    QcProductComponentConfigRead,
+    QcProductConfigurationRead,
     QcRunCreate,
     QcStepCreate,
+    QcStepUpdate,
     QcStepResultCreate,
 )
+
+
+ALLOWED_EVALUATION_MODES = {"MANUAL", "NUMERIC_RANGE", "TEXT_MATCH"}
 
 
 def create_checklist(db: Session, payload: QcChecklistCreate) -> QcChecklist:
     if repository.get_checklist_by_code(db, payload.checklist_code):
         raise HTTPException(status_code=409, detail="Checklist already exists")
+
+    if payload.device_type and payload.component_type:
+        existing_component_checklist = repository.get_component_qc_checklist(
+            db,
+            device_type=payload.device_type,
+            variant_code=payload.variant_code or "DEFAULT",
+            component_type=payload.component_type,
+        )
+        if existing_component_checklist:
+            raise HTTPException(
+                status_code=409,
+                detail="QC configuration already exists for this BOM component",
+            )
+
     checklist = QcChecklist(**payload.model_dump())
     db.add(checklist)
+    db.commit()
+    db.refresh(checklist)
+    return checklist
+
+
+def update_checklist(
+    db: Session,
+    checklist_code: str,
+    payload: QcChecklistUpdate,
+) -> QcChecklist:
+    checklist = repository.get_checklist_by_code(db, checklist_code)
+    if not checklist:
+        raise HTTPException(status_code=404, detail="Checklist not found")
+
+    changes = payload.model_dump(exclude_unset=True)
+    if not changes:
+        return checklist
+
+    merged_device_type = changes.get("device_type", checklist.device_type)
+    merged_variant_code = changes.get("variant_code", checklist.variant_code) or "DEFAULT"
+    merged_component_type = changes.get("component_type", checklist.component_type)
+    if merged_device_type and merged_component_type:
+        existing_component_checklist = repository.get_component_qc_checklist(
+            db,
+            device_type=merged_device_type,
+            variant_code=merged_variant_code,
+            component_type=merged_component_type,
+        )
+        if (
+            existing_component_checklist
+            and existing_component_checklist.checklist_code != checklist.checklist_code
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="QC configuration already exists for this BOM component",
+            )
+
+    for field_name, value in changes.items():
+        setattr(checklist, field_name, value)
+
     db.commit()
     db.refresh(checklist)
     return checklist
@@ -37,11 +100,51 @@ def add_checklist_step(db: Session, checklist_code: str, payload: QcStepCreate) 
     checklist = repository.get_checklist_by_code(db, checklist_code)
     if not checklist:
         raise HTTPException(status_code=404, detail="Checklist not found")
-    step = QcStep(checklist_id=checklist.id, **payload.model_dump())
+    step = QcStep(
+        checklist_id=checklist.id,
+        **_normalize_step_payload(payload.model_dump(exclude_unset=True)),
+    )
     db.add(step)
     db.commit()
     db.refresh(step)
     return step
+
+
+def update_checklist_step(
+    db: Session,
+    checklist_code: str,
+    step_id: str,
+    payload: QcStepUpdate,
+) -> QcStep:
+    checklist = repository.get_checklist_by_code(db, checklist_code)
+    if not checklist:
+        raise HTTPException(status_code=404, detail="Checklist not found")
+    step = repository.get_qc_step(db, step_id)
+    if not step or step.checklist_id != checklist.id:
+        raise HTTPException(status_code=404, detail="QC step not found")
+
+    changes = payload.model_dump(exclude_unset=True)
+    if not changes:
+        return step
+
+    normalized_changes = _normalize_step_payload(changes, existing_step=step)
+    for field_name, value in normalized_changes.items():
+        setattr(step, field_name, value)
+
+    db.commit()
+    db.refresh(step)
+    return step
+
+
+def delete_checklist_step(db: Session, checklist_code: str, step_id: str) -> None:
+    checklist = repository.get_checklist_by_code(db, checklist_code)
+    if not checklist:
+        raise HTTPException(status_code=404, detail="Checklist not found")
+    step = repository.get_qc_step(db, step_id)
+    if not step or step.checklist_id != checklist.id:
+        raise HTTPException(status_code=404, detail="QC step not found")
+    db.delete(step)
+    db.commit()
 
 
 def list_checklist_steps(db: Session, checklist_code: str) -> list[QcStep]:
@@ -49,6 +152,94 @@ def list_checklist_steps(db: Session, checklist_code: str) -> list[QcStep]:
     if not checklist:
         raise HTTPException(status_code=404, detail="Checklist not found")
     return repository.list_checklist_steps(db, checklist.id)
+
+
+def list_checklists(
+    db: Session,
+    *,
+    device_type: str | None = None,
+    variant_code: str | None = None,
+    component_type: str | None = None,
+) -> list[QcChecklist]:
+    return repository.list_checklists(
+        db,
+        device_type=device_type,
+        variant_code=variant_code,
+        component_type=component_type,
+    )
+
+
+def get_qc_product_configuration(
+    db: Session,
+    device_type: str,
+    variant_code: str = "DEFAULT",
+) -> QcProductConfigurationRead:
+    bom_items = assembly_service.list_device_bom_items(
+        db,
+        device_type,
+        version=None,
+        variant_code=variant_code,
+    )
+
+    entries: list[QcProductComponentConfigRead] = []
+    for bom_item in bom_items:
+        checklist = repository.get_component_qc_checklist(
+            db,
+            device_type=device_type,
+            variant_code=variant_code,
+            component_type=bom_item.component_type,
+        )
+        configured_step_count = (
+            repository.count_checklist_steps(db, checklist.id) if checklist else 0
+        )
+        entries.append(
+            QcProductComponentConfigRead(
+                component_type=bom_item.component_type,
+                substitution_group=bom_item.substitution_group,
+                required_part_number=bom_item.required_part_number,
+                required_revision=bom_item.required_revision,
+                required_drawing_number=bom_item.required_drawing_number,
+                required_drawing_revision=bom_item.required_drawing_revision,
+                quantity_required=bom_item.quantity_required,
+                is_required=bom_item.is_required,
+                checklist_code=checklist.checklist_code if checklist else None,
+                checklist_name=checklist.name if checklist else None,
+                checklist_version=checklist.version if checklist else None,
+                checklist_is_active=checklist.is_active if checklist else False,
+                skip_component_qc=checklist.skip_component_qc if checklist else False,
+                reference_image_file_id=checklist.reference_image_file_id if checklist else None,
+                configured_step_count=configured_step_count,
+            )
+        )
+
+    return QcProductConfigurationRead(
+        device_type=device_type,
+        variant_code=variant_code,
+        items=entries,
+    )
+
+
+def upload_checklist_reference_image(
+    db: Session,
+    checklist_code: str,
+    file: UploadFile,
+    uploaded_by: str | None = None,
+) -> QcChecklist:
+    checklist = repository.get_checklist_by_code(db, checklist_code)
+    if not checklist:
+        raise HTTPException(status_code=404, detail="Checklist not found")
+
+    stored = files_service.upload_file(
+        db,
+        file=file,
+        related_entity_type="QC_CHECKLIST",
+        related_entity_id=checklist.id,
+        uploaded_by=uploaded_by,
+    )
+    checklist.reference_image_file_id = stored.id
+    db.commit()
+    db.refresh(checklist)
+    return checklist
 
 
 def create_qc_run(db: Session, payload: QcRunCreate) -> QcRun:
@@ -129,6 +320,7 @@ def add_qc_step_result(
         step_id=step_id,
         status=computed_status,
         measurement_value=payload.measurement_value,
+        observed_value=payload.observed_value,
         comment=payload.comment,
         mcu_snapshot=payload.mcu_snapshot,
     )
@@ -202,12 +394,25 @@ def complete_qc_run(db: Session, run_id: str, result: str | None) -> QcRun:
 
 
 def _compute_step_status(step: QcStep, payload: QcStepResultCreate) -> str:
-    if step.requires_measurement and payload.measurement_value is not None:
+    if step.evaluation_mode == "NUMERIC_RANGE" or step.requires_measurement:
+        if payload.measurement_value is None:
+            raise HTTPException(status_code=400, detail="Measurement value is required for this step")
         if step.tolerance_min is not None and payload.measurement_value < float(step.tolerance_min):
             return "FAIL"
         if step.tolerance_max is not None and payload.measurement_value > float(step.tolerance_max):
             return "FAIL"
         return "PASS"
+    if step.evaluation_mode == "TEXT_MATCH":
+        if payload.observed_value is None or not payload.observed_value.strip():
+            raise HTTPException(status_code=400, detail="Observed value is required for this step")
+        if step.expected_value is None or not step.expected_value.strip():
+            raise HTTPException(status_code=400, detail="QC step does not define expected value")
+        return (
+            "PASS"
+            if payload.observed_value.strip().casefold()
+            == step.expected_value.strip().casefold()
+            else "FAIL"
+        )
     normalized = _normalize_run_result(payload.status)
     return normalized or payload.status
 
@@ -225,3 +430,65 @@ def _normalize_run_result(result: str | None) -> str | None:
     normalized = result.upper()
     mapping = {"OK": "PASS", "NOK": "FAIL"}
     return mapping.get(normalized, normalized)
+
+
+def _normalize_step_payload(
+    payload: dict,
+    *,
+    existing_step: QcStep | None = None,
+) -> dict:
+    normalized_payload = dict(payload)
+    raw_evaluation_mode = normalized_payload.get("evaluation_mode")
+    if raw_evaluation_mode is None:
+        if normalized_payload.get("requires_measurement") is True:
+            evaluation_mode = "NUMERIC_RANGE"
+        else:
+            evaluation_mode = existing_step.evaluation_mode if existing_step else "MANUAL"
+    else:
+        evaluation_mode = str(raw_evaluation_mode).upper()
+    if evaluation_mode not in ALLOWED_EVALUATION_MODES:
+        raise HTTPException(status_code=400, detail="Unsupported QC evaluation mode")
+
+    normalized_payload["evaluation_mode"] = evaluation_mode
+    normalized_payload["requires_measurement"] = evaluation_mode == "NUMERIC_RANGE"
+    if evaluation_mode == "MANUAL":
+        normalized_payload["tolerance_min"] = None
+        normalized_payload["tolerance_max"] = None
+    if evaluation_mode == "TEXT_MATCH":
+        normalized_payload["tolerance_min"] = None
+        normalized_payload["tolerance_max"] = None
+    if evaluation_mode == "TEXT_MATCH":
+        expected_value = normalized_payload.get("expected_value")
+        if expected_value is None and existing_step is not None:
+            expected_value = existing_step.expected_value
+        if expected_value is None or not str(expected_value).strip():
+            raise HTTPException(
+                status_code=400,
+                detail="TEXT_MATCH step requires expected_value",
+            )
+    if evaluation_mode == "NUMERIC_RANGE":
+        tolerance_min = normalized_payload.get("tolerance_min")
+        tolerance_max = normalized_payload.get("tolerance_max")
+        if tolerance_min is None and existing_step is not None:
+            tolerance_min = existing_step.tolerance_min
+        if tolerance_max is None and existing_step is not None:
+            tolerance_max = existing_step.tolerance_max
+        if tolerance_min is None and tolerance_max is None:
+            raise HTTPException(
+                status_code=400,
+                detail="NUMERIC_RANGE step requires tolerance_min or tolerance_max",
+            )
+        if (
+            tolerance_min is not None
+            and tolerance_max is not None
+            and float(tolerance_min) > float(tolerance_max)
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="tolerance_min must be <= tolerance_max",
+            )
+    if evaluation_mode == "NUMERIC_RANGE" and normalized_payload.get("expected_value") is None:
+        normalized_payload["expected_value"] = (
+            existing_step.expected_value if existing_step else None
+        )
+    return normalized_payload

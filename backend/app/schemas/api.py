@@ -508,7 +508,24 @@ class QcChecklistCreate(BaseModel):
     name: str
     process_stage: str
     version: str
+    device_type: str | None = None
+    variant_code: str | None = "DEFAULT"
+    component_type: str | None = None
+    skip_component_qc: bool = False
+    reference_image_file_id: str | None = None
     is_active: bool = True
+
+
+class QcChecklistUpdate(BaseModel):
+    name: str | None = None
+    process_stage: str | None = None
+    version: str | None = None
+    device_type: str | None = None
+    variant_code: str | None = None
+    component_type: str | None = None
+    skip_component_qc: bool | None = None
+    reference_image_file_id: str | None = None
+    is_active: bool | None = None
 
 
 class QcChecklistRead(QcChecklistCreate):
@@ -522,9 +539,28 @@ class QcStepCreate(BaseModel):
     step_order: int
     title: str
     instruction: str | None = None
+    control_area: str | None = None
+    evaluation_mode: str = "MANUAL"
+    result_input_label: str | None = None
     requires_photo: bool = False
     requires_measurement: bool = False
     blocking_on_fail: bool = True
+    expected_value: str | None = None
+    unit: str | None = None
+    tolerance_min: float | None = None
+    tolerance_max: float | None = None
+
+
+class QcStepUpdate(BaseModel):
+    step_order: int | None = None
+    title: str | None = None
+    instruction: str | None = None
+    control_area: str | None = None
+    evaluation_mode: str | None = None
+    result_input_label: str | None = None
+    requires_photo: bool | None = None
+    requires_measurement: bool | None = None
+    blocking_on_fail: bool | None = None
     expected_value: str | None = None
     unit: str | None = None
     tolerance_min: float | None = None
@@ -565,6 +601,7 @@ class QcRunRead(QcRunBase):
 class QcStepResultCreate(BaseModel):
     status: str
     measurement_value: float | None = None
+    observed_value: str | None = None
     comment: str | None = None
     mcu_snapshot: dict[str, Any] | None = None
 
@@ -576,6 +613,30 @@ class QcStepResultRead(QcStepResultCreate):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class QcProductComponentConfigRead(BaseModel):
+    component_type: str
+    substitution_group: str | None = None
+    required_part_number: str | None = None
+    required_revision: str | None = None
+    required_drawing_number: str | None = None
+    required_drawing_revision: str | None = None
+    quantity_required: int
+    is_required: bool
+    checklist_code: str | None = None
+    checklist_name: str | None = None
+    checklist_version: str | None = None
+    checklist_is_active: bool = False
+    skip_component_qc: bool = False
+    reference_image_file_id: str | None = None
+    configured_step_count: int = 0
+
+
+class QcProductConfigurationRead(BaseModel):
+    device_type: str
+    variant_code: str
+    items: list[QcProductComponentConfigRead]
 
 
 class FinalTestBase(BaseModel):

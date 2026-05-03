@@ -135,8 +135,38 @@ export interface QcChecklistRead {
   name: string;
   process_stage: string;
   version: string;
+  device_type: string | null;
+  variant_code: string | null;
+  component_type: string | null;
+  skip_component_qc: boolean;
+  reference_image_file_id: string | null;
   is_active: boolean;
   created_at: string;
+}
+
+export interface QcChecklistCreatePayload {
+  checklist_code: string;
+  name: string;
+  process_stage: string;
+  version: string;
+  device_type?: string | null;
+  variant_code?: string | null;
+  component_type?: string | null;
+  skip_component_qc?: boolean;
+  reference_image_file_id?: string | null;
+  is_active?: boolean;
+}
+
+export interface QcChecklistUpdatePayload {
+  name?: string;
+  process_stage?: string;
+  version?: string;
+  device_type?: string | null;
+  variant_code?: string | null;
+  component_type?: string | null;
+  skip_component_qc?: boolean;
+  reference_image_file_id?: string | null;
+  is_active?: boolean;
 }
 
 export interface QcStepRead {
@@ -145,6 +175,9 @@ export interface QcStepRead {
   step_order: number;
   title: string;
   instruction: string | null;
+  control_area: string | null;
+  evaluation_mode: string;
+  result_input_label: string | null;
   requires_photo: boolean;
   requires_measurement: boolean;
   blocking_on_fail: boolean;
@@ -152,6 +185,62 @@ export interface QcStepRead {
   unit: string | null;
   tolerance_min: number | null;
   tolerance_max: number | null;
+}
+
+export interface QcStepCreatePayload {
+  step_order: number;
+  title: string;
+  instruction?: string | null;
+  control_area?: string | null;
+  evaluation_mode?: string;
+  result_input_label?: string | null;
+  requires_photo?: boolean;
+  requires_measurement?: boolean;
+  blocking_on_fail?: boolean;
+  expected_value?: string | null;
+  unit?: string | null;
+  tolerance_min?: number | null;
+  tolerance_max?: number | null;
+}
+
+export interface QcStepUpdatePayload {
+  step_order?: number;
+  title?: string;
+  instruction?: string | null;
+  control_area?: string | null;
+  evaluation_mode?: string;
+  result_input_label?: string | null;
+  requires_photo?: boolean;
+  requires_measurement?: boolean;
+  blocking_on_fail?: boolean;
+  expected_value?: string | null;
+  unit?: string | null;
+  tolerance_min?: number | null;
+  tolerance_max?: number | null;
+}
+
+export interface QcProductComponentConfigRead {
+  component_type: string;
+  substitution_group: string | null;
+  required_part_number: string | null;
+  required_revision: string | null;
+  required_drawing_number: string | null;
+  required_drawing_revision: string | null;
+  quantity_required: number;
+  is_required: boolean;
+  checklist_code: string | null;
+  checklist_name: string | null;
+  checklist_version: string | null;
+  checklist_is_active: boolean;
+  skip_component_qc: boolean;
+  reference_image_file_id: string | null;
+  configured_step_count: number;
+}
+
+export interface QcProductConfigurationRead {
+  device_type: string;
+  variant_code: string;
+  items: QcProductComponentConfigRead[];
 }
 
 export interface ServiceSessionRead {
@@ -425,6 +514,7 @@ export interface QcRunRead extends QcRunCreatePayload {
 export interface QcStepResultCreatePayload {
   status: string;
   measurement_value?: number;
+  observed_value?: string | null;
   comment?: string;
   mcu_snapshot?: Record<string, unknown>;
 }
@@ -625,6 +715,38 @@ export async function patchJson<T>(
   });
 }
 
+export async function postMultipart<T>(
+  url: string,
+  body: FormData,
+  signal?: AbortSignal,
+): Promise<T> {
+  return requestJson<T>(url, {
+    method: "POST",
+    body,
+    signal,
+  });
+}
+
+export async function deleteRequest(
+  url: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  const response = await fetch(url, {
+    method: "DELETE",
+    headers: { Accept: "application/json" },
+    signal,
+  });
+
+  if (!response.ok) {
+    const detail = await readErrorDetail(response);
+    throw new Error(
+      detail
+        ? `API ${response.status} ${response.statusText}: ${detail}`
+        : `API ${response.status} ${response.statusText}`,
+    );
+  }
+}
+
 export async function updateDeviceStatus(
   apiBaseUrl: string,
   serialNumber: string,
@@ -759,13 +881,33 @@ export async function rfidLogin(
   );
 }
 
+function isAbortSignal(value: unknown): value is AbortSignal {
+  return (
+    typeof AbortSignal !== "undefined" &&
+    value instanceof AbortSignal
+  );
+}
+
 export async function listQcChecklists(
   apiBaseUrl: string,
+  paramsOrSignal:
+    | {
+        device_type?: string;
+        variant_code?: string;
+        component_type?: string;
+      }
+    | AbortSignal
+    | undefined = undefined,
   signal?: AbortSignal,
 ): Promise<QcChecklistRead[]> {
+  const query =
+    paramsOrSignal && !isAbortSignal(paramsOrSignal)
+      ? buildQuery(paramsOrSignal)
+      : "";
+  const effectiveSignal = isAbortSignal(paramsOrSignal) ? paramsOrSignal : signal;
   return fetchJson<QcChecklistRead[]>(
-    joinApiUrl(apiBaseUrl, "/qc-checklists"),
-    signal,
+    joinApiUrl(apiBaseUrl, `/qc-checklists${query}`),
+    effectiveSignal,
   );
 }
 
@@ -778,6 +920,118 @@ export async function listQcChecklistSteps(
     joinApiUrl(
       apiBaseUrl,
       `/qc-checklists/${encodeURIComponent(checklistCode)}/steps`,
+    ),
+    signal,
+  );
+}
+
+export async function createQcChecklist(
+  apiBaseUrl: string,
+  payload: QcChecklistCreatePayload,
+  signal?: AbortSignal,
+): Promise<QcChecklistRead> {
+  return postJson<QcChecklistRead>(
+    joinApiUrl(apiBaseUrl, "/qc-checklists"),
+    payload,
+    signal,
+  );
+}
+
+export async function updateQcChecklist(
+  apiBaseUrl: string,
+  checklistCode: string,
+  payload: QcChecklistUpdatePayload,
+  signal?: AbortSignal,
+): Promise<QcChecklistRead> {
+  return patchJson<QcChecklistRead>(
+    joinApiUrl(apiBaseUrl, `/qc-checklists/${encodeURIComponent(checklistCode)}`),
+    payload,
+    signal,
+  );
+}
+
+export async function uploadQcChecklistReferenceImage(
+  apiBaseUrl: string,
+  checklistCode: string,
+  file: File,
+  uploadedBy?: string,
+  signal?: AbortSignal,
+): Promise<QcChecklistRead> {
+  const formData = new FormData();
+  formData.append("file", file);
+  if (uploadedBy) {
+    formData.append("uploaded_by", uploadedBy);
+  }
+  return postMultipart<QcChecklistRead>(
+    joinApiUrl(
+      apiBaseUrl,
+      `/qc-checklists/${encodeURIComponent(checklistCode)}/reference-image`,
+    ),
+    formData,
+    signal,
+  );
+}
+
+export async function createQcChecklistStep(
+  apiBaseUrl: string,
+  checklistCode: string,
+  payload: QcStepCreatePayload,
+  signal?: AbortSignal,
+): Promise<QcStepRead> {
+  return postJson<QcStepRead>(
+    joinApiUrl(
+      apiBaseUrl,
+      `/qc-checklists/${encodeURIComponent(checklistCode)}/steps`,
+    ),
+    payload,
+    signal,
+  );
+}
+
+export async function updateQcChecklistStep(
+  apiBaseUrl: string,
+  checklistCode: string,
+  stepId: string,
+  payload: QcStepUpdatePayload,
+  signal?: AbortSignal,
+): Promise<QcStepRead> {
+  return patchJson<QcStepRead>(
+    joinApiUrl(
+      apiBaseUrl,
+      `/qc-checklists/${encodeURIComponent(checklistCode)}/steps/${encodeURIComponent(stepId)}`,
+    ),
+    payload,
+    signal,
+  );
+}
+
+export async function deleteQcChecklistStep(
+  apiBaseUrl: string,
+  checklistCode: string,
+  stepId: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  return deleteRequest(
+    joinApiUrl(
+      apiBaseUrl,
+      `/qc-checklists/${encodeURIComponent(checklistCode)}/steps/${encodeURIComponent(stepId)}`,
+    ),
+    signal,
+  );
+}
+
+export async function getQcProductConfiguration(
+  apiBaseUrl: string,
+  deviceType: string,
+  variantCode = "DEFAULT",
+  signal?: AbortSignal,
+): Promise<QcProductConfigurationRead> {
+  return fetchJson<QcProductConfigurationRead>(
+    joinApiUrl(
+      apiBaseUrl,
+      `/qc-product-configurations/${encodeURIComponent(deviceType)}${buildQuery({
+        variant_code: variantCode,
+      })}`,
     ),
     signal,
   );

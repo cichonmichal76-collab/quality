@@ -4,10 +4,14 @@ import {
   addQcStepResult,
   buildQuery,
   completeQcRun,
+  createQcChecklist,
+  createQcChecklistStep,
   createFinalTest,
   createOperator,
   createQcRun,
   createWorkstation,
+  deleteQcChecklistStep,
+  getQcProductConfiguration,
   getProductionItemByBarcode,
   getServiceSession,
   joinApiUrl,
@@ -22,9 +26,12 @@ import {
   optionalBoolean,
   rfidLogin,
   scanAssemblyComponent,
+  updateQcChecklist,
+  updateQcChecklistStep,
   updateDeviceStatus,
   updateNonconformityStatus,
   updateOperator,
+  uploadQcChecklistReferenceImage,
   updateWorkstation,
 } from "./api";
 
@@ -1011,6 +1018,251 @@ describe("scanAssemblyComponent", () => {
           workstation_id: "PR-ST-01",
           work_session_id: "WS-PROD-001",
         }),
+      }),
+    );
+  });
+});
+
+describe("qc product configuration api", () => {
+  it("pobiera konfiguracje komponentow BOM dla produktu", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => ({
+        device_type: "DEMO-OPS",
+        variant_code: "DEFAULT",
+        items: [
+          {
+            component_type: "SCREW_M4",
+            quantity_required: 4,
+            is_required: true,
+            checklist_code: "QC-DEMO-OPS-SCREW-M4",
+            checklist_name: "Kontrola sruby",
+            checklist_version: "1.0",
+            checklist_is_active: true,
+            skip_component_qc: false,
+            reference_image_file_id: "FILE-001",
+            configured_step_count: 2,
+          },
+        ],
+      }),
+    } satisfies Partial<Response>);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const payload = await getQcProductConfiguration("/api", "DEMO-OPS");
+
+    expect(payload.items[0]?.component_type).toBe("SCREW_M4");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/qc-product-configurations/DEMO-OPS?variant_code=DEFAULT",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+      }),
+    );
+  });
+
+  it("obsluguje filtrowanie checklist po produkcie, wariancie i komponencie", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => [],
+    } satisfies Partial<Response>);
+    vi.stubGlobal("fetch", fetchMock);
+
+    await listQcChecklists("/api", {
+      device_type: "DEMO-OPS",
+      variant_code: "DEFAULT",
+      component_type: "SCREW_M4",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/qc-checklists?device_type=DEMO-OPS&variant_code=DEFAULT&component_type=SCREW_M4",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+      }),
+    );
+  });
+
+  it("tworzy i aktualizuje checkliste produktu QC", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        json: async () => ({
+          checklist_code: "QC-DEMO-OPS-SCREW-M4",
+          name: "Kontrola sruby",
+          process_stage: "COMPONENT_QC",
+          version: "1.0",
+          device_type: "DEMO-OPS",
+          variant_code: "DEFAULT",
+          component_type: "SCREW_M4",
+          skip_component_qc: false,
+          reference_image_file_id: null,
+          is_active: true,
+          id: "CHK-001",
+          created_at: "2026-05-03T10:00:00Z",
+        }),
+      } satisfies Partial<Response>)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        json: async () => ({
+          checklist_code: "QC-DEMO-OPS-SCREW-M4",
+          name: "Kontrola sruby M4",
+          process_stage: "COMPONENT_QC",
+          version: "1.1",
+          device_type: "DEMO-OPS",
+          variant_code: "DEFAULT",
+          component_type: "SCREW_M4",
+          skip_component_qc: false,
+          reference_image_file_id: null,
+          is_active: true,
+          id: "CHK-001",
+          created_at: "2026-05-03T10:00:00Z",
+        }),
+      } satisfies Partial<Response>);
+    vi.stubGlobal("fetch", fetchMock);
+
+    await createQcChecklist("/api", {
+      checklist_code: "QC-DEMO-OPS-SCREW-M4",
+      name: "Kontrola sruby",
+      process_stage: "COMPONENT_QC",
+      version: "1.0",
+      device_type: "DEMO-OPS",
+      variant_code: "DEFAULT",
+      component_type: "SCREW_M4",
+      skip_component_qc: false,
+      is_active: true,
+    });
+    await updateQcChecklist("/api", "QC-DEMO-OPS-SCREW-M4", {
+      name: "Kontrola sruby M4",
+      version: "1.1",
+    });
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/qc-checklists");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(
+      "/api/qc-checklists/QC-DEMO-OPS-SCREW-M4",
+    );
+  });
+
+  it("tworzy, aktualizuje i usuwa krok checklisty produktu QC", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        json: async () => ({
+          id: "STEP-001",
+          checklist_id: "CHK-001",
+          step_order: 1,
+          title: "Sprawdz dlugosc",
+          instruction: "Zmierz srube",
+          control_area: "Trzon sruby",
+          evaluation_mode: "NUMERIC_RANGE",
+          result_input_label: "Wynik dlugosci",
+          requires_photo: false,
+          requires_measurement: true,
+          blocking_on_fail: true,
+          expected_value: "12.0",
+          unit: "mm",
+          tolerance_min: 11.8,
+          tolerance_max: 12.2,
+        }),
+      } satisfies Partial<Response>)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        json: async () => ({
+          id: "STEP-001",
+          checklist_id: "CHK-001",
+          step_order: 1,
+          title: "Sprawdz dlugosc nominalna",
+          instruction: "Zmierz srube",
+          control_area: "Trzon sruby",
+          evaluation_mode: "NUMERIC_RANGE",
+          result_input_label: "Wynik dlugosci",
+          requires_photo: false,
+          requires_measurement: true,
+          blocking_on_fail: true,
+          expected_value: "12.0",
+          unit: "mm",
+          tolerance_min: 11.8,
+          tolerance_max: 12.2,
+        }),
+      } satisfies Partial<Response>)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 204,
+        statusText: "No Content",
+        text: async () => "",
+      } satisfies Partial<Response>);
+    vi.stubGlobal("fetch", fetchMock);
+
+    await createQcChecklistStep("/api", "QC-DEMO-OPS-SCREW-M4", {
+      step_order: 1,
+      title: "Sprawdz dlugosc",
+      control_area: "Trzon sruby",
+      evaluation_mode: "NUMERIC_RANGE",
+      result_input_label: "Wynik dlugosci",
+      expected_value: "12.0",
+      unit: "mm",
+      tolerance_min: 11.8,
+      tolerance_max: 12.2,
+    });
+    await updateQcChecklistStep("/api", "QC-DEMO-OPS-SCREW-M4", "STEP-001", {
+      title: "Sprawdz dlugosc nominalna",
+    });
+    await deleteQcChecklistStep("/api", "QC-DEMO-OPS-SCREW-M4", "STEP-001");
+
+    expect(fetchMock.mock.calls[2]?.[1]).toEqual(
+      expect.objectContaining({
+        method: "DELETE",
+      }),
+    );
+  });
+
+  it("wysyla zdjecie referencyjne checklisty jako multipart/form-data", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => ({
+        checklist_code: "QC-DEMO-OPS-SCREW-M4",
+        name: "Kontrola sruby",
+        process_stage: "COMPONENT_QC",
+        version: "1.0",
+        device_type: "DEMO-OPS",
+        variant_code: "DEFAULT",
+        component_type: "SCREW_M4",
+        skip_component_qc: false,
+        reference_image_file_id: "FILE-001",
+        is_active: true,
+        id: "CHK-001",
+        created_at: "2026-05-03T10:00:00Z",
+      }),
+    } satisfies Partial<Response>);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const file = new File(["demo-image"], "screw.png", { type: "image/png" });
+    const payload = await uploadQcChecklistReferenceImage(
+      "/api",
+      "QC-DEMO-OPS-SCREW-M4",
+      file,
+      "QC-ADMIN",
+    );
+
+    expect(payload.reference_image_file_id).toBe("FILE-001");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/qc-checklists/QC-DEMO-OPS-SCREW-M4/reference-image",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.any(FormData),
       }),
     );
   });

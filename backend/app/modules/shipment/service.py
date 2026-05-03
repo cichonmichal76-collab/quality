@@ -7,6 +7,7 @@ from app.core.audit import record_audit_event
 from app.database import utc_now
 from app.models import AuditEvent, Device
 from app.modules.assembly.service import get_device_bom_compliance
+from app.modules.qc import repository as qc_repository
 from app.modules.shipment import repository, rules
 from app.schemas import (
     DeviceComponentPrimaryBlockingTypeSummaryRead,
@@ -321,6 +322,31 @@ def _recommended_action_for_primary_blocking_code(primary_blocking_code: str | N
     return RUN_FINAL_TEST_ACTION
 
 
+def _is_component_qc_skipped_for_device(
+    db: Session,
+    device: Device,
+    component_type: str,
+) -> bool:
+    variant_checklist = qc_repository.get_component_qc_checklist(
+        db,
+        device_type=device.device_type,
+        variant_code=device.variant_code,
+        component_type=component_type,
+    )
+    if variant_checklist is not None:
+        return variant_checklist.skip_component_qc
+    if device.variant_code != "DEFAULT":
+        default_checklist = qc_repository.get_component_qc_checklist(
+            db,
+            device_type=device.device_type,
+            variant_code="DEFAULT",
+            component_type=component_type,
+        )
+        if default_checklist is not None:
+            return default_checklist.skip_component_qc
+    return False
+
+
 def _build_installed_component_quality_rows(
     db: Session,
     device: Device,
@@ -337,9 +363,14 @@ def _build_installed_component_quality_rows(
     component_rows: list[DeviceInstalledComponentQualityRead] = []
     for link in installed_links:
         critical_open_ncr_ids = component_ncr_ids_by_serial.get(link.child_item_serial_number, [])
+        effective_component_qc_passed = link.component_qc_passed or _is_component_qc_skipped_for_device(
+            db,
+            device,
+            link.component_type,
+        )
         if critical_open_ncr_ids:
             quality_status = "CRITICAL_NCR_OPEN"
-        elif not link.component_qc_passed:
+        elif not effective_component_qc_passed:
             quality_status = "QC_NOT_PASSED"
         else:
             quality_status = "PASS"
@@ -353,7 +384,7 @@ def _build_installed_component_quality_rows(
                 workstation_id=link.workstation_id,
                 bom_template_id=link.bom_template_id,
                 bom_version=link.bom_version,
-                component_qc_passed=link.component_qc_passed,
+                component_qc_passed=effective_component_qc_passed,
                 has_critical_open_ncr=bool(critical_open_ncr_ids),
                 critical_open_ncr_ids=critical_open_ncr_ids,
                 blocks_shipment=quality_status != "PASS",

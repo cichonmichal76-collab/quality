@@ -18,6 +18,7 @@ from app.models import (
 from app.modules.auth_rfid.service import PRODUCTION_SESSION_ROLES, require_active_work_session
 from app.modules.assembly.bom_groups import build_bom_requirement_groups, evaluate_bom_requirement_groups
 from app.modules.assembly import repository
+from app.modules.qc import repository as qc_repository
 from app.schemas import (
     AssemblyScanRequest,
     ComponentCreate,
@@ -1735,6 +1736,31 @@ def list_device_bom_items(
     return repository.list_bom_items_for_template(db, template.id)
 
 
+def _is_component_qc_skipped_for_device(
+    db: Session,
+    device: Device,
+    component_type: str,
+) -> bool:
+    variant_checklist = qc_repository.get_component_qc_checklist(
+        db,
+        device_type=device.device_type,
+        variant_code=device.variant_code,
+        component_type=component_type,
+    )
+    if variant_checklist is not None:
+        return variant_checklist.skip_component_qc
+    if device.variant_code != "DEFAULT":
+        default_checklist = qc_repository.get_component_qc_checklist(
+            db,
+            device_type=device.device_type,
+            variant_code="DEFAULT",
+            component_type=component_type,
+        )
+        if default_checklist is not None:
+            return default_checklist.skip_component_qc
+    return False
+
+
 def _resolve_bom_template_for_device(db: Session, device: Device) -> DeviceBomTemplate | None:
     template, _, blocking_reason, _, _ = resolve_bom_template_context(db, device)
     if blocking_reason:
@@ -1840,7 +1866,15 @@ def scan_component_for_assembly(
     existing = repository.get_active_assembly_link_by_barcode(db, payload.child_barcode_value)
     if existing:
         raise HTTPException(status_code=409, detail="Component already installed in another device")
-    if item.current_status != "QC_PASSED":
+    qc_skipped_for_component = _is_component_qc_skipped_for_device(
+        db,
+        device,
+        payload.component_type,
+    )
+    allowed_component_statuses = {"QC_PASSED"}
+    if qc_skipped_for_component:
+        allowed_component_statuses.add("PRODUCED")
+    if item.current_status not in allowed_component_statuses:
         raise HTTPException(status_code=400, detail="Component must be QC_PASSED before assembly")
     critical_component_ncr_ids = repository.list_critical_open_ncr_ids_for_component(
         db,
@@ -1913,7 +1947,7 @@ def scan_component_for_assembly(
         scan_event_id=scan_event_id,
         bom_template_id=bom_template.id if bom_template else None,
         bom_version=bom_template.version if bom_template else None,
-        component_qc_passed=True,
+        component_qc_passed=item.current_status == "QC_PASSED" or qc_skipped_for_component,
     )
     item.current_status = "INSTALLED"
     db.add(event)
@@ -1932,7 +1966,8 @@ def scan_component_for_assembly(
             **payload.model_dump(exclude_none=True),
             "bom_template_id": bom_template.id if bom_template else None,
             "bom_version": bom_template.version if bom_template else None,
-            "component_qc_passed": True,
+            "component_qc_passed": link.component_qc_passed,
+            "component_qc_skipped": qc_skipped_for_component,
             "component_critical_open_ncr_ids": [],
         },
     )

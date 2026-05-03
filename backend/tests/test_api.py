@@ -171,6 +171,39 @@ def release_device_bom_template(
     assert release_response.status_code == 200
 
 
+def create_device_bom_template_with_items(
+    device_type: str,
+    *,
+    version: str = "1.0",
+    variant_code: str = "DEFAULT",
+    items: list[dict],
+) -> None:
+    template_response = client.post(
+        "/api/device-bom-templates",
+        json={
+            "device_type": device_type,
+            "variant_code": variant_code,
+            "name": f"{device_type} BOM",
+            "version": version,
+            "is_active": False,
+        },
+    )
+    assert template_response.status_code in {200, 409}
+
+    for item in items:
+        item_response = client.post(
+            f"/api/device-bom-templates/{device_type}/items?version={version}&variant_code={variant_code}",
+            json=item,
+        )
+        assert item_response.status_code in {200, 409}
+
+    release_device_bom_template(
+        device_type=device_type,
+        version=version,
+        variant_code=variant_code,
+    )
+
+
 def test_health():
     response = client.get("/health")
     assert response.status_code == 200
@@ -3221,6 +3254,269 @@ def test_qc_run_fail_updates_installed_component_snapshot_and_creates_component_
     assert quality_after.json()["passes_component_quality_gate"] is False
     assert quality_after.json()["primary_quality_status"] == "CRITICAL_NCR_OPEN"
     assert quality_after.json()["recommended_action"] == "RESOLVE_COMPONENT_NCR"
+
+
+def test_qc_product_configuration_can_bind_bom_component_reference_image_and_steps():
+    device_type = unique_id("DT")
+    create_device_bom_template_with_items(
+        device_type,
+        items=[
+            {
+                "component_type": "SCREW_M4",
+                "quantity_required": 4,
+                "is_required": True,
+            },
+            {
+                "component_type": "SILICONE_PACK",
+                "quantity_required": 1,
+                "is_required": False,
+            },
+        ],
+    )
+
+    checklist_code = unique_id("CHK")
+    checklist_response = client.post(
+        "/api/qc-checklists",
+        json={
+            "checklist_code": checklist_code,
+            "name": "Kontrola sruby M4",
+            "process_stage": "COMPONENT_QC",
+            "version": "1.0",
+            "device_type": device_type,
+            "variant_code": "DEFAULT",
+            "component_type": "SCREW_M4",
+        },
+    )
+    assert checklist_response.status_code == 200
+    assert checklist_response.json()["component_type"] == "SCREW_M4"
+
+    upload_response = client.post(
+        f"/api/qc-checklists/{checklist_code}/reference-image",
+        data={"uploaded_by": "PYTEST-ADMIN"},
+        files={"file": ("screw.png", b"png-bytes", "image/png")},
+    )
+    assert upload_response.status_code == 200
+    reference_image_file_id = upload_response.json()["reference_image_file_id"]
+    assert reference_image_file_id is not None
+
+    numeric_step = client.post(
+        f"/api/qc-checklists/{checklist_code}/steps",
+        json={
+            "step_order": 1,
+            "title": "Sprawdz dlugosc sruby",
+            "instruction": "Zmierz srube suwmiarka.",
+            "control_area": "Trzon sruby",
+            "evaluation_mode": "NUMERIC_RANGE",
+            "result_input_label": "Wynik dlugosci",
+            "blocking_on_fail": True,
+            "expected_value": "12.0",
+            "unit": "mm",
+            "tolerance_min": 11.8,
+            "tolerance_max": 12.2,
+        },
+    )
+    assert numeric_step.status_code == 200
+    numeric_step_id = numeric_step.json()["id"]
+    assert numeric_step.json()["requires_measurement"] is True
+
+    text_step = client.post(
+        f"/api/qc-checklists/{checklist_code}/steps",
+        json={
+            "step_order": 2,
+            "title": "Potwierdz oznaczenie",
+            "instruction": "Wpisz odczyt z glowki sruby.",
+            "control_area": "Glowka sruby",
+            "evaluation_mode": "TEXT_MATCH",
+            "result_input_label": "Odczyt oznaczenia",
+            "expected_value": "A2-70",
+            "blocking_on_fail": True,
+        },
+    )
+    assert text_step.status_code == 200
+    text_step_id = text_step.json()["id"]
+
+    updated_step = client.patch(
+        f"/api/qc-checklists/{checklist_code}/steps/{text_step_id}",
+        json={
+            "instruction": "Wpisz oznaczenie z glowki sruby i porownaj z wzorcem.",
+            "result_input_label": "Wpisz odczyt oznaczenia",
+        },
+    )
+    assert updated_step.status_code == 200
+    assert updated_step.json()["result_input_label"] == "Wpisz odczyt oznaczenia"
+
+    deleted_step = client.delete(
+        f"/api/qc-checklists/{checklist_code}/steps/{numeric_step_id}",
+    )
+    assert deleted_step.status_code == 204
+
+    filtered_checklists = client.get(
+        f"/api/qc-checklists?device_type={device_type}&variant_code=DEFAULT&component_type=SCREW_M4"
+    )
+    assert filtered_checklists.status_code == 200
+    assert [row["checklist_code"] for row in filtered_checklists.json()] == [checklist_code]
+
+    product_config = client.get(
+        f"/api/qc-product-configurations/{device_type}?variant_code=DEFAULT"
+    )
+    assert product_config.status_code == 200
+    product_items = {
+        row["component_type"]: row for row in product_config.json()["items"]
+    }
+    assert product_items["SCREW_M4"]["checklist_code"] == checklist_code
+    assert product_items["SCREW_M4"]["configured_step_count"] == 1
+    assert product_items["SCREW_M4"]["reference_image_file_id"] == reference_image_file_id
+    assert product_items["SILICONE_PACK"]["checklist_code"] is None
+    assert product_items["SILICONE_PACK"]["configured_step_count"] == 0
+
+    steps = client.get(f"/api/qc-checklists/{checklist_code}/steps")
+    assert steps.status_code == 200
+    assert [row["title"] for row in steps.json()] == ["Potwierdz oznaczenie"]
+    assert steps.json()[0]["evaluation_mode"] == "TEXT_MATCH"
+
+
+def test_qc_text_match_step_uses_observed_value_for_automatic_result():
+    quality_session = start_work_session(role="QUALITY_INSPECTOR")
+    item_serial_number = unique_id("ITEM")
+    barcode_value = unique_id("BC")
+
+    create_item = client.post(
+        "/api/production-items",
+        json={
+            "item_serial_number": item_serial_number,
+            "barcode_value": barcode_value,
+            "item_type": "SCREW_M4",
+            "work_session_id": quality_session["work_session_id"],
+            "workstation_id": quality_session["workstation_id"],
+        },
+    )
+    assert create_item.status_code == 200
+
+    checklist_code = unique_id("CHK")
+    checklist = client.post(
+        "/api/qc-checklists",
+        json={
+            "checklist_code": checklist_code,
+            "name": "Kontrola oznaczenia sruby",
+            "process_stage": "COMPONENT_QC",
+            "version": "1.0",
+        },
+    )
+    assert checklist.status_code == 200
+
+    step = client.post(
+        f"/api/qc-checklists/{checklist_code}/steps",
+        json={
+            "step_order": 1,
+            "title": "Zweryfikuj oznaczenie",
+            "evaluation_mode": "TEXT_MATCH",
+            "expected_value": "A2-70",
+            "result_input_label": "Odczyt oznaczenia",
+        },
+    )
+    assert step.status_code == 200
+    step_id = step.json()["id"]
+
+    run_id = unique_id("QCRUN")
+    qc_run = client.post(
+        "/api/qc-runs",
+        json={
+            "run_id": run_id,
+            "item_serial_number": item_serial_number,
+            "barcode_value": barcode_value,
+            "checklist_id": checklist.json()["id"],
+            "process_stage": "COMPONENT_QC",
+            "work_session_id": quality_session["work_session_id"],
+        },
+    )
+    assert qc_run.status_code == 200
+
+    mismatch_result = client.post(
+        f"/api/qc-runs/{run_id}/steps/{step_id}/result",
+        json={"status": "PASS", "observed_value": "A2-60"},
+    )
+    assert mismatch_result.status_code == 200
+    assert mismatch_result.json()["status"] == "FAIL"
+
+    completed = client.post(f"/api/qc-runs/{run_id}/complete", data={})
+    assert completed.status_code == 200
+    assert completed.json()["result"] == "FAIL"
+
+
+def test_skip_component_qc_allows_assembly_without_prior_qc_pass():
+    device_type = unique_id("DT")
+    create_device_bom_template_with_items(
+        device_type,
+        items=[
+            {
+                "component_type": "SILICONE_PACK",
+                "quantity_required": 1,
+                "is_required": True,
+            }
+        ],
+    )
+
+    checklist_code = unique_id("CHK")
+    skip_checklist = client.post(
+        "/api/qc-checklists",
+        json={
+            "checklist_code": checklist_code,
+            "name": "Pomijana kontrola silikonu",
+            "process_stage": "COMPONENT_QC",
+            "version": "1.0",
+            "device_type": device_type,
+            "variant_code": "DEFAULT",
+            "component_type": "SILICONE_PACK",
+            "skip_component_qc": True,
+        },
+    )
+    assert skip_checklist.status_code == 200
+    assert skip_checklist.json()["skip_component_qc"] is True
+
+    session = start_work_session(role="PRODUCTION_OPERATOR")
+    device_serial_number = unique_id("DEV")
+    device_response = client.post(
+        "/api/devices",
+        json={"device_serial_number": device_serial_number, "device_type": device_type},
+    )
+    assert device_response.status_code == 200
+
+    item_serial_number = unique_id("ITEM")
+    barcode_value = unique_id("BC")
+    item_response = client.post(
+        "/api/production-items",
+        json={
+            "item_serial_number": item_serial_number,
+            "barcode_value": barcode_value,
+            "item_type": "SILICONE_PACK",
+            "work_session_id": session["work_session_id"],
+            "workstation_id": session["workstation_id"],
+        },
+    )
+    assert item_response.status_code == 200
+
+    produced = client.patch(
+        f"/api/production-items/{item_serial_number}/status",
+        json={"current_status": "PRODUCED"},
+    )
+    assert produced.status_code == 200
+    assert produced.json()["current_status"] == "PRODUCED"
+
+    install = client.post(
+        f"/api/devices/{device_serial_number}/assembly/scan-component",
+        json={
+            "child_barcode_value": barcode_value,
+            "component_type": "SILICONE_PACK",
+            "work_session_id": session["work_session_id"],
+        },
+    )
+    assert install.status_code == 200
+
+    quality_after = client.get(f"/api/devices/{device_serial_number}/component-quality")
+    assert quality_after.status_code == 200
+    assert quality_after.json()["passes_component_quality_gate"] is True
+    assert quality_after.json()["primary_quality_status"] == "PASS"
+    assert quality_after.json()["components"][0]["component_qc_passed"] is True
 
 
 def test_assembly_scan_installs_component_and_blocks_duplicate_use():

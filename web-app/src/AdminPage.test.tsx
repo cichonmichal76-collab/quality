@@ -174,6 +174,219 @@ describe("AdminPage", () => {
     await screen.findByText(/Typ stanowiska FINAL_QC/);
     await screen.findByText("NIEAKTYWNE");
   });
+
+  it("konfiguruje kontrole komponentu z BOM wraz ze zdjeciem i krokiem tekstowym", async () => {
+    let configurationLoaded = false;
+    const operators: Array<Record<string, unknown>> = [];
+    const workstations: Array<Record<string, unknown>> = [];
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+
+      if (url.endsWith("/api/operators") && method === "GET") {
+        return jsonResponse(operators);
+      }
+
+      if (url.endsWith("/api/workstations") && method === "GET") {
+        return jsonResponse(workstations);
+      }
+
+      if (
+        url.endsWith("/api/qc-product-configurations/DEMO-OPS?variant_code=DEFAULT") &&
+        method === "GET"
+      ) {
+        return jsonResponse({
+          device_type: "DEMO-OPS",
+          variant_code: "DEFAULT",
+          items: [
+            {
+              component_type: "SCREW_M4",
+              substitution_group: null,
+              required_part_number: "M4-12",
+              required_revision: null,
+              required_drawing_number: null,
+              required_drawing_revision: null,
+              quantity_required: 4,
+              is_required: true,
+              checklist_code: configurationLoaded ? "QC-DEMO-OPS-DEFAULT-SCREW-M4" : null,
+              checklist_name: configurationLoaded ? "Kontrola sruby M4" : null,
+              checklist_version: configurationLoaded ? "1.0" : null,
+              checklist_is_active: configurationLoaded,
+              skip_component_qc: false,
+              reference_image_file_id: configurationLoaded ? "FILE-001" : null,
+              configured_step_count: configurationLoaded ? 1 : 0,
+            },
+          ],
+        });
+      }
+
+      if (
+        url.includes("/api/qc-checklists?device_type=DEMO-OPS") &&
+        method === "GET"
+      ) {
+        return jsonResponse([
+          {
+            id: "CHK-001",
+            checklist_code: "QC-DEMO-OPS-DEFAULT-SCREW-M4",
+            name: "Kontrola sruby M4",
+            process_stage: "COMPONENT_QC",
+            version: "1.0",
+            device_type: "DEMO-OPS",
+            variant_code: "DEFAULT",
+            component_type: "SCREW_M4",
+            skip_component_qc: false,
+            reference_image_file_id: "FILE-001",
+            is_active: true,
+            created_at: "2026-05-03T11:00:00Z",
+          },
+        ]);
+      }
+
+      if (
+        url.endsWith("/api/qc-checklists/QC-DEMO-OPS-DEFAULT-SCREW-M4/steps") &&
+        method === "GET"
+      ) {
+        return jsonResponse([
+          {
+            id: "STEP-001",
+            checklist_id: "CHK-001",
+            step_order: 1,
+            title: "Zweryfikuj oznaczenie",
+            instruction: "Porownaj oznaczenie z wzorcem.",
+            control_area: "Glowka sruby",
+            evaluation_mode: "TEXT_MATCH",
+            result_input_label: "Wpisz oznaczenie",
+            requires_photo: false,
+            requires_measurement: false,
+            blocking_on_fail: true,
+            expected_value: "A2-70",
+            unit: null,
+            tolerance_min: null,
+            tolerance_max: null,
+          },
+        ]);
+      }
+
+      if (url.endsWith("/api/qc-checklists") && method === "POST") {
+        configurationLoaded = true;
+        return jsonResponse({
+          id: "CHK-001",
+          checklist_code: "QC-DEMO-OPS-DEFAULT-SCREW-M4",
+          name: "Kontrola sruby M4",
+          process_stage: "COMPONENT_QC",
+          version: "1.0",
+          device_type: "DEMO-OPS",
+          variant_code: "DEFAULT",
+          component_type: "SCREW_M4",
+          skip_component_qc: false,
+          reference_image_file_id: null,
+          is_active: true,
+          created_at: "2026-05-03T11:00:00Z",
+        });
+      }
+
+      if (
+        url.endsWith("/api/qc-checklists/QC-DEMO-OPS-DEFAULT-SCREW-M4/reference-image") &&
+        method === "POST"
+      ) {
+        return jsonResponse({
+          id: "CHK-001",
+          checklist_code: "QC-DEMO-OPS-DEFAULT-SCREW-M4",
+          name: "Kontrola sruby M4",
+          process_stage: "COMPONENT_QC",
+          version: "1.0",
+          device_type: "DEMO-OPS",
+          variant_code: "DEFAULT",
+          component_type: "SCREW_M4",
+          skip_component_qc: false,
+          reference_image_file_id: "FILE-001",
+          is_active: true,
+          created_at: "2026-05-03T11:00:00Z",
+        });
+      }
+
+      if (
+        url.endsWith("/api/qc-checklists/QC-DEMO-OPS-DEFAULT-SCREW-M4/steps") &&
+        method === "POST"
+      ) {
+        return jsonResponse({
+          id: "STEP-001",
+          checklist_id: "CHK-001",
+          step_order: 1,
+          title: "Zweryfikuj oznaczenie",
+          instruction: "Porownaj oznaczenie z wzorcem.",
+          control_area: "Glowka sruby",
+          evaluation_mode: "TEXT_MATCH",
+          result_input_label: "Wpisz oznaczenie",
+          requires_photo: false,
+          requires_measurement: false,
+          blocking_on_fail: true,
+          expected_value: "A2-70",
+          unit: null,
+          tolerance_min: null,
+          tolerance_max: null,
+        });
+      }
+
+      throw new Error(`Unexpected request: ${method} ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.replaceState(null, "", "/admin");
+
+    render(<App />);
+
+    await screen.findByText("Lista operatorow");
+    fireEvent.click(screen.getByRole("button", { name: "Produkt QC" }));
+
+    fireEvent.change(screen.getByLabelText("Typ produktu"), {
+      target: { value: "DEMO-OPS" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Pobierz komponenty BOM" }));
+
+    await screen.findByText("Brak konfiguracji");
+    fireEvent.click(screen.getByRole("button", { name: "Skonfiguruj" }));
+
+    fireEvent.change(screen.getByLabelText("Nazwa checklisty"), {
+      target: { value: "Kontrola sruby M4" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Dodaj krok" }));
+    fireEvent.change(screen.getByPlaceholderText("np. Sprawdz dlugosc sruby"), {
+      target: { value: "Zweryfikuj oznaczenie" },
+    });
+    fireEvent.change(
+      screen.getByPlaceholderText("Opisz procedure i sposob kontroli dla operatora."),
+      {
+        target: { value: "Porownaj oznaczenie z wzorcem." },
+      },
+    );
+    fireEvent.change(screen.getByPlaceholderText("np. Glowka sruby / gwint / etykieta"), {
+      target: { value: "Glowka sruby" },
+    });
+    fireEvent.change(screen.getByLabelText("Tryb oceny"), {
+      target: { value: "TEXT_MATCH" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("np. Wpisz odczyt oznaczenia"), {
+      target: { value: "Wpisz oznaczenie" },
+    });
+    fireEvent.change(
+      screen.getByPlaceholderText("np. A2-70 albo Czytelna etykieta"),
+      {
+        target: { value: "A2-70" },
+      },
+    );
+
+    const file = new File(["demo-image"], "screw.png", { type: "image/png" });
+    fireEvent.change(screen.getByLabelText("Zdjecie referencyjne elementu"), {
+      target: { files: [file] },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Zapisz konfiguracje produktu QC" }));
+
+    await screen.findByText(/Zapisano konfiguracje QC dla SCREW_M4/);
+    await screen.findByText("SKONFIGUROWANY");
+  });
 });
 
 function jsonResponse(payload: unknown): Response {

@@ -104,6 +104,15 @@ class QcChecklist(Base):
     name: Mapped[str] = mapped_column(String)
     process_stage: Mapped[str] = mapped_column(String)
     version: Mapped[str] = mapped_column(String)
+    device_type: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
+    variant_code: Mapped[str | None] = mapped_column(String, nullable=True)
+    component_type: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
+    skip_component_qc: Mapped[bool] = mapped_column(Boolean, default=False)
+    reference_image_file_id: Mapped[str | None] = mapped_column(
+        String,
+        ForeignKey("files.id"),
+        nullable=True,
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
@@ -116,6 +125,9 @@ class QcStep(Base):
     step_order: Mapped[int] = mapped_column()
     title: Mapped[str] = mapped_column(String)
     instruction: Mapped[str | None] = mapped_column(Text, nullable=True)
+    control_area: Mapped[str | None] = mapped_column(Text, nullable=True)
+    evaluation_mode: Mapped[str] = mapped_column(String, default="MANUAL")
+    result_input_label: Mapped[str | None] = mapped_column(String, nullable=True)
     requires_photo: Mapped[bool] = mapped_column(Boolean, default=False)
     requires_measurement: Mapped[bool] = mapped_column(Boolean, default=False)
     blocking_on_fail: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -150,6 +162,7 @@ class QcStepResult(Base):
     step_id: Mapped[str] = mapped_column(String)
     status: Mapped[str] = mapped_column(String)
     measurement_value: Mapped[float | None] = mapped_column(Numeric, nullable=True)
+    observed_value: Mapped[str | None] = mapped_column(String, nullable=True)
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     mcu_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)

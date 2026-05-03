@@ -189,6 +189,12 @@ Wersje BOM mają też teraz jawne lineage przez `source_template_id` i `replaced
 - `PATCH /api/barcodes/{barcode_value}/status`
 - `GET /api/barcodes/{barcode_value}/scan-history`
 - `POST /api/qc-runs`
+- `GET /api/qc-checklists`
+- `PATCH /api/qc-checklists/{checklist_code}`
+- `POST /api/qc-checklists/{checklist_code}/reference-image`
+- `PATCH /api/qc-checklists/{checklist_code}/steps/{step_id}`
+- `DELETE /api/qc-checklists/{checklist_code}/steps/{step_id}`
+- `GET /api/qc-product-configurations/{device_type}`
 - `POST /api/final-tests`
 - `POST /api/devices`
 - `POST /api/device-bom-templates`
