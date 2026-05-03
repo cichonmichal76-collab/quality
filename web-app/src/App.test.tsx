@@ -1890,6 +1890,29 @@ describe("App", () => {
     expect(
       await screen.findByRole("link", { name: "Pobierz paczkę ZIP" }),
     ).toHaveAttribute("href", "/api/service-sessions/SVC-9001/package");
+    const fullSessionPageLink = await screen.findByRole("link", {
+      name: "Pełna strona sesji",
+    });
+    expect(fullSessionPageLink).toHaveAttribute(
+      "href",
+      expect.stringContaining("/service-sessions/SVC-9001?view=shipment"),
+    );
+    expect(fullSessionPageLink).toHaveAttribute(
+      "href",
+      expect.stringContaining("device_serial=SHIP-001"),
+    );
+    const serviceReuploadedShortcut = screen
+      .getAllByRole("link", { name: /Pokaz reuploadowane sesje/i })
+      .find((link) =>
+        (link.getAttribute("href") ?? "").includes("svc_device_type=DEMO-OPS"),
+      );
+    if (!serviceReuploadedShortcut) {
+      throw new Error("Expected reuploaded shortcut in device service session card.");
+    }
+    expect(serviceReuploadedShortcut).toHaveAttribute(
+      "href",
+      expect.stringContaining("svc_only_reuploaded=true"),
+    );
 
     expect(screen.getByText("Historia uploadów i synchronizacji")).toBeInTheDocument();
     expect(

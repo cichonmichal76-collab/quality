@@ -144,6 +144,9 @@ backend pod `http://127.0.0.1:8000`.
   `reuploadowanych` sesjach. Historia audytu synchronizacji dodaje też
   własne skróty do kolejek po `Attempt ID`, `Correlation ID`
   i samych reuploadach.
+  Ta sama sekcja `Commissioning i serwis` w szczegółach urządzenia pokazuje
+  teraz także `Pełną stronę sesji` i skróty do powiązanych kolejek bez
+  wychodzenia z widoku urządzenia.
 
 Pełny widok urządzenia zawiera też skróty do gotowych, przefiltrowanych
 kolejek powiązanych z bieżącym problemem, np. do tej samej blokady

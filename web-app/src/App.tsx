@@ -2416,6 +2416,7 @@ export function App() {
   const deviceDetailsViewProps = selectedDevice
     ? {
         device: selectedDevice,
+        activeView,
         apiBaseUrl,
         details: deviceDetails,
         queueShortcuts: deviceQueueShortcuts,
@@ -5008,6 +5009,7 @@ function ServiceSessionDetailsPage({
 
 interface DeviceDetailsViewProps {
   device: DeviceSelection;
+  activeView: DashboardMode;
   apiBaseUrl: string;
   details: DeviceDetailsPayload | null;
   queueShortcuts: DeviceDetailsQueueShortcuts | null;
@@ -5048,6 +5050,7 @@ interface DeviceDetailsViewProps {
 
 function DeviceDetailsDrawer({
   device,
+  activeView,
   apiBaseUrl,
   details,
   queueShortcuts,
@@ -5106,6 +5109,7 @@ function DeviceDetailsDrawer({
       >
         <DeviceDetailsSurface
           device={device}
+          activeView={activeView}
           apiBaseUrl={apiBaseUrl}
           details={details}
           queueShortcuts={queueShortcuts}
@@ -5241,6 +5245,7 @@ function DeviceDetailsPage({
 
 function DeviceDetailsSurface({
   device,
+  activeView,
   apiBaseUrl,
   details,
   queueShortcuts,
@@ -5293,12 +5298,20 @@ function DeviceDetailsSurface({
 }) {
   const shipment = details?.shipment ?? null;
   const component = details?.component ?? null;
-  const deviceType = device.deviceType || shipment?.device_type || component?.device_type || "Brak danych";
-  const deviceVariant =
+  const resolvedDeviceType =
+    device.deviceType || shipment?.device_type || component?.device_type || "";
+  const resolvedDeviceVariant =
     device.variantCode ||
     shipment?.device_variant_code ||
     component?.device_variant_code ||
-    "Brak danych";
+    "";
+  const deviceType = resolvedDeviceType || "Brak danych";
+  const deviceVariant = resolvedDeviceVariant || "Brak danych";
+  const currentDeviceSelection: DeviceSelection = {
+    serialNumber: device.serialNumber,
+    deviceType: resolvedDeviceType,
+    variantCode: resolvedDeviceVariant,
+  };
   const bomCompliance = shipment?.bom_compliance ?? null;
   const bomCoverage = bomCompliance?.component_coverage ?? [];
   const componentRows = component?.components ?? [];
@@ -6118,7 +6131,24 @@ function DeviceDetailsSurface({
             >
               {serviceSessions.length > 0 ? (
                 <div className="detail-history-list">
-                  {serviceSessions.map((session) => (
+                  {serviceSessions.map((session) => {
+                    const sessionQueueShortcuts = buildServiceSessionQueueShortcuts({
+                      session,
+                      shipmentFilters,
+                      componentFilters,
+                      serviceFilters,
+                    });
+                    const sessionPageHref = buildDashboardLocationHref({
+                      pathname: buildServiceSessionDetailsPath(session.session_id),
+                      activeView,
+                      shipmentFilters,
+                      componentFilters,
+                      serviceFilters,
+                      selectedDevice: currentDeviceSelection,
+                      selectedServiceSessionId: session.session_id,
+                    });
+
+                    return (
                     <article className="detail-history-card" key={session.session_id}>
                       <div className="detail-inline-header">
                         <CodePill value={session.upload_status} />
@@ -6158,7 +6188,14 @@ function DeviceDetailsSurface({
                         emptyLabel="Brak dodatkowych metadanych uploadu."
                         compact
                       />
+                      <QueueShortcutList compact links={sessionQueueShortcuts} />
                       <div className="details-inline-actions">
+                        <a
+                          className="details-record-link"
+                          href={sessionPageHref}
+                        >
+                          Pełna strona sesji
+                        </a>
                         <a
                           className="details-record-link"
                           href={buildServiceSessionPackageHref(
@@ -6172,7 +6209,8 @@ function DeviceDetailsSurface({
                         </a>
                       </div>
                     </article>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="empty-copy">
