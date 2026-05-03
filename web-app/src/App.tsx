@@ -8380,6 +8380,7 @@ function buildServiceQueueShortcutHref({
   technicianId = "",
   clientAttemptId = "",
   uploadCorrelationId = "",
+  onlyReuploaded = false,
   result = "",
   uploadStatus = "",
   clientTriggerSource = "",
@@ -8392,6 +8393,7 @@ function buildServiceQueueShortcutHref({
   technicianId?: string;
   clientAttemptId?: string;
   uploadCorrelationId?: string;
+  onlyReuploaded?: boolean;
   result?: string;
   uploadStatus?: string;
   clientTriggerSource?: string;
@@ -8411,6 +8413,7 @@ function buildServiceQueueShortcutHref({
       technician_id: technicianId,
       client_attempt_id: clientAttemptId,
       upload_correlation_id: uploadCorrelationId,
+      only_reuploaded: onlyReuploaded,
       result,
       upload_status: uploadStatus,
       client_trigger_source: clientTriggerSource,
@@ -8447,6 +8450,7 @@ function buildServiceSessionQueueShortcuts({
   const clientTriggerSource = session.client_trigger_source ?? "";
   const clientAttemptId = session.client_attempt_id?.trim() ?? "";
   const uploadCorrelationId = session.upload_correlation_id?.trim() ?? "";
+  const isReuploaded = session.upload_count > 1;
 
   if (deviceSerialNumber !== "") {
     links.push({
@@ -8529,6 +8533,20 @@ function buildServiceSessionQueueShortcuts({
     });
   }
 
+  if (isReuploaded) {
+    links.push({
+      href: buildServiceQueueShortcutHref({
+        shipmentFilters,
+        componentFilters,
+        serviceFilters,
+        deviceType,
+        onlyReuploaded: true,
+      }),
+      label: "Pokaz reuploadowane sesje",
+      caption: `${formatNumber(session.upload_count)} uploady · ${deviceType || "Wszystkie typy"}`,
+    });
+  }
+
   if (clientAttemptId !== "") {
     links.push({
       href: buildServiceQueueShortcutHref({
@@ -8578,6 +8596,13 @@ function buildServiceSessionAuditQueueShortcuts({
     typeof event.payload?.upload_correlation_id === "string"
       ? event.payload.upload_correlation_id.trim()
       : "";
+  const uploadCount =
+    typeof event.payload?.upload_count === "number"
+      ? event.payload.upload_count
+      : null;
+  const isReuploaded =
+    event.event_type === "SERVICE_SESSION_PACKAGE_REUPLOADED" ||
+    (uploadCount !== null && uploadCount > 1);
 
   if (clientAttemptId !== "") {
     links.push({
@@ -8589,6 +8614,22 @@ function buildServiceSessionAuditQueueShortcuts({
       }),
       label: "Pokaz sesje z tym samym Attempt ID z audytu",
       caption: clientAttemptId,
+    });
+  }
+
+  if (isReuploaded) {
+    links.push({
+      href: buildServiceQueueShortcutHref({
+        shipmentFilters,
+        componentFilters,
+        serviceFilters,
+        onlyReuploaded: true,
+      }),
+      label: "Pokaz reuploadowane sesje z audytu",
+      caption:
+        uploadCount !== null && uploadCount > 1
+          ? `${formatNumber(uploadCount)} uploady backendu`
+          : "Reupload z audytu",
     });
   }
 

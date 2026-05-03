@@ -2234,6 +2234,23 @@ describe("App", () => {
       expect.stringContaining("svc_upload_correlation_id=CORR-DETAIL-001"),
     );
     expect(correlationLink.getAttribute("href")).not.toContain("svc_session_id=");
+    const reuploadedLink = screen
+      .getAllByRole("link", {
+        name: /Pokaz reuploadowane sesje/i,
+      })
+      .find((link) => (link.getAttribute("href") ?? "").includes("svc_device_type=DEMO-SVC"));
+    if (!reuploadedLink) {
+      throw new Error("Expected reuploaded service queue shortcut for DEMO-SVC.");
+    }
+    expect(reuploadedLink).toHaveAttribute(
+      "href",
+      expect.stringContaining("svc_only_reuploaded=true"),
+    );
+    expect(reuploadedLink).toHaveAttribute(
+      "href",
+      expect.stringContaining("svc_device_type=DEMO-SVC"),
+    );
+    expect(reuploadedLink.getAttribute("href")).not.toContain("svc_session_id=");
     const auditCorrelationLinks = screen.getAllByRole("link", {
       name: /korelacja z audytu/i,
     });
@@ -2249,6 +2266,14 @@ describe("App", () => {
         (link.getAttribute("href") ?? "").includes(
           "svc_upload_correlation_id=SRV-UP-0001",
         ),
+      ),
+    ).toBe(true);
+    const auditReuploadedLinks = screen.getAllByRole("link", {
+      name: /reuploadowane sesje z audytu/i,
+    });
+    expect(
+      auditReuploadedLinks.some((link) =>
+        (link.getAttribute("href") ?? "").includes("svc_only_reuploaded=true"),
       ),
     ).toBe(true);
   });
@@ -4597,11 +4622,13 @@ describe("App", () => {
         }),
       );
     });
-    expect(
-      screen.queryByRole("button", {
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("button", {
         name: "Zamknij krytyczne NCR urządzenia",
       }),
-    ).not.toBeInTheDocument();
+      ).not.toBeInTheDocument();
+    });
   });
 
   it("closes component critical NCRs from the details drawer", async () => {

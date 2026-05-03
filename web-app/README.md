@@ -140,9 +140,10 @@ backend pod `http://127.0.0.1:8000`.
   ma też `Pełną stronę` pod `/service-sessions/{session_id}` z linkiem powrotu
   do dokładnie tego samego kontekstu dashboardu oraz skrótami do gotowych,
   przefiltrowanych kolejek sesji o tym samym statusie uploadu, wyniku,
-  triggerze, techniku, urządzeniu albo typie urządzenia. Historia audytu
-  synchronizacji dodaje też własne skróty do kolejek po `Attempt ID`
-  i `Correlation ID`.
+  triggerze, techniku, urządzeniu, typie urządzenia albo tylko
+  `reuploadowanych` sesjach. Historia audytu synchronizacji dodaje też
+  własne skróty do kolejek po `Attempt ID`, `Correlation ID`
+  i samych reuploadach.
 
 Pełny widok urządzenia zawiera też skróty do gotowych, przefiltrowanych
 kolejek powiązanych z bieżącym problemem, np. do tej samej blokady
