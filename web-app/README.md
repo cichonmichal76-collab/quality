@@ -136,7 +136,9 @@ backend pod `http://127.0.0.1:8000`.
   firmware/bootloader, eksport CSV, drawer szczegółów sesji po `session_id`
   oraz przejście do szczegółów urządzenia po numerze seryjnym. Drawer sesji
   ma też `Pełną stronę` pod `/service-sessions/{session_id}` z linkiem powrotu
-  do dokładnie tego samego kontekstu dashboardu.
+  do dokładnie tego samego kontekstu dashboardu oraz skrótami do gotowych,
+  przefiltrowanych kolejek sesji o tym samym statusie uploadu, wyniku,
+  triggerze, techniku, urządzeniu albo typie urządzenia.
 
 Pełny widok urządzenia zawiera też skróty do gotowych, przefiltrowanych
 kolejek powiązanych z bieżącym problemem, np. do tej samej blokady

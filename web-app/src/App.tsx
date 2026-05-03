@@ -2632,6 +2632,9 @@ export function App() {
           </div>
           <ServiceSessionDetailsPage
             {...serviceSessionDetailsViewProps}
+            shipmentFilters={shipmentFilters}
+            componentFilters={componentFilters}
+            serviceFilters={serviceFilters}
             sessionPageHref={selectedServiceSessionPageHref}
           />
         </section>
@@ -4720,6 +4723,9 @@ function ServiceSessionDetailsPage({
   auditEvents,
   loadState,
   errorMessage,
+  shipmentFilters,
+  componentFilters,
+  serviceFilters,
 }: {
   apiBaseUrl: string;
   sessionId: string;
@@ -4727,11 +4733,9 @@ function ServiceSessionDetailsPage({
   auditEvents: AuditEvent[];
   loadState: LoadState;
   errorMessage: string | null;
-  onShowDevice: (device: {
-    device_serial_number: string;
-    device_type: string;
-    device_variant_code?: string;
-  }) => void;
+  shipmentFilters: ShipmentFilters;
+  componentFilters: ComponentFilters;
+  serviceFilters: ServiceFilters;
   sessionPageHref: string | null;
 }) {
   const detailHeadingId = "service-session-page-title";
@@ -4743,6 +4747,14 @@ function ServiceSessionDetailsPage({
   const uploadCount = session?.upload_count ?? 0;
   const firmwareVersion = session?.firmware_version ?? "Brak danych";
   const bootloaderVersion = session?.bootloader_version ?? "Brak danych";
+  const queueShortcuts = session
+    ? buildServiceSessionQueueShortcuts({
+        session,
+        shipmentFilters,
+        componentFilters,
+        serviceFilters,
+      })
+    : [];
 
   return (
     <article className="details-page">
@@ -4791,6 +4803,12 @@ function ServiceSessionDetailsPage({
               <DetailCard label="Firmware" value={firmwareVersion} />
               <DetailCard label="Bootloader" value={bootloaderVersion} />
             </section>
+            {queueShortcuts.length > 0 ? (
+              <section className="details-section">
+                <h3>PowiÄ…zane kolejki</h3>
+                <QueueShortcutList links={queueShortcuts} compact />
+              </section>
+            ) : null}
 
             <DetailsSection title="Metadane synchronizacji">
               <DetailsKeyGrid
@@ -8237,12 +8255,157 @@ function buildComponentQueueShortcutHref({
   });
 }
 
+function buildServiceQueueShortcutHref({
+  shipmentFilters,
+  componentFilters,
+  serviceFilters,
+  deviceSerialNumber = "",
+  deviceType = "",
+  technicianId = "",
+  result = "",
+  uploadStatus = "",
+  clientTriggerSource = "",
+}: {
+  shipmentFilters: ShipmentFilters;
+  componentFilters: ComponentFilters;
+  serviceFilters: ServiceFilters;
+  deviceSerialNumber?: string;
+  deviceType?: string;
+  technicianId?: string;
+  result?: string;
+  uploadStatus?: string;
+  clientTriggerSource?: string;
+}): string {
+  return buildDashboardLocationHref({
+    pathname: "/",
+    activeView: "service",
+    shipmentFilters,
+    componentFilters,
+    serviceFilters: {
+      ...DEFAULT_SERVICE_FILTERS,
+      sort_by: serviceFilters.sort_by,
+      sort_desc: serviceFilters.sort_desc,
+      limit: serviceFilters.limit,
+      device_serial_number: deviceSerialNumber,
+      device_type: deviceType,
+      technician_id: technicianId,
+      result,
+      upload_status: uploadStatus,
+      client_trigger_source: clientTriggerSource,
+    },
+    selectedDevice: null,
+  });
+}
+
 function dedupeQueueShortcutLinks(
   links: QueueShortcutLink[],
 ): QueueShortcutLink[] {
   return Array.from(
     new Map(links.map((link) => [link.href, link])).values(),
   );
+}
+
+function buildServiceSessionQueueShortcuts({
+  session,
+  shipmentFilters,
+  componentFilters,
+  serviceFilters,
+}: {
+  session: ServiceSessionRead;
+  shipmentFilters: ShipmentFilters;
+  componentFilters: ComponentFilters;
+  serviceFilters: ServiceFilters;
+}): QueueShortcutLink[] {
+  const links: QueueShortcutLink[] = [];
+  const deviceSerialNumber = session.device_serial_number.trim();
+  const deviceType = session.device_type?.trim() ?? "";
+  const technicianId = session.technician_id?.trim() ?? "";
+  const uploadStatus = session.upload_status ?? "";
+  const result = session.result ?? "";
+  const clientTriggerSource = session.client_trigger_source ?? "";
+
+  if (deviceSerialNumber !== "") {
+    links.push({
+      href: buildServiceQueueShortcutHref({
+        shipmentFilters,
+        componentFilters,
+        serviceFilters,
+        deviceSerialNumber,
+      }),
+      label: "PokaĹĽ sesje dla tego samego urzÄ…dzenia",
+      caption: deviceSerialNumber,
+    });
+  }
+
+  if (deviceType !== "") {
+    links.push({
+      href: buildServiceQueueShortcutHref({
+        shipmentFilters,
+        componentFilters,
+        serviceFilters,
+        deviceType,
+      }),
+      label: "PokaĹĽ sesje dla tego samego typu urzÄ…dzenia",
+      caption: deviceType,
+    });
+  }
+
+  if (uploadStatus !== "") {
+    links.push({
+      href: buildServiceQueueShortcutHref({
+        shipmentFilters,
+        componentFilters,
+        serviceFilters,
+        deviceType,
+        uploadStatus,
+      }),
+      label: "PokaĹĽ sesje z tym samym statusem uploadu",
+      caption: `${labelForCode(uploadStatus)} Â· ${deviceType || "Wszystkie typy"}`,
+    });
+  }
+
+  if (result !== "") {
+    links.push({
+      href: buildServiceQueueShortcutHref({
+        shipmentFilters,
+        componentFilters,
+        serviceFilters,
+        deviceType,
+        result,
+      }),
+      label: "PokaĹĽ sesje z tym samym wynikiem commissioning",
+      caption: `${labelForCode(result)} Â· ${deviceType || "Wszystkie typy"}`,
+    });
+  }
+
+  if (clientTriggerSource !== "") {
+    links.push({
+      href: buildServiceQueueShortcutHref({
+        shipmentFilters,
+        componentFilters,
+        serviceFilters,
+        deviceType,
+        clientTriggerSource,
+      }),
+      label: "PokaĹĽ sesje z tym samym triggerem synchronizacji",
+      caption: `${labelForCode(clientTriggerSource)} Â· ${deviceType || "Wszystkie typy"}`,
+    });
+  }
+
+  if (technicianId !== "") {
+    links.push({
+      href: buildServiceQueueShortcutHref({
+        shipmentFilters,
+        componentFilters,
+        serviceFilters,
+        technicianId,
+      }),
+      label: "PokaĹĽ sesje tego samego technika",
+      caption: technicianId,
+    });
+  }
+
+  return dedupeQueueShortcutLinks(links);
 }
 
 function buildShipmentHistoryQueueShortcuts({

@@ -2208,6 +2208,24 @@ describe("App", () => {
       "href",
       expect.stringContaining("svc_session_id=SVC-001"),
     );
+    const uploadStatusLink = screen.getByRole("link", {
+      name: /statusem uploadu/i,
+    });
+    expect(uploadStatusLink).toHaveAttribute(
+      "href",
+      expect.stringContaining("/?view=service"),
+    );
+    expect(uploadStatusLink).toHaveAttribute(
+      "href",
+      expect.stringContaining("svc_upload_status=UPLOADED"),
+    );
+    expect(uploadStatusLink).toHaveAttribute(
+      "href",
+      expect.stringContaining("svc_device_type=DEMO-SVC"),
+    );
+    expect(uploadStatusLink.getAttribute("href")).not.toContain(
+      "svc_session_id=",
+    );
   });
 
   it("copies current dashboard link with active filters", async () => {
