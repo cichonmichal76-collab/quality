@@ -1,6 +1,7 @@
+from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
-from app.models import AuditEvent, BarcodeLabel, ProductionItem, ScanEvent
+from app.models import AuditEvent, BarcodeLabel, ProductionItem, ScanEvent, ServiceSession
 
 
 def get_barcode_label(db: Session, barcode_value: str) -> BarcodeLabel | None:
@@ -23,8 +24,17 @@ def list_audit_events(
     work_session_id: str | None = None,
     event_type: str | None = None,
     result: str | None = None,
+    service_session_device_serial_number: str | None = None,
 ) -> list[AuditEvent]:
     query = db.query(AuditEvent)
+    if service_session_device_serial_number:
+        query = query.join(
+            ServiceSession,
+            and_(
+                AuditEvent.entity_type == "SERVICE_SESSION",
+                AuditEvent.entity_id == ServiceSession.session_id,
+            ),
+        ).filter(ServiceSession.device_serial_number == service_session_device_serial_number)
     if entity_type:
         query = query.filter(AuditEvent.entity_type == entity_type)
     if entity_id:

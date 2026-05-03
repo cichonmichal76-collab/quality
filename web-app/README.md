@@ -52,7 +52,10 @@ Kliknięcie numeru seryjnego w tabeli otwiera drawer szczegółów urządzenia.
 Drawer łączy dane z shipment readiness, component quality, commissioning/service
 sessions i historii shipment gate, żeby od razu pokazać blokady,
 rekomendowaną akcję, stan BOM, szczegóły blokujących komponentów oraz
-ostatnie uploady serwisowe. Z drawera można też przejść do pełnej
+ostatnie uploady serwisowe. W sekcji `Commissioning i serwis` pokazuje też
+osobną historię uploadów i reuploadów paczek commissioning dla danego seriala,
+łącznie z triggerem klienta, licznikiem uploadów backendu i linkiem do paczki
+konkretnej sesji. Z drawera można też przejść do pełnej
 strony szczegółów urządzenia, kiedy potrzebny jest stały link albo więcej
 miejsca na pracę. Na pełnej stronie dostępna jest też szybka nawigacja do
 sekcji `Akcje`, `Bramka wysyłki`, `BOM`, `Jakość komponentów`,

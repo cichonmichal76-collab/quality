@@ -533,6 +533,24 @@ export async function listServiceSessions(
   );
 }
 
+export async function listAuditEvents(
+  apiBaseUrl: string,
+  params: {
+    entity_type?: string;
+    entity_id?: string;
+    work_session_id?: string;
+    event_type?: string;
+    result?: string;
+    service_session_device_serial_number?: string;
+  } = {},
+  signal?: AbortSignal,
+): Promise<AuditEvent[]> {
+  return fetchJson<AuditEvent[]>(
+    joinApiUrl(apiBaseUrl, `/audit-events${buildQuery(params)}`),
+    signal,
+  );
+}
+
 export async function createFinalTest(
   apiBaseUrl: string,
   payload: FinalTestCreatePayload,

@@ -6364,6 +6364,17 @@ def test_service_session_upload_list_and_download(tmp_path, monkeypatch):
     assert audit_rows[1]["payload"]["upload_count"] == 1
     assert audit_rows[1]["payload"]["client_attempt_id"] == "SYNC-UPLOAD-0001"
 
+    audit_for_device = client.get(
+        "/api/audit-events"
+        f"?entity_type=SERVICE_SESSION&service_session_device_serial_number={primary_device_serial}"
+    )
+    assert audit_for_device.status_code == 200
+    assert [row["entity_id"] for row in audit_for_device.json()] == [session_id, session_id]
+    assert all(
+        row["payload"]["device_serial_number"] == primary_device_serial
+        for row in audit_for_device.json()
+    )
+
 
 def test_file_upload_and_download(tmp_path, monkeypatch):
     import app.services.files as file_storage

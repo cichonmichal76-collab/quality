@@ -26,6 +26,7 @@ def list_audit_events(
     work_session_id: str | None = None,
     event_type: str | None = None,
     result: str | None = None,
+    service_session_device_serial_number: str | None = None,
     db: Session = Depends(get_db),
 ):
     return repository.list_audit_events(
@@ -35,6 +36,7 @@ def list_audit_events(
         work_session_id=work_session_id,
         event_type=event_type,
         result=result,
+        service_session_device_serial_number=service_session_device_serial_number,
     )
 
 

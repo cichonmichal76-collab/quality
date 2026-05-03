@@ -8,6 +8,7 @@ import {
   createQcRun,
   fetchJson,
   joinApiUrl,
+  listAuditEvents,
   listOperators,
   listServiceSessions,
   listWorkSessions,
@@ -236,6 +237,7 @@ interface DeviceDetailsPayload {
   shipment: DeviceShipmentReadiness;
   component: DeviceComponentQuality;
   serviceSessions: ServiceSessionRead[];
+  serviceSessionAudit: AuditEvent[];
   shipmentGateHistory: AuditEvent[];
 }
 
@@ -1430,6 +1432,20 @@ export function App() {
 
       return [] as ServiceSessionRead[];
     });
+    const serviceSessionAuditPromise = listAuditEvents(
+      apiBaseUrl.trim(),
+      {
+        entity_type: "SERVICE_SESSION",
+        service_session_device_serial_number: selectedDeviceSerial,
+      },
+      controller.signal,
+    ).catch((error: unknown) => {
+      if (isAbortError(error)) {
+        throw error;
+      }
+
+      return [] as AuditEvent[];
+    });
 
     setDeviceDetails(null);
     setDeviceDetailsState("loading");
@@ -1439,21 +1455,31 @@ export function App() {
       fetchJson<DeviceShipmentReadiness>(shipmentUrl, controller.signal),
       fetchJson<DeviceComponentQuality>(componentUrl, controller.signal),
       serviceSessionsPromise,
+      serviceSessionAuditPromise,
       fetchJson<AuditEvent[]>(historyUrl, controller.signal),
     ])
-      .then(([shipment, component, serviceSessions, shipmentGateHistory]) => {
-        if (!isCurrentRequest) {
-          return;
-        }
-
-        setDeviceDetails({
+      .then(
+        ([
           shipment,
           component,
           serviceSessions,
+          serviceSessionAudit,
           shipmentGateHistory,
-        });
-        setDeviceDetailsState("loaded");
-      })
+        ]) => {
+          if (!isCurrentRequest) {
+            return;
+          }
+
+          setDeviceDetails({
+            shipment,
+            component,
+            serviceSessions,
+            serviceSessionAudit,
+            shipmentGateHistory,
+          });
+          setDeviceDetailsState("loaded");
+        },
+      )
       .catch((error: unknown) => {
         if (!isCurrentRequest || isAbortError(error)) {
           return;
@@ -3911,6 +3937,7 @@ function DeviceDetailsSurface({
   const bomCoverage = bomCompliance?.component_coverage ?? [];
   const componentRows = component?.components ?? [];
   const serviceSessions = details?.serviceSessions ?? [];
+  const serviceSessionAuditRows = details?.serviceSessionAudit ?? [];
   const historyRows = details?.shipmentGateHistory ?? [];
   const shipmentCriticalNcrIds = shipment?.critical_open_ncr_ids ?? [];
   const shipmentBlockingReasons = shipment?.blocking_reasons ?? [];
@@ -4784,6 +4811,97 @@ function DeviceDetailsSurface({
               ) : (
                 <p className="empty-copy">
                   Brak zapisanych sesji commissioning lub serwisowych dla tego
+                  urządzenia.
+                </p>
+              )}
+
+              <h4 className="details-subheading">
+                Historia uploadów i synchronizacji
+              </h4>
+              {serviceSessionAuditRows.length > 0 ? (
+                <div className="detail-history-list">
+                  {serviceSessionAuditRows.map((event) => {
+                    const uploadCount =
+                      typeof event.payload?.upload_count === "number"
+                        ? event.payload.upload_count
+                        : null;
+                    const clientTriggerSource =
+                      typeof event.payload?.client_trigger_source === "string"
+                        ? event.payload.client_trigger_source
+                        : null;
+                    const clientAttemptNumber =
+                      typeof event.payload?.client_attempt_number === "number"
+                        ? event.payload.client_attempt_number
+                        : null;
+                    const uploadCorrelationId =
+                      typeof event.payload?.upload_correlation_id === "string"
+                        ? event.payload.upload_correlation_id
+                        : null;
+                    const packageHash =
+                      typeof event.payload?.package_hash === "string"
+                        ? event.payload.package_hash
+                        : null;
+                    const clientAttemptId =
+                      typeof event.payload?.client_attempt_id === "string"
+                        ? event.payload.client_attempt_id
+                        : null;
+
+                    return (
+                      <article className="detail-history-card" key={event.id}>
+                        <div className="detail-inline-header">
+                          <CodePill value={event.event_type} />
+                          <CodePill value={event.result} />
+                        </div>
+                        <strong>{formatDateTime(event.created_at)}</strong>
+                        <p>{event.message ?? "Bez komunikatu."}</p>
+                        <span>
+                          Sesja: <code>{event.entity_id}</code>
+                          {" · "}
+                          Technik: <code>{event.operator_id ?? "Brak danych"}</code>
+                        </span>
+                        <span>
+                          Trigger klienta: {labelForCode(clientTriggerSource)}
+                          {clientAttemptNumber !== null
+                            ? ` · próba ${formatNumber(clientAttemptNumber)}`
+                            : ""}
+                        </span>
+                        <span>
+                          Licznik uploadów backendu:{" "}
+                          {uploadCount !== null
+                            ? formatNumber(uploadCount)
+                            : "Brak danych"}
+                        </span>
+                        <TagList
+                          items={[
+                            uploadCorrelationId
+                              ? `Correlation ID: ${uploadCorrelationId}`
+                              : "",
+                            clientAttemptId ? `Attempt ID: ${clientAttemptId}` : "",
+                            packageHash ? `Hash: ${packageHash}` : "",
+                          ].filter((value) => value !== "")}
+                          emptyLabel="Brak dodatkowych metadanych synchronizacji."
+                          compact
+                        />
+                        <div className="details-inline-actions">
+                          <a
+                            className="details-record-link"
+                            href={buildServiceSessionPackageHref(
+                              apiBaseUrl,
+                              event.entity_id,
+                            )}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Pobierz paczkę z tej sesji
+                          </a>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="empty-copy">
+                  Brak historii synchronizacji commissioning i serwisu dla tego
                   urządzenia.
                 </p>
               )}

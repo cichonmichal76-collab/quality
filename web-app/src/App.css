@@ -1014,6 +1014,14 @@ td span {
   gap: 12px;
 }
 
+.details-subheading {
+  margin: 18px 0 10px;
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
 .tag-list {
   display: flex;
   flex-wrap: wrap;

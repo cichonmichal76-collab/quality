@@ -340,6 +340,53 @@ const serviceSessionPayload: ServiceSessionRead[] = [
   },
 ];
 
+const serviceSessionAuditPayload: AuditEvent[] = [
+  {
+    id: "AUD-SVC-2",
+    event_type: "SERVICE_SESSION_PACKAGE_REUPLOADED",
+    entity_type: "SERVICE_SESSION",
+    entity_id: "SVC-9001",
+    work_session_id: null,
+    operator_id: "TECH-001",
+    workstation_id: null,
+    machine_id: null,
+    result: "UPLOADED",
+    message: "Service session package reuploaded",
+    payload: {
+      device_serial_number: "SHIP-001",
+      package_hash: "hash-ship-001-v2",
+      upload_correlation_id: "SRV-UP-0002",
+      upload_count: 2,
+      client_attempt_id: "SYNC-TRY-0002",
+      client_attempt_number: 2,
+      client_trigger_source: "AUTO_NETWORK",
+    },
+    created_at: "2026-05-01T09:45:00Z",
+  },
+  {
+    id: "AUD-SVC-1",
+    event_type: "SERVICE_SESSION_PACKAGE_UPLOADED",
+    entity_type: "SERVICE_SESSION",
+    entity_id: "SVC-9001",
+    work_session_id: null,
+    operator_id: "TECH-001",
+    workstation_id: null,
+    machine_id: null,
+    result: "UPLOADED",
+    message: "Service session package uploaded",
+    payload: {
+      device_serial_number: "SHIP-001",
+      package_hash: "hash-ship-001",
+      upload_correlation_id: "SRV-UP-0001",
+      upload_count: 1,
+      client_attempt_id: "SYNC-TRY-0001",
+      client_attempt_number: 1,
+      client_trigger_source: "MANUAL",
+    },
+    created_at: "2026-05-01T09:30:00Z",
+  },
+];
+
 const shipmentReadyQueuePayload: DeviceShipmentQueue = {
   ...shipmentPayload,
   production_status_summary: [
@@ -1674,6 +1721,13 @@ describe("App", () => {
         return Promise.resolve(createJsonResponse(serviceSessionPayload));
       }
 
+      if (
+        url ===
+        "/api/audit-events?entity_type=SERVICE_SESSION&service_session_device_serial_number=SHIP-001"
+      ) {
+        return Promise.resolve(createJsonResponse(serviceSessionAuditPayload));
+      }
+
       if (url === "/api/devices/SHIP-001/shipment-gate-history?limit=10") {
         return Promise.resolve(createJsonResponse(shipmentGateHistoryPayload));
       }
@@ -1708,6 +1762,20 @@ describe("App", () => {
     expect(
       await screen.findByRole("link", { name: "Pobierz paczkę ZIP" }),
     ).toHaveAttribute("href", "/api/service-sessions/SVC-9001/package");
+
+    expect(screen.getByText("Historia uploadów i synchronizacji")).toBeInTheDocument();
+    expect(
+      screen.getByText("Service session package reuploaded"),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText(/Licznik uploadów backendu:/)).toHaveLength(2);
+    const sessionDownloadLinks = screen
+      .getAllByRole("link")
+      .filter(
+        (element) =>
+          element.textContent?.includes("tej sesji") &&
+          element.getAttribute("href") === "/api/service-sessions/SVC-9001/package",
+      );
+    expect(sessionDownloadLinks).toHaveLength(2);
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/devices/SHIP-001/shipment-readiness",

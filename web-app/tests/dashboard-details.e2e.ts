@@ -132,6 +132,217 @@ test("dashboard jumps from full device page to a filtered related queue", async 
   ).toHaveValue("FAN_MODULE");
 });
 
+test("dashboard shows commissioning sync history in device details", async ({
+  page,
+}) => {
+  await page.route("**/api/**", async (route) => {
+    const url = new URL(route.request().url());
+
+    if (url.pathname === "/api/shipment-readiness") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          total_devices: 1,
+          shipment_ready: 0,
+          blocked_devices: 1,
+          returned_count: 1,
+          offset: 0,
+          limit: 100,
+          has_more: false,
+          next_offset: null,
+          filters: {},
+          blocking_summary: [],
+          action_summary: [],
+          latest_decision_summary: [],
+          production_status_summary: [],
+          devices: [
+            {
+              device_serial_number: "SVC-001",
+              device_type: "DEMO-SVC",
+              device_variant_code: "DEFAULT",
+              production_status: "FINAL_TEST_FAILED",
+              device_created_at: "2026-05-01T08:00:00Z",
+              device_updated_at: "2026-05-01T09:00:00Z",
+              final_test_passed: false,
+              has_critical_open_ncr: false,
+              primary_blocking_code: "FINAL_TEST_NOT_PASSED",
+              primary_blocking_message: "Final test nie przeszedl.",
+              recommended_action: "RUN_FINAL_TEST",
+              latest_shipment_gate_decision: null,
+              bom_compliance: {
+                passes_bom_gate: true,
+                resolution_source: "EXACT",
+                resolved_status: "READY",
+                component_coverage: [],
+              },
+            },
+          ],
+        }),
+      });
+      return;
+    }
+
+    if (url.pathname === "/api/devices/SVC-001/shipment-readiness") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          device_serial_number: "SVC-001",
+          device_type: "DEMO-SVC",
+          device_variant_code: "DEFAULT",
+          production_status: "FINAL_TEST_FAILED",
+          device_created_at: "2026-05-01T08:00:00Z",
+          device_updated_at: "2026-05-01T09:00:00Z",
+          final_test_passed: false,
+          has_critical_open_ncr: false,
+          critical_open_ncr_ids: [],
+          bom_compliance: {
+            passes_bom_gate: true,
+            resolution_source: "EXACT",
+            resolved_status: "READY",
+            component_coverage: [],
+          },
+          blocking_reasons: ["Final test nie przeszedl."],
+          blocking_checks: [],
+          primary_blocking_code: "FINAL_TEST_NOT_PASSED",
+          primary_blocking_message: "Final test nie przeszedl.",
+          recommended_action: "RUN_FINAL_TEST",
+          latest_shipment_gate_decision: null,
+        }),
+      });
+      return;
+    }
+
+    if (url.pathname === "/api/devices/SVC-001/component-quality") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          device_serial_number: "SVC-001",
+          device_type: "DEMO-SVC",
+          device_variant_code: "DEFAULT",
+          production_status: "FINAL_TEST_FAILED",
+          device_created_at: "2026-05-01T08:00:00Z",
+          device_updated_at: "2026-05-01T09:00:00Z",
+          total_installed_components: 0,
+          passing_components: 0,
+          blocked_components: 0,
+          passes_component_quality_gate: true,
+          primary_quality_status: "PASS",
+          primary_blocking_component_type: null,
+          primary_blocking_component_serial_number: null,
+          stale_bucket: "LT_24H",
+          recommended_action: "NONE",
+          components: [],
+        }),
+      });
+      return;
+    }
+
+    if (url.pathname === "/api/service-sessions") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          {
+            id: "svc-db-1",
+            session_id: "SVC-SESSION-001",
+            device_serial_number: "SVC-001",
+            device_type: "DEMO-SVC",
+            technician_id: "TECH-001",
+            result: "PASS",
+            firmware_version: "1.2.4",
+            bootloader_version: "0.9.8",
+            package_path: "/tmp/service-package.zip",
+            package_hash: "hash-svc-001",
+            upload_status: "UPLOADED",
+            upload_count: 2,
+            client_attempt_id: "SYNC-TRY-0002",
+            client_attempt_number: 2,
+            client_trigger_source: "AUTO_NETWORK",
+            upload_correlation_id: "SRV-UP-0002",
+            uploaded_at: "2026-05-01T09:45:00Z",
+            created_at: "2026-05-01T09:30:00Z",
+          },
+        ]),
+      });
+      return;
+    }
+
+    if (url.pathname === "/api/audit-events") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          {
+            id: "AUD-SVC-2",
+            event_type: "SERVICE_SESSION_PACKAGE_REUPLOADED",
+            entity_type: "SERVICE_SESSION",
+            entity_id: "SVC-SESSION-001",
+            work_session_id: null,
+            operator_id: "TECH-001",
+            workstation_id: null,
+            machine_id: null,
+            result: "UPLOADED",
+            message: "Service session package reuploaded",
+            payload: {
+              device_serial_number: "SVC-001",
+              package_hash: "hash-svc-001",
+              upload_correlation_id: "SRV-UP-0002",
+              upload_count: 2,
+              client_attempt_id: "SYNC-TRY-0002",
+              client_attempt_number: 2,
+              client_trigger_source: "AUTO_NETWORK",
+            },
+            created_at: "2026-05-01T09:45:00Z",
+          },
+        ]),
+      });
+      return;
+    }
+
+    if (url.pathname === "/api/devices/SVC-001/shipment-gate-history") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([]),
+      });
+      return;
+    }
+
+    if (url.pathname === "/api/work-sessions" || url.pathname === "/api/operators") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([]),
+      });
+      return;
+    }
+
+    await route.continue();
+  });
+
+  await page.goto("/");
+
+  await expect(page.getByText("API OK")).toBeVisible();
+
+  await page.locator(".filters-card input").first().fill("DEMO-SVC");
+  await page.getByRole("button", { name: "SVC-001" }).click();
+
+  const drawer = page.getByRole("dialog");
+  await expect(drawer).toBeVisible();
+  await expect(
+    drawer.getByText("Historia uploadów i synchronizacji"),
+  ).toBeVisible();
+  await expect(
+    drawer.locator("p", { hasText: "Service session package reuploaded" }),
+  ).toBeVisible();
+  await expect(
+    drawer.getByRole("link", { name: "Pobierz paczkę z tej sesji" }),
+  ).toHaveAttribute("href", /\/api\/service-sessions\/SVC-SESSION-001\/package$/);
+});
+
 test("dashboard jumps from BOM details to a filtered shipment queue", async ({
   page,
 }) => {
