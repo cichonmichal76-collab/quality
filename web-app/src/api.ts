@@ -530,6 +530,12 @@ export interface CompleteQcRunOptions {
   failure_disposition?: "OPEN_CRITICAL_NCR" | "REWORK_REQUIRED" | "BLOCKED";
 }
 
+export interface QcReworkReleasePayload {
+  work_session_id: string;
+  operator_id?: string;
+  corrective_action: string;
+}
+
 export interface QcStepResultCreatePayload {
   status: string;
   measurement_value?: number;
@@ -808,6 +814,24 @@ export async function updateNonconformityStatus(
   );
 }
 
+export async function updateProductionItemStatus(
+  apiBaseUrl: string,
+  itemSerialNumber: string,
+  currentStatus: string,
+  signal?: AbortSignal,
+): Promise<ProductionItemRead> {
+  return patchJson<ProductionItemRead>(
+    joinApiUrl(
+      apiBaseUrl,
+      `/production-items/${encodeURIComponent(itemSerialNumber)}/status`,
+    ),
+    {
+      current_status: currentStatus,
+    },
+    signal,
+  );
+}
+
 export async function listWorkSessions(
   apiBaseUrl: string,
   signal?: AbortSignal,
@@ -972,6 +996,36 @@ export async function listQcWaitingItems(
         limit: params.limit,
       })}`,
     ),
+    signal,
+  );
+}
+
+export async function listQcItemOpenCriticalNcrs(
+  apiBaseUrl: string,
+  itemSerialNumber: string,
+  signal?: AbortSignal,
+): Promise<NonconformityRead[]> {
+  return fetchJson<NonconformityRead[]>(
+    joinApiUrl(
+      apiBaseUrl,
+      `/qc-items/${encodeURIComponent(itemSerialNumber)}/open-critical-ncrs`,
+    ),
+    signal,
+  );
+}
+
+export async function releaseQcItemForRework(
+  apiBaseUrl: string,
+  itemSerialNumber: string,
+  payload: QcReworkReleasePayload,
+  signal?: AbortSignal,
+): Promise<ProductionItemRead> {
+  return postJson<ProductionItemRead>(
+    joinApiUrl(
+      apiBaseUrl,
+      `/qc-items/${encodeURIComponent(itemSerialNumber)}/release-for-rework`,
+    ),
+    payload,
     signal,
   );
 }

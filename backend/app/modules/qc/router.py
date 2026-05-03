@@ -5,11 +5,13 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.modules.qc import service
 from app.schemas import (
+    NonconformityRead,
     ProductionItemRead,
     QcChecklistCreate,
     QcChecklistRead,
     QcChecklistUpdate,
     QcProductConfigurationRead,
+    QcReworkReleaseRequest,
     QcRunCreate,
     QcRunRead,
     QcStepCreate,
@@ -53,6 +55,29 @@ def list_waiting_items(
         component_type=component_type,
         limit=limit,
     )
+
+
+@router.get(
+    "/qc-items/{item_serial_number}/open-critical-ncrs",
+    response_model=list[NonconformityRead],
+)
+def list_open_critical_ncrs_for_item(
+    item_serial_number: str,
+    db: Session = Depends(get_db),
+):
+    return service.list_open_critical_ncrs_for_item(db, item_serial_number)
+
+
+@router.post(
+    "/qc-items/{item_serial_number}/release-for-rework",
+    response_model=ProductionItemRead,
+)
+def release_item_for_rework(
+    item_serial_number: str,
+    payload: QcReworkReleaseRequest,
+    db: Session = Depends(get_db),
+):
+    return service.release_item_for_rework(db, item_serial_number, payload)
 
 
 @router.patch("/qc-checklists/{checklist_code}", response_model=QcChecklistRead)

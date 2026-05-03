@@ -22,6 +22,7 @@ from app.schemas import (
     QcChecklistUpdate,
     QcProductComponentConfigRead,
     QcProductConfigurationRead,
+    QcReworkReleaseRequest,
     QcRunCreate,
     QcStepCreate,
     QcStepUpdate,
@@ -220,6 +221,23 @@ def list_waiting_items(
             waiting_items.append(item)
 
     return waiting_items
+
+
+def list_open_critical_ncrs_for_item(
+    db: Session,
+    item_serial_number: str,
+) -> list[Nonconformity]:
+    get_production_item_or_404(db, item_serial_number)
+    return (
+        db.query(Nonconformity)
+        .filter(
+            Nonconformity.component_serial_number == item_serial_number,
+            Nonconformity.severity == "CRITICAL",
+            Nonconformity.status != "CLOSED",
+        )
+        .order_by(Nonconformity.detected_at.desc())
+        .all()
+    )
 
 
 def get_qc_product_configuration(
@@ -471,6 +489,77 @@ def complete_qc_run(
     return run
 
 
+def release_item_for_rework(
+    db: Session,
+    item_serial_number: str,
+    payload: QcReworkReleaseRequest,
+) -> ProductionItem:
+    item = get_production_item_or_404(db, item_serial_number)
+    work_session = require_active_work_session(
+        db,
+        payload.work_session_id,
+        operator_id=payload.operator_id,
+        allowed_roles=QUALITY_SESSION_ROLES,
+    )
+    corrective_action = _normalize_optional_text(payload.corrective_action)
+    if not corrective_action:
+        raise HTTPException(status_code=400, detail="Corrective action is required")
+
+    open_critical_ncrs = list_open_critical_ncrs_for_item(db, item_serial_number)
+    if item.current_status not in {"QC_FAILED", "BLOCKED", "REWORK_REQUIRED"} and not open_critical_ncrs:
+        raise HTTPException(
+            status_code=400,
+            detail="Production item is not awaiting NCR or rework handling",
+        )
+
+    previous_status = item.current_status
+    closed_ncr_ids: list[str] = []
+    closed_at = utc_now()
+
+    for ncr in open_critical_ncrs:
+        ncr.status = "CLOSED"
+        ncr.corrective_action = corrective_action
+        if ncr.closed_at is None:
+            ncr.closed_at = closed_at
+        closed_ncr_ids.append(ncr.ncr_id)
+
+    item.current_status = "REWORK_REQUIRED"
+
+    installed_links = db.query(AssemblyLink).filter(
+        AssemblyLink.child_item_serial_number == item_serial_number,
+        AssemblyLink.status == "INSTALLED",
+    ).all()
+    if installed_links:
+        parent_serial_numbers = {
+            link.parent_device_serial_number for link in installed_links
+        }
+        parent_devices = db.query(Device).filter(
+            Device.device_serial_number.in_(parent_serial_numbers)
+        ).all()
+        for device in parent_devices:
+            device.updated_at = closed_at
+
+    record_audit_event(
+        db,
+        event_type="QC_ITEM_RELEASED_FOR_REWORK",
+        entity_type="PRODUCTION_ITEM",
+        entity_id=item_serial_number,
+        work_session=work_session,
+        operator_id=payload.operator_id or work_session.operator_id,
+        result=item.current_status,
+        message=f"Production item {item_serial_number} released for rework",
+        payload={
+            "previous_status": previous_status,
+            "current_status": item.current_status,
+            "closed_ncr_ids": closed_ncr_ids,
+            "corrective_action": corrective_action,
+        },
+    )
+    db.commit()
+    db.refresh(item)
+    return item
+
+
 def _compute_step_status(step: QcStep, payload: QcStepResultCreate) -> str:
     if step.evaluation_mode == "NUMERIC_RANGE" or step.requires_measurement:
         if payload.measurement_value is None:
@@ -547,6 +636,18 @@ def build_qc_failure_description(
     if failure_comment:
         return f"QC failed: {failure_comment}"
     return "QC failed"
+
+
+def get_production_item_or_404(
+    db: Session,
+    item_serial_number: str,
+) -> ProductionItem:
+    item = db.query(ProductionItem).filter(
+        ProductionItem.item_serial_number == item_serial_number
+    ).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Production item not found")
+    return item
 
 
 def _normalize_step_payload(

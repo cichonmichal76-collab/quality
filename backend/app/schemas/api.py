@@ -606,6 +606,12 @@ class QcRunRead(QcRunBase):
     model_config = {"from_attributes": True}
 
 
+class QcReworkReleaseRequest(BaseModel):
+    work_session_id: str
+    operator_id: str | None = None
+    corrective_action: str
+
+
 class QcStepResultCreate(BaseModel):
     status: str
     measurement_value: float | None = None

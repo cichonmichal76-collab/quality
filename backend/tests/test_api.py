@@ -3148,6 +3148,122 @@ def test_qc_run_fail_with_rework_disposition_marks_item_without_ncr():
     assert completed_event["payload"]["failure_reason"] == "VISUAL_DEFECT"
 
 
+def test_qc_item_can_close_open_ncr_and_return_to_rework():
+    quality_session = start_work_session(role="QUALITY_INSPECTOR")
+    item_serial_number = unique_id("ITEM")
+    barcode_value = unique_id("BC")
+
+    created = client.post(
+        "/api/production-items",
+        json={
+            "item_serial_number": item_serial_number,
+            "barcode_value": barcode_value,
+            "item_type": "FAN_MODULE",
+            "work_session_id": quality_session["work_session_id"],
+            "workstation_id": quality_session["workstation_id"],
+        },
+    )
+    assert created.status_code == 200
+
+    checklist_code = unique_id("CHK")
+    checklist = client.post(
+        "/api/qc-checklists",
+        json={
+            "checklist_code": checklist_code,
+            "name": "Rework QC",
+            "process_stage": "MECHANICAL_QC",
+            "version": "1.0",
+        },
+    )
+    assert checklist.status_code == 200
+    checklist_id = checklist.json()["id"]
+
+    step = client.post(
+        f"/api/qc-checklists/{checklist_code}/steps",
+        json={
+            "step_order": 1,
+            "title": "Inspect housing",
+            "evaluation_mode": "MANUAL",
+        },
+    )
+    assert step.status_code == 200
+    step_id = step.json()["id"]
+
+    run_id = unique_id("QCRUN")
+    qc_run = client.post(
+        "/api/qc-runs",
+        json={
+            "run_id": run_id,
+            "item_serial_number": item_serial_number,
+            "barcode_value": barcode_value,
+            "checklist_id": checklist_id,
+            "process_stage": "MECHANICAL_QC",
+            "work_session_id": quality_session["work_session_id"],
+        },
+    )
+    assert qc_run.status_code == 200
+
+    step_result = client.post(
+        f"/api/qc-runs/{run_id}/steps/{step_id}/result",
+        json={"status": "FAIL", "comment": "Housing cracked"},
+    )
+    assert step_result.status_code == 200
+
+    completed = client.post(
+        f"/api/qc-runs/{run_id}/complete",
+        data={
+            "failure_reason": "VISUAL_DEFECT",
+            "failure_comment": "Housing cracked",
+            "failure_disposition": "OPEN_CRITICAL_NCR",
+        },
+    )
+    assert completed.status_code == 200
+
+    ncr_rows = client.get(f"/api/qc-items/{item_serial_number}/open-critical-ncrs")
+    assert ncr_rows.status_code == 200
+    assert len(ncr_rows.json()) == 1
+    assert ncr_rows.json()[0]["ncr_id"] == f"NCR-QC-{run_id}"
+
+    released = client.post(
+        f"/api/qc-items/{item_serial_number}/release-for-rework",
+        json={
+            "work_session_id": quality_session["work_session_id"],
+            "operator_id": quality_session["operator_id"],
+            "corrective_action": "Replaced housing and queued for reinspection",
+        },
+    )
+    assert released.status_code == 200
+    assert released.json()["current_status"] == "REWORK_REQUIRED"
+
+    closed_ncr = client.get(f"/api/nonconformities/NCR-QC-{run_id}")
+    assert closed_ncr.status_code == 200
+    assert closed_ncr.json()["status"] == "CLOSED"
+    assert (
+        closed_ncr.json()["corrective_action"]
+        == "Replaced housing and queued for reinspection"
+    )
+    assert closed_ncr.json()["closed_at"] is not None
+
+    after_release_rows = client.get(f"/api/qc-items/{item_serial_number}/open-critical-ncrs")
+    assert after_release_rows.status_code == 200
+    assert after_release_rows.json() == []
+
+    audit = client.get(
+        f"/api/audit-events?entity_type=PRODUCTION_ITEM&entity_id={item_serial_number}"
+    )
+    assert audit.status_code == 200
+    rework_event = next(
+        row for row in audit.json() if row["event_type"] == "QC_ITEM_RELEASED_FOR_REWORK"
+    )
+    assert rework_event["payload"]["previous_status"] == "QC_FAILED"
+    assert rework_event["payload"]["current_status"] == "REWORK_REQUIRED"
+    assert rework_event["payload"]["closed_ncr_ids"] == [f"NCR-QC-{run_id}"]
+    assert (
+        rework_event["payload"]["corrective_action"]
+        == "Replaced housing and queued for reinspection"
+    )
+
+
 def test_qc_run_pass_updates_item_status():
     quality_session = start_work_session(role="QUALITY_INSPECTOR")
     item_serial_number = unique_id("ITEM")

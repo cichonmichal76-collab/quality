@@ -486,3 +486,236 @@ test("qc station pozwala pobrac detal z kolejki oczekujacych na QC", async ({ pa
   ).toBeVisible();
   await expect(page.getByPlaceholder("np. BC-DEMO-001")).toHaveValue("QCBC-DEMO-QUEUE");
 });
+
+test("qc station pozwala zamknac NCR i przywrocic detal do reworku", async ({ page }) => {
+  let releasedForRework = false;
+
+  await page.route("**/api/**", async (route) => {
+    const url = new URL(route.request().url());
+    const pathname = url.pathname;
+    const method = route.request().method();
+
+    if (pathname === "/api/operators") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          {
+            id: "ROW-OP-001",
+            operator_id: "QCOP-DEMO-LOCAL",
+            full_name: "Anna Kontrola",
+            role: "QUALITY_INSPECTOR",
+            login_name: "qc-demo-local",
+            rfid_uid_hash: "QCRFID-DEMO-LOCAL",
+            is_active: true,
+            created_at: "2026-05-03T07:55:00Z",
+          },
+        ]),
+      });
+      return;
+    }
+
+    if (pathname === "/api/workstations") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          {
+            id: "ROW-WS-001",
+            workstation_id: "QCWS-DEMO-LOCAL",
+            name: "QC Station Demo",
+            area: "QA",
+            station_type: "QC",
+            is_active: true,
+          },
+        ]),
+      });
+      return;
+    }
+
+    if (pathname === "/api/qc-checklists") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          {
+            id: "CHK-REWORK",
+            checklist_code: "QC-REWORK",
+            name: "Kontrola po reworku",
+            process_stage: "COMPONENT_QC",
+            version: "1.0",
+            device_type: null,
+            variant_code: null,
+            component_type: "FAN_MODULE",
+            skip_component_qc: false,
+            reference_image_file_id: null,
+            is_active: true,
+            created_at: "2026-05-03T08:05:00Z",
+          },
+        ]),
+      });
+      return;
+    }
+
+    if (pathname === "/api/qc-waiting-items") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          {
+            id: "ITEM-ROW-REWORK",
+            item_serial_number: "QCITEM-DEMO-REWORK",
+            barcode_value: "QCBC-DEMO-REWORK",
+            item_type: "FAN_MODULE",
+            part_number: "PN-FAN-REWORK",
+            revision: "A",
+            drawing_number: null,
+            drawing_revision: null,
+            production_order: null,
+            material_batch: null,
+            machine_id: null,
+            created_by_operator_id: "QCOP-DEMO-LOCAL",
+            current_status: releasedForRework ? "REWORK_REQUIRED" : "QC_FAILED",
+            produced_at: "2026-05-03T08:16:00Z",
+            created_at: "2026-05-03T08:16:00Z",
+          },
+        ]),
+      });
+      return;
+    }
+
+    if (pathname === "/api/auth/operator-login" && method === "POST") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: "ROW-SESSION-REWORK",
+          work_session_id: "WS-QA-REWORK",
+          operator_id: "QCOP-DEMO-LOCAL",
+          workstation_id: "QCWS-DEMO-LOCAL",
+          machine_id: null,
+          status: "ACTIVE",
+          started_at: "2026-05-03T08:00:00Z",
+          ended_at: null,
+        }),
+      });
+      return;
+    }
+
+    if (pathname === "/api/qc-checklists/QC-REWORK/steps") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          {
+            id: "STEP-REWORK-001",
+            checklist_id: "CHK-REWORK",
+            step_order: 1,
+            title: "Potwierdz rework",
+            instruction: "Kontrola po poprawce.",
+            control_area: "Obudowa",
+            evaluation_mode: "MANUAL",
+            result_input_label: null,
+            region_x: null,
+            region_y: null,
+            region_width: null,
+            region_height: null,
+            requires_photo: false,
+            requires_measurement: false,
+            blocking_on_fail: true,
+            expected_value: null,
+            unit: null,
+            tolerance_min: null,
+            tolerance_max: null,
+          },
+        ]),
+      });
+      return;
+    }
+
+    if (pathname === "/api/qc-items/QCITEM-DEMO-REWORK/open-critical-ncrs") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(
+          releasedForRework
+            ? []
+            : [
+                {
+                  id: "NCR-ROW-001",
+                  ncr_id: "NCR-QC-REWORK-001",
+                  device_serial_number: null,
+                  component_serial_number: "QCITEM-DEMO-REWORK",
+                  process_stage: "COMPONENT_QC",
+                  description: "QC failed: VISUAL_DEFECT. Pekniecie obudowy.",
+                  severity: "CRITICAL",
+                  detected_by: "QCOP-DEMO-LOCAL",
+                  corrective_action: null,
+                  status: "OPEN",
+                  detected_at: "2026-05-03T08:18:00Z",
+                  closed_at: null,
+                },
+              ],
+        ),
+      });
+      return;
+    }
+
+    if (pathname === "/api/qc-items/QCITEM-DEMO-REWORK/release-for-rework" && method === "POST") {
+      releasedForRework = true;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: "ITEM-ROW-REWORK",
+          item_serial_number: "QCITEM-DEMO-REWORK",
+          barcode_value: "QCBC-DEMO-REWORK",
+          item_type: "FAN_MODULE",
+          part_number: "PN-FAN-REWORK",
+          revision: "A",
+          drawing_number: null,
+          drawing_revision: null,
+          production_order: null,
+          material_batch: null,
+          machine_id: null,
+          created_by_operator_id: "QCOP-DEMO-LOCAL",
+          current_status: "REWORK_REQUIRED",
+          produced_at: "2026-05-03T08:16:00Z",
+          created_at: "2026-05-03T08:16:00Z",
+        }),
+      });
+      return;
+    }
+
+    await route.abort();
+  });
+
+  await page.goto("/qc-station");
+
+  await page.getByPlaceholder("np. qc-demo-local").fill("qc-demo-local");
+  await page.getByPlaceholder("Haslo operatora").fill("qc-demo-local-123");
+  await page.getByRole("button", { name: "Wejdz do aplikacji" }).click();
+
+  await expect(page.getByRole("heading", { name: "Sesja stanowiskowa" })).toBeVisible();
+  await page.getByRole("button", { name: /QCITEM-DEMO-REWORK/i }).click();
+
+  await expect(page.getByText("NCR-QC-REWORK-001")).toBeVisible();
+
+  await page.getByRole("button", { name: "Zamknij NCR i przywroc do reworku" }).click();
+  await expect(
+    page.getByText("Wpisz akcje korygujaca przed przywroceniem detalu do reworku."),
+  ).toBeVisible();
+
+  await page
+    .getByLabel("Akcja korygujaca po reworku")
+    .fill("Wymieniono obudowe i przygotowano detal do ponownej kontroli.");
+  await page.getByRole("button", { name: "Zamknij NCR i przywroc do reworku" }).click();
+
+  await expect(page.getByText(/Zamknieto 1 krytyczne NCR/i)).toBeVisible();
+  await expect(
+    page
+      .locator(".detail-card")
+      .filter({ hasText: "Status biezacy" })
+      .getByText(/Rework Required|REWORK_REQUIRED/i),
+  ).toBeVisible();
+});

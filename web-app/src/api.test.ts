@@ -15,6 +15,7 @@ import {
   getProductionItemByBarcode,
   getServiceSession,
   joinApiUrl,
+  listQcItemOpenCriticalNcrs,
   listOperators,
   listQcChecklists,
   listQcChecklistSteps,
@@ -25,11 +26,13 @@ import {
   operatorLogin,
   optionalBoolean,
   rfidLogin,
+  releaseQcItemForRework,
   scanAssemblyComponent,
   updateQcChecklist,
   updateQcChecklistStep,
   updateDeviceStatus,
   updateNonconformityStatus,
+  updateProductionItemStatus,
   updateOperator,
   uploadQcChecklistReferenceImage,
   uploadQcRunEvidence,
@@ -170,6 +173,106 @@ describe("updateNonconformityStatus", () => {
         body: JSON.stringify({
           status: "CLOSED",
           corrective_action: "Zamknięte z panelu operacyjnego.",
+        }),
+      }),
+    );
+  });
+});
+
+describe("updateProductionItemStatus", () => {
+  it("wysyla PATCH ze statusem komponentu", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => ({
+        item_serial_number: "ITEM-001",
+        current_status: "REWORK_REQUIRED",
+      }),
+    } satisfies Partial<Response>);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const payload = await updateProductionItemStatus(
+      "/api",
+      "ITEM-001",
+      "REWORK_REQUIRED",
+    );
+
+    expect(payload.current_status).toBe("REWORK_REQUIRED");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/production-items/ITEM-001/status",
+      expect.objectContaining({
+        method: "PATCH",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ current_status: "REWORK_REQUIRED" }),
+      }),
+    );
+  });
+});
+
+describe("qc item rework helpers", () => {
+  it("pobiera otwarte krytyczne NCR dla komponentu", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => [
+        {
+          ncr_id: "NCR-QC-001",
+          component_serial_number: "ITEM-001",
+          severity: "CRITICAL",
+          status: "OPEN",
+        },
+      ],
+    } satisfies Partial<Response>);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const payload = await listQcItemOpenCriticalNcrs("/api", "ITEM-001");
+
+    expect(payload).toHaveLength(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/qc-items/ITEM-001/open-critical-ncrs",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+      }),
+    );
+  });
+
+  it("wysyla release-for-rework z akcja korygujaca i work session", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => ({
+        item_serial_number: "ITEM-001",
+        current_status: "REWORK_REQUIRED",
+      }),
+    } satisfies Partial<Response>);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const payload = await releaseQcItemForRework("/api", "ITEM-001", {
+      work_session_id: "WS-QC-001",
+      operator_id: "OP-QC-001",
+      corrective_action: "Wymieniono uszczelke i przygotowano do ponownej kontroli.",
+    });
+
+    expect(payload.current_status).toBe("REWORK_REQUIRED");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/qc-items/ITEM-001/release-for-rework",
+      expect.objectContaining({
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          work_session_id: "WS-QC-001",
+          operator_id: "OP-QC-001",
+          corrective_action:
+            "Wymieniono uszczelke i przygotowano do ponownej kontroli.",
         }),
       }),
     );

@@ -7,12 +7,14 @@ import {
   createQcRun,
   getProductionItemByBarcode,
   joinApiUrl,
+  listQcItemOpenCriticalNcrs,
   listQcWaitingItems,
   listOperators,
   listQcChecklists,
   listQcChecklistSteps,
   listWorkstations,
   operatorLogin,
+  releaseQcItemForRework,
   rfidLogin,
   uploadQcRunEvidence,
 } from "./api";
@@ -20,6 +22,7 @@ import { QcReferenceImage } from "./QcReferenceImage";
 import type {
   FileRead,
   LoadState,
+  NonconformityRead,
   OperatorRead,
   ProductionItemRead,
   QcChecklistRead,
@@ -127,6 +130,13 @@ export function QcStationPage() {
   const [waitingItemsError, setWaitingItemsError] = useState<string | null>(null);
   const [waitingItems, setWaitingItems] = useState<ProductionItemRead[]>([]);
   const [waitingItemsReloadKey, setWaitingItemsReloadKey] = useState(0);
+  const [openCriticalNcrsState, setOpenCriticalNcrsState] = useState<LoadState>("idle");
+  const [openCriticalNcrsError, setOpenCriticalNcrsError] = useState<string | null>(null);
+  const [openCriticalNcrs, setOpenCriticalNcrs] = useState<NonconformityRead[]>([]);
+  const [reworkAction, setReworkAction] = useState("");
+  const [reworkActionState, setReworkActionState] = useState<LoadState>("idle");
+  const [reworkActionError, setReworkActionError] = useState<string | null>(null);
+  const [reworkActionSuccess, setReworkActionSuccess] = useState<string | null>(null);
   const [stepsState, setStepsState] = useState<LoadState>("idle");
   const [stepsError, setStepsError] = useState<string | null>(null);
   const [steps, setSteps] = useState<QcStepRead[]>([]);
@@ -170,6 +180,17 @@ export function QcStationPage() {
   const referenceOverlayAreas = buildStationOverlayAreas(steps);
   const predictedRunResult = deriveDraftRunResult(steps, stepDrafts);
   const requiresEvidencePhoto = steps.some((step) => step.requires_photo);
+  const shouldShowReworkPanel =
+    !!selectedItem &&
+    (openCriticalNcrs.length > 0 ||
+      selectedItem.current_status === "QC_FAILED" ||
+      selectedItem.current_status === "BLOCKED" ||
+      selectedItem.current_status === "REWORK_REQUIRED");
+  const canReleaseSelectedItemForRework =
+    !!selectedItem &&
+    (openCriticalNcrs.length > 0 ||
+      selectedItem.current_status === "QC_FAILED" ||
+      selectedItem.current_status === "BLOCKED");
 
   useEffect(() => {
     localStorage.setItem(API_STORAGE_KEY, apiBaseUrl);
@@ -412,6 +433,51 @@ export function QcStationPage() {
   }, [apiBaseUrl, authState, waitingItemsReloadKey]);
 
   useEffect(() => {
+    const trimmedApiBaseUrl = apiBaseUrl.trim();
+    if (!trimmedApiBaseUrl || !authState || !selectedItem) {
+      setOpenCriticalNcrs([]);
+      setOpenCriticalNcrsState("idle");
+      setOpenCriticalNcrsError(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    let isCurrentRequest = true;
+    setOpenCriticalNcrsState("loading");
+    setOpenCriticalNcrsError(null);
+
+    listQcItemOpenCriticalNcrs(
+      trimmedApiBaseUrl,
+      selectedItem.item_serial_number,
+      controller.signal,
+    )
+      .then((rows) => {
+        if (!isCurrentRequest) {
+          return;
+        }
+
+        setOpenCriticalNcrs(rows);
+        setOpenCriticalNcrsState("loaded");
+      })
+      .catch((error: unknown) => {
+        if (!isCurrentRequest || controller.signal.aborted) {
+          return;
+        }
+
+        setOpenCriticalNcrs([]);
+        setOpenCriticalNcrsState("error");
+        setOpenCriticalNcrsError(
+          getErrorMessage(error, "Nie udalo sie pobrac otwartych NCR dla detalu."),
+        );
+      });
+
+    return () => {
+      isCurrentRequest = false;
+      controller.abort();
+    };
+  }, [apiBaseUrl, authState, selectedItem]);
+
+  useEffect(() => {
     setLookupError(null);
     setSubmitState("idle");
     setSubmitError(null);
@@ -421,6 +487,13 @@ export function QcStationPage() {
     setFailureComment("");
     setFailureDisposition("OPEN_CRITICAL_NCR");
     setEvidenceFiles([]);
+    setOpenCriticalNcrs([]);
+    setOpenCriticalNcrsState("idle");
+    setOpenCriticalNcrsError(null);
+    setReworkAction("");
+    setReworkActionState("idle");
+    setReworkActionError(null);
+    setReworkActionSuccess(null);
   }, [authState, selectedChecklistCode, selectedItem?.barcode_value]);
 
   const handleManualLoginSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -576,6 +649,10 @@ export function QcStationPage() {
     setFailureComment("");
     setFailureDisposition("OPEN_CRITICAL_NCR");
     setEvidenceFiles([]);
+    setReworkAction("");
+    setReworkActionState("idle");
+    setReworkActionError(null);
+    setReworkActionSuccess(null);
   };
 
   const handleLookupSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -587,6 +664,8 @@ export function QcStationPage() {
     setSubmitError(null);
     setSubmitSuccess(null);
     setCompletedRun(null);
+    setReworkActionError(null);
+    setReworkActionSuccess(null);
 
     if (!trimmedApiBaseUrl) {
       setLookupState("error");
@@ -640,6 +719,66 @@ export function QcStationPage() {
     );
   };
 
+  const handleReleaseForRework = async () => {
+    const trimmedApiBaseUrl = apiBaseUrl.trim();
+    const normalizedReworkAction = normalizeOptionalString(reworkAction);
+
+    setReworkActionError(null);
+    setReworkActionSuccess(null);
+
+    if (!trimmedApiBaseUrl) {
+      setReworkActionState("error");
+      setReworkActionError("Podaj adres API przed obsluga NCR albo reworku.");
+      return;
+    }
+
+    if (!authState) {
+      setReworkActionState("error");
+      setReworkActionError("Najpierw zaloguj operatora na stanowisku.");
+      return;
+    }
+
+    if (!selectedItem) {
+      setReworkActionState("error");
+      setReworkActionError("Najpierw wybierz detal do obslugi NCR albo reworku.");
+      return;
+    }
+
+    if (!normalizedReworkAction) {
+      setReworkActionState("error");
+      setReworkActionError("Wpisz akcje korygujaca przed przywroceniem detalu do reworku.");
+      return;
+    }
+
+    setReworkActionState("loading");
+
+    try {
+      const refreshedItem = await releaseQcItemForRework(
+        trimmedApiBaseUrl,
+        selectedItem.item_serial_number,
+        {
+          work_session_id: authState.workSessionId,
+          operator_id: authState.operatorId,
+          corrective_action: normalizedReworkAction,
+        },
+      );
+      setSelectedItem(refreshedItem);
+      setWaitingItemsReloadKey((currentValue) => currentValue + 1);
+      setOpenCriticalNcrs([]);
+      setReworkActionState("loaded");
+      setReworkActionSuccess(
+        openCriticalNcrs.length > 0
+          ? `Zamknieto ${openCriticalNcrs.length} krytyczne NCR i przywrocono detal ${refreshedItem.item_serial_number} do statusu ${refreshedItem.current_status}.`
+          : `Detal ${refreshedItem.item_serial_number} zostal przywrocony do statusu ${refreshedItem.current_status}.`,
+      );
+    } catch (error) {
+      setReworkActionState("error");
+      setReworkActionError(
+        getErrorMessage(error, "Nie udalo sie przygotowac detalu do reworku."),
+      );
+    }
+  };
+
   const handleStepDraftChange = (
     stepId: string,
     field: keyof StepDraft,
@@ -660,6 +799,8 @@ export function QcStationPage() {
     setSubmitError(null);
     setSubmitSuccess(null);
     setCompletedRun(null);
+    setReworkActionError(null);
+    setReworkActionSuccess(null);
 
     if (!trimmedApiBaseUrl) {
       setSubmitState("error");
@@ -802,6 +943,10 @@ export function QcStationPage() {
     setFailureComment("");
     setFailureDisposition("OPEN_CRITICAL_NCR");
     setEvidenceFiles([]);
+    setReworkAction("");
+    setReworkActionState("idle");
+    setReworkActionError(null);
+    setReworkActionSuccess(null);
     setLookupState("idle");
     setLookupError(null);
     setSelectedItem(null);
@@ -812,6 +957,10 @@ export function QcStationPage() {
     setSubmitError(null);
     setSubmitSuccess(null);
     setCompletedRun(null);
+    setReworkAction("");
+    setReworkActionState("idle");
+    setReworkActionError(null);
+    setReworkActionSuccess(null);
     setAuthState(null);
     setAuthMessage("Sesja stanowiskowa zostala wylogowana lokalnie.");
   };
@@ -858,6 +1007,10 @@ export function QcStationPage() {
     setSubmitError(null);
     setSubmitSuccess(null);
     setCompletedRun(null);
+    setReworkAction("");
+    setReworkActionState("idle");
+    setReworkActionError(null);
+    setReworkActionSuccess(null);
   };
 
   return (
@@ -1152,6 +1305,10 @@ export function QcStationPage() {
                         setFailureComment("");
                         setFailureDisposition("OPEN_CRITICAL_NCR");
                         setEvidenceFiles([]);
+                        setReworkAction("");
+                        setReworkActionState("idle");
+                        setReworkActionError(null);
+                        setReworkActionSuccess(null);
                         setBarcodeValue("");
                       }}
                     >
@@ -1249,6 +1406,109 @@ export function QcStationPage() {
                   </span>
                 </div>
               )}
+
+              {shouldShowReworkPanel ? (
+                <div className="detail-inline-card qc-run-decision-card">
+                  <div className="detail-inline-header">
+                    <strong>2a. NCR i decyzja rework</strong>
+                    <span className={`status-badge state-${openCriticalNcrsState}`}>
+                      {openCriticalNcrsState === "loading"
+                        ? "Sprawdzam NCR"
+                        : openCriticalNcrs.length > 0
+                          ? `${openCriticalNcrs.length} NCR`
+                          : selectedItem?.current_status === "REWORK_REQUIRED"
+                            ? "Rework gotowy"
+                            : "Brak otwartego NCR"}
+                    </span>
+                  </div>
+                  <p>
+                    Ten panel sluzy do domkniecia krytycznych NCR po poprawkach i
+                    przywrocenia detalu do kolejki ponownej kontroli.
+                  </p>
+
+                  {openCriticalNcrsError ? (
+                    <div className="error-banner" role="alert">
+                      <strong>Nie udalo sie pobrac NCR dla detalu.</strong>
+                      <span>{openCriticalNcrsError}</span>
+                    </div>
+                  ) : null}
+
+                  {openCriticalNcrs.length > 0 ? (
+                    <div className="qc-evidence-list">
+                      {openCriticalNcrs.map((ncr) => (
+                        <div key={ncr.ncr_id} className="qc-evidence-item">
+                          <div className="qc-evidence-item-copy">
+                            <strong>{ncr.ncr_id}</strong>
+                            <span>
+                              {labelForCode(ncr.severity)} | {labelForCode(ncr.status)} |{" "}
+                              {labelForCode(ncr.process_stage ?? "QC")}
+                            </span>
+                            <span>{ncr.description}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="details-inline-actions">
+                      <span className="action-hint">
+                        {selectedItem?.current_status === "REWORK_REQUIRED"
+                          ? "Detal jest juz oznaczony do reworku i pozostaje w kolejce ponownej kontroli."
+                          : "Dla tego detalu nie ma obecnie otwartego krytycznego NCR."}
+                      </span>
+                    </div>
+                  )}
+
+                  {canReleaseSelectedItemForRework ? (
+                    <div className="qc-station-form-grid">
+                      <label className="field qc-step-comment-field">
+                        <span>Akcja korygujaca po reworku</span>
+                        <textarea
+                          value={reworkAction}
+                          onChange={(event) => setReworkAction(event.target.value)}
+                          placeholder="Opisz wykonany rework, naprawe albo decyzje serwisowa przed ponowna kontrola."
+                        />
+                      </label>
+                    </div>
+                  ) : null}
+
+                  {reworkActionError ? (
+                    <div className="error-banner" role="alert">
+                      <strong>Nie udalo sie przygotowac detalu do reworku.</strong>
+                      <span>{reworkActionError}</span>
+                    </div>
+                  ) : null}
+
+                  {reworkActionSuccess ? (
+                    <div className="qc-auth-banner" role="status">
+                      <strong>{reworkActionSuccess}</strong>
+                    </div>
+                  ) : null}
+
+                  {canReleaseSelectedItemForRework ? (
+                    <div className="details-inline-actions">
+                      <button
+                        className="primary-button"
+                        type="button"
+                        disabled={reworkActionState === "loading"}
+                        onClick={handleReleaseForRework}
+                      >
+                        {openCriticalNcrs.length > 0
+                          ? "Zamknij NCR i przywroc do reworku"
+                          : "Przywroc detal do reworku"}
+                      </button>
+                      <span className={`status-badge state-${reworkActionState}`}>
+                        {reworkActionState === "loading"
+                          ? "Zapisuje"
+                          : reworkActionState === "loaded"
+                            ? "Rework OK"
+                            : reworkActionState === "error"
+                              ? "Blad"
+                              : "Gotowe"}
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           </section>
 
