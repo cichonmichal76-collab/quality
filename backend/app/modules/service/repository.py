@@ -26,6 +26,8 @@ def list_service_sessions_queue(
     device_serial_number: str | None = None,
     device_type: str | None = None,
     technician_id: str | None = None,
+    client_attempt_id: str | None = None,
+    upload_correlation_id: str | None = None,
     result: str | None = None,
     upload_status: str | None = None,
     client_trigger_source: str | None = None,
@@ -39,6 +41,8 @@ def list_service_sessions_queue(
         device_serial_number=device_serial_number,
         device_type=device_type,
         technician_id=technician_id,
+        client_attempt_id=client_attempt_id,
+        upload_correlation_id=upload_correlation_id,
         result=result,
         upload_status=upload_status,
         client_trigger_source=client_trigger_source,
@@ -66,6 +70,8 @@ def list_service_sessions_queue(
             "device_serial_number": device_serial_number,
             "device_type": device_type,
             "technician_id": technician_id,
+            "client_attempt_id": client_attempt_id,
+            "upload_correlation_id": upload_correlation_id,
             "result": result,
             "upload_status": upload_status,
             "client_trigger_source": client_trigger_source,
@@ -109,6 +115,8 @@ def _apply_service_session_filters(
     device_serial_number: str | None = None,
     device_type: str | None = None,
     technician_id: str | None = None,
+    client_attempt_id: str | None = None,
+    upload_correlation_id: str | None = None,
     result: str | None = None,
     upload_status: str | None = None,
     client_trigger_source: str | None = None,
@@ -119,6 +127,10 @@ def _apply_service_session_filters(
         query = query.filter(ServiceSession.device_type == device_type)
     if technician_id:
         query = query.filter(ServiceSession.technician_id == technician_id)
+    if client_attempt_id:
+        query = query.filter(ServiceSession.client_attempt_id == client_attempt_id)
+    if upload_correlation_id:
+        query = query.filter(ServiceSession.upload_correlation_id == upload_correlation_id)
     if result:
         query = query.filter(ServiceSession.result == result)
     if upload_status:

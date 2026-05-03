@@ -310,6 +310,8 @@ describe("listServiceSessionsQueue", () => {
         next_offset: 1,
         filters: {
           technician_id: "TECH-A",
+          client_attempt_id: "ATT-QUEUE-001",
+          upload_correlation_id: "CORR-QUEUE-001",
           sort_by: "upload_count",
           sort_desc: true,
           offset: 0,
@@ -338,6 +340,8 @@ describe("listServiceSessionsQueue", () => {
 
     const payload = await listServiceSessionsQueue("/api", {
       technician_id: "TECH-A",
+      client_attempt_id: "ATT-QUEUE-001",
+      upload_correlation_id: "CORR-QUEUE-001",
       sort_by: "upload_count",
       sort_desc: true,
       offset: 0,
@@ -347,7 +351,7 @@ describe("listServiceSessionsQueue", () => {
     expect(payload.reuploaded_sessions).toBe(1);
     expect(payload.sessions[0]?.upload_count).toBe(2);
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/service-sessions/queue?technician_id=TECH-A&sort_by=upload_count&sort_desc=true&offset=0&limit=1",
+      "/api/service-sessions/queue?technician_id=TECH-A&client_attempt_id=ATT-QUEUE-001&upload_correlation_id=CORR-QUEUE-001&sort_by=upload_count&sort_desc=true&offset=0&limit=1",
       expect.objectContaining({
         headers: { Accept: "application/json" },
       }),

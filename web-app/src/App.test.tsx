@@ -2226,6 +2226,31 @@ describe("App", () => {
     expect(uploadStatusLink.getAttribute("href")).not.toContain(
       "svc_session_id=",
     );
+    const correlationLink = screen.getByRole("link", {
+      name: /correlation id/i,
+    });
+    expect(correlationLink).toHaveAttribute(
+      "href",
+      expect.stringContaining("svc_upload_correlation_id=CORR-DETAIL-001"),
+    );
+    expect(correlationLink.getAttribute("href")).not.toContain("svc_session_id=");
+    const auditCorrelationLinks = screen.getAllByRole("link", {
+      name: /korelacja z audytu/i,
+    });
+    expect(
+      auditCorrelationLinks.some((link) =>
+        (link.getAttribute("href") ?? "").includes(
+          "svc_upload_correlation_id=SRV-UP-0002",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      auditCorrelationLinks.some((link) =>
+        (link.getAttribute("href") ?? "").includes(
+          "svc_upload_correlation_id=SRV-UP-0001",
+        ),
+      ),
+    ).toBe(true);
   });
 
   it("copies current dashboard link with active filters", async () => {

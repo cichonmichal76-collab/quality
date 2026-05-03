@@ -132,13 +132,16 @@ backend pod `http://127.0.0.1:8000`.
   status jakości, rekomendowane akcje, tabela urządzeń z komponentami
   blokującymi, drawer szczegółów urządzenia i paginacja wyników.
 - `Commissioning i serwis` - kolejka sesji commissioning, status uploadu,
-  wynik sesji, trigger synchronizacji, liczba reuploadów, technik,
+  wynik sesji, trigger synchronizacji, `Attempt ID`, `Correlation ID`,
+  liczba reuploadów, technik,
   firmware/bootloader, eksport CSV, drawer szczegółów sesji po `session_id`
   oraz przejście do szczegółów urządzenia po numerze seryjnym. Drawer sesji
   ma też `Pełną stronę` pod `/service-sessions/{session_id}` z linkiem powrotu
   do dokładnie tego samego kontekstu dashboardu oraz skrótami do gotowych,
   przefiltrowanych kolejek sesji o tym samym statusie uploadu, wyniku,
-  triggerze, techniku, urządzeniu albo typie urządzenia.
+  triggerze, techniku, urządzeniu albo typie urządzenia. Historia audytu
+  synchronizacji dodaje też własne skróty do kolejek po `Attempt ID`
+  i `Correlation ID`.
 
 Pełny widok urządzenia zawiera też skróty do gotowych, przefiltrowanych
 kolejek powiązanych z bieżącym problemem, np. do tej samej blokady

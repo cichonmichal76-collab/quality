@@ -254,6 +254,8 @@ interface ServiceFilters {
   device_serial_number: string;
   device_type: string;
   technician_id: string;
+  client_attempt_id: string;
+  upload_correlation_id: string;
   result: string;
   upload_status: string;
   client_trigger_source: string;
@@ -338,6 +340,8 @@ const SERVICE_TEXT_FILTER_KEYS: Array<keyof ServiceFilters> = [
   "device_serial_number",
   "device_type",
   "technician_id",
+  "client_attempt_id",
+  "upload_correlation_id",
 ];
 
 const DEFAULT_SHIPMENT_FILTERS: ShipmentFilters = {
@@ -376,6 +380,8 @@ const DEFAULT_SERVICE_FILTERS: ServiceFilters = {
   device_serial_number: "",
   device_type: "",
   technician_id: "",
+  client_attempt_id: "",
+  upload_correlation_id: "",
   result: "",
   upload_status: "",
   client_trigger_source: "",
@@ -2454,6 +2460,9 @@ export function App() {
         sessionId: selectedServiceSessionId,
         session: serviceSessionDetails,
         auditEvents: serviceSessionAudit,
+        shipmentFilters,
+        componentFilters,
+        serviceFilters,
         loadState: serviceSessionDetailsState,
         errorMessage: serviceSessionDetailsError,
         onShowDevice: selectDevice,
@@ -3217,6 +3226,20 @@ function ServiceFiltersPanel({
           onChange={(value) => onChange("technician_id", value)}
           onCommit={onCommitTextFilters}
           placeholder="np. TECH-A"
+        />
+        <TextField
+          label="Attempt ID"
+          value={filters.client_attempt_id}
+          onChange={(value) => onChange("client_attempt_id", value)}
+          onCommit={onCommitTextFilters}
+          placeholder="np. ATT-001"
+        />
+        <TextField
+          label="Correlation ID uploadu"
+          value={filters.upload_correlation_id}
+          onChange={(value) => onChange("upload_correlation_id", value)}
+          onCommit={onCommitTextFilters}
+          placeholder="np. CORR-001"
         />
         <SelectField
           label="Wynik"
@@ -4455,6 +4478,9 @@ function ServiceSessionDetailsDrawer({
   sessionId,
   session,
   auditEvents,
+  shipmentFilters,
+  componentFilters,
+  serviceFilters,
   loadState,
   errorMessage,
   onShowDevice,
@@ -4465,6 +4491,9 @@ function ServiceSessionDetailsDrawer({
   sessionId: string;
   session: ServiceSessionRead | null;
   auditEvents: AuditEvent[];
+  shipmentFilters: ShipmentFilters;
+  componentFilters: ComponentFilters;
+  serviceFilters: ServiceFilters;
   loadState: LoadState;
   errorMessage: string | null;
   onShowDevice: (device: {
@@ -4661,6 +4690,12 @@ function ServiceSessionDetailsDrawer({
                       typeof event.payload?.client_attempt_id === "string"
                         ? event.payload.client_attempt_id
                         : null;
+                    const auditQueueShortcuts = buildServiceSessionAuditQueueShortcuts({
+                      event,
+                      shipmentFilters,
+                      componentFilters,
+                      serviceFilters,
+                    });
 
                     return (
                       <article className="detail-history-card" key={event.id}>
@@ -4695,6 +4730,7 @@ function ServiceSessionDetailsDrawer({
                           emptyLabel="Brak dodatkowych metadanych synchronizacji."
                           compact
                         />
+                        <QueueShortcutList compact links={auditQueueShortcuts} />
                       </article>
                     );
                   })}
@@ -4895,6 +4931,12 @@ function ServiceSessionDetailsPage({
                       typeof event.payload?.client_attempt_id === "string"
                         ? event.payload.client_attempt_id
                         : null;
+                    const auditQueueShortcuts = buildServiceSessionAuditQueueShortcuts({
+                      event,
+                      shipmentFilters,
+                      componentFilters,
+                      serviceFilters,
+                    });
 
                     return (
                       <article className="detail-history-card" key={event.id}>
@@ -4927,6 +4969,7 @@ function ServiceSessionDetailsPage({
                           emptyLabel="Brak dodatkowych metadanych synchronizacji."
                           compact
                         />
+                        <QueueShortcutList compact links={auditQueueShortcuts} />
                       </article>
                     );
                   })}
@@ -6153,6 +6196,12 @@ function DeviceDetailsSurface({
                       typeof event.payload?.client_attempt_id === "string"
                         ? event.payload.client_attempt_id
                         : null;
+                    const auditQueueShortcuts = buildServiceSessionAuditQueueShortcuts({
+                      event,
+                      shipmentFilters,
+                      componentFilters,
+                      serviceFilters,
+                    });
 
                     return (
                       <article className="detail-history-card" key={event.id}>
@@ -6190,6 +6239,7 @@ function DeviceDetailsSurface({
                           emptyLabel="Brak dodatkowych metadanych synchronizacji."
                           compact
                         />
+                        <QueueShortcutList compact links={auditQueueShortcuts} />
                         <div className="details-inline-actions">
                           <a
                             className="details-record-link"
@@ -6982,6 +7032,20 @@ function buildServiceActiveFilterChips(
     });
   }
 
+  if (filters.client_attempt_id.trim() !== "") {
+    chips.push({
+      id: "client_attempt_id",
+      label: `Attempt ID: ${filters.client_attempt_id.trim()}`,
+    });
+  }
+
+  if (filters.upload_correlation_id.trim() !== "") {
+    chips.push({
+      id: "upload_correlation_id",
+      label: `Correlation ID: ${filters.upload_correlation_id.trim()}`,
+    });
+  }
+
   if (filters.result !== "") {
     chips.push({
       id: "result",
@@ -7243,6 +7307,8 @@ function serviceQueryParams(filters: ServiceFilters): Record<string, QueryValue>
     device_serial_number: filters.device_serial_number,
     device_type: filters.device_type,
     technician_id: filters.technician_id,
+    client_attempt_id: filters.client_attempt_id,
+    upload_correlation_id: filters.upload_correlation_id,
     result: filters.result,
     upload_status: filters.upload_status,
     client_trigger_source: filters.client_trigger_source,
@@ -7567,6 +7633,16 @@ function readServiceFiltersFromUrl(
       `${URL_SERVICE_PREFIX}technician_id`,
       baseFilters.technician_id,
     ),
+    client_attempt_id: readSearchString(
+      searchParams,
+      `${URL_SERVICE_PREFIX}client_attempt_id`,
+      baseFilters.client_attempt_id,
+    ),
+    upload_correlation_id: readSearchString(
+      searchParams,
+      `${URL_SERVICE_PREFIX}upload_correlation_id`,
+      baseFilters.upload_correlation_id,
+    ),
     result: readSearchOption(
       searchParams,
       `${URL_SERVICE_PREFIX}result`,
@@ -7790,6 +7866,14 @@ function readStoredServiceFilters(): ServiceFilters {
     technician_id: readStoredString(
       storedValue.technician_id,
       DEFAULT_SERVICE_FILTERS.technician_id,
+    ),
+    client_attempt_id: readStoredString(
+      storedValue.client_attempt_id,
+      DEFAULT_SERVICE_FILTERS.client_attempt_id,
+    ),
+    upload_correlation_id: readStoredString(
+      storedValue.upload_correlation_id,
+      DEFAULT_SERVICE_FILTERS.upload_correlation_id,
     ),
     result: readStoredOption(
       storedValue.result,
@@ -8262,6 +8346,8 @@ function buildServiceQueueShortcutHref({
   deviceSerialNumber = "",
   deviceType = "",
   technicianId = "",
+  clientAttemptId = "",
+  uploadCorrelationId = "",
   result = "",
   uploadStatus = "",
   clientTriggerSource = "",
@@ -8272,6 +8358,8 @@ function buildServiceQueueShortcutHref({
   deviceSerialNumber?: string;
   deviceType?: string;
   technicianId?: string;
+  clientAttemptId?: string;
+  uploadCorrelationId?: string;
   result?: string;
   uploadStatus?: string;
   clientTriggerSource?: string;
@@ -8289,6 +8377,8 @@ function buildServiceQueueShortcutHref({
       device_serial_number: deviceSerialNumber,
       device_type: deviceType,
       technician_id: technicianId,
+      client_attempt_id: clientAttemptId,
+      upload_correlation_id: uploadCorrelationId,
       result,
       upload_status: uploadStatus,
       client_trigger_source: clientTriggerSource,
@@ -8323,6 +8413,8 @@ function buildServiceSessionQueueShortcuts({
   const uploadStatus = session.upload_status ?? "";
   const result = session.result ?? "";
   const clientTriggerSource = session.client_trigger_source ?? "";
+  const clientAttemptId = session.client_attempt_id?.trim() ?? "";
+  const uploadCorrelationId = session.upload_correlation_id?.trim() ?? "";
 
   if (deviceSerialNumber !== "") {
     links.push({
@@ -8402,6 +8494,82 @@ function buildServiceSessionQueueShortcuts({
       }),
       label: "PokaĹĽ sesje tego samego technika",
       caption: technicianId,
+    });
+  }
+
+  if (clientAttemptId !== "") {
+    links.push({
+      href: buildServiceQueueShortcutHref({
+        shipmentFilters,
+        componentFilters,
+        serviceFilters,
+        clientAttemptId,
+      }),
+      label: "Pokaz sesje z tym samym Attempt ID",
+      caption: clientAttemptId,
+    });
+  }
+
+  if (uploadCorrelationId !== "") {
+    links.push({
+      href: buildServiceQueueShortcutHref({
+        shipmentFilters,
+        componentFilters,
+        serviceFilters,
+        uploadCorrelationId,
+      }),
+      label: "Pokaz sesje z tym samym Correlation ID",
+      caption: uploadCorrelationId,
+    });
+  }
+
+  return dedupeQueueShortcutLinks(links);
+}
+
+function buildServiceSessionAuditQueueShortcuts({
+  event,
+  shipmentFilters,
+  componentFilters,
+  serviceFilters,
+}: {
+  event: AuditEvent;
+  shipmentFilters: ShipmentFilters;
+  componentFilters: ComponentFilters;
+  serviceFilters: ServiceFilters;
+}): QueueShortcutLink[] {
+  const links: QueueShortcutLink[] = [];
+  const clientAttemptId =
+    typeof event.payload?.client_attempt_id === "string"
+      ? event.payload.client_attempt_id.trim()
+      : "";
+  const uploadCorrelationId =
+    typeof event.payload?.upload_correlation_id === "string"
+      ? event.payload.upload_correlation_id.trim()
+      : "";
+
+  if (clientAttemptId !== "") {
+    links.push({
+      href: buildServiceQueueShortcutHref({
+        shipmentFilters,
+        componentFilters,
+        serviceFilters,
+        clientAttemptId,
+      }),
+      label: "Pokaz sesje z tym samym Attempt ID z audytu",
+      caption: clientAttemptId,
+    });
+  }
+
+  if (uploadCorrelationId !== "") {
+    links.push({
+      href: buildServiceQueueShortcutHref({
+        shipmentFilters,
+        componentFilters,
+        serviceFilters,
+        uploadCorrelationId,
+      }),
+      label: "Pokaz sesje z ta sama korelacja z audytu",
+      caption: uploadCorrelationId,
     });
   }
 
@@ -8631,6 +8799,16 @@ function writeServiceFiltersToSearchParams(
     searchParams,
     `${URL_SERVICE_PREFIX}technician_id`,
     filters.technician_id,
+  );
+  setOptionalSearchString(
+    searchParams,
+    `${URL_SERVICE_PREFIX}client_attempt_id`,
+    filters.client_attempt_id,
+  );
+  setOptionalSearchString(
+    searchParams,
+    `${URL_SERVICE_PREFIX}upload_correlation_id`,
+    filters.upload_correlation_id,
   );
   setOptionalSearchString(
     searchParams,

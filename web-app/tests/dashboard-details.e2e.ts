@@ -766,7 +766,7 @@ test("dashboard opens full commissioning session page and returns to queue conte
   await expect(page.getByRole("dialog")).toBeVisible();
 });
 
-test("dashboard jumps from full commissioning session page to a filtered service queue", async ({
+test("dashboard jumps from commissioning sync audit to a filtered service queue", async ({
   page,
 }) => {
   await page.route("**/api/**", async (route) => {
@@ -950,23 +950,22 @@ test("dashboard jumps from full commissioning session page to a filtered service
   await expect(page).toHaveURL(/\/service-sessions\/SVC-SESSION-001/);
 
   await page
-    .getByRole("link", { name: /statusem uploadu/i })
+    .getByRole("link", { name: /korelacja z audytu/i })
     .click();
 
   await expect(page).toHaveURL(/\/\?view=service/);
-  await expect(page).toHaveURL(/svc_upload_status=UPLOADED/);
-  await expect(page).toHaveURL(/svc_device_type=DEMO-SVC/);
+  await expect(page).toHaveURL(/svc_upload_correlation_id=CORR-001/);
   await expect(page).not.toHaveURL(/svc_session_id=/);
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Commissioning i serwis" }),
   ).toHaveClass(/is-active/);
   await expect(
-    page.getByRole("combobox", { name: "Status uploadu" }),
-  ).toHaveValue("UPLOADED");
+    page.getByRole("textbox", { name: "Correlation ID uploadu" }),
+  ).toHaveValue("CORR-001");
   await expect(
-    page.getByRole("textbox", { name: "Typ urządzenia" }),
-  ).toHaveValue("DEMO-SVC");
+    page.getByRole("textbox", { name: "Attempt ID" }),
+  ).toHaveValue("");
 });
 
 test("dashboard jumps from BOM details to a filtered shipment queue", async ({

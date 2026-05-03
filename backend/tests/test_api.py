@@ -6461,7 +6461,8 @@ def test_service_session_queue_supports_filters_and_pagination(tmp_path, monkeyp
         },
     )
     assert reupload.status_code == 200
-    assert reupload.json()["upload_count"] == 2
+    reupload_payload = reupload.json()
+    assert reupload_payload["upload_count"] == 2
 
     queue = client.get(
         "/api/service-sessions/queue"
@@ -6506,6 +6507,29 @@ def test_service_session_queue_supports_filters_and_pagination(tmp_path, monkeyp
     device_type_filtered = client.get("/api/service-sessions/queue?device_type=VENT-PRO")
     assert device_type_filtered.status_code == 200
     assert [row["session_id"] for row in device_type_filtered.json()["sessions"]] == [
+        uploads[0]["session_id"]
+    ]
+
+    correlation_filtered = client.get(
+        "/api/service-sessions/queue"
+        f"?upload_correlation_id={reupload_payload['upload_correlation_id']}"
+    )
+    assert correlation_filtered.status_code == 200
+    correlation_payload = correlation_filtered.json()
+    assert correlation_payload["filters"]["upload_correlation_id"] == reupload_payload[
+        "upload_correlation_id"
+    ]
+    assert [row["session_id"] for row in correlation_payload["sessions"]] == [
+        uploads[0]["session_id"]
+    ]
+
+    attempt_filtered = client.get(
+        "/api/service-sessions/queue?client_attempt_id=SYNC-Q-0004"
+    )
+    assert attempt_filtered.status_code == 200
+    attempt_payload = attempt_filtered.json()
+    assert attempt_payload["filters"]["client_attempt_id"] == "SYNC-Q-0004"
+    assert [row["session_id"] for row in attempt_payload["sessions"]] == [
         uploads[0]["session_id"]
     ]
 
