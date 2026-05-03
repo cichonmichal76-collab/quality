@@ -452,6 +452,9 @@ test("qc station pozwala pobrac detal z kolejki oczekujacych na QC", async ({ pa
             current_status: "PRODUCED",
             produced_at: "2026-05-03T08:15:00Z",
             created_at: "2026-05-03T08:15:00Z",
+            qc_reserved_by_operator_id: null,
+            qc_reserved_by_workstation_id: null,
+            qc_reserved_at: null,
           },
           {
             id: "ITEM-ROW-QUEUE-REWORK",
@@ -469,6 +472,29 @@ test("qc station pozwala pobrac detal z kolejki oczekujacych na QC", async ({ pa
             current_status: "REWORK_REQUIRED",
             produced_at: "2026-05-03T08:20:00Z",
             created_at: "2026-05-03T08:20:00Z",
+            qc_reserved_by_operator_id: "QCOP-DEMO-LOCAL",
+            qc_reserved_by_workstation_id: "QCWS-DEMO-LOCAL",
+            qc_reserved_at: "2026-05-03T08:22:00Z",
+          },
+          {
+            id: "ITEM-ROW-QUEUE-OTHER",
+            item_serial_number: "QCITEM-DEMO-QUEUE-OTHER",
+            barcode_value: "QCBC-DEMO-QUEUE-OTHER",
+            item_type: "FAN_MODULE",
+            part_number: "PN-FAN-004",
+            revision: "D",
+            drawing_number: null,
+            drawing_revision: null,
+            production_order: null,
+            material_batch: null,
+            machine_id: null,
+            created_by_operator_id: "QCOP-OTHER",
+            current_status: "PRODUCED",
+            produced_at: "2026-05-03T08:25:00Z",
+            created_at: "2026-05-03T08:25:00Z",
+            qc_reserved_by_operator_id: "QCOP-OTHER",
+            qc_reserved_by_workstation_id: "QCWS-OTHER",
+            qc_reserved_at: "2026-05-03T08:26:00Z",
           },
         ]),
       });
@@ -547,15 +573,33 @@ test("qc station pozwala pobrac detal z kolejki oczekujacych na QC", async ({ pa
   await page.getByRole("button", { name: "Wejdz do aplikacji" }).click();
 
   await expect(page.getByRole("heading", { name: "Sesja stanowiskowa" })).toBeVisible();
-  await expect(page.getByText("2/2 oczekuje")).toBeVisible();
+  await expect(page.getByText("3/3 oczekuje")).toBeVisible();
 
-  await page.getByLabel("Filtr kolejki QC").selectOption("REWORK_REQUIRED");
-  await expect(page.getByText("1/2 oczekuje")).toBeVisible();
+  await page.getByLabel("Status kolejki QC").selectOption("REWORK_REQUIRED");
+  await expect(page.getByText("1/3 oczekuje")).toBeVisible();
   await expect(page.getByTestId("qc-waiting-list")).toContainText("QCITEM-DEMO-QUEUE-REWORK");
   await expect(page.locator('[data-testid="qc-waiting-list"] button')).toHaveCount(1);
 
+  await page.getByRole("button", { name: "Moje rezerwacje" }).click();
+  await expect(page.getByText("1/3 oczekuje")).toBeVisible();
+  await expect(page.getByTestId("qc-waiting-list")).toContainText("QCITEM-DEMO-QUEUE-REWORK");
+  await expect(page.getByTestId("qc-waiting-list")).not.toContainText("QCITEM-DEMO-QUEUE-OTHER");
+
+  await page.getByRole("button", { name: "Wolne detale" }).click();
+  await expect(page.getByText("1/3 oczekuje")).toBeVisible();
+  await expect(page.getByTestId("qc-waiting-list")).toContainText("QCITEM-DEMO-QUEUE");
+  await expect(page.getByTestId("qc-waiting-list")).not.toContainText("QCITEM-DEMO-QUEUE-REWORK");
+
+  await page.getByRole("button", { name: "Cudze rezerwacje" }).click();
+  await expect(page.getByText("1/3 oczekuje")).toBeVisible();
+  await expect(page.getByTestId("qc-waiting-list")).toContainText("QCITEM-DEMO-QUEUE-OTHER");
+  await expect(
+    page.getByTestId("qc-waiting-list").getByRole("button", { name: /QCITEM-DEMO-QUEUE-OTHER/i }),
+  ).toBeDisabled();
+
   await page.getByRole("button", { name: "Reset kolejki" }).click();
   await expect(page.getByTestId("qc-waiting-list")).toContainText("QCITEM-DEMO-QUEUE");
+  await expect(page.getByTestId("qc-waiting-list")).toContainText("QCITEM-DEMO-QUEUE-OTHER");
   await page.locator('[data-testid="qc-waiting-list"] button').first().click();
 
   await expect(

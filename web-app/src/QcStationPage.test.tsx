@@ -507,6 +507,9 @@ describe("QcStationPage", () => {
             current_status: "PRODUCED",
             produced_at: "2026-05-03T08:15:00Z",
             created_at: "2026-05-03T08:15:00Z",
+            qc_reserved_by_operator_id: null,
+            qc_reserved_by_workstation_id: null,
+            qc_reserved_at: null,
           },
           {
             id: "ITEM-ROW-QUEUE-REWORK",
@@ -524,6 +527,29 @@ describe("QcStationPage", () => {
             current_status: "REWORK_REQUIRED",
             produced_at: "2026-05-03T08:20:00Z",
             created_at: "2026-05-03T08:20:00Z",
+            qc_reserved_by_operator_id: "QCOP-DEMO-LOCAL",
+            qc_reserved_by_workstation_id: "QCWS-DEMO-LOCAL",
+            qc_reserved_at: "2026-05-03T08:22:00Z",
+          },
+          {
+            id: "ITEM-ROW-QUEUE-OTHER",
+            item_serial_number: "QCITEM-DEMO-QUEUE-OTHER",
+            barcode_value: "QCBC-DEMO-QUEUE-OTHER",
+            item_type: "FAN_MODULE",
+            part_number: "PN-FAN-004",
+            revision: "D",
+            drawing_number: null,
+            drawing_revision: null,
+            production_order: null,
+            material_batch: null,
+            machine_id: null,
+            created_by_operator_id: "QCOP-OTHER",
+            current_status: "PRODUCED",
+            produced_at: "2026-05-03T08:25:00Z",
+            created_at: "2026-05-03T08:25:00Z",
+            qc_reserved_by_operator_id: "QCOP-OTHER",
+            qc_reserved_by_workstation_id: "QCWS-OTHER",
+            qc_reserved_at: "2026-05-03T08:26:00Z",
           },
         ]);
       }
@@ -595,21 +621,54 @@ describe("QcStationPage", () => {
 
     await screen.findByText("Sesja stanowiskowa");
     await screen.findByTestId("qc-waiting-list");
-    expect(screen.getByText(/2\/2 oczekuje/i)).toBeInTheDocument();
+    expect(screen.getByText(/3\/3 oczekuje/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Rework" }));
     await waitFor(() => {
       const waitingList = screen.getByTestId("qc-waiting-list");
       expect(within(waitingList).getByText("QCITEM-DEMO-QUEUE-REWORK")).toBeInTheDocument();
       expect(within(waitingList).queryByText("QCITEM-DEMO-QUEUE")).not.toBeInTheDocument();
+      expect(within(waitingList).queryByText("QCITEM-DEMO-QUEUE-OTHER")).not.toBeInTheDocument();
     });
-    expect(screen.getByText(/1\/2 oczekuje/i)).toBeInTheDocument();
+    expect(screen.getByText(/1\/3 oczekuje/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Moje rezerwacje" }));
+    await waitFor(() => {
+      const waitingList = screen.getByTestId("qc-waiting-list");
+      expect(within(waitingList).getByText("QCITEM-DEMO-QUEUE-REWORK")).toBeInTheDocument();
+      expect(within(waitingList).queryByText("QCITEM-DEMO-QUEUE")).not.toBeInTheDocument();
+      expect(within(waitingList).queryByText("QCITEM-DEMO-QUEUE-OTHER")).not.toBeInTheDocument();
+    });
+    expect(screen.getByText(/1\/3 oczekuje/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Wolne detale" }));
+    await waitFor(() => {
+      const waitingList = screen.getByTestId("qc-waiting-list");
+      expect(within(waitingList).getByText("QCITEM-DEMO-QUEUE")).toBeInTheDocument();
+      expect(within(waitingList).queryByText("QCITEM-DEMO-QUEUE-REWORK")).not.toBeInTheDocument();
+      expect(within(waitingList).queryByText("QCITEM-DEMO-QUEUE-OTHER")).not.toBeInTheDocument();
+    });
+    expect(screen.getByText(/1\/3 oczekuje/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cudze rezerwacje" }));
+    await waitFor(() => {
+      const waitingList = screen.getByTestId("qc-waiting-list");
+      expect(within(waitingList).getByText("QCITEM-DEMO-QUEUE-OTHER")).toBeInTheDocument();
+      expect(within(waitingList).queryByText("QCITEM-DEMO-QUEUE")).not.toBeInTheDocument();
+      expect(within(waitingList).queryByText("QCITEM-DEMO-QUEUE-REWORK")).not.toBeInTheDocument();
+    });
+    expect(
+      within(screen.getByTestId("qc-waiting-list")).getByRole("button", {
+        name: /QCITEM-DEMO-QUEUE-OTHER/i,
+      }),
+    ).toBeDisabled();
 
     fireEvent.click(screen.getByRole("button", { name: "Reset kolejki" }));
     await waitFor(() => {
       const waitingList = screen.getByTestId("qc-waiting-list");
       expect(within(waitingList).getByText("QCITEM-DEMO-QUEUE")).toBeInTheDocument();
       expect(within(waitingList).getByText("QCITEM-DEMO-QUEUE-REWORK")).toBeInTheDocument();
+      expect(within(waitingList).getByText("QCITEM-DEMO-QUEUE-OTHER")).toBeInTheDocument();
     });
 
     fireEvent.click(within(screen.getByTestId("qc-waiting-list")).getAllByRole("button")[0]);
@@ -621,7 +680,7 @@ describe("QcStationPage", () => {
         ?.textContent,
     ).toContain("QCITEM-DEMO-QUEUE");
     expect(screen.getByDisplayValue("QCBC-DEMO-QUEUE")).toBeInTheDocument();
-    expect(screen.getByText(/2\/2 oczekuje/i)).toBeInTheDocument();
+    expect(screen.getByText(/3\/3 oczekuje/i)).toBeInTheDocument();
   });
 
   it("dobiera checkliste po typie komponentu i wymaga danych dla FAIL", async () => {

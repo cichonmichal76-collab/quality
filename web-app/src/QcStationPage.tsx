@@ -103,6 +103,7 @@ interface StepPreview {
 }
 
 type WaitingItemsFilter = "ALL" | "PRODUCED" | "REWORK_REQUIRED";
+type WaitingItemsReservationFilter = "ALL" | "UNRESERVED" | "MINE" | "OTHER_RESERVED";
 type WaitingItemsSort = "OLDEST" | "NEWEST";
 type QcRunHistoryFilter = "ALL" | "FAIL" | "PASS" | "POST_LATEST_REWORK";
 type QcRunHistorySort = "NEWEST" | "OLDEST";
@@ -144,6 +145,8 @@ export function QcStationPage() {
   const [waitingItemsReloadKey, setWaitingItemsReloadKey] = useState(0);
   const [waitingItemsFilter, setWaitingItemsFilter] =
     useState<WaitingItemsFilter>("ALL");
+  const [waitingItemsReservationFilter, setWaitingItemsReservationFilter] =
+    useState<WaitingItemsReservationFilter>("ALL");
   const [waitingItemsSort, setWaitingItemsSort] =
     useState<WaitingItemsSort>("OLDEST");
   const [reservationState, setReservationState] = useState<LoadState>("idle");
@@ -236,7 +239,9 @@ export function QcStationPage() {
   const filteredWaitingItems = filterAndSortWaitingItems(
     waitingItems,
     waitingItemsFilter,
+    waitingItemsReservationFilter,
     waitingItemsSort,
+    authState?.operatorId ?? null,
   );
   const filteredQcRunHistory = filterAndSortQcRunHistory(
     qcRunHistory,
@@ -1000,21 +1005,51 @@ export function QcStationPage() {
   };
 
   const applyWaitingItemsPreset = (
-    preset: "PRODUCED" | "REWORK_REQUIRED" | "RESET",
+    preset:
+      | "PRODUCED"
+      | "REWORK_REQUIRED"
+      | "UNRESERVED"
+      | "MINE"
+      | "OTHER_RESERVED"
+      | "RESET",
   ) => {
     if (preset === "PRODUCED") {
       setWaitingItemsFilter("PRODUCED");
+      setWaitingItemsReservationFilter("ALL");
       setWaitingItemsSort("OLDEST");
       return;
     }
 
     if (preset === "REWORK_REQUIRED") {
       setWaitingItemsFilter("REWORK_REQUIRED");
+      setWaitingItemsReservationFilter("ALL");
+      setWaitingItemsSort("OLDEST");
+      return;
+    }
+
+    if (preset === "UNRESERVED") {
+      setWaitingItemsFilter("ALL");
+      setWaitingItemsReservationFilter("UNRESERVED");
+      setWaitingItemsSort("OLDEST");
+      return;
+    }
+
+    if (preset === "MINE") {
+      setWaitingItemsFilter("ALL");
+      setWaitingItemsReservationFilter("MINE");
+      setWaitingItemsSort("OLDEST");
+      return;
+    }
+
+    if (preset === "OTHER_RESERVED") {
+      setWaitingItemsFilter("ALL");
+      setWaitingItemsReservationFilter("OTHER_RESERVED");
       setWaitingItemsSort("OLDEST");
       return;
     }
 
     setWaitingItemsFilter("ALL");
+    setWaitingItemsReservationFilter("ALL");
     setWaitingItemsSort("OLDEST");
   };
 
@@ -1693,15 +1728,36 @@ export function QcStationPage() {
                   <button
                     className="ghost-button"
                     type="button"
+                    onClick={() => applyWaitingItemsPreset("MINE")}
+                  >
+                    Moje rezerwacje
+                  </button>
+                  <button
+                    className="ghost-button"
+                    type="button"
+                    onClick={() => applyWaitingItemsPreset("UNRESERVED")}
+                  >
+                    Wolne detale
+                  </button>
+                  <button
+                    className="ghost-button"
+                    type="button"
+                    onClick={() => applyWaitingItemsPreset("OTHER_RESERVED")}
+                  >
+                    Cudze rezerwacje
+                  </button>
+                  <button
+                    className="ghost-button"
+                    type="button"
                     onClick={() => applyWaitingItemsPreset("RESET")}
                   >
                     Reset kolejki
                   </button>
                 </div>
                 <label className="field">
-                  <span>Filtr kolejki QC</span>
+                  <span>Status kolejki QC</span>
                   <select
-                    aria-label="Filtr kolejki QC"
+                    aria-label="Status kolejki QC"
                     value={waitingItemsFilter}
                     onChange={(event) =>
                       setWaitingItemsFilter(event.target.value as WaitingItemsFilter)
@@ -1710,6 +1766,23 @@ export function QcStationPage() {
                     <option value="ALL">Wszystkie sztuki</option>
                     <option value="PRODUCED">Tylko nowe sztuki</option>
                     <option value="REWORK_REQUIRED">Tylko rework</option>
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Filtr rezerwacji QC</span>
+                  <select
+                    aria-label="Filtr rezerwacji QC"
+                    value={waitingItemsReservationFilter}
+                    onChange={(event) =>
+                      setWaitingItemsReservationFilter(
+                        event.target.value as WaitingItemsReservationFilter,
+                      )
+                    }
+                  >
+                    <option value="ALL">Wszystkie rezerwacje</option>
+                    <option value="UNRESERVED">Tylko wolne detale</option>
+                    <option value="MINE">Tylko moje rezerwacje</option>
+                    <option value="OTHER_RESERVED">Tylko cudze rezerwacje</option>
                   </select>
                 </label>
                 <label className="field">
@@ -3088,14 +3161,28 @@ function filterAndSortQcRunHistory(
 function filterAndSortWaitingItems(
   items: ProductionItemRead[],
   filter: WaitingItemsFilter,
+  reservationFilter: WaitingItemsReservationFilter,
   sort: WaitingItemsSort,
+  operatorId: string | null,
 ): ProductionItemRead[] {
   const filteredItems = items.filter((item) => {
-    if (filter === "ALL") {
+    if (filter !== "ALL" && item.current_status !== filter) {
+      return false;
+    }
+
+    if (reservationFilter === "ALL") {
       return true;
     }
 
-    return item.current_status === filter;
+    if (reservationFilter === "UNRESERVED") {
+      return !item.qc_reserved_by_operator_id;
+    }
+
+    if (reservationFilter === "MINE") {
+      return !!operatorId && item.qc_reserved_by_operator_id === operatorId;
+    }
+
+    return !!item.qc_reserved_by_operator_id && item.qc_reserved_by_operator_id !== operatorId;
   });
 
   return [...filteredItems].sort((left, right) => {
