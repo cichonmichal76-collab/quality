@@ -30,6 +30,7 @@ from app.schemas import (
 
 
 ALLOWED_EVALUATION_MODES = {"MANUAL", "NUMERIC_RANGE", "TEXT_MATCH"}
+QC_WAITING_ITEM_STATUSES = {"PRODUCED", "REWORK_REQUIRED"}
 
 
 def create_checklist(db: Session, payload: QcChecklistCreate) -> QcChecklist:
@@ -167,6 +168,53 @@ def list_checklists(
         variant_code=variant_code,
         component_type=component_type,
     )
+
+
+def list_waiting_items(
+    db: Session,
+    *,
+    component_type: str | None = None,
+    limit: int = 25,
+) -> list[ProductionItem]:
+    normalized_limit = max(1, min(limit, 100))
+    items = repository.list_waiting_production_items(
+        db,
+        component_type=component_type,
+        statuses=QC_WAITING_ITEM_STATUSES,
+        limit=normalized_limit,
+    )
+    if not items:
+        return []
+
+    checklists = repository.list_active_queue_checklists(
+        db,
+        component_type=component_type,
+    )
+    specific_checklists_by_component: dict[str, list[QcChecklist]] = {}
+    generic_checklists: list[QcChecklist] = []
+
+    for checklist in checklists:
+        if checklist.component_type:
+            specific_checklists_by_component.setdefault(
+                checklist.component_type,
+                [],
+            ).append(checklist)
+            continue
+        generic_checklists.append(checklist)
+
+    waiting_items: list[ProductionItem] = []
+    generic_qc_enabled = any(not checklist.skip_component_qc for checklist in generic_checklists)
+
+    for item in items:
+        matching_specific_checklists = specific_checklists_by_component.get(item.item_type, [])
+        if matching_specific_checklists:
+            if any(not checklist.skip_component_qc for checklist in matching_specific_checklists):
+                waiting_items.append(item)
+            continue
+        if generic_qc_enabled:
+            waiting_items.append(item)
+
+    return waiting_items
 
 
 def get_qc_product_configuration(

@@ -64,6 +64,28 @@ describe("QcStationPage", () => {
         ]);
       }
 
+      if (url.includes("/api/qc-waiting-items")) {
+        return jsonResponse([
+          {
+            id: "ITEM-ROW-001",
+            item_serial_number: "QCITEM-DEMO-LOCAL",
+            barcode_value: "QCBC-DEMO-LOCAL",
+            item_type: "FAN_MODULE",
+            part_number: "PN-FAN-001",
+            revision: "A",
+            drawing_number: null,
+            drawing_revision: null,
+            production_order: null,
+            material_batch: null,
+            machine_id: null,
+            created_by_operator_id: "QCOP-DEMO-LOCAL",
+            current_status: "PRODUCED",
+            produced_at: "2026-05-03T08:10:00Z",
+            created_at: "2026-05-03T08:10:00Z",
+          },
+        ]);
+      }
+
       if (url.endsWith("/api/auth/operator-login") && method === "POST") {
         return jsonResponse({
           id: "SESSION-ROW-001",
@@ -331,6 +353,10 @@ describe("QcStationPage", () => {
         ]);
       }
 
+      if (url.includes("/api/qc-waiting-items")) {
+        return jsonResponse([]);
+      }
+
       if (url.endsWith("/api/auth/rfid-login") && method === "POST") {
         return jsonResponse({
           id: "SESSION-ROW-002",
@@ -370,6 +396,151 @@ describe("QcStationPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Wyloguj" }));
 
     await screen.findByDisplayValue("qc-demo-local");
+  });
+
+  it("klikniecie komponentu z kolejki oczekujacych podstawia detal do kontroli", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+
+      if (url.endsWith("/api/operators")) {
+        return jsonResponse([
+          {
+            id: "OP-ROW-001",
+            operator_id: "QCOP-DEMO-LOCAL",
+            full_name: "Demo QC Inspector",
+            role: "QUALITY_INSPECTOR",
+            login_name: "qc-demo-local",
+            rfid_uid_hash: "QCRFID-DEMO-LOCAL",
+            is_active: true,
+            created_at: "2026-05-03T08:00:00Z",
+          },
+        ]);
+      }
+
+      if (url.endsWith("/api/workstations")) {
+        return jsonResponse([
+          {
+            id: "WS-ROW-001",
+            workstation_id: "QCWS-DEMO-LOCAL",
+            name: "QC Station Demo",
+            area: "QA",
+            station_type: "QC",
+            is_active: true,
+          },
+        ]);
+      }
+
+      if (url.endsWith("/api/qc-checklists")) {
+        return jsonResponse([
+          {
+            id: "CHK-001",
+            checklist_code: "QC-STATION-DEMO-LOCAL",
+            name: "Kontrola wentylatora",
+            process_stage: "COMPONENT_QC",
+            version: "1.0",
+            device_type: null,
+            variant_code: null,
+            component_type: "FAN_MODULE",
+            skip_component_qc: false,
+            reference_image_file_id: null,
+            is_active: true,
+            created_at: "2026-05-03T08:00:00Z",
+          },
+        ]);
+      }
+
+      if (url.includes("/api/qc-waiting-items")) {
+        return jsonResponse([
+          {
+            id: "ITEM-ROW-QUEUE",
+            item_serial_number: "QCITEM-DEMO-QUEUE",
+            barcode_value: "QCBC-DEMO-QUEUE",
+            item_type: "FAN_MODULE",
+            part_number: "PN-FAN-002",
+            revision: "B",
+            drawing_number: null,
+            drawing_revision: null,
+            production_order: null,
+            material_batch: null,
+            machine_id: null,
+            created_by_operator_id: "QCOP-DEMO-LOCAL",
+            current_status: "PRODUCED",
+            produced_at: "2026-05-03T08:15:00Z",
+            created_at: "2026-05-03T08:15:00Z",
+          },
+        ]);
+      }
+
+      if (url.endsWith("/api/auth/operator-login") && method === "POST") {
+        return jsonResponse({
+          id: "SESSION-ROW-001",
+          work_session_id: "WS-QA-001",
+          operator_id: "QCOP-DEMO-LOCAL",
+          workstation_id: "QCWS-DEMO-LOCAL",
+          machine_id: null,
+          status: "ACTIVE",
+          started_at: "2026-05-03T08:10:00Z",
+          ended_at: null,
+        });
+      }
+
+      if (url.endsWith("/api/qc-checklists/QC-STATION-DEMO-LOCAL/steps")) {
+        return jsonResponse([
+          {
+            id: "STEP-001",
+            checklist_id: "CHK-001",
+            step_order: 1,
+            title: "Sprawdz wyglad",
+            instruction: "Porownaj detal ze wzorcem.",
+            control_area: "Front",
+            evaluation_mode: "MANUAL",
+            result_input_label: null,
+            region_x: null,
+            region_y: null,
+            region_width: null,
+            region_height: null,
+            requires_photo: false,
+            requires_measurement: false,
+            blocking_on_fail: true,
+            expected_value: null,
+            unit: null,
+            tolerance_min: null,
+            tolerance_max: null,
+          },
+        ]);
+      }
+
+      throw new Error(`Unexpected request: ${method} ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.replaceState(null, "", "/qc-station");
+
+    render(<App />);
+
+    await screen.findByText(/Logowanie operatora/);
+
+    fireEvent.change(screen.getByPlaceholderText("np. qc-demo-local"), {
+      target: { value: "qc-demo-local" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Haslo operatora"), {
+      target: { value: "qc-demo-local-123" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Wejdz do aplikacji" }));
+
+    await screen.findByText("Sesja stanowiskowa");
+    await screen.findByTestId("qc-waiting-list");
+    fireEvent.click(screen.getByRole("button", { name: /QCITEM-DEMO-QUEUE/i }));
+
+    expect(
+      screen
+        .getByText("Serial komponentu")
+        .closest(".detail-card")
+        ?.textContent,
+    ).toContain("QCITEM-DEMO-QUEUE");
+    expect(screen.getByDisplayValue("QCBC-DEMO-QUEUE")).toBeInTheDocument();
+    expect(screen.getByText(/1 oczekuje/i)).toBeInTheDocument();
   });
 });
 

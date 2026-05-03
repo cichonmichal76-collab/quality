@@ -3109,6 +3109,81 @@ def test_qc_run_pass_updates_item_status():
     assert item.json()["current_status"] == "QC_PASSED"
 
 
+def test_qc_waiting_items_queue_returns_only_components_requiring_qc():
+    session = start_work_session(role="PRODUCTION_OPERATOR")
+
+    fan_checklist = client.post(
+        "/api/qc-checklists",
+        json={
+            "checklist_code": unique_id("CHK"),
+            "name": "Kontrola wentylatora",
+            "process_stage": "COMPONENT_QC",
+            "version": "1.0",
+            "component_type": "FAN_MODULE",
+        },
+    )
+    assert fan_checklist.status_code == 200
+
+    skip_checklist = client.post(
+        "/api/qc-checklists",
+        json={
+            "checklist_code": unique_id("CHK"),
+            "name": "Silikon bez kontroli",
+            "process_stage": "COMPONENT_QC",
+            "version": "1.0",
+            "component_type": "SILICONE_PACK",
+            "skip_component_qc": True,
+        },
+    )
+    assert skip_checklist.status_code == 200
+
+    def create_waiting_item(item_type: str, status_path: list[str]) -> dict:
+        item_serial_number = unique_id("ITEM")
+        barcode_value = unique_id("BC")
+        created = client.post(
+            "/api/production-items",
+            json={
+                "item_serial_number": item_serial_number,
+                "barcode_value": barcode_value,
+                "item_type": item_type,
+                "work_session_id": session["work_session_id"],
+                "workstation_id": session["workstation_id"],
+            },
+        )
+        assert created.status_code == 200
+
+        for status in status_path:
+            updated = client.patch(
+                f"/api/production-items/{item_serial_number}/status",
+                json={"current_status": status},
+            )
+            assert updated.status_code == 200
+
+        return created.json()
+
+    produced_fan = create_waiting_item("FAN_MODULE", ["PRODUCED"])
+    rework_fan = create_waiting_item("FAN_MODULE", ["PRODUCED", "QC_IN_PROGRESS", "REWORK_REQUIRED"])
+    skipped_silicone = create_waiting_item("SILICONE_PACK", ["PRODUCED"])
+    unknown_sensor = create_waiting_item("SENSOR_MODULE", ["PRODUCED"])
+    qc_passed_fan = create_waiting_item("FAN_MODULE", ["PRODUCED", "QC_IN_PROGRESS", "QC_PASSED"])
+
+    queue = client.get("/api/qc-waiting-items")
+    assert queue.status_code == 200
+    queue_rows = queue.json()
+    queue_serials = {row["item_serial_number"] for row in queue_rows}
+    assert produced_fan["item_serial_number"] in queue_serials
+    assert rework_fan["item_serial_number"] in queue_serials
+    assert skipped_silicone["item_serial_number"] not in queue_serials
+    assert unknown_sensor["item_serial_number"] not in queue_serials
+    assert qc_passed_fan["item_serial_number"] not in queue_serials
+
+    filtered = client.get("/api/qc-waiting-items?component_type=FAN_MODULE&limit=1")
+    assert filtered.status_code == 200
+    filtered_rows = filtered.json()
+    assert len(filtered_rows) == 1
+    assert filtered_rows[0]["item_type"] == "FAN_MODULE"
+
+
 def test_qc_run_pass_updates_installed_component_snapshot_and_queue_state():
     device_type = unique_id("DT")
     ensure_device_bom_template(device_type, component_type="CONTROL_PCB")

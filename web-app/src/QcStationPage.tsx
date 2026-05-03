@@ -7,6 +7,7 @@ import {
   createQcRun,
   getProductionItemByBarcode,
   joinApiUrl,
+  listQcWaitingItems,
   listOperators,
   listQcChecklists,
   listQcChecklistSteps,
@@ -96,6 +97,10 @@ export function QcStationPage() {
   const [lookupState, setLookupState] = useState<LoadState>("idle");
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<ProductionItemRead | null>(null);
+  const [waitingItemsState, setWaitingItemsState] = useState<LoadState>("idle");
+  const [waitingItemsError, setWaitingItemsError] = useState<string | null>(null);
+  const [waitingItems, setWaitingItems] = useState<ProductionItemRead[]>([]);
+  const [waitingItemsReloadKey, setWaitingItemsReloadKey] = useState(0);
   const [stepsState, setStepsState] = useState<LoadState>("idle");
   const [stepsError, setStepsError] = useState<string | null>(null);
   const [steps, setSteps] = useState<QcStepRead[]>([]);
@@ -129,8 +134,19 @@ export function QcStationPage() {
     activeWorkstations.find(
       (workstation) => workstation.workstation_id === selectedWorkstationId,
     ) ?? null;
+  const waitingItemsComponentType = selectedChecklist?.component_type?.trim() || undefined;
   const stepPreviews = buildStepPreviews(steps, stepDrafts);
   const referenceOverlayAreas = buildStationOverlayAreas(steps);
+  const selectItemForInspection = selectItemForInspectionFactory(
+    setSelectedItem,
+    setBarcodeValue,
+    setLookupState,
+    setLookupError,
+    setSubmitState,
+    setSubmitError,
+    setSubmitSuccess,
+    setCompletedRun,
+  );
 
   useEffect(() => {
     localStorage.setItem(API_STORAGE_KEY, apiBaseUrl);
@@ -326,6 +342,54 @@ export function QcStationPage() {
   }, [apiBaseUrl, authState, selectedChecklistCode]);
 
   useEffect(() => {
+    const trimmedApiBaseUrl = apiBaseUrl.trim();
+    if (!trimmedApiBaseUrl || !authState) {
+      setWaitingItems([]);
+      setWaitingItemsState("idle");
+      setWaitingItemsError(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    let isCurrentRequest = true;
+    setWaitingItemsState("loading");
+    setWaitingItemsError(null);
+
+    listQcWaitingItems(
+      trimmedApiBaseUrl,
+      {
+        component_type: waitingItemsComponentType,
+        limit: 25,
+      },
+      controller.signal,
+    )
+      .then((items) => {
+        if (!isCurrentRequest) {
+          return;
+        }
+
+        setWaitingItems(items);
+        setWaitingItemsState("loaded");
+      })
+      .catch((error: unknown) => {
+        if (!isCurrentRequest || controller.signal.aborted) {
+          return;
+        }
+
+        setWaitingItems([]);
+        setWaitingItemsState("error");
+        setWaitingItemsError(
+          getErrorMessage(error, "Nie udalo sie pobrac kolejki komponentow oczekujacych na QC."),
+        );
+      });
+
+    return () => {
+      isCurrentRequest = false;
+      controller.abort();
+    };
+  }, [apiBaseUrl, authState, waitingItemsComponentType, waitingItemsReloadKey]);
+
+  useEffect(() => {
     setLookupError(null);
     setSubmitState("idle");
     setSubmitError(null);
@@ -496,9 +560,7 @@ export function QcStationPage() {
 
     try {
       const item = await getProductionItemByBarcode(trimmedApiBaseUrl, trimmedBarcodeValue);
-      setSelectedItem(item);
-      setBarcodeValue(item.barcode_value);
-      setLookupState("loaded");
+      selectItemForInspection(item);
     } catch (error) {
       setSelectedItem(null);
       setLookupState("error");
@@ -506,6 +568,10 @@ export function QcStationPage() {
         getErrorMessage(error, "Nie znaleziono komponentu dla podanego barcode."),
       );
     }
+  };
+
+  const handlePickWaitingItem = (item: ProductionItemRead) => {
+    selectItemForInspection(item);
   };
 
   const handleStepDraftChange = (
@@ -600,6 +666,7 @@ export function QcStationPage() {
       );
 
       setSelectedItem(refreshedItem);
+      setWaitingItemsReloadKey((currentValue) => currentValue + 1);
       setCompletedRun(completed);
       setSubmitState("loaded");
       setSubmitSuccess(
@@ -625,6 +692,9 @@ export function QcStationPage() {
     setLookupState("idle");
     setLookupError(null);
     setSelectedItem(null);
+    setWaitingItems([]);
+    setWaitingItemsState("idle");
+    setWaitingItemsError(null);
     setSubmitState("idle");
     setSubmitError(null);
     setSubmitSuccess(null);
@@ -930,7 +1000,7 @@ export function QcStationPage() {
 
             <div className="filters-card">
               <div className="section-heading">
-                <h2>2. Skan detalu</h2>
+                <h2>2. Skan detalu i kolejka QC</h2>
                 <span className={`status-badge state-${lookupState}`}>
                   {lookupState === "loading"
                     ? "Szukam"
@@ -973,6 +1043,64 @@ export function QcStationPage() {
                   ) : null}
                 </div>
               </form>
+              <div className="details-inline-actions">
+                <span className="action-hint">
+                  Kolejka pokazuje elementy w statusie `PRODUCED` albo `REWORK_REQUIRED`
+                  {waitingItemsComponentType
+                    ? ` dla typu ${labelForCode(waitingItemsComponentType)}.`
+                    : "."}
+                </span>
+                <span className={`status-badge state-${waitingItemsState}`}>
+                  {waitingItemsState === "loading"
+                    ? "Kolejka laduje"
+                    : waitingItemsState === "loaded"
+                      ? `${waitingItems.length} oczekuje`
+                      : waitingItemsState === "error"
+                        ? "Blad kolejki"
+                        : "Kolejka idle"}
+                </span>
+              </div>
+              {waitingItemsError ? (
+                <div className="error-banner" role="alert">
+                  <strong>Nie udalo sie pobrac kolejki QC.</strong>
+                  <span>{waitingItemsError}</span>
+                </div>
+              ) : null}
+              {waitingItems.length === 0 ? (
+                <div className="empty-state qc-waiting-empty-state">
+                  <strong>Brak komponentow oczekujacych na QC</strong>
+                  <span>
+                    Gdy backend znajdzie detale gotowe do kontroli, pojawia sie tutaj
+                    lista do szybkiego pobrania bez przepisywania barcode.
+                  </span>
+                </div>
+              ) : (
+                <div className="qc-waiting-list" data-testid="qc-waiting-list">
+                  {waitingItems.map((item) => {
+                    const isSelected =
+                      selectedItem?.item_serial_number === item.item_serial_number;
+                    return (
+                      <button
+                        key={item.item_serial_number}
+                        className={`qc-waiting-item${isSelected ? " is-selected" : ""}`}
+                        type="button"
+                        onClick={() => handlePickWaitingItem(item)}
+                      >
+                        <div className="qc-waiting-item-copy">
+                          <strong>{item.item_serial_number}</strong>
+                          <span>
+                            {labelForCode(item.item_type)} | {item.barcode_value}
+                          </span>
+                        </div>
+                        <div className="qc-waiting-item-meta">
+                          <span>{labelForCode(item.current_status)}</span>
+                          <span>{formatDateTime(item.produced_at ?? item.created_at)}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
               {lookupError ? (
                 <div className="error-banner" role="alert">
                   <strong>Nie udalo sie pobrac komponentu.</strong>
@@ -1268,6 +1396,28 @@ function buildInitialStepDrafts(steps: QcStepRead[]): StepDraftMap {
   return Object.fromEntries(
     steps.map((step) => [step.id, createDefaultStepDraft(step.requires_measurement)]),
   );
+}
+
+function selectItemForInspectionFactory(
+  setSelectedItem: (item: ProductionItemRead | null) => void,
+  setBarcodeValue: (value: string) => void,
+  setLookupState: (state: LoadState) => void,
+  setLookupError: (value: string | null) => void,
+  setSubmitState: (state: LoadState) => void,
+  setSubmitError: (value: string | null) => void,
+  setSubmitSuccess: (value: string | null) => void,
+  setCompletedRun: (value: QcRunRead | null) => void,
+) {
+  return (item: ProductionItemRead) => {
+    setSelectedItem(item);
+    setBarcodeValue(item.barcode_value);
+    setLookupState("loaded");
+    setLookupError(null);
+    setSubmitState("idle");
+    setSubmitError(null);
+    setSubmitSuccess(null);
+    setCompletedRun(null);
+  };
 }
 
 function createDefaultStepDraft(_requiresMeasurement = false): StepDraft {

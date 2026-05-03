@@ -937,6 +937,26 @@ export async function listQcChecklistSteps(
   );
 }
 
+export async function listQcWaitingItems(
+  apiBaseUrl: string,
+  params: {
+    component_type?: string;
+    limit?: number;
+  } = {},
+  signal?: AbortSignal,
+): Promise<ProductionItemRead[]> {
+  return fetchJson<ProductionItemRead[]>(
+    joinApiUrl(
+      apiBaseUrl,
+      `/qc-waiting-items${buildQuery({
+        component_type: params.component_type,
+        limit: params.limit,
+      })}`,
+    ),
+    signal,
+  );
+}
+
 export async function createQcChecklist(
   apiBaseUrl: string,
   payload: QcChecklistCreatePayload,

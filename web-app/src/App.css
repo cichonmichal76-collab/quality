@@ -401,6 +401,62 @@ select:focus {
   margin-top: 16px;
 }
 
+.qc-waiting-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.qc-waiting-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgb(255 255 255 / 90%);
+  padding: 12px 14px;
+  color: inherit;
+  text-align: left;
+}
+
+.qc-waiting-item:hover {
+  border-color: rgb(34 107 95 / 28%);
+  background: rgb(34 107 95 / 6%);
+}
+
+.qc-waiting-item.is-selected {
+  border-color: rgb(34 107 95 / 44%);
+  box-shadow: 0 0 0 2px rgb(34 107 95 / 10%);
+  background: rgb(34 107 95 / 8%);
+}
+
+.qc-waiting-item-copy,
+.qc-waiting-item-meta {
+  display: grid;
+  gap: 4px;
+}
+
+.qc-waiting-item-copy strong {
+  color: var(--ink);
+}
+
+.qc-waiting-item-copy span,
+.qc-waiting-item-meta span {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.qc-waiting-item-meta {
+  justify-items: end;
+  text-align: right;
+}
+
+.qc-waiting-empty-state {
+  margin-top: 14px;
+}
+
 .qc-station-run-section {
   gap: 16px;
 }

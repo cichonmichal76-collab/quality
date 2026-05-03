@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.modules.qc import service
 from app.schemas import (
+    ProductionItemRead,
     QcChecklistCreate,
     QcChecklistRead,
     QcChecklistUpdate,
@@ -38,6 +39,19 @@ def list_checklists(
         device_type=device_type,
         variant_code=variant_code,
         component_type=component_type,
+    )
+
+
+@router.get("/qc-waiting-items", response_model=list[ProductionItemRead])
+def list_waiting_items(
+    component_type: str | None = None,
+    limit: int = 25,
+    db: Session = Depends(get_db),
+):
+    return service.list_waiting_items(
+        db,
+        component_type=component_type,
+        limit=limit,
     )
 
 

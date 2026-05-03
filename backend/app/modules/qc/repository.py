@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 
-from app.models import QcChecklist, QcRun, QcStep, QcStepResult
+from app.models import ProductionItem, QcChecklist, QcRun, QcStep, QcStepResult
 
 
 def get_checklist_by_code(db: Session, checklist_code: str) -> QcChecklist | None:
@@ -40,6 +40,46 @@ def get_component_qc_checklist(
         )
         .order_by(QcChecklist.created_at.desc())
         .first()
+    )
+
+
+def list_active_queue_checklists(
+    db: Session,
+    *,
+    component_type: str | None = None,
+) -> list[QcChecklist]:
+    query = db.query(QcChecklist).filter(
+        QcChecklist.is_active.is_(True),
+        QcChecklist.process_stage == "COMPONENT_QC",
+    )
+    if component_type is not None:
+        query = query.filter(
+            (QcChecklist.component_type == component_type)
+            | (QcChecklist.component_type.is_(None))
+        )
+    return query.order_by(QcChecklist.created_at.desc()).all()
+
+
+def list_waiting_production_items(
+    db: Session,
+    *,
+    component_type: str | None = None,
+    statuses: set[str],
+    limit: int,
+) -> list[ProductionItem]:
+    query = db.query(ProductionItem).filter(
+        ProductionItem.current_status.in_(sorted(statuses))
+    )
+    if component_type is not None:
+        query = query.filter(ProductionItem.item_type == component_type)
+    return (
+        query.order_by(
+            ProductionItem.produced_at.asc(),
+            ProductionItem.created_at.asc(),
+            ProductionItem.item_serial_number.asc(),
+        )
+        .limit(limit)
+        .all()
     )
 
 

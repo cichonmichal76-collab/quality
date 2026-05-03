@@ -171,6 +171,8 @@ Trasa `/qc-station` zaczyna sie teraz od ekranu startowego systemu kontroli jako
 - wejscie do stanowiska QC dopiero po uzyskaniu dostepu
 
 Po zalogowaniu stanowisko dowozi brakujacy krok z PRD:
+- kolejke `Komponenty oczekujace na QC` dla detali w statusie `PRODUCED` albo `REWORK_REQUIRED`
+- szybkie pobranie detalu z tej kolejki bez recznego przepisywania barcode
 - skan barcode komponentu
 - wybor aktywnej checklisty QC
 - wpisanie pomiarow albo wyniku kontroli
