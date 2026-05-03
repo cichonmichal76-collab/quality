@@ -5,6 +5,7 @@ import {
   addQcStepResult,
   completeQcRun,
   createQcRun,
+  getQcRunDetails,
   getProductionItemByBarcode,
   joinApiUrl,
   listQcItemClosedCriticalNcrs,
@@ -28,6 +29,7 @@ import type {
   OperatorRead,
   ProductionItemRead,
   QcChecklistRead,
+  QcRunDetailsRead,
   QcRunRead,
   QcStepRead,
   WorkstationRead,
@@ -141,6 +143,11 @@ export function QcStationPage() {
   const [qcRunHistoryState, setQcRunHistoryState] = useState<LoadState>("idle");
   const [qcRunHistoryError, setQcRunHistoryError] = useState<string | null>(null);
   const [qcRunHistory, setQcRunHistory] = useState<QcRunRead[]>([]);
+  const [selectedHistoryRunId, setSelectedHistoryRunId] = useState<string | null>(null);
+  const [selectedHistoryRunDetails, setSelectedHistoryRunDetails] =
+    useState<QcRunDetailsRead | null>(null);
+  const [qcRunDetailsState, setQcRunDetailsState] = useState<LoadState>("idle");
+  const [qcRunDetailsError, setQcRunDetailsError] = useState<string | null>(null);
   const [reworkAction, setReworkAction] = useState("");
   const [reworkActionState, setReworkActionState] = useState<LoadState>("idle");
   const [reworkActionError, setReworkActionError] = useState<string | null>(null);
@@ -494,6 +501,7 @@ export function QcStationPage() {
       setQcRunHistory([]);
       setQcRunHistoryState("idle");
       setQcRunHistoryError(null);
+      setSelectedHistoryRunId(null);
       return;
     }
 
@@ -552,6 +560,61 @@ export function QcStationPage() {
   }, [apiBaseUrl, authState, selectedItem]);
 
   useEffect(() => {
+    if (qcRunHistory.length === 0) {
+      if (selectedHistoryRunId !== null) {
+        setSelectedHistoryRunId(null);
+      }
+      return;
+    }
+
+    const hasSelectedRun = qcRunHistory.some((run) => run.run_id === selectedHistoryRunId);
+    if (!hasSelectedRun) {
+      setSelectedHistoryRunId(qcRunHistory[0]?.run_id ?? null);
+    }
+  }, [qcRunHistory, selectedHistoryRunId]);
+
+  useEffect(() => {
+    const trimmedApiBaseUrl = apiBaseUrl.trim();
+    if (!trimmedApiBaseUrl || !authState || !selectedItem || !selectedHistoryRunId) {
+      setSelectedHistoryRunDetails(null);
+      setQcRunDetailsState("idle");
+      setQcRunDetailsError(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    let isCurrentRequest = true;
+    setQcRunDetailsState("loading");
+    setQcRunDetailsError(null);
+
+    getQcRunDetails(trimmedApiBaseUrl, selectedHistoryRunId, controller.signal)
+      .then((details) => {
+        if (!isCurrentRequest) {
+          return;
+        }
+
+        setSelectedHistoryRunDetails(details);
+        setQcRunDetailsState("loaded");
+      })
+      .catch((error: unknown) => {
+        if (!isCurrentRequest || controller.signal.aborted) {
+          return;
+        }
+
+        setSelectedHistoryRunDetails(null);
+        setQcRunDetailsState("error");
+        setQcRunDetailsError(
+          getErrorMessage(error, "Nie udalo sie pobrac szczegolow wybranego runu QC."),
+        );
+      });
+
+    return () => {
+      isCurrentRequest = false;
+      controller.abort();
+    };
+  }, [apiBaseUrl, authState, selectedItem, selectedHistoryRunId]);
+
+  useEffect(() => {
     setLookupError(null);
     setSubmitState("idle");
     setSubmitError(null);
@@ -570,6 +633,10 @@ export function QcStationPage() {
     setQcRunHistory([]);
     setQcRunHistoryState("idle");
     setQcRunHistoryError(null);
+    setSelectedHistoryRunId(null);
+    setSelectedHistoryRunDetails(null);
+    setQcRunDetailsState("idle");
+    setQcRunDetailsError(null);
     setReworkAction("");
     setReworkActionState("idle");
     setReworkActionError(null);
@@ -1629,27 +1696,39 @@ export function QcStationPage() {
                     </div>
                   </div>
 
-                  {qcRunHistory.length > 0 ? (
-                    <div className="qc-evidence-list" data-testid="qc-run-history-list">
-                      {qcRunHistory.map((run) => (
-                        <div key={run.run_id} className="qc-evidence-item">
-                          <div className="qc-evidence-item-copy">
-                            <strong>{run.run_id}</strong>
-                            <span>
-                              {labelForCode(run.process_stage)} | {labelForCode(run.status)} |{" "}
-                              {labelForCode(run.result ?? "IN_PROGRESS")}
+                    {qcRunHistory.length > 0 ? (
+                      <div className="qc-evidence-list" data-testid="qc-run-history-list">
+                        {qcRunHistory.map((run) => (
+                          <button
+                            key={run.run_id}
+                            type="button"
+                            className={`qc-evidence-item qc-run-history-item${
+                              selectedHistoryRunId === run.run_id ? " is-selected" : ""
+                            }`}
+                            onClick={() => setSelectedHistoryRunId(run.run_id)}
+                          >
+                            <div className="qc-evidence-item-copy">
+                              <strong>{run.run_id}</strong>
+                              <span>
+                                {labelForCode(run.process_stage)} | {labelForCode(run.status)} |{" "}
+                                {labelForCode(run.result ?? "IN_PROGRESS")}
+                              </span>
+                              <span>
+                                {formatDateTime(run.started_at)}{" "}
+                                {run.ended_at ? `-> ${formatDateTime(run.ended_at)}` : ""}
+                              </span>
+                            </div>
+                            <span className="status-badge">
+                              {selectedHistoryRunId === run.run_id
+                                ? "Szczegoly aktywne"
+                                : "Pokaz szczegoly"}
                             </span>
-                            <span>
-                              {formatDateTime(run.started_at)}{" "}
-                              {run.ended_at ? `-> ${formatDateTime(run.ended_at)}` : ""}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="details-inline-actions">
-                      <span className="action-hint">
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="details-inline-actions">
+                        <span className="action-hint">
                         Brak wczesniejszych runow QC dla tego detalu.
                       </span>
                     </div>
@@ -1679,13 +1758,182 @@ export function QcStationPage() {
                     </div>
                   ) : (
                     <div className="details-inline-actions">
-                      <span className="action-hint">
-                        Brak zamknietych krytycznych NCR dla tego detalu.
-                      </span>
+                        <span className="action-hint">
+                          Brak zamknietych krytycznych NCR dla tego detalu.
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="detail-inline-card qc-run-details-card">
+                      <div className="detail-inline-header">
+                        <strong>2c. Szczegoly wybranego runu QC</strong>
+                        <span className={`status-badge state-${qcRunDetailsState}`}>
+                          {qcRunDetailsState === "loading"
+                            ? "Ladowanie"
+                            : qcRunDetailsState === "loaded"
+                              ? "Szczegoly gotowe"
+                              : qcRunDetailsState === "error"
+                                ? "Blad"
+                                : "Wybierz run"}
+                        </span>
+                      </div>
+                      <p>
+                        Szczegolowy podglad krokow, komentarzy, decyzji FAIL i plikow
+                        dowodowych dla zaznaczonego wpisu z historii.
+                      </p>
+
+                      {qcRunDetailsError ? (
+                        <div className="error-banner" role="alert">
+                          <strong>Nie udalo sie pobrac szczegolow runu.</strong>
+                          <span>{qcRunDetailsError}</span>
+                        </div>
+                      ) : null}
+
+                      {selectedHistoryRunDetails ? (
+                        <>
+                          <div className="details-grid qc-station-item-grid">
+                            <div className="detail-card">
+                              <span>Run ID</span>
+                              <strong>{selectedHistoryRunDetails.run_id}</strong>
+                            </div>
+                            <div className="detail-card">
+                              <span>Wynik</span>
+                              <strong>
+                                {labelForCode(
+                                  selectedHistoryRunDetails.result ?? selectedHistoryRunDetails.status,
+                                )}
+                              </strong>
+                            </div>
+                            <div className="detail-card">
+                              <span>Checklista</span>
+                              <strong>
+                                {selectedHistoryRunDetails.checklist_name ??
+                                  selectedHistoryRunDetails.checklist_code ??
+                                  "Brak checklisty"}
+                              </strong>
+                            </div>
+                            <div className="detail-card">
+                              <span>Pliki dowodowe</span>
+                              <strong>
+                                {selectedHistoryRunDetails.evidence_files.length} plik(ow)
+                              </strong>
+                            </div>
+                          </div>
+
+                          {(selectedHistoryRunDetails.failure_reason ||
+                            selectedHistoryRunDetails.failure_comment ||
+                            selectedHistoryRunDetails.failure_disposition) && (
+                            <div className="details-grid qc-station-item-grid">
+                              <div className="detail-card">
+                                <span>Decyzja FAIL</span>
+                                <strong>
+                                  {labelForCode(
+                                    selectedHistoryRunDetails.failure_disposition ?? "FAIL",
+                                  )}
+                                </strong>
+                              </div>
+                              <div className="detail-card">
+                                <span>Powod FAIL</span>
+                                <strong>
+                                  {labelForCode(
+                                    selectedHistoryRunDetails.failure_reason ?? "BRAK_POWODU",
+                                  )}
+                                </strong>
+                              </div>
+                              <div className="detail-card">
+                                <span>Komentarz FAIL</span>
+                                <strong>
+                                  {selectedHistoryRunDetails.failure_comment ??
+                                    "Brak zapisanego komentarza."}
+                                </strong>
+                              </div>
+                            </div>
+                          )}
+
+                          {selectedHistoryRunDetails.step_results.length > 0 ? (
+                            <div className="qc-evidence-list" data-testid="qc-run-detail-steps">
+                              {selectedHistoryRunDetails.step_results.map((stepResult) => (
+                                <div key={stepResult.id} className="qc-evidence-item">
+                                  <div className="qc-evidence-item-copy">
+                                    <strong>
+                                      Krok {stepResult.step_order}: {stepResult.step_title}
+                                    </strong>
+                                    <span>
+                                      {labelForCode(stepResult.evaluation_mode)} |{" "}
+                                      {labelForCode(stepResult.status)}
+                                    </span>
+                                    {stepResult.control_area ? (
+                                      <span>Obszar: {stepResult.control_area}</span>
+                                    ) : null}
+                                    {stepResult.measurement_value != null ? (
+                                      <span>
+                                        Pomiar: {stepResult.measurement_value}
+                                        {stepResult.unit ? ` ${stepResult.unit}` : ""}
+                                      </span>
+                                    ) : null}
+                                    {stepResult.observed_value ? (
+                                      <span>Wynik obserwowany: {stepResult.observed_value}</span>
+                                    ) : null}
+                                    {stepResult.expected_value ? (
+                                      <span>Wartosc oczekiwana: {stepResult.expected_value}</span>
+                                    ) : null}
+                                    {stepResult.comment ? (
+                                      <span>Komentarz: {stepResult.comment}</span>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="details-inline-actions">
+                              <span className="action-hint">
+                                Brak zapisanych wynikow krokow dla tego runu.
+                              </span>
+                            </div>
+                          )}
+
+                          {selectedHistoryRunDetails.evidence_files.length > 0 ? (
+                            <div className="qc-evidence-list" data-testid="qc-run-detail-files">
+                              {selectedHistoryRunDetails.evidence_files.map((file) => (
+                                <a
+                                  key={file.id}
+                                  className="qc-evidence-item qc-evidence-link"
+                                  href={joinApiUrl(apiBaseUrl, `/files/${file.id}`)}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  <div className="qc-evidence-item-copy">
+                                    <strong>{file.file_name}</strong>
+                                    <span>
+                                      {file.file_type ?? "plik"} | {formatDateTime(file.created_at)}
+                                    </span>
+                                    <span>
+                                      Zaladowal:{" "}
+                                      {file.uploaded_by ?? "brak"}
+                                    </span>
+                                  </div>
+                                  <span className="status-badge">Pobierz</span>
+                                </a>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="details-inline-actions">
+                              <span className="action-hint">
+                                Ten run nie ma zalaczonych plikow dowodowych.
+                              </span>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="details-inline-actions">
+                          <span className="action-hint">
+                            Wybierz run z historii, aby zobaczyc szczegoly krokow i plikow.
+                          </span>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              ) : null}
+                  </div>
+                ) : null}
             </div>
           </section>
 

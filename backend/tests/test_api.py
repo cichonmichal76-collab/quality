@@ -3219,6 +3219,17 @@ def test_qc_item_can_close_open_ncr_and_return_to_rework():
     )
     assert completed.status_code == 200
 
+    evidence_upload = client.post(
+        "/api/files/upload",
+        data={
+            "related_entity_type": "QC_RUN",
+            "related_entity_id": run_id,
+            "uploaded_by": quality_session["operator_id"],
+        },
+        files={"file": ("qc-fail.jpg", b"image-bytes", "image/jpeg")},
+    )
+    assert evidence_upload.status_code == 200
+
     ncr_rows = client.get(f"/api/qc-items/{item_serial_number}/open-critical-ncrs")
     assert ncr_rows.status_code == 200
     assert len(ncr_rows.json()) == 1
@@ -3229,6 +3240,18 @@ def test_qc_item_can_close_open_ncr_and_return_to_rework():
     assert len(run_history.json()) == 1
     assert run_history.json()[0]["run_id"] == run_id
     assert run_history.json()[0]["result"] == "FAIL"
+
+    run_details = client.get(f"/api/qc-runs/{run_id}/details")
+    assert run_details.status_code == 200
+    assert run_details.json()["run_id"] == run_id
+    assert run_details.json()["failure_reason"] == "VISUAL_DEFECT"
+    assert run_details.json()["failure_comment"] == "Housing cracked"
+    assert run_details.json()["failure_disposition"] == "OPEN_CRITICAL_NCR"
+    assert len(run_details.json()["step_results"]) == 1
+    assert run_details.json()["step_results"][0]["step_title"] == "Inspect housing"
+    assert run_details.json()["step_results"][0]["comment"] == "Housing cracked"
+    assert len(run_details.json()["evidence_files"]) == 1
+    assert run_details.json()["evidence_files"][0]["file_name"] == "qc-fail.jpg"
 
     released = client.post(
         f"/api/qc-items/{item_serial_number}/release-for-rework",

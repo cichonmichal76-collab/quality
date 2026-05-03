@@ -523,6 +523,37 @@ export interface QcRunRead extends QcRunCreatePayload {
   ended_at: string | null;
 }
 
+export interface QcRunStepResultDetailRead {
+  id: string;
+  qc_run_id: string;
+  step_id: string;
+  step_order: number;
+  step_title: string;
+  evaluation_mode: string;
+  result_input_label: string | null;
+  control_area: string | null;
+  expected_value: string | null;
+  tolerance_min: number | null;
+  tolerance_max: number | null;
+  unit: string | null;
+  status: string;
+  measurement_value: number | null;
+  observed_value: string | null;
+  comment: string | null;
+  mcu_snapshot?: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface QcRunDetailsRead extends QcRunRead {
+  checklist_code: string | null;
+  checklist_name: string | null;
+  failure_reason: string | null;
+  failure_comment: string | null;
+  failure_disposition: string | null;
+  step_results: QcRunStepResultDetailRead[];
+  evidence_files: FileRead[];
+}
+
 export interface CompleteQcRunOptions {
   result?: "PASS" | "FAIL";
   failure_reason?: string;
@@ -1044,6 +1075,17 @@ export async function listQcRunsForItem(
         limit,
       })}`,
     ),
+    signal,
+  );
+}
+
+export async function getQcRunDetails(
+  apiBaseUrl: string,
+  runId: string,
+  signal?: AbortSignal,
+): Promise<QcRunDetailsRead> {
+  return fetchJson<QcRunDetailsRead>(
+    joinApiUrl(apiBaseUrl, `/qc-runs/${encodeURIComponent(runId)}/details`),
     signal,
   );
 }

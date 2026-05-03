@@ -24,6 +24,8 @@ from app.schemas import (
     QcProductConfigurationRead,
     QcReworkReleaseRequest,
     QcRunCreate,
+    QcRunDetailsRead,
+    QcRunStepResultDetailRead,
     QcStepCreate,
     QcStepUpdate,
     QcStepResultCreate,
@@ -404,6 +406,84 @@ def get_qc_run_or_404(db: Session, run_id: str) -> QcRun:
     return run
 
 
+def get_qc_run_details(db: Session, run_id: str) -> QcRunDetailsRead:
+    run = get_qc_run_or_404(db, run_id)
+    checklist = None
+    if run.checklist_id:
+        checklist = db.query(QcChecklist).filter(QcChecklist.id == run.checklist_id).first()
+
+    step_results = repository.list_step_results_for_run(db, run.id)
+    checklist_steps = repository.list_checklist_steps(db, run.checklist_id) if run.checklist_id else []
+    steps_by_id = {step.id: step for step in checklist_steps}
+    detailed_step_results = sorted(
+        [
+            QcRunStepResultDetailRead(
+                id=result.id,
+                qc_run_id=result.qc_run_id,
+                step_id=result.step_id,
+                step_order=steps_by_id[result.step_id].step_order if result.step_id in steps_by_id else 0,
+                step_title=steps_by_id[result.step_id].title if result.step_id in steps_by_id else result.step_id,
+                evaluation_mode=steps_by_id[result.step_id].evaluation_mode
+                if result.step_id in steps_by_id
+                else "MANUAL",
+                result_input_label=steps_by_id[result.step_id].result_input_label
+                if result.step_id in steps_by_id
+                else None,
+                control_area=steps_by_id[result.step_id].control_area if result.step_id in steps_by_id else None,
+                expected_value=steps_by_id[result.step_id].expected_value
+                if result.step_id in steps_by_id
+                else None,
+                tolerance_min=float(steps_by_id[result.step_id].tolerance_min)
+                if result.step_id in steps_by_id and steps_by_id[result.step_id].tolerance_min is not None
+                else None,
+                tolerance_max=float(steps_by_id[result.step_id].tolerance_max)
+                if result.step_id in steps_by_id and steps_by_id[result.step_id].tolerance_max is not None
+                else None,
+                unit=steps_by_id[result.step_id].unit if result.step_id in steps_by_id else None,
+                status=result.status,
+                measurement_value=float(result.measurement_value)
+                if result.measurement_value is not None
+                else None,
+                observed_value=result.observed_value,
+                comment=result.comment,
+                mcu_snapshot=result.mcu_snapshot,
+                created_at=result.created_at,
+            )
+            for result in step_results
+        ],
+        key=lambda row: (row.step_order, row.created_at, row.id),
+    )
+
+    completed_audit_event = repository.get_latest_run_completed_audit_event(db, run.run_id)
+    completed_payload = completed_audit_event.payload if completed_audit_event else {}
+    if not isinstance(completed_payload, dict):
+        completed_payload = {}
+
+    return QcRunDetailsRead(
+        id=run.id,
+        run_id=run.run_id,
+        device_serial_number=run.device_serial_number,
+        item_serial_number=run.item_serial_number,
+        barcode_value=run.barcode_value,
+        checklist_id=run.checklist_id,
+        process_stage=run.process_stage,
+        operator_id=run.operator_id,
+        status=run.status,
+        result=run.result,
+        started_at=run.started_at,
+        ended_at=run.ended_at,
+        checklist_code=checklist.checklist_code if checklist else None,
+        checklist_name=checklist.name if checklist else None,
+        failure_reason=_as_optional_payload_text(completed_payload.get("failure_reason")),
+        failure_comment=_as_optional_payload_text(completed_payload.get("failure_comment")),
+        failure_disposition=_as_optional_payload_text(
+            completed_payload.get("failure_disposition")
+        ),
+        step_results=detailed_step_results,
+        evidence_files=repository.list_run_evidence_files(db, run.run_id),
+    )
+
+
 def add_qc_step_result(
     db: Session,
     run_id: str,
@@ -634,6 +714,12 @@ def _normalize_optional_text(value: str | None) -> str | None:
         return None
     normalized = value.strip()
     return normalized or None
+
+
+def _as_optional_payload_text(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    return _normalize_optional_text(value)
 
 
 def _normalize_failure_disposition(value: str | None) -> str:

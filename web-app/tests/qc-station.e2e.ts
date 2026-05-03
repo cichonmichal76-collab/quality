@@ -271,6 +271,19 @@ test("qc station starts from login screen and supports RFID entry", async ({ pag
       return;
     }
 
+    if (
+      pathname.includes("/open-critical-ncrs") ||
+      pathname.includes("/closed-critical-ncrs") ||
+      pathname.includes("/runs")
+    ) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([]),
+      });
+      return;
+    }
+
     await route.abort();
   });
 
@@ -462,6 +475,19 @@ test("qc station pozwala pobrac detal z kolejki oczekujacych na QC", async ({ pa
             tolerance_max: null,
           },
         ]),
+      });
+      return;
+    }
+
+    if (
+      pathname.includes("/open-critical-ncrs") ||
+      pathname.includes("/closed-critical-ncrs") ||
+      pathname.includes("/runs")
+    ) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([]),
       });
       return;
     }
@@ -714,6 +740,68 @@ test("qc station pozwala zamknac NCR i przywrocic detal do reworku", async ({ pa
       return;
     }
 
+    if (pathname === "/api/qc-runs/QC-WEB-REWORK/details") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: "QC-ROW-REWORK",
+          run_id: "QC-WEB-REWORK",
+          device_serial_number: null,
+          item_serial_number: "QCITEM-DEMO-REWORK",
+          barcode_value: "QCBC-DEMO-REWORK",
+          checklist_id: "CHK-REWORK",
+          checklist_code: "QC-STATION-DEMO-LOCAL",
+          checklist_name: "Kontrola wentylatora",
+          process_stage: "COMPONENT_QC",
+          operator_id: "QCOP-DEMO-LOCAL",
+          status: "COMPLETED",
+          result: "FAIL",
+          started_at: "2026-05-03T08:17:00Z",
+          ended_at: "2026-05-03T08:19:00Z",
+          failure_reason: "VISUAL_DEFECT",
+          failure_comment: "Pekniecie obudowy.",
+          failure_disposition: "OPEN_CRITICAL_NCR",
+          step_results: [
+            {
+              id: "STEP-RESULT-REWORK-001",
+              qc_run_id: "QC-ROW-REWORK",
+              step_id: "STEP-REWORK-001",
+              step_order: 1,
+              step_title: "Sprawdz obudowe",
+              evaluation_mode: "MANUAL",
+              result_input_label: null,
+              control_area: "Obudowa",
+              expected_value: null,
+              tolerance_min: null,
+              tolerance_max: null,
+              unit: null,
+              status: "FAIL",
+              measurement_value: null,
+              observed_value: null,
+              comment: "Pekniecie obudowy.",
+              mcu_snapshot: null,
+              created_at: "2026-05-03T08:17:30Z",
+            },
+          ],
+          evidence_files: [
+            {
+              id: "FILE-REWORK-001",
+              related_entity_type: "QC_RUN",
+              related_entity_id: "QC-WEB-REWORK",
+              file_name: "pekniecie-obudowy.jpg",
+              file_path: "/storage/files/pekniecie-obudowy.jpg",
+              file_type: "image/jpeg",
+              file_hash: "hash-rework-001",
+              uploaded_by: "QCOP-DEMO-LOCAL",
+              created_at: "2026-05-03T08:18:00Z",
+            },
+          ],
+        }),
+      });
+      return;
+    }
+
     if (pathname === "/api/qc-items/QCITEM-DEMO-REWORK/release-for-rework" && method === "POST") {
       releasedForRework = true;
       await route.fulfill({
@@ -740,6 +828,19 @@ test("qc station pozwala zamknac NCR i przywrocic detal do reworku", async ({ pa
       return;
     }
 
+    if (
+      pathname.includes("/open-critical-ncrs") ||
+      pathname.includes("/closed-critical-ncrs") ||
+      pathname.includes("/runs")
+    ) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([]),
+      });
+      return;
+    }
+
     await route.abort();
   });
 
@@ -750,12 +851,21 @@ test("qc station pozwala zamknac NCR i przywrocic detal do reworku", async ({ pa
   await page.getByRole("button", { name: "Wejdz do aplikacji" }).click();
 
   await expect(page.getByRole("heading", { name: "Sesja stanowiskowa" })).toBeVisible();
-  await page.getByRole("button", { name: /QCITEM-DEMO-REWORK/i }).click();
+    await page.getByRole("button", { name: /QCITEM-DEMO-REWORK/i }).click();
 
-  await expect(page.getByText("NCR-QC-REWORK-001")).toBeVisible();
-  await expect(page.getByText("QC-WEB-REWORK")).toBeVisible();
+    await expect(page.getByText("NCR-QC-REWORK-001")).toBeVisible();
+    await expect(
+      page.getByTestId("qc-run-history-list").getByText("QC-WEB-REWORK"),
+    ).toBeVisible();
+    await expect(page.getByTestId("qc-run-detail-steps")).toBeVisible();
+    await expect(
+      page.getByTestId("qc-run-detail-steps").getByText("Pekniecie obudowy."),
+    ).toBeVisible();
+    await expect(page.getByTestId("qc-run-detail-files")).toContainText(
+      "pekniecie-obudowy.jpg",
+    );
 
-  await page.getByRole("button", { name: "Zamknij NCR i przywroc do reworku" }).click();
+    await page.getByRole("button", { name: "Zamknij NCR i przywroc do reworku" }).click();
   await expect(
     page.getByText("Wpisz akcje korygujaca przed przywroceniem detalu do reworku."),
   ).toBeVisible();

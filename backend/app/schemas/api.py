@@ -606,6 +606,27 @@ class QcRunRead(QcRunBase):
     model_config = {"from_attributes": True}
 
 
+class QcRunStepResultDetailRead(BaseModel):
+    id: str
+    qc_run_id: str
+    step_id: str
+    step_order: int
+    step_title: str
+    evaluation_mode: str
+    result_input_label: str | None = None
+    control_area: str | None = None
+    expected_value: str | None = None
+    tolerance_min: float | None = None
+    tolerance_max: float | None = None
+    unit: str | None = None
+    status: str
+    measurement_value: float | None = None
+    observed_value: str | None = None
+    comment: str | None = None
+    mcu_snapshot: dict[str, Any] | None = None
+    created_at: datetime
+
+
 class QcReworkReleaseRequest(BaseModel):
     work_session_id: str
     operator_id: str | None = None
@@ -778,6 +799,16 @@ class FileRead(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class QcRunDetailsRead(QcRunRead):
+    checklist_code: str | None = None
+    checklist_name: str | None = None
+    failure_reason: str | None = None
+    failure_comment: str | None = None
+    failure_disposition: str | None = None
+    step_results: list[QcRunStepResultDetailRead]
+    evidence_files: list[FileRead]
 
 
 class OperatorCreate(BaseModel):

@@ -1,6 +1,15 @@
 from sqlalchemy.orm import Session
 
-from app.models import Nonconformity, ProductionItem, QcChecklist, QcRun, QcStep, QcStepResult
+from app.models import (
+    AuditEvent,
+    Nonconformity,
+    ProductionItem,
+    QcChecklist,
+    QcRun,
+    QcStep,
+    QcStepResult,
+    StoredFile,
+)
 
 
 def get_checklist_by_code(db: Session, checklist_code: str) -> QcChecklist | None:
@@ -144,4 +153,32 @@ def list_step_results_for_run(db: Session, qc_run_id: str) -> list[QcStepResult]
         .filter(QcStepResult.qc_run_id == qc_run_id)
         .order_by(QcStepResult.created_at.asc())
         .all()
+    )
+
+
+def list_run_evidence_files(db: Session, run_id: str) -> list[StoredFile]:
+    return (
+        db.query(StoredFile)
+        .filter(
+            StoredFile.related_entity_type == "QC_RUN",
+            StoredFile.related_entity_id == run_id,
+        )
+        .order_by(StoredFile.created_at.asc(), StoredFile.id.asc())
+        .all()
+    )
+
+
+def get_latest_run_completed_audit_event(
+    db: Session,
+    run_id: str,
+) -> AuditEvent | None:
+    return (
+        db.query(AuditEvent)
+        .filter(
+            AuditEvent.entity_type == "QC_RUN",
+            AuditEvent.entity_id == run_id,
+            AuditEvent.event_type == "QC_RUN_COMPLETED",
+        )
+        .order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc())
+        .first()
     )

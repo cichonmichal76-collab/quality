@@ -12,6 +12,7 @@ import {
   createWorkstation,
   deleteQcChecklistStep,
   getQcProductConfiguration,
+  getQcRunDetails,
   getProductionItemByBarcode,
   getServiceSession,
   joinApiUrl,
@@ -292,6 +293,81 @@ describe("qc item rework helpers", () => {
     expect(payload).toHaveLength(1);
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/qc-items/ITEM-001/runs?limit=8",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+      }),
+    );
+  });
+
+  it("pobiera szczegoly wybranego QC run", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => ({
+        id: "QC-ROW-001",
+        run_id: "QC-WEB-001",
+        device_serial_number: null,
+        item_serial_number: "ITEM-001",
+        barcode_value: "BC-001",
+        checklist_id: "CHK-001",
+        checklist_code: "QC-STATION-001",
+        checklist_name: "Kontrola obudowy",
+        process_stage: "COMPONENT_QC",
+        operator_id: "OP-QC-001",
+        status: "COMPLETED",
+        result: "FAIL",
+        started_at: "2026-05-03T09:20:00Z",
+        ended_at: "2026-05-03T09:22:00Z",
+        failure_reason: "VISUAL_DEFECT",
+        failure_comment: "Rysa na obudowie",
+        failure_disposition: "OPEN_CRITICAL_NCR",
+        step_results: [
+          {
+            id: "STEP-RESULT-001",
+            qc_run_id: "QC-ROW-001",
+            step_id: "STEP-001",
+            step_order: 1,
+            step_title: "Sprawdz obudowe",
+            evaluation_mode: "MANUAL",
+            result_input_label: null,
+            control_area: "Obudowa",
+            expected_value: null,
+            tolerance_min: null,
+            tolerance_max: null,
+            unit: null,
+            status: "FAIL",
+            measurement_value: null,
+            observed_value: null,
+            comment: "Rysa na obudowie",
+            mcu_snapshot: null,
+            created_at: "2026-05-03T09:20:30Z",
+          },
+        ],
+        evidence_files: [
+          {
+            id: "FILE-001",
+            related_entity_type: "QC_RUN",
+            related_entity_id: "QC-WEB-001",
+            file_name: "scratch.jpg",
+            file_path: "/storage/files/scratch.jpg",
+            file_type: "image/jpeg",
+            file_hash: "hash-001",
+            uploaded_by: "OP-QC-001",
+            created_at: "2026-05-03T09:21:00Z",
+          },
+        ],
+      }),
+    } satisfies Partial<Response>);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const payload = await getQcRunDetails("/api", "QC-WEB-001");
+
+    expect(payload.run_id).toBe("QC-WEB-001");
+    expect(payload.step_results).toHaveLength(1);
+    expect(payload.evidence_files[0]?.file_name).toBe("scratch.jpg");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/qc-runs/QC-WEB-001/details",
       expect.objectContaining({
         headers: { Accept: "application/json" },
       }),

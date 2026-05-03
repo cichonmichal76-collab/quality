@@ -13,6 +13,7 @@ from app.schemas import (
     QcProductConfigurationRead,
     QcReworkReleaseRequest,
     QcRunCreate,
+    QcRunDetailsRead,
     QcRunRead,
     QcStepCreate,
     QcStepRead,
@@ -189,6 +190,11 @@ def create_qc_run(payload: QcRunCreate, db: Session = Depends(get_db)):
 @router.get("/qc-runs/{run_id}", response_model=QcRunRead)
 def get_qc_run(run_id: str, db: Session = Depends(get_db)):
     return service.get_qc_run_or_404(db, run_id)
+
+
+@router.get("/qc-runs/{run_id}/details", response_model=QcRunDetailsRead)
+def get_qc_run_details(run_id: str, db: Session = Depends(get_db)):
+    return service.get_qc_run_details(db, run_id)
 
 
 @router.post("/qc-runs/{run_id}/steps/{step_id}/result", response_model=QcStepResultRead)

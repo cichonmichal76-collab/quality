@@ -223,6 +223,14 @@ describe("QcStationPage", () => {
         });
       }
 
+      if (
+        url.includes("/open-critical-ncrs") ||
+        url.includes("/closed-critical-ncrs") ||
+        url.includes("/runs?limit=10")
+      ) {
+        return jsonResponse([]);
+      }
+
       throw new Error(`Unexpected request: ${method} ${url}`);
     });
 
@@ -374,6 +382,14 @@ describe("QcStationPage", () => {
         return jsonResponse([]);
       }
 
+      if (
+        url.includes("/open-critical-ncrs") ||
+        url.includes("/closed-critical-ncrs") ||
+        url.includes("/runs?limit=10")
+      ) {
+        return jsonResponse([]);
+      }
+
       throw new Error(`Unexpected request: ${method} ${url}`);
     });
 
@@ -509,6 +525,14 @@ describe("QcStationPage", () => {
             tolerance_max: null,
           },
         ]);
+      }
+
+      if (
+        url.includes("/open-critical-ncrs") ||
+        url.includes("/closed-critical-ncrs") ||
+        url.includes("/runs?limit=10")
+      ) {
+        return jsonResponse([]);
       }
 
       throw new Error(`Unexpected request: ${method} ${url}`);
@@ -750,6 +774,14 @@ describe("QcStationPage", () => {
           produced_at: "2026-05-03T08:16:00Z",
           created_at: "2026-05-03T08:16:00Z",
         });
+      }
+
+      if (
+        url.includes("/open-critical-ncrs") ||
+        url.includes("/closed-critical-ncrs") ||
+        url.includes("/runs?limit=10")
+      ) {
+        return jsonResponse([]);
       }
 
       throw new Error(`Unexpected request: ${method} ${url}`);
@@ -1015,6 +1047,63 @@ describe("QcStationPage", () => {
         ]);
       }
 
+      if (url.endsWith("/api/qc-runs/QC-WEB-REWORK/details")) {
+        return jsonResponse({
+          id: "QC-ROW-REWORK",
+          run_id: "QC-WEB-REWORK",
+          device_serial_number: null,
+          item_serial_number: "QCITEM-DEMO-REWORK",
+          barcode_value: "QCBC-DEMO-REWORK",
+          checklist_id: "CHK-REWORK",
+          checklist_code: "QC-STATION-DEMO-LOCAL",
+          checklist_name: "Kontrola wentylatora",
+          process_stage: "COMPONENT_QC",
+          operator_id: "QCOP-DEMO-LOCAL",
+          status: "COMPLETED",
+          result: "FAIL",
+          started_at: "2026-05-03T08:17:00Z",
+          ended_at: "2026-05-03T08:19:00Z",
+          failure_reason: "VISUAL_DEFECT",
+          failure_comment: "Pekniecie obudowy.",
+          failure_disposition: "OPEN_CRITICAL_NCR",
+          step_results: [
+            {
+              id: "STEP-RESULT-REWORK-001",
+              qc_run_id: "QC-ROW-REWORK",
+              step_id: "STEP-REWORK-001",
+              step_order: 1,
+              step_title: "Sprawdz obudowe",
+              evaluation_mode: "MANUAL",
+              result_input_label: null,
+              control_area: "Obudowa",
+              expected_value: null,
+              tolerance_min: null,
+              tolerance_max: null,
+              unit: null,
+              status: "FAIL",
+              measurement_value: null,
+              observed_value: null,
+              comment: "Pekniecie obudowy.",
+              mcu_snapshot: null,
+              created_at: "2026-05-03T08:17:30Z",
+            },
+          ],
+          evidence_files: [
+            {
+              id: "FILE-REWORK-001",
+              related_entity_type: "QC_RUN",
+              related_entity_id: "QC-WEB-REWORK",
+              file_name: "pekniecie-obudowy.jpg",
+              file_path: "/storage/files/pekniecie-obudowy.jpg",
+              file_type: "image/jpeg",
+              file_hash: "hash-rework-001",
+              uploaded_by: "QCOP-DEMO-LOCAL",
+              created_at: "2026-05-03T08:18:00Z",
+            },
+          ],
+        });
+      }
+
       if (
         url.endsWith("/api/qc-items/QCITEM-DEMO-REWORK/release-for-rework") &&
         method === "POST"
@@ -1039,6 +1128,14 @@ describe("QcStationPage", () => {
         });
       }
 
+      if (
+        url.includes("/open-critical-ncrs") ||
+        url.includes("/closed-critical-ncrs") ||
+        url.includes("/runs?limit=10")
+      ) {
+        return jsonResponse([]);
+      }
+
       throw new Error(`Unexpected request: ${method} ${url}`);
     });
 
@@ -1061,13 +1158,16 @@ describe("QcStationPage", () => {
     await screen.findByText(/1 oczekuje/i);
     fireEvent.click(screen.getByRole("button", { name: /QCITEM-DEMO-REWORK/i }));
 
-    await screen.findByText("NCR-QC-REWORK-001");
-    await screen.findByText("QC-WEB-REWORK");
-    expect(screen.getByTestId("qc-run-history-list")).toBeInTheDocument();
+      await screen.findByText("NCR-QC-REWORK-001");
+      await screen.findByText("QC-WEB-REWORK");
+      expect(screen.getByTestId("qc-run-history-list")).toBeInTheDocument();
+      await screen.findByTestId("qc-run-detail-steps");
+      expect(screen.getByText("Pekniecie obudowy.")).toBeInTheDocument();
+      expect(screen.getByText("pekniecie-obudowy.jpg")).toBeInTheDocument();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Zamknij NCR i przywroc do reworku" }),
-    );
+      fireEvent.click(
+        screen.getByRole("button", { name: "Zamknij NCR i przywroc do reworku" }),
+      );
     await screen.findByText(
       "Wpisz akcje korygujaca przed przywroceniem detalu do reworku.",
     );
