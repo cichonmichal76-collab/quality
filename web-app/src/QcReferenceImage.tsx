@@ -1,4 +1,4 @@
-import type { MouseEventHandler, Ref } from "react";
+import type { MouseEvent as ReactMouseEvent, MouseEventHandler, Ref } from "react";
 
 export interface QcReferenceOverlayArea {
   id: string;
@@ -9,6 +9,8 @@ export interface QcReferenceOverlayArea {
   width: number;
   height: number;
 }
+
+export type QcReferenceResizeHandle = "nw" | "ne" | "sw" | "se";
 
 interface QcReferenceImageProps {
   imageUrl: string;
@@ -23,6 +25,12 @@ interface QcReferenceImageProps {
   onStageMouseDown?: MouseEventHandler<HTMLDivElement>;
   onStageMouseMove?: MouseEventHandler<HTMLDivElement>;
   onStageMouseUp?: MouseEventHandler<HTMLDivElement>;
+  onAreaMouseDown?: (areaId: string, event: ReactMouseEvent<HTMLDivElement>) => void;
+  onResizeHandleMouseDown?: (
+    areaId: string,
+    handle: QcReferenceResizeHandle,
+    event: ReactMouseEvent<HTMLButtonElement>,
+  ) => void;
 }
 
 export function QcReferenceImage({
@@ -38,6 +46,8 @@ export function QcReferenceImage({
   onStageMouseDown,
   onStageMouseMove,
   onStageMouseUp,
+  onAreaMouseDown,
+  onResizeHandleMouseDown,
 }: QcReferenceImageProps) {
   return (
     <div className="qc-reference-inline">
@@ -55,7 +65,7 @@ export function QcReferenceImage({
             {areas.map((area) => (
               <div
                 key={area.id}
-                className={`qc-reference-region${activeAreaId === area.id ? " is-active" : ""}`}
+                className={`qc-reference-region${activeAreaId === area.id ? " is-active is-editable" : ""}`}
                 style={{
                   left: `${area.x}%`,
                   top: `${area.y}%`,
@@ -63,8 +73,46 @@ export function QcReferenceImage({
                   height: `${area.height}%`,
                 }}
                 title={area.title}
+                onMouseDown={
+                  activeAreaId === area.id && onAreaMouseDown
+                    ? (event) => onAreaMouseDown(area.id, event)
+                    : undefined
+                }
+                data-testid={`qc-reference-region-${area.id}`}
               >
                 <span className="qc-reference-region-label">{area.label}</span>
+                {activeAreaId === area.id && onResizeHandleMouseDown ? (
+                  <>
+                    <button
+                      className="qc-reference-handle is-nw"
+                      type="button"
+                      aria-label="Zmien rozmiar z lewego gornego rogu"
+                      onMouseDown={(event) => onResizeHandleMouseDown(area.id, "nw", event)}
+                      data-testid={`qc-reference-handle-${area.id}-nw`}
+                    />
+                    <button
+                      className="qc-reference-handle is-ne"
+                      type="button"
+                      aria-label="Zmien rozmiar z prawego gornego rogu"
+                      onMouseDown={(event) => onResizeHandleMouseDown(area.id, "ne", event)}
+                      data-testid={`qc-reference-handle-${area.id}-ne`}
+                    />
+                    <button
+                      className="qc-reference-handle is-sw"
+                      type="button"
+                      aria-label="Zmien rozmiar z lewego dolnego rogu"
+                      onMouseDown={(event) => onResizeHandleMouseDown(area.id, "sw", event)}
+                      data-testid={`qc-reference-handle-${area.id}-sw`}
+                    />
+                    <button
+                      className="qc-reference-handle is-se"
+                      type="button"
+                      aria-label="Zmien rozmiar z prawego dolnego rogu"
+                      onMouseDown={(event) => onResizeHandleMouseDown(area.id, "se", event)}
+                      data-testid={`qc-reference-handle-${area.id}-se`}
+                    />
+                  </>
+                ) : null}
               </div>
             ))}
             {draftArea ? (

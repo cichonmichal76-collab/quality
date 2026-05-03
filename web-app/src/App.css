@@ -1327,6 +1327,10 @@ td span {
     0 0 0 4px rgb(34 107 95 / 18%);
 }
 
+.qc-reference-region.is-editable {
+  pointer-events: auto;
+}
+
 .qc-reference-region.is-draft {
   border-style: dashed;
   border-color: rgb(34 107 95 / 78%);
@@ -1344,6 +1348,41 @@ td span {
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.04em;
+}
+
+.qc-reference-handle {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border: 2px solid white;
+  border-radius: 999px;
+  background: rgb(34 107 95 / 96%);
+  padding: 0;
+  box-shadow: 0 0 0 1px rgb(23 32 27 / 24%);
+}
+
+.qc-reference-handle.is-nw {
+  top: -7px;
+  left: -7px;
+  cursor: nwse-resize;
+}
+
+.qc-reference-handle.is-ne {
+  top: -7px;
+  right: -7px;
+  cursor: nesw-resize;
+}
+
+.qc-reference-handle.is-sw {
+  bottom: -7px;
+  left: -7px;
+  cursor: nesw-resize;
+}
+
+.qc-reference-handle.is-se {
+  right: -7px;
+  bottom: -7px;
+  cursor: nwse-resize;
 }
 
 .qc-reference-helper {

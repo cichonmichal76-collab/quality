@@ -223,6 +223,8 @@ Panel pozwala:
   `Szerokosc` i `Wysokosc` liczone w procentach obrazu
 - ustawic ten sam obszar szybciej przez klikniecie `Ustaw z obrazu` i przeciagniecie
   myszka bezposrednio po zdjeciu referencyjnym
+- przesunac gotowy prostokat po obrazie albo skorygowac go narożnikami bez
+  ponownego rysowania od zera
 - ustawic wartosci oczekiwane i granice dla trybow `TEXT_MATCH` oraz `NUMERIC_RANGE`
 
 Konfiguracja `Produkt QC` sluzy do zbudowania planu kontroli na podstawie BOM.

@@ -426,6 +426,26 @@ describe("AdminPage", () => {
     expect((screen.getByPlaceholderText("np. 36") as HTMLInputElement).value).toBe("50");
     expect((screen.getByPlaceholderText("np. 24") as HTMLInputElement).value).toBe("40");
 
+    const activeRegion = screen.getByTestId(/qc-reference-region-/);
+    fireEvent.mouseDown(activeRegion, { button: 0, clientX: 60, clientY: 30 });
+    fireEvent.mouseMove(window, { clientX: 80, clientY: 40 });
+    fireEvent.mouseUp(window, { clientX: 80, clientY: 40 });
+
+    expect((screen.getByPlaceholderText("np. 12") as HTMLInputElement).value).toBe("30");
+    expect((screen.getByPlaceholderText("np. 18") as HTMLInputElement).value).toBe("30");
+    expect((screen.getByPlaceholderText("np. 36") as HTMLInputElement).value).toBe("50");
+    expect((screen.getByPlaceholderText("np. 24") as HTMLInputElement).value).toBe("40");
+
+    const resizeHandle = screen.getByLabelText("Zmien rozmiar z prawego dolnego rogu");
+    fireEvent.mouseDown(resizeHandle, { button: 0, clientX: 160, clientY: 70 });
+    fireEvent.mouseMove(window, { clientX: 180, clientY: 90 });
+    fireEvent.mouseUp(window, { clientX: 180, clientY: 90 });
+
+    expect((screen.getByPlaceholderText("np. 12") as HTMLInputElement).value).toBe("30");
+    expect((screen.getByPlaceholderText("np. 18") as HTMLInputElement).value).toBe("30");
+    expect((screen.getByPlaceholderText("np. 36") as HTMLInputElement).value).toBe("60");
+    expect((screen.getByPlaceholderText("np. 24") as HTMLInputElement).value).toBe("60");
+
     fireEvent.click(screen.getByRole("button", { name: "Zapisz konfiguracje produktu QC" }));
 
     await screen.findByText(/Zapisano konfiguracje QC dla SCREW_M4/);
@@ -437,10 +457,10 @@ describe("AdminPage", () => {
     );
     expect(createStepCall).toBeDefined();
     expect(JSON.parse(String((createStepCall?.[1] as RequestInit).body))).toMatchObject({
-      region_x: 20,
-      region_y: 20,
-      region_width: 50,
-      region_height: 40,
+      region_x: 30,
+      region_y: 30,
+      region_width: 60,
+      region_height: 60,
     });
   });
 });

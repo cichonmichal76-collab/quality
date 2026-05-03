@@ -359,14 +359,56 @@ test("admin page configures product qc for bom component", async ({ page }) => {
   expect(regionWidth).toBeLessThan(51);
   expect(regionHeight).toBeGreaterThan(0);
 
+  const activeRegion = page.locator("[data-testid^='qc-reference-region-']").first();
+  await activeRegion.dispatchEvent("mousedown", {
+    button: 0,
+    clientX: stageBounds.x + stageBounds.width * 0.35,
+    clientY: stageBounds.y + stageBounds.height * 0.3,
+  });
+  await stage.dispatchEvent("mousemove", {
+    button: 0,
+    clientX: stageBounds.x + stageBounds.width * 0.45,
+    clientY: stageBounds.y + stageBounds.height * 0.4,
+  });
+  await stage.dispatchEvent("mouseup", {
+    button: 0,
+    clientX: stageBounds.x + stageBounds.width * 0.45,
+    clientY: stageBounds.y + stageBounds.height * 0.4,
+  });
+
+  const movedRegionX = Number(await page.getByPlaceholder("np. 12").inputValue());
+  const movedRegionY = Number(await page.getByPlaceholder("np. 18").inputValue());
+  expect(movedRegionX).toBeGreaterThan(regionX);
+  expect(movedRegionY).toBeGreaterThan(regionY);
+
+  const resizeHandle = page.getByLabel("Zmien rozmiar z prawego dolnego rogu");
+  await resizeHandle.dispatchEvent("mousedown", {
+    button: 0,
+    clientX: stageBounds.x + stageBounds.width * 0.8,
+    clientY: stageBounds.y + stageBounds.height * 0.8,
+  });
+  await stage.dispatchEvent("mousemove", {
+    button: 0,
+    clientX: stageBounds.x + stageBounds.width * 0.9,
+    clientY: stageBounds.y + stageBounds.height * 0.9,
+  });
+  await stage.dispatchEvent("mouseup", {
+    button: 0,
+    clientX: stageBounds.x + stageBounds.width * 0.9,
+    clientY: stageBounds.y + stageBounds.height * 0.9,
+  });
+
+  const resizedWidth = Number(await page.getByPlaceholder("np. 36").inputValue());
+  const resizedHeight = Number(await page.getByPlaceholder("np. 24").inputValue());
+  expect(resizedWidth).toBeGreaterThan(regionWidth);
+  expect(resizedHeight).toBeGreaterThan(regionHeight);
+
   await page.getByRole("button", { name: "Zapisz konfiguracje produktu QC" }).click();
 
   await expect(page.getByText(/Zapisano konfiguracje QC dla SCREW_M4/)).toBeVisible();
   await expect(page.getByText("SKONFIGUROWANY")).toBeVisible();
   expect(Number(createdStepPayload?.region_x)).toBeGreaterThan(19);
-  expect(Number(createdStepPayload?.region_x)).toBeLessThan(21);
   expect(Number(createdStepPayload?.region_y)).toBeGreaterThan(0);
-  expect(Number(createdStepPayload?.region_width)).toBeGreaterThan(49);
-  expect(Number(createdStepPayload?.region_width)).toBeLessThan(51);
-  expect(Number(createdStepPayload?.region_height)).toBeGreaterThan(0);
+  expect(Number(createdStepPayload?.region_width)).toBeGreaterThan(regionWidth);
+  expect(Number(createdStepPayload?.region_height)).toBeGreaterThan(regionHeight);
 });

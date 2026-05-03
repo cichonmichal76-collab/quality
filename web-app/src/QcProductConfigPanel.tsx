@@ -21,7 +21,10 @@ import type {
   QcStepCreatePayload,
   QcStepRead,
 } from "./api";
-import { QcReferenceImage } from "./QcReferenceImage";
+import {
+  QcReferenceImage,
+  type QcReferenceResizeHandle,
+} from "./QcReferenceImage";
 import { labelForCode } from "./dashboard";
 
 const PROCESS_STAGE_OPTIONS = ["COMPONENT_QC", "MECHANICAL_QC", "ELECTRONICS_QC"] as const;
@@ -63,12 +66,24 @@ interface StepEditorState {
   toleranceMax: string;
 }
 
-interface StepRegionDragState {
+type StepRegionInteractionMode = "draw" | "move" | "resize";
+
+interface StepRegionBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+interface StepRegionInteractionState {
   localId: string;
+  mode: StepRegionInteractionMode;
   startX: number;
   startY: number;
   currentX: number;
   currentY: number;
+  baseRegion?: StepRegionBounds;
+  resizeHandle?: QcReferenceResizeHandle;
 }
 
 export function QcProductConfigPanel({ apiBaseUrl }: QcProductConfigPanelProps) {
@@ -89,9 +104,9 @@ export function QcProductConfigPanel({ apiBaseUrl }: QcProductConfigPanelProps) 
   const [selectedReferenceImage, setSelectedReferenceImage] = useState<File | null>(null);
   const [referencePreviewUrl, setReferencePreviewUrl] = useState<string | null>(null);
   const [activeRegionStepId, setActiveRegionStepId] = useState<string | null>(null);
-  const [dragRegion, setDragRegion] = useState<StepRegionDragState | null>(null);
+  const [regionInteraction, setRegionInteraction] = useState<StepRegionInteractionState | null>(null);
   const referenceStageRef = useRef<HTMLDivElement | null>(null);
-  const dragRegionRef = useRef<StepRegionDragState | null>(null);
+  const regionInteractionRef = useRef<StepRegionInteractionState | null>(null);
 
   const selectedComponent =
     configuration?.items.find((item) => item.component_type === selectedComponentType) ?? null;
@@ -147,27 +162,28 @@ export function QcProductConfigPanel({ apiBaseUrl }: QcProductConfigPanelProps) 
     );
   }, [apiBaseUrl, checklistForm?.referenceImageFileId, referencePreviewUrl]);
 
+  const persistedOverlayAreas = useMemo(() => buildDraftOverlayAreas(stepDrafts), [stepDrafts]);
   const referenceOverlayAreas = useMemo(
-    () => buildDraftOverlayAreas(stepDrafts),
-    [stepDrafts],
+    () =>
+      regionInteraction
+        ? persistedOverlayAreas.filter((area) => area.id !== regionInteraction.localId)
+        : persistedOverlayAreas,
+    [persistedOverlayAreas, regionInteraction],
   );
   const draftOverlayArea = useMemo(() => {
-    if (!dragRegion) {
+    if (!regionInteraction) {
       return null;
     }
-    const matchingStepIndex = stepDrafts.findIndex((step) => step.localId === dragRegion.localId);
+    const matchingStepIndex = stepDrafts.findIndex(
+      (step) => step.localId === regionInteraction.localId,
+    );
     if (matchingStepIndex < 0) {
       return null;
     }
     const matchingStep = stepDrafts[matchingStepIndex]!;
-    const region = buildPercentRegion(
-      dragRegion.startX,
-      dragRegion.startY,
-      dragRegion.currentX,
-      dragRegion.currentY,
-    );
+    const region = buildInteractionRegion(regionInteraction);
     return {
-      id: `draft-${dragRegion.localId}`,
+      id: `draft-${regionInteraction.localId}`,
       label: `K${matchingStepIndex + 1}`,
       title: matchingStep.title || `Krok ${matchingStepIndex + 1}`,
       x: region.x,
@@ -175,17 +191,21 @@ export function QcProductConfigPanel({ apiBaseUrl }: QcProductConfigPanelProps) 
       width: region.width,
       height: region.height,
     };
-  }, [dragRegion, stepDrafts]);
+  }, [regionInteraction, stepDrafts]);
   const referenceHelperText = checklistPreviewUrl
     ? activeRegionStep
-      ? dragRegion?.localId === activeRegionStep.localId
-        ? `Rysujesz obszar dla kroku ${activeRegionStepNumber}. Zwolnij przycisk myszy, aby zapisac prostokat.`
-        : `Aktywny krok ${activeRegionStepNumber}. Kliknij i przeciagnij po obrazie, aby ustawic obszar kontroli.`
+      ? regionInteraction?.localId === activeRegionStep.localId
+        ? regionInteraction.mode === "move"
+          ? `Przesuwasz obszar dla kroku ${activeRegionStepNumber}. Zwolnij przycisk myszy, aby zapisac zmiane.`
+          : regionInteraction.mode === "resize"
+            ? `Korygujesz obszar dla kroku ${activeRegionStepNumber}. Zwolnij przycisk myszy, aby zapisac nowy rozmiar.`
+            : `Rysujesz obszar dla kroku ${activeRegionStepNumber}. Zwolnij przycisk myszy, aby zapisac prostokat.`
+        : `Aktywny krok ${activeRegionStepNumber}. Kliknij i przeciagnij po obrazie, aby ustawic obszar kontroli, albo zlap zielony prostokat i uchwyty, aby go poprawic.`
       : "Mozesz wpisac procenty recznie albo kliknac `Ustaw z obrazu` przy wybranym kroku."
     : "Dodaj albo wgraj zdjecie referencyjne, aby rysowac obszary kontroli bezposrednio na obrazie.";
 
   useEffect(() => {
-    if (!dragRegion) {
+    if (!regionInteraction) {
       return;
     }
 
@@ -195,7 +215,7 @@ export function QcProductConfigPanel({ apiBaseUrl }: QcProductConfigPanelProps) 
 
     function handleWindowMouseUp(event: MouseEvent) {
       const point = getStagePercentPoint(referenceStageRef.current, event.clientX, event.clientY);
-      finishRegionDrag(point);
+      finishRegionInteraction(point);
     }
 
     window.addEventListener("mousemove", handleWindowMouseMove);
@@ -204,7 +224,7 @@ export function QcProductConfigPanel({ apiBaseUrl }: QcProductConfigPanelProps) 
       window.removeEventListener("mousemove", handleWindowMouseMove);
       window.removeEventListener("mouseup", handleWindowMouseUp);
     };
-  }, [dragRegion]);
+  }, [regionInteraction]);
 
   async function handleLoadConfiguration(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -267,7 +287,7 @@ export function QcProductConfigPanel({ apiBaseUrl }: QcProductConfigPanelProps) 
       setDeletedStepIds([]);
       setSelectedReferenceImage(null);
       setActiveRegionStepId(null);
-      replaceDragRegion(null);
+      replaceRegionInteraction(null);
       setEditorState("idle");
       setEditorError(null);
     } catch (error) {
@@ -282,7 +302,7 @@ export function QcProductConfigPanel({ apiBaseUrl }: QcProductConfigPanelProps) 
       setDeletedStepIds([]);
       setSelectedReferenceImage(null);
       setActiveRegionStepId(null);
-      replaceDragRegion(null);
+      replaceRegionInteraction(null);
       setEditorState("idle");
       setEditorError(null);
     }
@@ -302,7 +322,7 @@ export function QcProductConfigPanel({ apiBaseUrl }: QcProductConfigPanelProps) 
     setSelectedReferenceImage(null);
     setDeletedStepIds([]);
     setActiveRegionStepId(null);
-    replaceDragRegion(null);
+    replaceRegionInteraction(null);
 
     try {
       if (!component.checklist_code) {
@@ -389,29 +409,29 @@ export function QcProductConfigPanel({ apiBaseUrl }: QcProductConfigPanelProps) 
     );
   }
 
-  function replaceDragRegion(next: StepRegionDragState | null) {
-    dragRegionRef.current = next;
-    setDragRegion(next);
+  function replaceRegionInteraction(next: StepRegionInteractionState | null) {
+    regionInteractionRef.current = next;
+    setRegionInteraction(next);
   }
 
-  function updateDragRegion(
-    updater: (current: StepRegionDragState | null) => StepRegionDragState | null,
+  function updateRegionInteraction(
+    updater: (current: StepRegionInteractionState | null) => StepRegionInteractionState | null,
   ) {
-    setDragRegion((current) => {
+    setRegionInteraction((current) => {
       const next = updater(current);
-      dragRegionRef.current = next;
+      regionInteractionRef.current = next;
       return next;
     });
   }
 
   function handleActivateRegionStep(localId: string) {
-    replaceDragRegion(null);
+    replaceRegionInteraction(null);
     setActiveRegionStepId((current) => (current === localId ? null : localId));
   }
 
   function handleClearStepRegion(localId: string) {
-    if (dragRegionRef.current?.localId === localId) {
-      replaceDragRegion(null);
+    if (regionInteractionRef.current?.localId === localId) {
+      replaceRegionInteraction(null);
     }
     setStepDrafts((current) =>
       current.map((step) =>
@@ -457,12 +477,69 @@ export function QcProductConfigPanel({ apiBaseUrl }: QcProductConfigPanelProps) 
     }
     event.preventDefault();
     setSaveError(null);
-    replaceDragRegion({
+    replaceRegionInteraction({
       localId: activeRegionStepId,
+      mode: "draw",
       startX: point.x,
       startY: point.y,
       currentX: point.x,
       currentY: point.y,
+    });
+  }
+
+  function handleReferenceAreaMouseDown(
+    localId: string,
+    event: ReactMouseEvent<HTMLDivElement>,
+  ) {
+    if (event.button !== 0 || activeRegionStepId !== localId || !checklistPreviewUrl) {
+      return;
+    }
+    const point = getStagePercentPoint(referenceStageRef.current, event.clientX, event.clientY);
+    const step = stepDrafts.find((candidate) => candidate.localId === localId);
+    const baseRegion = step ? parseStepRegion(step) : null;
+    if (!point || !baseRegion) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    setSaveError(null);
+    replaceRegionInteraction({
+      localId,
+      mode: "move",
+      startX: point.x,
+      startY: point.y,
+      currentX: point.x,
+      currentY: point.y,
+      baseRegion,
+    });
+  }
+
+  function handleReferenceResizeHandleMouseDown(
+    localId: string,
+    handle: QcReferenceResizeHandle,
+    event: ReactMouseEvent<HTMLButtonElement>,
+  ) {
+    if (event.button !== 0 || activeRegionStepId !== localId || !checklistPreviewUrl) {
+      return;
+    }
+    const point = getStagePercentPoint(referenceStageRef.current, event.clientX, event.clientY);
+    const step = stepDrafts.find((candidate) => candidate.localId === localId);
+    const baseRegion = step ? parseStepRegion(step) : null;
+    if (!point || !baseRegion) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    setSaveError(null);
+    replaceRegionInteraction({
+      localId,
+      mode: "resize",
+      resizeHandle: handle,
+      startX: point.x,
+      startY: point.y,
+      currentX: point.x,
+      currentY: point.y,
+      baseRegion,
     });
   }
 
@@ -471,7 +548,7 @@ export function QcProductConfigPanel({ apiBaseUrl }: QcProductConfigPanelProps) 
     if (!point) {
       return;
     }
-    updateDragRegion((current) =>
+    updateRegionInteraction((current) =>
       current
         ? {
             ...current,
@@ -483,43 +560,42 @@ export function QcProductConfigPanel({ apiBaseUrl }: QcProductConfigPanelProps) 
   }
 
   function handleReferenceStageMouseMove(event: ReactMouseEvent<HTMLDivElement>) {
-    if (!dragRegionRef.current) {
+    if (!regionInteractionRef.current) {
       return;
     }
     updateDragRegionPoint(event.clientX, event.clientY);
   }
 
   function handleReferenceStageMouseUp(event: ReactMouseEvent<HTMLDivElement>) {
-    if (!dragRegionRef.current) {
+    if (!regionInteractionRef.current) {
       return;
     }
     const point = getStagePercentPoint(referenceStageRef.current, event.clientX, event.clientY);
-    finishRegionDrag(point);
+    finishRegionInteraction(point);
   }
 
-  function finishRegionDrag(finalPoint: { x: number; y: number } | null) {
-    const currentDragRegion = dragRegionRef.current;
-    if (!currentDragRegion) {
+  function finishRegionInteraction(finalPoint: { x: number; y: number } | null) {
+    const currentInteraction = regionInteractionRef.current;
+    if (!currentInteraction) {
       return;
     }
     const endpoint = finalPoint ?? {
-      x: currentDragRegion.currentX,
-      y: currentDragRegion.currentY,
+      x: currentInteraction.currentX,
+      y: currentInteraction.currentY,
     };
-    const region = buildPercentRegion(
-      currentDragRegion.startX,
-      currentDragRegion.startY,
-      endpoint.x,
-      endpoint.y,
-    );
-    applyRegionToStep(currentDragRegion.localId, region);
-    replaceDragRegion(null);
+    const region = buildInteractionRegion({
+      ...currentInteraction,
+      currentX: endpoint.x,
+      currentY: endpoint.y,
+    });
+    applyRegionToStep(currentInteraction.localId, region);
+    replaceRegionInteraction(null);
   }
 
   function handleRemoveStep(localId: string) {
     if (activeRegionStepId === localId) {
       setActiveRegionStepId(null);
-      replaceDragRegion(null);
+      replaceRegionInteraction(null);
     }
     setStepDrafts((current) => {
       const removed = current.find((step) => step.localId === localId);
@@ -966,6 +1042,8 @@ export function QcProductConfigPanel({ apiBaseUrl }: QcProductConfigPanelProps) 
                   onStageMouseDown={handleReferenceStageMouseDown}
                   onStageMouseMove={handleReferenceStageMouseMove}
                   onStageMouseUp={handleReferenceStageMouseUp}
+                  onAreaMouseDown={handleReferenceAreaMouseDown}
+                  onResizeHandleMouseDown={handleReferenceResizeHandleMouseDown}
                 />
               </div>
             ) : null}
@@ -1198,8 +1276,12 @@ export function QcProductConfigPanel({ apiBaseUrl }: QcProductConfigPanelProps) 
                               }`}
                             >
                               {activeRegionStepId === step.localId
-                                ? dragRegion?.localId === step.localId
-                                  ? "RYSOWANIE"
+                                ? regionInteraction?.localId === step.localId
+                                  ? regionInteraction.mode === "move"
+                                    ? "PRZESUWANIE"
+                                    : regionInteraction.mode === "resize"
+                                      ? "KOREKTA ROZMIARU"
+                                      : "RYSOWANIE"
                                   : "AKTYWNY KROK"
                                 : hasCompleteStepRegion(step)
                                   ? "OBSZAR USTAWIONY"
@@ -1523,6 +1605,17 @@ function hasCompleteStepRegion(step: StepEditorState): boolean {
   );
 }
 
+function parseStepRegion(step: StepEditorState): StepRegionBounds | null {
+  const x = parseOptionalNumber(step.regionX);
+  const y = parseOptionalNumber(step.regionY);
+  const width = parseOptionalNumber(step.regionWidth);
+  const height = parseOptionalNumber(step.regionHeight);
+  if (x === null || y === null || width === null || height === null) {
+    return null;
+  }
+  return { x, y, width, height };
+}
+
 const MIN_DRAWN_REGION_SIZE = 0.5;
 const MAX_DRAW_POINT = 100 - MIN_DRAWN_REGION_SIZE;
 
@@ -1570,6 +1663,66 @@ function buildPercentRegion(
     y,
     width,
     height,
+  };
+}
+
+function buildInteractionRegion(interaction: StepRegionInteractionState): StepRegionBounds {
+  if (interaction.mode === "move" && interaction.baseRegion) {
+    const deltaX = interaction.currentX - interaction.startX;
+    const deltaY = interaction.currentY - interaction.startY;
+    return translateRegion(interaction.baseRegion, deltaX, deltaY);
+  }
+  if (interaction.mode === "resize" && interaction.baseRegion && interaction.resizeHandle) {
+    return resizeRegion(interaction.baseRegion, interaction.resizeHandle, interaction.currentX, interaction.currentY);
+  }
+  return buildPercentRegion(
+    interaction.startX,
+    interaction.startY,
+    interaction.currentX,
+    interaction.currentY,
+  );
+}
+
+function translateRegion(region: StepRegionBounds, deltaX: number, deltaY: number): StepRegionBounds {
+  const x = clamp(region.x + deltaX, 0, 100 - region.width);
+  const y = clamp(region.y + deltaY, 0, 100 - region.height);
+  return {
+    x,
+    y,
+    width: region.width,
+    height: region.height,
+  };
+}
+
+function resizeRegion(
+  region: StepRegionBounds,
+  handle: QcReferenceResizeHandle,
+  pointerX: number,
+  pointerY: number,
+): StepRegionBounds {
+  let left = region.x;
+  let top = region.y;
+  let right = region.x + region.width;
+  let bottom = region.y + region.height;
+
+  if (handle.includes("w")) {
+    left = clamp(pointerX, 0, right - MIN_DRAWN_REGION_SIZE);
+  }
+  if (handle.includes("e")) {
+    right = clamp(pointerX, left + MIN_DRAWN_REGION_SIZE, 100);
+  }
+  if (handle.includes("n")) {
+    top = clamp(pointerY, 0, bottom - MIN_DRAWN_REGION_SIZE);
+  }
+  if (handle.includes("s")) {
+    bottom = clamp(pointerY, top + MIN_DRAWN_REGION_SIZE, 100);
+  }
+
+  return {
+    x: left,
+    y: top,
+    width: right - left,
+    height: bottom - top,
   };
 }
 
