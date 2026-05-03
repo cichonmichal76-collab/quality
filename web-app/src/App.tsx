@@ -254,6 +254,7 @@ interface ServiceFilters {
   device_serial_number: string;
   device_type: string;
   technician_id: string;
+  min_upload_count: number;
   client_attempt_id: string;
   upload_correlation_id: string;
   only_reuploaded: boolean;
@@ -381,6 +382,7 @@ const DEFAULT_SERVICE_FILTERS: ServiceFilters = {
   device_serial_number: "",
   device_type: "",
   technician_id: "",
+  min_upload_count: 0,
   client_attempt_id: "",
   upload_correlation_id: "",
   only_reuploaded: false,
@@ -726,6 +728,7 @@ export function App() {
   const commitServiceFilters = (nextFilters: ServiceFilters) => {
     const sanitizedFilters = {
       ...nextFilters,
+      min_upload_count: clampServiceMinUploadCount(nextFilters.min_upload_count),
       limit: clampLimit(nextFilters.limit),
       offset: clampOffset(nextFilters.offset),
     };
@@ -2264,6 +2267,8 @@ export function App() {
       const normalizedValue =
         key === "limit"
           ? (clampLimit(value as number) as ServiceFilters[Key])
+          : key === "min_upload_count"
+            ? (clampServiceMinUploadCount(value as number) as ServiceFilters[Key])
           : value;
       const next = {
         ...previous,
@@ -2312,6 +2317,7 @@ export function App() {
       device_serial_number: serviceFilters.device_serial_number,
       device_type: serviceFilters.device_type,
       technician_id: serviceFilters.technician_id,
+      min_upload_count: serviceFilters.min_upload_count,
       sort_by: serviceFilters.sort_by,
       sort_desc: serviceFilters.sort_desc,
       limit: serviceFilters.limit,
@@ -3234,6 +3240,14 @@ function ServiceFiltersPanel({
           onChange={(value) => onChange("technician_id", value)}
           onCommit={onCommitTextFilters}
           placeholder="np. TECH-A"
+        />
+        <NumberField
+          label="Min. uploadów backendu"
+          value={filters.min_upload_count}
+          min={0}
+          max={9999}
+          fallbackValue={0}
+          onChange={(value) => onChange("min_upload_count", value)}
         />
         <TextField
           label="Attempt ID"
@@ -6807,22 +6821,28 @@ function NumberField({
   label,
   value,
   onChange,
+  min = 1,
+  max = 500,
+  fallbackValue = 100,
 }: {
   label: string;
   value: number;
   onChange: (value: number) => void;
+  min?: number;
+  max?: number;
+  fallbackValue?: number;
 }) {
   return (
     <label className="field">
       <span>{label}</span>
       <input
-        min={1}
-        max={500}
+        min={min}
+        max={max}
         type="number"
         value={value}
         onChange={(event) => {
           const nextValue = Number(event.target.value);
-          onChange(Number.isFinite(nextValue) ? nextValue : 100);
+          onChange(Number.isFinite(nextValue) ? nextValue : fallbackValue);
         }}
       />
     </label>
@@ -7107,6 +7127,13 @@ function buildServiceActiveFilterChips(
     });
   }
 
+  if (filters.min_upload_count > 0) {
+    chips.push({
+      id: "min_upload_count",
+      label: `Min. uploadów backendu: ${formatNumber(filters.min_upload_count)}`,
+    });
+  }
+
   if (filters.client_attempt_id.trim() !== "") {
     chips.push({
       id: "client_attempt_id",
@@ -7288,6 +7315,10 @@ function clampLimit(value: number): number {
   return Math.min(Math.max(Math.trunc(value), 1), 500);
 }
 
+function clampServiceMinUploadCount(value: number): number {
+  return Math.max(Math.trunc(value), 0);
+}
+
 function isAbortError(error: unknown): boolean {
   return (
     typeof error === "object" &&
@@ -7389,6 +7420,8 @@ function serviceQueryParams(filters: ServiceFilters): Record<string, QueryValue>
     device_serial_number: filters.device_serial_number,
     device_type: filters.device_type,
     technician_id: filters.technician_id,
+    min_upload_count:
+      filters.min_upload_count > 0 ? filters.min_upload_count : undefined,
     client_attempt_id: filters.client_attempt_id,
     upload_correlation_id: filters.upload_correlation_id,
     only_reuploaded: filters.only_reuploaded || undefined,
@@ -7716,6 +7749,13 @@ function readServiceFiltersFromUrl(
       `${URL_SERVICE_PREFIX}technician_id`,
       baseFilters.technician_id,
     ),
+    min_upload_count: clampServiceMinUploadCount(
+      readSearchNumber(
+        searchParams,
+        `${URL_SERVICE_PREFIX}min_upload_count`,
+        baseFilters.min_upload_count,
+      ),
+    ),
     client_attempt_id: readSearchString(
       searchParams,
       `${URL_SERVICE_PREFIX}client_attempt_id`,
@@ -7954,6 +7994,12 @@ function readStoredServiceFilters(): ServiceFilters {
     technician_id: readStoredString(
       storedValue.technician_id,
       DEFAULT_SERVICE_FILTERS.technician_id,
+    ),
+    min_upload_count: clampServiceMinUploadCount(
+      readStoredNumber(
+        storedValue.min_upload_count,
+        DEFAULT_SERVICE_FILTERS.min_upload_count,
+      ),
     ),
     client_attempt_id: readStoredString(
       storedValue.client_attempt_id,
@@ -8438,6 +8484,7 @@ function buildServiceQueueShortcutHref({
   deviceSerialNumber = "",
   deviceType = "",
   technicianId = "",
+  minUploadCount = 0,
   clientAttemptId = "",
   uploadCorrelationId = "",
   onlyReuploaded = false,
@@ -8451,6 +8498,7 @@ function buildServiceQueueShortcutHref({
   deviceSerialNumber?: string;
   deviceType?: string;
   technicianId?: string;
+  minUploadCount?: number;
   clientAttemptId?: string;
   uploadCorrelationId?: string;
   onlyReuploaded?: boolean;
@@ -8471,6 +8519,7 @@ function buildServiceQueueShortcutHref({
       device_serial_number: deviceSerialNumber,
       device_type: deviceType,
       technician_id: technicianId,
+      min_upload_count: clampServiceMinUploadCount(minUploadCount),
       client_attempt_id: clientAttemptId,
       upload_correlation_id: uploadCorrelationId,
       only_reuploaded: onlyReuploaded,
@@ -8605,6 +8654,17 @@ function buildServiceSessionQueueShortcuts({
       label: "Pokaz reuploadowane sesje",
       caption: `${formatNumber(session.upload_count)} uploady · ${deviceType || "Wszystkie typy"}`,
     });
+    links.push({
+      href: buildServiceQueueShortcutHref({
+        shipmentFilters,
+        componentFilters,
+        serviceFilters,
+        deviceType,
+        minUploadCount: session.upload_count,
+      }),
+      label: "Pokaz sesje z co najmniej tyloma uploadami",
+      caption: `${formatNumber(session.upload_count)}+ uploady · ${deviceType || "Wszystkie typy"}`,
+    });
   }
 
   if (clientAttemptId !== "") {
@@ -8690,6 +8750,19 @@ function buildServiceSessionAuditQueueShortcuts({
         uploadCount !== null && uploadCount > 1
           ? `${formatNumber(uploadCount)} uploady backendu`
           : "Reupload z audytu",
+    });
+  }
+
+  if (uploadCount !== null && uploadCount > 1) {
+    links.push({
+      href: buildServiceQueueShortcutHref({
+        shipmentFilters,
+        componentFilters,
+        serviceFilters,
+        minUploadCount: uploadCount,
+      }),
+      label: "Pokaz sesje z co najmniej tyloma uploadami z audytu",
+      caption: `${formatNumber(uploadCount)}+ uploady backendu`,
     });
   }
 
@@ -8933,6 +9006,12 @@ function writeServiceFiltersToSearchParams(
     `${URL_SERVICE_PREFIX}technician_id`,
     filters.technician_id,
   );
+  if (filters.min_upload_count > 0) {
+    searchParams.set(
+      `${URL_SERVICE_PREFIX}min_upload_count`,
+      String(clampServiceMinUploadCount(filters.min_upload_count)),
+    );
+  }
   setOptionalSearchString(
     searchParams,
     `${URL_SERVICE_PREFIX}client_attempt_id`,

@@ -754,6 +754,11 @@ test("dashboard opens full commissioning session page and returns to queue conte
   await expect(
     page.getByRole("link", { name: "Pokaż urządzenie" }),
   ).toHaveAttribute("href", /\/devices\/SVC-DEVICE-001\?view=service/);
+  await expect(
+    page.getByRole("link", {
+      name: /^Pokaz sesje z co najmniej tyloma uploadami 3\+ uploady/i,
+    }),
+  ).toHaveAttribute("href", /svc_min_upload_count=3/);
 
   await page.reload();
 

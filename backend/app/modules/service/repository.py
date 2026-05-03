@@ -26,6 +26,7 @@ def list_service_sessions_queue(
     device_serial_number: str | None = None,
     device_type: str | None = None,
     technician_id: str | None = None,
+    min_upload_count: int | None = None,
     client_attempt_id: str | None = None,
     upload_correlation_id: str | None = None,
     only_reuploaded: bool = False,
@@ -42,6 +43,7 @@ def list_service_sessions_queue(
         device_serial_number=device_serial_number,
         device_type=device_type,
         technician_id=technician_id,
+        min_upload_count=min_upload_count,
         client_attempt_id=client_attempt_id,
         upload_correlation_id=upload_correlation_id,
         only_reuploaded=only_reuploaded,
@@ -72,6 +74,7 @@ def list_service_sessions_queue(
             "device_serial_number": device_serial_number,
             "device_type": device_type,
             "technician_id": technician_id,
+            "min_upload_count": min_upload_count,
             "client_attempt_id": client_attempt_id,
             "upload_correlation_id": upload_correlation_id,
             "only_reuploaded": only_reuploaded,
@@ -118,6 +121,7 @@ def _apply_service_session_filters(
     device_serial_number: str | None = None,
     device_type: str | None = None,
     technician_id: str | None = None,
+    min_upload_count: int | None = None,
     client_attempt_id: str | None = None,
     upload_correlation_id: str | None = None,
     only_reuploaded: bool = False,
@@ -131,6 +135,8 @@ def _apply_service_session_filters(
         query = query.filter(ServiceSession.device_type == device_type)
     if technician_id:
         query = query.filter(ServiceSession.technician_id == technician_id)
+    if min_upload_count is not None:
+        query = query.filter(ServiceSession.upload_count >= min_upload_count)
     if client_attempt_id:
         query = query.filter(ServiceSession.client_attempt_id == client_attempt_id)
     if upload_correlation_id:

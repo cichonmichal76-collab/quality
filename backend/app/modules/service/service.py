@@ -147,6 +147,7 @@ def list_service_sessions_queue(
     device_serial_number: str | None = None,
     device_type: str | None = None,
     technician_id: str | None = None,
+    min_upload_count: int | None = None,
     client_attempt_id: str | None = None,
     upload_correlation_id: str | None = None,
     only_reuploaded: bool = False,
@@ -160,6 +161,8 @@ def list_service_sessions_queue(
 ) -> dict[str, object]:
     if offset < 0:
         raise HTTPException(status_code=400, detail="offset must be >= 0")
+    if min_upload_count is not None and min_upload_count < 1:
+        raise HTTPException(status_code=400, detail="min_upload_count must be >= 1")
     if limit < 1:
         raise HTTPException(status_code=400, detail="limit must be >= 1")
     if limit > MAX_QUEUE_LIMIT:
@@ -175,6 +178,7 @@ def list_service_sessions_queue(
         device_serial_number=device_serial_number,
         device_type=device_type,
         technician_id=technician_id,
+        min_upload_count=min_upload_count,
         client_attempt_id=client_attempt_id,
         upload_correlation_id=upload_correlation_id,
         only_reuploaded=only_reuploaded,

@@ -6533,9 +6533,24 @@ def test_service_session_queue_supports_filters_and_pagination(tmp_path, monkeyp
         uploads[0]["session_id"]
     ]
 
-    reuploaded_filtered = client.get("/api/service-sessions/queue?only_reuploaded=true")
+    min_upload_count_filtered = client.get(
+        "/api/service-sessions/queue?technician_id=TECH-A&min_upload_count=2"
+    )
+    assert min_upload_count_filtered.status_code == 200
+    min_upload_count_payload = min_upload_count_filtered.json()
+    assert min_upload_count_payload["filters"]["technician_id"] == "TECH-A"
+    assert min_upload_count_payload["filters"]["min_upload_count"] == 2
+    assert min_upload_count_payload["total_sessions"] == 1
+    assert [row["session_id"] for row in min_upload_count_payload["sessions"]] == [
+        uploads[0]["session_id"]
+    ]
+
+    reuploaded_filtered = client.get(
+        "/api/service-sessions/queue?technician_id=TECH-A&only_reuploaded=true"
+    )
     assert reuploaded_filtered.status_code == 200
     reuploaded_payload = reuploaded_filtered.json()
+    assert reuploaded_payload["filters"]["technician_id"] == "TECH-A"
     assert reuploaded_payload["filters"]["only_reuploaded"] is True
     assert reuploaded_payload["total_sessions"] == 1
     assert reuploaded_payload["reuploaded_sessions"] == 1
@@ -6550,6 +6565,10 @@ def test_service_session_queue_supports_filters_and_pagination(tmp_path, monkeyp
     invalid_limit = client.get("/api/service-sessions/queue?limit=0")
     assert invalid_limit.status_code == 400
     assert invalid_limit.json()["detail"] == "limit must be >= 1"
+
+    invalid_min_upload_count = client.get("/api/service-sessions/queue?min_upload_count=0")
+    assert invalid_min_upload_count.status_code == 400
+    assert invalid_min_upload_count.json()["detail"] == "min_upload_count must be >= 1"
 
 
 def test_file_upload_and_download(tmp_path, monkeypatch):

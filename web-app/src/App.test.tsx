@@ -2285,6 +2285,29 @@ describe("App", () => {
       expect.stringContaining("svc_device_type=DEMO-SVC"),
     );
     expect(reuploadedLink.getAttribute("href")).not.toContain("svc_session_id=");
+    const minUploadCountLink = screen
+      .getAllByRole("link", {
+        name: /co najmniej tyloma uploadami/i,
+      })
+      .find((link) =>
+        (link.getAttribute("href") ?? "").includes("svc_device_type=DEMO-SVC"),
+      );
+    if (!minUploadCountLink) {
+      throw new Error(
+        "Expected minimum upload count shortcut for DEMO-SVC service queue.",
+      );
+    }
+    expect(minUploadCountLink).toHaveAttribute(
+      "href",
+      expect.stringContaining("svc_min_upload_count=2"),
+    );
+    expect(minUploadCountLink).toHaveAttribute(
+      "href",
+      expect.stringContaining("svc_device_type=DEMO-SVC"),
+    );
+    expect(minUploadCountLink.getAttribute("href")).not.toContain(
+      "svc_session_id=",
+    );
     const auditCorrelationLinks = screen.getAllByRole("link", {
       name: /korelacja z audytu/i,
     });
@@ -2308,6 +2331,14 @@ describe("App", () => {
     expect(
       auditReuploadedLinks.some((link) =>
         (link.getAttribute("href") ?? "").includes("svc_only_reuploaded=true"),
+      ),
+    ).toBe(true);
+    const auditMinUploadLinks = screen.getAllByRole("link", {
+      name: /co najmniej tyloma uploadami z audytu/i,
+    });
+    expect(
+      auditMinUploadLinks.some((link) =>
+        (link.getAttribute("href") ?? "").includes("svc_min_upload_count=2"),
       ),
     ).toBe(true);
   });
@@ -6138,6 +6169,54 @@ describe("App", () => {
     expect(
       screen.getByRole("button", {
         name: /Usuń filtr: Tylko reuploadowane/i,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("applies minimum upload count filter in commissioning queue", async () => {
+    const retryHeavyPayload: ServiceSessionQueue = {
+      ...serviceQueuePayload,
+      total_sessions: 1,
+      returned_count: 1,
+      filters: {
+        min_upload_count: 2,
+      },
+      sessions: [serviceQueuePayload.sessions[0]],
+    };
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(createJsonResponse(shipmentPayload))
+      .mockResolvedValueOnce(createJsonResponse(serviceQueuePayload))
+      .mockResolvedValueOnce(createJsonResponse(retryHeavyPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("SHIP-001")).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Commissioning i serwis" }),
+    );
+
+    expect(await screen.findByText("SVC-001")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Min. uploadów backendu"), {
+      target: { value: "2" },
+    });
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/service-sessions/queue?min_upload_count=2&sort_by=uploaded_at&sort_desc=true&limit=100",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+    expect(screen.getByLabelText("Min. uploadów backendu")).toHaveValue(2);
+    expect(
+      screen.getByRole("button", {
+        name: /Usuń filtr: Min\. uploadów backendu: 2/i,
       }),
     ).toBeInTheDocument();
   });

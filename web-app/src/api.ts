@@ -595,6 +595,7 @@ export async function listServiceSessionsQueue(
     device_serial_number?: string;
     device_type?: string;
     technician_id?: string;
+    min_upload_count?: number;
     client_attempt_id?: string;
     upload_correlation_id?: string;
     only_reuploaded?: boolean;
