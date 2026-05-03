@@ -154,6 +154,7 @@ def complete_qc_run(
     result: str | None = Form(default=None),
     failure_reason: str | None = Form(default=None),
     failure_comment: str | None = Form(default=None),
+    failure_disposition: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
     return service.complete_qc_run(
@@ -162,4 +163,5 @@ def complete_qc_run(
         result,
         failure_reason=failure_reason,
         failure_comment=failure_comment,
+        failure_disposition=failure_disposition,
     )

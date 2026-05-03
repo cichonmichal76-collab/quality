@@ -3049,11 +3049,103 @@ def test_qc_run_fail_updates_item_and_creates_ncr():
     completed_event = next(
         row for row in audit.json() if row["event_type"] == "QC_RUN_COMPLETED"
     )
+    assert completed_event["payload"]["failure_disposition"] == "OPEN_CRITICAL_NCR"
     assert completed_event["payload"]["failure_reason"] == "DIMENSION_OUT_OF_RANGE"
     assert (
         completed_event["payload"]["failure_comment"]
         == "Width measured above upper limit"
     )
+
+
+def test_qc_run_fail_with_rework_disposition_marks_item_without_ncr():
+    quality_session = start_work_session(role="QUALITY_INSPECTOR")
+    item_serial_number = unique_id("ITEM")
+    barcode_value = unique_id("BC")
+
+    create_item = client.post(
+        "/api/production-items",
+        json={
+            "item_serial_number": item_serial_number,
+            "barcode_value": barcode_value,
+            "item_type": "PCB",
+            "work_session_id": quality_session["work_session_id"],
+            "workstation_id": quality_session["workstation_id"],
+        },
+    )
+    assert create_item.status_code == 200
+
+    checklist_code = unique_id("CHK")
+    checklist = client.post(
+        "/api/qc-checklists",
+        json={
+            "checklist_code": checklist_code,
+            "name": "Visual QC",
+            "process_stage": "MECHANICAL_QC",
+            "version": "1.0",
+        },
+    )
+    assert checklist.status_code == 200
+    checklist_id = checklist.json()["id"]
+
+    step = client.post(
+        f"/api/qc-checklists/{checklist_code}/steps",
+        json={
+            "step_order": 1,
+            "title": "Inspect housing",
+            "evaluation_mode": "MANUAL",
+            "requires_photo": True,
+        },
+    )
+    assert step.status_code == 200
+    step_id = step.json()["id"]
+
+    run_id = unique_id("QCRUN")
+    qc_run = client.post(
+        "/api/qc-runs",
+        json={
+            "run_id": run_id,
+            "item_serial_number": item_serial_number,
+            "barcode_value": barcode_value,
+            "checklist_id": checklist_id,
+            "process_stage": "MECHANICAL_QC",
+            "work_session_id": quality_session["work_session_id"],
+        },
+    )
+    assert qc_run.status_code == 200
+
+    step_result = client.post(
+        f"/api/qc-runs/{run_id}/steps/{step_id}/result",
+        json={"status": "FAIL", "comment": "Scratch on the surface"},
+    )
+    assert step_result.status_code == 200
+    assert step_result.json()["status"] == "FAIL"
+
+    completed = client.post(
+        f"/api/qc-runs/{run_id}/complete",
+        data={
+            "failure_reason": "VISUAL_DEFECT",
+            "failure_comment": "Scratch on the surface",
+            "failure_disposition": "REWORK_REQUIRED",
+        },
+    )
+    assert completed.status_code == 200
+    assert completed.json()["result"] == "FAIL"
+
+    item = client.get(f"/api/production-items/{item_serial_number}")
+    assert item.status_code == 200
+    assert item.json()["current_status"] == "REWORK_REQUIRED"
+
+    ncr = client.get("/api/nonconformities")
+    assert ncr.status_code == 200
+    assert not any(row["ncr_id"] == f"NCR-QC-{run_id}" for row in ncr.json())
+
+    audit = client.get(f"/api/audit-events?entity_type=QC_RUN&entity_id={run_id}")
+    assert audit.status_code == 200
+    completed_event = next(
+        row for row in audit.json() if row["event_type"] == "QC_RUN_COMPLETED"
+    )
+    assert completed_event["payload"]["failure_disposition"] == "REWORK_REQUIRED"
+    assert completed_event["payload"]["failure_reason"] == "VISUAL_DEFECT"
 
 
 def test_qc_run_pass_updates_item_status():

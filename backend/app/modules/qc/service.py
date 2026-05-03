@@ -31,6 +31,11 @@ from app.schemas import (
 
 ALLOWED_EVALUATION_MODES = {"MANUAL", "NUMERIC_RANGE", "TEXT_MATCH"}
 QC_WAITING_ITEM_STATUSES = {"PRODUCED", "REWORK_REQUIRED"}
+QC_FAILURE_DISPOSITIONS = {
+    "OPEN_CRITICAL_NCR",
+    "REWORK_REQUIRED",
+    "BLOCKED",
+}
 
 
 def create_checklist(db: Session, payload: QcChecklistCreate) -> QcChecklist:
@@ -385,12 +390,14 @@ def complete_qc_run(
     *,
     failure_reason: str | None = None,
     failure_comment: str | None = None,
+    failure_disposition: str | None = None,
 ) -> QcRun:
     run = get_qc_run_or_404(db, run_id)
     final_result = _normalize_run_result(result) or _derive_run_result(db, run)
     completed_at = utc_now()
     normalized_failure_reason = _normalize_optional_text(failure_reason)
     normalized_failure_comment = _normalize_optional_text(failure_comment)
+    normalized_failure_disposition = _normalize_failure_disposition(failure_disposition)
     run.result = final_result
     run.status = "COMPLETED"
     run.ended_at = completed_at
@@ -400,7 +407,9 @@ def complete_qc_run(
             ProductionItem.item_serial_number == run.item_serial_number
         ).first()
         if item:
-            item.current_status = "QC_PASSED" if final_result == "PASS" else "QC_FAILED"
+            item.current_status = resolve_failed_item_status(normalized_failure_disposition)
+            if final_result == "PASS":
+                item.current_status = "QC_PASSED"
 
         installed_links = db.query(AssemblyLink).filter(
             AssemblyLink.child_item_serial_number == run.item_serial_number,
@@ -420,7 +429,7 @@ def complete_qc_run(
                 for device in parent_devices:
                     device.updated_at = completed_at
 
-    if final_result == "FAIL":
+    if final_result == "FAIL" and normalized_failure_disposition == "OPEN_CRITICAL_NCR":
         ncr_id = f"NCR-QC-{run.run_id}"
         if not db.query(Nonconformity).filter(Nonconformity.ncr_id == ncr_id).first():
             failure_description = build_qc_failure_description(
@@ -441,6 +450,7 @@ def complete_qc_run(
 
     audit_payload = {"result": final_result}
     if final_result == "FAIL":
+        audit_payload["failure_disposition"] = normalized_failure_disposition
         if normalized_failure_reason:
             audit_payload["failure_reason"] = normalized_failure_reason
         if normalized_failure_comment:
@@ -505,6 +515,25 @@ def _normalize_optional_text(value: str | None) -> str | None:
         return None
     normalized = value.strip()
     return normalized or None
+
+
+def _normalize_failure_disposition(value: str | None) -> str:
+    if value is None:
+        return "OPEN_CRITICAL_NCR"
+    normalized = value.strip().upper()
+    if not normalized:
+        return "OPEN_CRITICAL_NCR"
+    if normalized not in QC_FAILURE_DISPOSITIONS:
+        raise HTTPException(status_code=400, detail="Unsupported QC failure disposition")
+    return normalized
+
+
+def resolve_failed_item_status(failure_disposition: str) -> str:
+    if failure_disposition == "REWORK_REQUIRED":
+        return "REWORK_REQUIRED"
+    if failure_disposition == "BLOCKED":
+        return "BLOCKED"
+    return "QC_FAILED"
 
 
 def build_qc_failure_description(

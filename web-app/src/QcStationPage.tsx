@@ -47,6 +47,23 @@ const QC_FAILURE_REASON_OPTIONS = [
   { value: "ASSEMBLY_DAMAGE", label: "Uszkodzenie po montazu" },
   { value: "OTHER", label: "Inny powod" },
 ] as const;
+const QC_FAILURE_DISPOSITION_OPTIONS = [
+  {
+    value: "OPEN_CRITICAL_NCR",
+    label: "Otworz krytyczne NCR",
+    hint: "Detal zostanie oznaczony jako QC_FAILED i otworzy krytyczne NCR.",
+  },
+  {
+    value: "REWORK_REQUIRED",
+    label: "Przekaz do rework",
+    hint: "Detal wraca do kolejki QC jako REWORK_REQUIRED bez otwierania NCR.",
+  },
+  {
+    value: "BLOCKED",
+    label: "Zablokuj detal",
+    hint: "Detal zostanie zablokowany bez otwierania NCR.",
+  },
+] as const;
 
 type LoginMethod = "PASSWORD" | "RFID";
 
@@ -116,6 +133,9 @@ export function QcStationPage() {
   const [stepDrafts, setStepDrafts] = useState<StepDraftMap>({});
   const [failureReason, setFailureReason] = useState("");
   const [failureComment, setFailureComment] = useState("");
+  const [failureDisposition, setFailureDisposition] = useState<
+    "OPEN_CRITICAL_NCR" | "REWORK_REQUIRED" | "BLOCKED"
+  >("OPEN_CRITICAL_NCR");
   const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
   const [submitState, setSubmitState] = useState<LoadState>("idle");
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -399,6 +419,7 @@ export function QcStationPage() {
     setCompletedRun(null);
     setFailureReason("");
     setFailureComment("");
+    setFailureDisposition("OPEN_CRITICAL_NCR");
     setEvidenceFiles([]);
   }, [authState, selectedChecklistCode, selectedItem?.barcode_value]);
 
@@ -553,6 +574,7 @@ export function QcStationPage() {
     setCompletedRun(null);
     setFailureReason("");
     setFailureComment("");
+    setFailureDisposition("OPEN_CRITICAL_NCR");
     setEvidenceFiles([]);
   };
 
@@ -745,6 +767,7 @@ export function QcStationPage() {
         result: finalResult,
         failure_reason: normalizedFailureReason ?? undefined,
         failure_comment: normalizedFailureComment ?? undefined,
+        failure_disposition: failureDisposition,
       });
       const refreshedItem = await getProductionItemByBarcode(
         trimmedApiBaseUrl,
@@ -777,6 +800,7 @@ export function QcStationPage() {
     setRfidUidHash("");
     setFailureReason("");
     setFailureComment("");
+    setFailureDisposition("OPEN_CRITICAL_NCR");
     setEvidenceFiles([]);
     setLookupState("idle");
     setLookupError(null);
@@ -1126,6 +1150,7 @@ export function QcStationPage() {
                         setCompletedRun(null);
                         setFailureReason("");
                         setFailureComment("");
+                        setFailureDisposition("OPEN_CRITICAL_NCR");
                         setEvidenceFiles([]);
                         setBarcodeValue("");
                       }}
@@ -1319,6 +1344,28 @@ export function QcStationPage() {
                     </label>
                   ) : null}
                   {predictedRunResult === "FAIL" ? (
+                    <label className="field">
+                      <span>Decyzja po FAIL</span>
+                      <select
+                        value={failureDisposition}
+                        onChange={(event) =>
+                          setFailureDisposition(
+                            event.target.value as
+                              | "OPEN_CRITICAL_NCR"
+                              | "REWORK_REQUIRED"
+                              | "BLOCKED",
+                          )
+                        }
+                      >
+                        {QC_FAILURE_DISPOSITION_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+                  {predictedRunResult === "FAIL" ? (
                     <label className="field qc-step-comment-field">
                       <span>Komentarz do FAIL</span>
                       <textarea
@@ -1329,6 +1376,17 @@ export function QcStationPage() {
                     </label>
                   ) : null}
                 </div>
+                {predictedRunResult === "FAIL" ? (
+                  <div className="details-inline-actions">
+                    <span className="action-hint">
+                      {
+                        QC_FAILURE_DISPOSITION_OPTIONS.find(
+                          (option) => option.value === failureDisposition,
+                        )?.hint
+                      }
+                    </span>
+                  </div>
+                ) : null}
                 {evidenceFiles.length > 0 ? (
                   <div className="qc-evidence-list" data-testid="qc-evidence-list">
                     {evidenceFiles.map((file, index) => (

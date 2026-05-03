@@ -951,6 +951,7 @@ describe("completeQcRun", () => {
       result: "FAIL",
       failure_reason: " VISUAL_DEFECT ",
       failure_comment: " Rysa na powierzchni. ",
+      failure_disposition: "REWORK_REQUIRED",
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -958,7 +959,7 @@ describe("completeQcRun", () => {
       expect.objectContaining({
         method: "POST",
         body:
-          "result=FAIL&failure_reason=VISUAL_DEFECT&failure_comment=Rysa+na+powierzchni.",
+          "result=FAIL&failure_reason=VISUAL_DEFECT&failure_comment=Rysa+na+powierzchni.&failure_disposition=REWORK_REQUIRED",
       }),
     );
   });

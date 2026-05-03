@@ -527,6 +527,7 @@ export interface CompleteQcRunOptions {
   result?: "PASS" | "FAIL";
   failure_reason?: string;
   failure_comment?: string;
+  failure_disposition?: "OPEN_CRITICAL_NCR" | "REWORK_REQUIRED" | "BLOCKED";
 }
 
 export interface QcStepResultCreatePayload {
@@ -1238,6 +1239,9 @@ export async function completeQcRun(
   }
   if (options.failure_comment?.trim()) {
     formBody.failure_comment = options.failure_comment.trim();
+  }
+  if (options.failure_disposition?.trim()) {
+    formBody.failure_disposition = options.failure_disposition.trim();
   }
 
   return postForm<QcRunRead>(

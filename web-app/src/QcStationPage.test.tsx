@@ -746,7 +746,7 @@ describe("QcStationPage", () => {
           material_batch: null,
           machine_id: null,
           created_by_operator_id: "QCOP-DEMO-LOCAL",
-          current_status: "QC_FAILED",
+          current_status: "REWORK_REQUIRED",
           produced_at: "2026-05-03T08:16:00Z",
           created_at: "2026-05-03T08:16:00Z",
         });
@@ -771,6 +771,7 @@ describe("QcStationPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Wejdz do aplikacji" }));
 
     await screen.findByText("Sesja stanowiskowa");
+    await screen.findByText(/1 oczekuje/i);
     fireEvent.click(screen.getByRole("button", { name: /QCITEM-DEMO-FAIL/i }));
 
     await screen.findByText(/Aktywna checklista: Kontrola silikonu/);
@@ -785,6 +786,9 @@ describe("QcStationPage", () => {
 
     fireEvent.change(screen.getByLabelText("Powod niezgodnosci"), {
       target: { value: "VISUAL_DEFECT" },
+    });
+    fireEvent.change(screen.getByLabelText("Decyzja po FAIL"), {
+      target: { value: "REWORK_REQUIRED" },
     });
     fireEvent.change(screen.getByLabelText("Komentarz do FAIL"), {
       target: { value: "Rysa na worku silikonowym" },
@@ -806,7 +810,9 @@ describe("QcStationPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Zapisz kontrole QC" }));
 
     await screen.findByText(/Kontrola zakonczona FAIL/);
-    await screen.findByText("Qc Failed");
+    expect(
+      screen.getByText("Status biezacy").closest(".detail-card")?.textContent,
+    ).toContain("Rework Required");
     expect(screen.getByText("evidence.jpg")).toBeInTheDocument();
 
     const uploadCall = fetchMock.mock.calls.find(
@@ -822,6 +828,9 @@ describe("QcStationPage", () => {
     );
     expect(String((completeCall?.[1] as RequestInit).body)).toContain(
       "failure_comment=Rysa+na+worku+silikonowym",
+    );
+    expect(String((completeCall?.[1] as RequestInit).body)).toContain(
+      "failure_disposition=REWORK_REQUIRED",
     );
   });
 });
