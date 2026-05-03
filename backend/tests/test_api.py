@@ -3308,6 +3308,10 @@ def test_qc_product_configuration_can_bind_bom_component_reference_image_and_ste
             "control_area": "Trzon sruby",
             "evaluation_mode": "NUMERIC_RANGE",
             "result_input_label": "Wynik dlugosci",
+            "region_x": 12,
+            "region_y": 18,
+            "region_width": 46,
+            "region_height": 24,
             "blocking_on_fail": True,
             "expected_value": "12.0",
             "unit": "mm",
@@ -3318,6 +3322,8 @@ def test_qc_product_configuration_can_bind_bom_component_reference_image_and_ste
     assert numeric_step.status_code == 200
     numeric_step_id = numeric_step.json()["id"]
     assert numeric_step.json()["requires_measurement"] is True
+    assert numeric_step.json()["region_x"] == 12
+    assert numeric_step.json()["region_height"] == 24
 
     text_step = client.post(
         f"/api/qc-checklists/{checklist_code}/steps",
@@ -3328,6 +3334,10 @@ def test_qc_product_configuration_can_bind_bom_component_reference_image_and_ste
             "control_area": "Glowka sruby",
             "evaluation_mode": "TEXT_MATCH",
             "result_input_label": "Odczyt oznaczenia",
+            "region_x": 60,
+            "region_y": 58,
+            "region_width": 20,
+            "region_height": 16,
             "expected_value": "A2-70",
             "blocking_on_fail": True,
         },
@@ -3340,10 +3350,13 @@ def test_qc_product_configuration_can_bind_bom_component_reference_image_and_ste
         json={
             "instruction": "Wpisz oznaczenie z glowki sruby i porownaj z wzorcem.",
             "result_input_label": "Wpisz odczyt oznaczenia",
+            "region_x": 62,
         },
     )
     assert updated_step.status_code == 200
     assert updated_step.json()["result_input_label"] == "Wpisz odczyt oznaczenia"
+    assert updated_step.json()["region_x"] == 62
+    assert updated_step.json()["region_width"] == 20
 
     deleted_step = client.delete(
         f"/api/qc-checklists/{checklist_code}/steps/{numeric_step_id}",
@@ -3373,6 +3386,50 @@ def test_qc_product_configuration_can_bind_bom_component_reference_image_and_ste
     assert steps.status_code == 200
     assert [row["title"] for row in steps.json()] == ["Potwierdz oznaczenie"]
     assert steps.json()[0]["evaluation_mode"] == "TEXT_MATCH"
+    assert steps.json()[0]["region_x"] == 62
+    assert steps.json()[0]["region_height"] == 16
+
+
+def test_qc_step_control_region_requires_complete_bounded_rectangle():
+    checklist_code = unique_id("CHK")
+    checklist = client.post(
+        "/api/qc-checklists",
+        json={
+            "checklist_code": checklist_code,
+            "name": "Kontrola obszaru",
+            "process_stage": "COMPONENT_QC",
+            "version": "1.0",
+        },
+    )
+    assert checklist.status_code == 200
+
+    incomplete_region = client.post(
+        f"/api/qc-checklists/{checklist_code}/steps",
+        json={
+            "step_order": 1,
+            "title": "Brak kompletu regionu",
+            "region_x": 10,
+            "region_y": 20,
+            "evaluation_mode": "MANUAL",
+        },
+    )
+    assert incomplete_region.status_code == 400
+    assert "Control region requires" in incomplete_region.json()["detail"]
+
+    out_of_bounds_region = client.post(
+        f"/api/qc-checklists/{checklist_code}/steps",
+        json={
+            "step_order": 1,
+            "title": "Region wychodzi poza obraz",
+            "region_x": 80,
+            "region_y": 10,
+            "region_width": 30,
+            "region_height": 15,
+            "evaluation_mode": "MANUAL",
+        },
+    )
+    assert out_of_bounds_region.status_code == 400
+    assert "fit inside the reference image bounds" in out_of_bounds_region.json()["detail"]
 
 
 def test_qc_text_match_step_uses_observed_value_for_automatic_result():

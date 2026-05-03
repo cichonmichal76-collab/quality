@@ -14,6 +14,7 @@ import {
   operatorLogin,
   rfidLogin,
 } from "./api";
+import { QcReferenceImage } from "./QcReferenceImage";
 import type {
   LoadState,
   OperatorRead,
@@ -129,6 +130,7 @@ export function QcStationPage() {
       (workstation) => workstation.workstation_id === selectedWorkstationId,
     ) ?? null;
   const stepPreviews = buildStepPreviews(steps, stepDrafts);
+  const referenceOverlayAreas = buildStationOverlayAreas(steps);
 
   useEffect(() => {
     localStorage.setItem(API_STORAGE_KEY, apiBaseUrl);
@@ -1040,19 +1042,15 @@ export function QcStationPage() {
                   Kod {selectedChecklist.checklist_code}, wersja {selectedChecklist.version}.
                 </p>
                 {selectedChecklist.reference_image_file_id ? (
-                  <div className="qc-reference-inline">
-                    <img
-                      className="qc-reference-image"
-                      src={joinApiUrl(
-                        apiBaseUrl.trim(),
-                        `/files/${encodeURIComponent(selectedChecklist.reference_image_file_id)}`,
-                      )}
-                      alt={`Wzorzec kontroli ${selectedChecklist.name}`}
-                    />
-                    <p className="details-subtitle">
-                      Zdjecie referencyjne elementu do porownania podczas kontroli.
-                    </p>
-                  </div>
+                  <QcReferenceImage
+                    imageUrl={joinApiUrl(
+                      apiBaseUrl.trim(),
+                      `/files/${encodeURIComponent(selectedChecklist.reference_image_file_id)}`,
+                    )}
+                    imageAlt={`Wzorzec kontroli ${selectedChecklist.name}`}
+                    areas={referenceOverlayAreas}
+                    caption="Zdjecie referencyjne elementu do porownania podczas kontroli."
+                  />
                 ) : null}
               </div>
             ) : null}
@@ -1102,6 +1100,15 @@ export function QcStationPage() {
                       ) : null}
                       <div className="qc-step-meta">
                         {step.control_area ? <span>Obszar: {step.control_area}</span> : null}
+                        {step.region_x != null &&
+                        step.region_y != null &&
+                        step.region_width != null &&
+                        step.region_height != null ? (
+                          <span>
+                            Region: X {step.region_x}% | Y {step.region_y}% | S {step.region_width}%
+                            {" "}W {step.region_height}%
+                          </span>
+                        ) : null}
                         {step.expected_value ? (
                           <span>Oczekiwane: {step.expected_value}</span>
                         ) : null}
@@ -1458,6 +1465,31 @@ function normalizeStepEvaluationMode(step: QcStepRead): "MANUAL" | "NUMERIC_RANG
     return normalizedMode;
   }
   return step.requires_measurement ? "NUMERIC_RANGE" : "MANUAL";
+}
+
+function buildStationOverlayAreas(steps: QcStepRead[]) {
+  return steps.flatMap((step, index) => {
+    if (
+      step.region_x == null ||
+      step.region_y == null ||
+      step.region_width == null ||
+      step.region_height == null
+    ) {
+      return [];
+    }
+
+    return [
+      {
+        id: step.id,
+        label: `K${index + 1}`,
+        title: step.title,
+        x: step.region_x,
+        y: step.region_y,
+        width: step.region_width,
+        height: step.region_height,
+      },
+    ];
+  });
 }
 
 function normalizeOptionalString(value: string): string | null {

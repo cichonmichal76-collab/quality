@@ -21,6 +21,7 @@ import type {
   QcStepCreatePayload,
   QcStepRead,
 } from "./api";
+import { QcReferenceImage } from "./QcReferenceImage";
 import { labelForCode } from "./dashboard";
 
 const PROCESS_STAGE_OPTIONS = ["COMPONENT_QC", "MECHANICAL_QC", "ELECTRONICS_QC"] as const;
@@ -50,6 +51,10 @@ interface StepEditorState {
   controlArea: string;
   evaluationMode: EvaluationMode;
   resultInputLabel: string;
+  regionX: string;
+  regionY: string;
+  regionWidth: string;
+  regionHeight: string;
   requiresPhoto: boolean;
   blockingOnFail: boolean;
   expectedValue: string;
@@ -118,6 +123,11 @@ export function QcProductConfigPanel({ apiBaseUrl }: QcProductConfigPanelProps) 
       `/files/${encodeURIComponent(checklistForm.referenceImageFileId)}`,
     );
   }, [apiBaseUrl, checklistForm?.referenceImageFileId, referencePreviewUrl]);
+
+  const referenceOverlayAreas = useMemo(
+    () => buildDraftOverlayAreas(stepDrafts),
+    [stepDrafts],
+  );
 
   async function handleLoadConfiguration(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -725,16 +735,16 @@ export function QcProductConfigPanel({ apiBaseUrl }: QcProductConfigPanelProps) 
                     {selectedReferenceImage ? "NOWY PLIK" : "ZAPISANY"}
                   </span>
                 </div>
-                <img
-                  className="qc-reference-image"
-                  src={checklistPreviewUrl}
-                  alt={`Wzorzec kontroli ${selectedComponent.component_type}`}
+                <QcReferenceImage
+                  imageUrl={checklistPreviewUrl}
+                  imageAlt={`Wzorzec kontroli ${selectedComponent.component_type}`}
+                  areas={referenceOverlayAreas}
+                  caption={
+                    selectedReferenceImage
+                      ? `Nowy plik: ${selectedReferenceImage.name}`
+                      : `ID pliku: ${checklistForm.referenceImageFileId}`
+                  }
                 />
-                <p>
-                  {selectedReferenceImage
-                    ? `Nowy plik: ${selectedReferenceImage.name}`
-                    : `ID pliku: ${checklistForm.referenceImageFileId}`}
-                </p>
               </div>
             ) : null}
 
@@ -869,6 +879,75 @@ export function QcProductConfigPanel({ apiBaseUrl }: QcProductConfigPanelProps) 
                             }
                           />
                         </label>
+                        <div className="field qc-step-comment-field">
+                          <span>Obszar na obrazie referencyjnym (%)</span>
+                          <div className="qc-step-region-grid">
+                            <label className="field">
+                              <span>X</span>
+                              <input
+                                value={step.regionX}
+                                onChange={(event) =>
+                                  handleStepFieldChange(
+                                    step.localId,
+                                    "regionX",
+                                    event.target.value,
+                                  )
+                                }
+                                inputMode="decimal"
+                                placeholder="np. 12"
+                              />
+                            </label>
+                            <label className="field">
+                              <span>Y</span>
+                              <input
+                                value={step.regionY}
+                                onChange={(event) =>
+                                  handleStepFieldChange(
+                                    step.localId,
+                                    "regionY",
+                                    event.target.value,
+                                  )
+                                }
+                                inputMode="decimal"
+                                placeholder="np. 18"
+                              />
+                            </label>
+                            <label className="field">
+                              <span>Szerokosc</span>
+                              <input
+                                value={step.regionWidth}
+                                onChange={(event) =>
+                                  handleStepFieldChange(
+                                    step.localId,
+                                    "regionWidth",
+                                    event.target.value,
+                                  )
+                                }
+                                inputMode="decimal"
+                                placeholder="np. 36"
+                              />
+                            </label>
+                            <label className="field">
+                              <span>Wysokosc</span>
+                              <input
+                                value={step.regionHeight}
+                                onChange={(event) =>
+                                  handleStepFieldChange(
+                                    step.localId,
+                                    "regionHeight",
+                                    event.target.value,
+                                  )
+                                }
+                                inputMode="decimal"
+                                placeholder="np. 24"
+                              />
+                            </label>
+                          </div>
+                          <p className="qc-step-region-summary">
+                            Wpisz prostokat jako procent zdjecia: punkt startu `X/Y` i rozmiar
+                            `Szerokosc/Wysokosc`. Puste pola oznaczaja brak wizualnego obszaru.
+                          </p>
+                        </div>
                         <label className="field checkbox-field">
                           <input
                             type="checkbox"
@@ -1019,6 +1098,10 @@ function buildStepEditorState(step: QcStepRead): StepEditorState {
     controlArea: step.control_area ?? "",
     evaluationMode: normalizeEvaluationMode(step.evaluation_mode, step.requires_measurement),
     resultInputLabel: step.result_input_label ?? "",
+    regionX: step.region_x != null ? String(step.region_x) : "",
+    regionY: step.region_y != null ? String(step.region_y) : "",
+    regionWidth: step.region_width != null ? String(step.region_width) : "",
+    regionHeight: step.region_height != null ? String(step.region_height) : "",
     requiresPhoto: step.requires_photo,
     blockingOnFail: step.blocking_on_fail,
     expectedValue: step.expected_value ?? "",
@@ -1037,6 +1120,10 @@ function createEmptyStepEditor(stepOrder: number): StepEditorState {
     controlArea: "",
     evaluationMode: "MANUAL",
     resultInputLabel: "",
+    regionX: "",
+    regionY: "",
+    regionWidth: "",
+    regionHeight: "",
     requiresPhoto: false,
     blockingOnFail: true,
     expectedValue: "",
@@ -1083,6 +1170,10 @@ function buildStepPayload(
   const unit = normalizeOptionalString(step.unit);
   const toleranceMin = parseOptionalNumber(step.toleranceMin);
   const toleranceMax = parseOptionalNumber(step.toleranceMax);
+  const regionX = parseOptionalNumber(step.regionX);
+  const regionY = parseOptionalNumber(step.regionY);
+  const regionWidth = parseOptionalNumber(step.regionWidth);
+  const regionHeight = parseOptionalNumber(step.regionHeight);
 
   if (step.evaluationMode === "TEXT_MATCH" && !expectedValue) {
     return {
@@ -1103,6 +1194,15 @@ function buildStepPayload(
     }
   }
 
+  const providedRegionValues = [regionX, regionY, regionWidth, regionHeight].filter(
+    (value) => value !== null,
+  );
+  if (providedRegionValues.length > 0 && providedRegionValues.length < 4) {
+    return {
+      error: `Krok "${title}" wymaga kompletu pol obszaru obrazu: X, Y, szerokosc i wysokosc.`,
+    };
+  }
+
   return {
     payload: {
       step_order: stepOrder,
@@ -1111,6 +1211,10 @@ function buildStepPayload(
       control_area: controlArea,
       evaluation_mode: step.evaluationMode,
       result_input_label: resultInputLabel,
+      region_x: regionX,
+      region_y: regionY,
+      region_width: regionWidth,
+      region_height: regionHeight,
       requires_photo: step.requiresPhoto,
       blocking_on_fail: step.blockingOnFail,
       expected_value: expectedValue,
@@ -1119,6 +1223,36 @@ function buildStepPayload(
       tolerance_max: step.evaluationMode === "NUMERIC_RANGE" ? toleranceMax : null,
     },
   };
+}
+
+function buildDraftOverlayAreas(stepDrafts: StepEditorState[]) {
+  return stepDrafts.flatMap((step, index) => {
+    const regionX = parseOptionalNumber(step.regionX);
+    const regionY = parseOptionalNumber(step.regionY);
+    const regionWidth = parseOptionalNumber(step.regionWidth);
+    const regionHeight = parseOptionalNumber(step.regionHeight);
+
+    if (
+      regionX === null ||
+      regionY === null ||
+      regionWidth === null ||
+      regionHeight === null
+    ) {
+      return [];
+    }
+
+    return [
+      {
+        id: step.localId,
+        label: `K${index + 1}`,
+        title: step.title || `Krok ${index + 1}`,
+        x: regionX,
+        y: regionY,
+        width: regionWidth,
+        height: regionHeight,
+      },
+    ];
+  });
 }
 
 function normalizeEvaluationMode(

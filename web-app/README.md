@@ -219,13 +219,17 @@ Panel pozwala:
 - oznaczyc komponent jako `Pomin kontrole`, jesli dla tej pozycji nie ma byc osobnego gate QC
 - dodac obraz referencyjny kontrolowanego elementu
 - zdefiniowac kroki kontroli z opisem, `control area`, trybem oceny i etykieta pola wyniku
+- naniesc na zdjecie referencyjne prostokatny obszar kontroli przez pola `X`, `Y`,
+  `Szerokosc` i `Wysokosc` liczone w procentach obrazu
 - ustawic wartosci oczekiwane i granice dla trybow `TEXT_MATCH` oraz `NUMERIC_RANGE`
 
 Konfiguracja `Produkt QC` sluzy do zbudowania planu kontroli na podstawie BOM.
 Kazdy komponent moze miec osobna checkliste albo moze zostac jawnie oznaczony jako
 pomijany w kontroli. Skonfigurowane kroki sa potem widoczne na stanowisku
 `/qc-station`, gdzie operator wpisuje wartosci zmierzone lub odczytane, a system
-sam wylicza `PASS` albo `FAIL` dla krokow automatycznych.
+sam wylicza `PASS` albo `FAIL` dla krokow automatycznych. Jesli krok ma
+zdefiniowany obszar obrazu, panel administratora i stanowisko QC pokazuja ten
+sam overlay na zdjeciu referencyjnym.
 
 ## Walidacja
 

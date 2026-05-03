@@ -179,6 +179,16 @@ describe("AdminPage", () => {
     let configurationLoaded = false;
     const operators: Array<Record<string, unknown>> = [];
     const workstations: Array<Record<string, unknown>> = [];
+    const createObjectUrl = vi.fn(() => "blob:qc-reference-preview");
+    const revokeObjectUrl = vi.fn();
+    Object.defineProperty(globalThis.URL, "createObjectURL", {
+      configurable: true,
+      value: createObjectUrl,
+    });
+    Object.defineProperty(globalThis.URL, "revokeObjectURL", {
+      configurable: true,
+      value: revokeObjectUrl,
+    });
 
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -257,6 +267,10 @@ describe("AdminPage", () => {
             control_area: "Glowka sruby",
             evaluation_mode: "TEXT_MATCH",
             result_input_label: "Wpisz oznaczenie",
+            region_x: 62,
+            region_y: 58,
+            region_width: 20,
+            region_height: 16,
             requires_photo: false,
             requires_measurement: false,
             blocking_on_fail: true,
@@ -316,12 +330,16 @@ describe("AdminPage", () => {
           step_order: 1,
           title: "Zweryfikuj oznaczenie",
           instruction: "Porownaj oznaczenie z wzorcem.",
-          control_area: "Glowka sruby",
-          evaluation_mode: "TEXT_MATCH",
-          result_input_label: "Wpisz oznaczenie",
-          requires_photo: false,
-          requires_measurement: false,
-          blocking_on_fail: true,
+            control_area: "Glowka sruby",
+            evaluation_mode: "TEXT_MATCH",
+            result_input_label: "Wpisz oznaczenie",
+            region_x: 62,
+            region_y: 58,
+            region_width: 20,
+            region_height: 16,
+            requires_photo: false,
+            requires_measurement: false,
+            blocking_on_fail: true,
           expected_value: "A2-70",
           unit: null,
           tolerance_min: null,
@@ -376,16 +394,41 @@ describe("AdminPage", () => {
         target: { value: "A2-70" },
       },
     );
+    fireEvent.change(screen.getByPlaceholderText("np. 12"), {
+      target: { value: "62" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("np. 18"), {
+      target: { value: "58" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("np. 36"), {
+      target: { value: "20" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("np. 24"), {
+      target: { value: "16" },
+    });
 
     const file = new File(["demo-image"], "screw.png", { type: "image/png" });
     fireEvent.change(screen.getByLabelText("Zdjecie referencyjne elementu"), {
       target: { files: [file] },
     });
+    await screen.findByText("K1");
 
     fireEvent.click(screen.getByRole("button", { name: "Zapisz konfiguracje produktu QC" }));
 
     await screen.findByText(/Zapisano konfiguracje QC dla SCREW_M4/);
     await screen.findByText("SKONFIGUROWANY");
+    const createStepCall = fetchMock.mock.calls.find(
+      ([url, init]) =>
+        String(url).endsWith("/api/qc-checklists/QC-DEMO-OPS-DEFAULT-SCREW-M4/steps") &&
+        (init?.method ?? "GET") === "POST",
+    );
+    expect(createStepCall).toBeDefined();
+    expect(JSON.parse(String((createStepCall?.[1] as RequestInit).body))).toMatchObject({
+      region_x: 62,
+      region_y: 58,
+      region_width: 20,
+      region_height: 16,
+    });
   });
 });
 

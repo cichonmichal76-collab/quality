@@ -88,6 +88,10 @@ describe("QcStationPage", () => {
             control_area: "Obudowa wentylatora",
             evaluation_mode: "NUMERIC_RANGE",
             result_input_label: "Wynik szerokosci",
+            region_x: 14,
+            region_y: 18,
+            region_width: 58,
+            region_height: 34,
             requires_photo: false,
             requires_measurement: true,
             blocking_on_fail: true,
@@ -105,6 +109,10 @@ describe("QcStationPage", () => {
             control_area: "Etykieta",
             evaluation_mode: "TEXT_MATCH",
             result_input_label: "Wpisz odczyt etykiety",
+            region_x: 62,
+            region_y: 60,
+            region_width: 24,
+            region_height: 18,
             requires_photo: false,
             requires_measurement: false,
             blocking_on_fail: true,
@@ -216,6 +224,8 @@ describe("QcStationPage", () => {
     await screen.findByText(/QC Station Demo/);
     await screen.findByText(/Aktywna checklista: Kontrola wentylatora/);
     expect(screen.getByAltText(/Wzorzec kontroli Kontrola wentylatora/i)).toBeInTheDocument();
+    expect(screen.getByText("K1")).toBeInTheDocument();
+    expect(screen.getByText("K2")).toBeInTheDocument();
 
     fireEvent.change(screen.getByPlaceholderText("np. BC-DEMO-001"), {
       target: { value: "QCBC-DEMO-LOCAL" },

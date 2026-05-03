@@ -226,6 +226,11 @@ Wersje BOM mają też teraz jawne lineage przez `source_template_id` i `replaced
 - `POST /api/service-sessions/upload`
   Zwraca teĹĽ metadane uploadu: `upload_status`, `package_hash`, `upload_correlation_id`, `uploaded_at`.
 
+Kroki checklist QC wspieraja tez opcjonalny obszar wizualny na zdjeciu
+referencyjnym przez pola `region_x`, `region_y`, `region_width` i
+`region_height`. Wartosci sa liczone procentowo w zakresie `0..100`, a backend
+pilnuje, zeby prostokat byl kompletny i miescil sie w granicach obrazu.
+
 ## Kontekst traceability i work sessions
 
 Operacje produkcyjne i jakościowe mogą przekazywać `work_session_id`, żeby powiązać akcję z aktywną sesją RFID operatora na stanowisku.

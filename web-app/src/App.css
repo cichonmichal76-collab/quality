@@ -1286,14 +1286,56 @@ td span {
   margin-top: 12px;
 }
 
-.qc-reference-image {
+.qc-reference-stage {
+  position: relative;
   width: min(100%, 420px);
-  max-height: 280px;
-  object-fit: contain;
+}
+
+.qc-reference-image {
+  display: block;
+  width: 100%;
+  height: auto;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: rgb(255 255 255 / 90%);
-  padding: 10px;
+}
+
+.qc-reference-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.qc-reference-region {
+  position: absolute;
+  border: 2px solid rgb(199 82 0 / 85%);
+  background: rgb(199 82 0 / 10%);
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 75%);
+}
+
+.qc-reference-region-label {
+  position: absolute;
+  top: -12px;
+  left: 0;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgb(199 82 0 / 92%);
+  color: white;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.qc-step-region-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.qc-step-region-summary {
+  color: var(--muted);
+  font-size: 0.84rem;
 }
 
 .details-shortcut-list.is-compact .details-queue-link {
@@ -1361,6 +1403,7 @@ td span {
   .qc-station-grid,
   .qc-station-form-grid,
   .qc-step-form-grid,
+  .qc-step-region-grid,
    .summary-grid,
    .details-grid,
    .details-key-grid,
@@ -1387,6 +1430,7 @@ td span {
   .qc-station-grid,
   .qc-station-form-grid,
   .qc-step-form-grid,
+  .qc-step-region-grid,
    .summary-grid,
    .details-grid,
    .details-key-grid,

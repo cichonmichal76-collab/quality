@@ -178,6 +178,10 @@ export interface QcStepRead {
   control_area: string | null;
   evaluation_mode: string;
   result_input_label: string | null;
+  region_x: number | null;
+  region_y: number | null;
+  region_width: number | null;
+  region_height: number | null;
   requires_photo: boolean;
   requires_measurement: boolean;
   blocking_on_fail: boolean;
@@ -194,6 +198,10 @@ export interface QcStepCreatePayload {
   control_area?: string | null;
   evaluation_mode?: string;
   result_input_label?: string | null;
+  region_x?: number | null;
+  region_y?: number | null;
+  region_width?: number | null;
+  region_height?: number | null;
   requires_photo?: boolean;
   requires_measurement?: boolean;
   blocking_on_fail?: boolean;
@@ -210,6 +218,10 @@ export interface QcStepUpdatePayload {
   control_area?: string | null;
   evaluation_mode?: string;
   result_input_label?: string | null;
+  region_x?: number | null;
+  region_y?: number | null;
+  region_width?: number | null;
+  region_height?: number | null;
   requires_photo?: boolean;
   requires_measurement?: boolean;
   blocking_on_fail?: boolean;

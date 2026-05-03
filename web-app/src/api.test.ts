@@ -1165,6 +1165,10 @@ describe("qc product configuration api", () => {
           control_area: "Trzon sruby",
           evaluation_mode: "NUMERIC_RANGE",
           result_input_label: "Wynik dlugosci",
+          region_x: 12,
+          region_y: 18,
+          region_width: 46,
+          region_height: 24,
           requires_photo: false,
           requires_measurement: true,
           blocking_on_fail: true,
@@ -1187,6 +1191,10 @@ describe("qc product configuration api", () => {
           control_area: "Trzon sruby",
           evaluation_mode: "NUMERIC_RANGE",
           result_input_label: "Wynik dlugosci",
+          region_x: 12,
+          region_y: 18,
+          region_width: 46,
+          region_height: 24,
           requires_photo: false,
           requires_measurement: true,
           blocking_on_fail: true,
@@ -1210,6 +1218,10 @@ describe("qc product configuration api", () => {
       control_area: "Trzon sruby",
       evaluation_mode: "NUMERIC_RANGE",
       result_input_label: "Wynik dlugosci",
+      region_x: 12,
+      region_y: 18,
+      region_width: 46,
+      region_height: 24,
       expected_value: "12.0",
       unit: "mm",
       tolerance_min: 11.8,
@@ -1225,6 +1237,14 @@ describe("qc product configuration api", () => {
         method: "DELETE",
       }),
     );
+    expect(
+      JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body)),
+    ).toMatchObject({
+      region_x: 12,
+      region_y: 18,
+      region_width: 46,
+      region_height: 24,
+    });
   });
 
   it("wysyla zdjecie referencyjne checklisty jako multipart/form-data", async () => {

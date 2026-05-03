@@ -111,6 +111,10 @@ test("qc station starts from login screen and supports RFID entry", async ({ pag
             control_area: "Obudowa wentylatora",
             evaluation_mode: "NUMERIC_RANGE",
             result_input_label: "Wynik szerokosci",
+            region_x: 14,
+            region_y: 18,
+            region_width: 58,
+            region_height: 34,
             requires_photo: false,
             requires_measurement: true,
             blocking_on_fail: true,
@@ -128,6 +132,10 @@ test("qc station starts from login screen and supports RFID entry", async ({ pag
             control_area: "Etykieta",
             evaluation_mode: "TEXT_MATCH",
             result_input_label: "Wpisz odczyt etykiety",
+            region_x: 62,
+            region_y: 60,
+            region_width: 24,
+            region_height: 18,
             requires_photo: false,
             requires_measurement: false,
             blocking_on_fail: true,
@@ -251,6 +259,8 @@ test("qc station starts from login screen and supports RFID entry", async ({ pag
   await expect(page.getByText("Anna Kontrola")).toBeVisible();
   await expect(page.getByText(/RFID rozpoznane/i)).toBeVisible();
   await expect(page.getByAltText(/Wzorzec kontroli Kontrola wentylatora/i)).toBeVisible();
+  await expect(page.getByText("K1")).toBeVisible();
+  await expect(page.getByText("K2")).toBeVisible();
 
   await page.getByPlaceholder("np. BC-DEMO-001").fill("QCBC-DEMO-LOCAL");
   await page.getByRole("button", { name: "Pobierz detal" }).click();

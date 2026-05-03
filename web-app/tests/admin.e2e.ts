@@ -195,6 +195,10 @@ test("admin page configures product qc for bom component", async ({ page }) => {
           control_area: "Glowka sruby",
           evaluation_mode: "TEXT_MATCH",
           result_input_label: "Wpisz oznaczenie",
+          region_x: 62,
+          region_y: 58,
+          region_width: 20,
+          region_height: 16,
           requires_photo: false,
           requires_measurement: false,
           blocking_on_fail: true,
@@ -219,6 +223,10 @@ test("admin page configures product qc for bom component", async ({ page }) => {
           control_area: "Glowka sruby",
           evaluation_mode: "TEXT_MATCH",
           result_input_label: "Wpisz oznaczenie",
+          region_x: 62,
+          region_y: 58,
+          region_width: 20,
+          region_height: 16,
           requires_photo: false,
           requires_measurement: false,
           blocking_on_fail: true,
@@ -308,11 +316,16 @@ test("admin page configures product qc for bom component", async ({ page }) => {
   await page.getByLabel("Tryb oceny").selectOption("TEXT_MATCH");
   await page.getByPlaceholder("np. Wpisz odczyt oznaczenia").fill("Wpisz oznaczenie");
   await page.getByPlaceholder("np. A2-70 albo Czytelna etykieta").fill("A2-70");
+  await page.getByPlaceholder("np. 12").fill("62");
+  await page.getByPlaceholder("np. 18").fill("58");
+  await page.getByPlaceholder("np. 36").fill("20");
+  await page.getByPlaceholder("np. 24").fill("16");
   await page.getByLabel("Zdjecie referencyjne elementu").setInputFiles({
     name: "screw.png",
     mimeType: "image/png",
     buffer: Buffer.from("demo-image"),
   });
+  await expect(page.getByText("K1")).toBeVisible();
 
   await page.getByRole("button", { name: "Zapisz konfiguracje produktu QC" }).click();
 

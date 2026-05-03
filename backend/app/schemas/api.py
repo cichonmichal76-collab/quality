@@ -542,6 +542,10 @@ class QcStepCreate(BaseModel):
     control_area: str | None = None
     evaluation_mode: str = "MANUAL"
     result_input_label: str | None = None
+    region_x: float | None = None
+    region_y: float | None = None
+    region_width: float | None = None
+    region_height: float | None = None
     requires_photo: bool = False
     requires_measurement: bool = False
     blocking_on_fail: bool = True
@@ -558,6 +562,10 @@ class QcStepUpdate(BaseModel):
     control_area: str | None = None
     evaluation_mode: str | None = None
     result_input_label: str | None = None
+    region_x: float | None = None
+    region_y: float | None = None
+    region_width: float | None = None
+    region_height: float | None = None
     requires_photo: bool | None = None
     requires_measurement: bool | None = None
     blocking_on_fail: bool | None = None

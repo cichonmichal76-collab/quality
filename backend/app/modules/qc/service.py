@@ -491,4 +491,62 @@ def _normalize_step_payload(
         normalized_payload["expected_value"] = (
             existing_step.expected_value if existing_step else None
         )
+    _normalize_control_region(normalized_payload, existing_step=existing_step)
     return normalized_payload
+
+
+def _normalize_control_region(
+    normalized_payload: dict,
+    *,
+    existing_step: QcStep | None = None,
+) -> None:
+    field_names = ("region_x", "region_y", "region_width", "region_height")
+    merged_values: dict[str, float | None] = {}
+
+    for field_name in field_names:
+        value = normalized_payload.get(field_name)
+        if value is None and existing_step is not None:
+            value = getattr(existing_step, field_name)
+        merged_values[field_name] = None if value is None else float(value)
+
+    if all(value is None for value in merged_values.values()):
+        for field_name in field_names:
+            normalized_payload[field_name] = None
+        return
+
+    if any(value is None for value in merged_values.values()):
+        raise HTTPException(
+            status_code=400,
+            detail="Control region requires region_x, region_y, region_width and region_height",
+        )
+
+    region_x = merged_values["region_x"]
+    region_y = merged_values["region_y"]
+    region_width = merged_values["region_width"]
+    region_height = merged_values["region_height"]
+
+    assert region_x is not None
+    assert region_y is not None
+    assert region_width is not None
+    assert region_height is not None
+
+    if not 0 <= region_x <= 100 or not 0 <= region_y <= 100:
+        raise HTTPException(
+            status_code=400,
+            detail="Control region origin must be between 0 and 100 percent",
+        )
+    if not 0 < region_width <= 100 or not 0 < region_height <= 100:
+        raise HTTPException(
+            status_code=400,
+            detail="Control region width and height must be greater than 0 and at most 100 percent",
+        )
+    if region_x + region_width > 100 or region_y + region_height > 100:
+        raise HTTPException(
+            status_code=400,
+            detail="Control region must fit inside the reference image bounds",
+        )
+
+    normalized_payload["region_x"] = region_x
+    normalized_payload["region_y"] = region_y
+    normalized_payload["region_width"] = region_width
+    normalized_payload["region_height"] = region_height
