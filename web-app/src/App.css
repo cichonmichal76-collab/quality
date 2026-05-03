@@ -573,6 +573,11 @@ select:focus {
   flex-wrap: wrap;
 }
 
+.qc-history-preset-actions {
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+}
+
 .qc-login-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

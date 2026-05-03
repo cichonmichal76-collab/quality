@@ -1159,7 +1159,12 @@ describe("QcStationPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /QCITEM-DEMO-REWORK/i }));
 
       await screen.findByText("NCR-QC-REWORK-001");
-      await screen.findByText("QC-WEB-REWORK");
+      await screen.findByTestId("qc-run-history-list");
+      fireEvent.click(
+        within(screen.getByTestId("qc-run-history-list")).getByRole("button", {
+          name: /QC-WEB-REWORK/i,
+        }),
+      );
       expect(screen.getByTestId("qc-run-history-list")).toBeInTheDocument();
       await screen.findByTestId("qc-run-detail-steps");
       expect(screen.getByText("Pekniecie obudowy.")).toBeInTheDocument();
@@ -1275,6 +1280,26 @@ describe("QcStationPage", () => {
         ]);
       }
 
+      if (url.endsWith("/api/production-items/by-barcode/QCBC-DEMO-HISTORY")) {
+        return jsonResponse({
+          id: "ITEM-ROW-HISTORY",
+          item_serial_number: "QCITEM-DEMO-HISTORY",
+          barcode_value: "QCBC-DEMO-HISTORY",
+          item_type: "FAN_MODULE",
+          part_number: "PN-FAN-HISTORY",
+          revision: "A",
+          drawing_number: null,
+          drawing_revision: null,
+          production_order: null,
+          material_batch: null,
+          machine_id: null,
+          created_by_operator_id: "QCOP-DEMO-LOCAL",
+          current_status: "REWORK_REQUIRED",
+          produced_at: "2026-05-03T08:16:00Z",
+          created_at: "2026-05-03T08:16:00Z",
+        });
+      }
+
       if (url.endsWith("/api/auth/operator-login") && method === "POST") {
         return jsonResponse({
           id: "ROW-SESSION-HISTORY",
@@ -1359,6 +1384,20 @@ describe("QcStationPage", () => {
             started_at: "2026-05-03T08:05:00Z",
             ended_at: "2026-05-03T08:06:00Z",
           },
+          {
+            id: "QC-ROW-POST-REWORK",
+            run_id: "QC-WEB-POST-REWORK",
+            item_serial_number: "QCITEM-DEMO-HISTORY",
+            barcode_value: "QCBC-DEMO-HISTORY",
+            checklist_id: "CHK-HISTORY",
+            process_stage: "COMPONENT_QC",
+            work_session_id: "WS-QA-HISTORY",
+            operator_id: "QCOP-DEMO-LOCAL",
+            status: "COMPLETED",
+            result: "PASS",
+            started_at: "2026-05-03T08:31:00Z",
+            ended_at: "2026-05-03T08:33:00Z",
+          },
         ]);
       }
 
@@ -1410,6 +1449,30 @@ describe("QcStationPage", () => {
         });
       }
 
+      if (url.endsWith("/api/qc-runs/QC-WEB-POST-REWORK/details")) {
+        return jsonResponse({
+          id: "QC-ROW-POST-REWORK",
+          run_id: "QC-WEB-POST-REWORK",
+          device_serial_number: null,
+          item_serial_number: "QCITEM-DEMO-HISTORY",
+          barcode_value: "QCBC-DEMO-HISTORY",
+          checklist_id: "CHK-HISTORY",
+          checklist_code: "QC-HISTORY",
+          checklist_name: "Kontrola historii",
+          process_stage: "COMPONENT_QC",
+          operator_id: "QCOP-DEMO-LOCAL",
+          status: "COMPLETED",
+          result: "PASS",
+          started_at: "2026-05-03T08:31:00Z",
+          ended_at: "2026-05-03T08:33:00Z",
+          failure_reason: null,
+          failure_comment: null,
+          failure_disposition: null,
+          step_results: [],
+          evidence_files: [],
+        });
+      }
+
       throw new Error(`Unexpected request: ${method} ${url}`);
     });
 
@@ -1428,7 +1491,10 @@ describe("QcStationPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Wejdz do aplikacji" }));
 
     await screen.findByText("Sesja stanowiskowa");
-    fireEvent.click(screen.getByRole("button", { name: /QCITEM-DEMO-HISTORY/i }));
+    fireEvent.change(screen.getByPlaceholderText("np. BC-DEMO-001"), {
+      target: { value: "QCBC-DEMO-HISTORY" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Pobierz detal" }));
 
     await screen.findByTestId("qc-run-history-list");
     expect(screen.getByText("QC-WEB-FAIL-NEW")).toBeInTheDocument();
@@ -1464,6 +1530,22 @@ describe("QcStationPage", () => {
         /NCR-QC-HISTORY-/,
       );
       expect(ncrRows[0]).toHaveTextContent("NCR-QC-HISTORY-OLD");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Po ostatnim reworku" }));
+    await waitFor(() => {
+      const historyList = screen.getByTestId("qc-run-history-list");
+      expect(within(historyList).getByText("QC-WEB-POST-REWORK")).toBeInTheDocument();
+      expect(within(historyList).queryByText("QC-WEB-FAIL-NEW")).not.toBeInTheDocument();
+      expect(within(historyList).queryByText("QC-WEB-PASS-OLD")).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset historii" }));
+    await waitFor(() => {
+      const historyList = screen.getByTestId("qc-run-history-list");
+      expect(within(historyList).getByText("QC-WEB-FAIL-NEW")).toBeInTheDocument();
+      expect(within(historyList).getByText("QC-WEB-PASS-OLD")).toBeInTheDocument();
+      expect(within(historyList).getByText("QC-WEB-POST-REWORK")).toBeInTheDocument();
     });
   });
 });

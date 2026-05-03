@@ -100,7 +100,7 @@ interface StepPreview {
   message: string;
 }
 
-type QcRunHistoryFilter = "ALL" | "FAIL" | "PASS";
+type QcRunHistoryFilter = "ALL" | "FAIL" | "PASS" | "POST_LATEST_REWORK";
 type QcRunHistorySort = "NEWEST" | "OLDEST";
 type ClosedCriticalNcrSort = "NEWEST" | "OLDEST";
 
@@ -218,6 +218,7 @@ export function QcStationPage() {
       selectedItem.current_status === "BLOCKED");
   const filteredQcRunHistory = filterAndSortQcRunHistory(
     qcRunHistory,
+    closedCriticalNcrs,
     qcRunHistoryFilter,
     qcRunHistorySort,
   );
@@ -869,6 +870,28 @@ export function QcStationPage() {
 
   const handlePickWaitingItem = (item: ProductionItemRead) => {
     selectItemForInspection(item);
+  };
+
+  const applyHistoryPreset = (preset: "LATEST_FAIL" | "LATEST_PASS" | "POST_LATEST_REWORK" | "RESET") => {
+    if (preset === "LATEST_FAIL") {
+      setQcRunHistoryFilter("FAIL");
+      setQcRunHistorySort("NEWEST");
+      return;
+    }
+    if (preset === "LATEST_PASS") {
+      setQcRunHistoryFilter("PASS");
+      setQcRunHistorySort("NEWEST");
+      return;
+    }
+    if (preset === "POST_LATEST_REWORK") {
+      setQcRunHistoryFilter("POST_LATEST_REWORK");
+      setQcRunHistorySort("NEWEST");
+      setClosedCriticalNcrSort("NEWEST");
+      return;
+    }
+    setQcRunHistoryFilter("ALL");
+    setQcRunHistorySort("NEWEST");
+    setClosedCriticalNcrSort("NEWEST");
   };
 
   const handleEvidenceFilesChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -1719,6 +1742,36 @@ export function QcStationPage() {
                   </div>
 
                   <div className="qc-station-form-grid qc-history-filter-grid">
+                    <div className="details-inline-actions qc-history-preset-actions">
+                      <button
+                        className="ghost-button"
+                        type="button"
+                        onClick={() => applyHistoryPreset("LATEST_FAIL")}
+                      >
+                        Najnowszy FAIL
+                      </button>
+                      <button
+                        className="ghost-button"
+                        type="button"
+                        onClick={() => applyHistoryPreset("LATEST_PASS")}
+                      >
+                        Najnowszy PASS
+                      </button>
+                      <button
+                        className="ghost-button"
+                        type="button"
+                        onClick={() => applyHistoryPreset("POST_LATEST_REWORK")}
+                      >
+                        Po ostatnim reworku
+                      </button>
+                      <button
+                        className="ghost-button"
+                        type="button"
+                        onClick={() => applyHistoryPreset("RESET")}
+                      >
+                        Reset historii
+                      </button>
+                    </div>
                     <label className="field">
                       <span>Filtr historii QC</span>
                       <select
@@ -1731,6 +1784,7 @@ export function QcStationPage() {
                         <option value="ALL">Wszystkie runy</option>
                         <option value="FAIL">Tylko FAIL</option>
                         <option value="PASS">Tylko PASS</option>
+                        <option value="POST_LATEST_REWORK">Po ostatnim reworku</option>
                       </select>
                     </label>
                     <label className="field">
@@ -2724,15 +2778,29 @@ function getErrorMessage(error: unknown, fallback: string): string {
 
 function filterAndSortQcRunHistory(
   runs: QcRunRead[],
+  closedCriticalNcrs: NonconformityRead[],
   filter: QcRunHistoryFilter,
   sort: QcRunHistorySort,
 ): QcRunRead[] {
+  const latestClosedCriticalNcrTimestamp = getLatestClosedCriticalNcrTimestamp(
+    closedCriticalNcrs,
+  );
   const filteredRuns = runs.filter((run) => {
     if (filter === "FAIL") {
       return run.result === "FAIL";
     }
     if (filter === "PASS") {
       return run.result === "PASS";
+    }
+    if (filter === "POST_LATEST_REWORK") {
+      if (latestClosedCriticalNcrTimestamp === null) {
+        return false;
+      }
+      const runTimestamp = Date.parse(run.started_at ?? run.ended_at ?? "");
+      if (!Number.isFinite(runTimestamp)) {
+        return false;
+      }
+      return runTimestamp >= latestClosedCriticalNcrTimestamp;
     }
     return true;
   });
@@ -2751,6 +2819,22 @@ function filterAndSortQcRunHistory(
       ? right.run_id.localeCompare(left.run_id, "pl")
       : left.run_id.localeCompare(right.run_id, "pl");
   });
+}
+
+function getLatestClosedCriticalNcrTimestamp(
+  ncrs: NonconformityRead[],
+): number | null {
+  let latestTimestamp: number | null = null;
+  for (const ncr of ncrs) {
+    const closedTimestamp = Date.parse(ncr.closed_at ?? "");
+    if (!Number.isFinite(closedTimestamp)) {
+      continue;
+    }
+    if (latestTimestamp === null || closedTimestamp > latestTimestamp) {
+      latestTimestamp = closedTimestamp;
+    }
+  }
+  return latestTimestamp;
 }
 
 function sortClosedCriticalNcrs(
