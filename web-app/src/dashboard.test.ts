@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildComponentQueueCsv,
   buildDashboardCsvFileName,
+  buildServiceSessionQueueCsv,
   buildShipmentQueueCsv,
   formatDurationLabel,
   humanizeCode,
@@ -46,6 +47,9 @@ describe("buildDashboardCsvFileName", () => {
     );
     expect(buildDashboardCsvFileName("components", timestamp)).toBe(
       "servicetrace-komponenty-20260502-160708.csv",
+    );
+    expect(buildDashboardCsvFileName("service", timestamp)).toBe(
+      "servicetrace-commissioning-serwis-20260502-160708.csv",
     );
   });
 });
@@ -161,6 +165,55 @@ describe("buildComponentQueueCsv", () => {
     expect(csv).toContain("QC_NOT_PASSED");
     expect(csv).toContain("RUN_COMPONENT_QC_OR_REWORK");
     expect(csv).toContain("D1_TO_D3");
+  });
+});
+
+describe("buildServiceSessionQueueCsv", () => {
+  it("eksportuje wiersze kolejki commissioning z triggerem i uploadem", () => {
+    const csv = buildServiceSessionQueueCsv({
+      total_sessions: 1,
+      reuploaded_sessions: 1,
+      returned_count: 1,
+      offset: 0,
+      limit: 100,
+      has_more: false,
+      next_offset: null,
+      filters: {},
+      upload_status_summary: [],
+      result_summary: [],
+      device_type_summary: [],
+      technician_summary: [],
+      trigger_source_summary: [],
+      sessions: [
+        {
+          id: "svc-row-001",
+          session_id: "SVC-001",
+          device_serial_number: "DEVICE-001",
+          device_type: "DEMO-SVC",
+          technician_id: "TECH-A",
+          result: "HOLD",
+          firmware_version: "1.0.0",
+          bootloader_version: "0.9.0",
+          package_path: "/tmp/SVC-001.zip",
+          package_hash: "hash-001",
+          upload_status: "UPLOADED",
+          upload_count: 2,
+          client_attempt_id: "ATT-001",
+          client_attempt_number: 2,
+          client_trigger_source: "AUTO_NETWORK",
+          upload_correlation_id: "CORR-001",
+          uploaded_at: "2026-05-03T08:00:00Z",
+          created_at: "2026-05-03T07:30:00Z",
+        },
+      ],
+    });
+
+    expect(csv).toContain(
+      "session_id,device_serial_number,device_type,technician_id,result",
+    );
+    expect(csv).toContain("SVC-001,DEVICE-001,DEMO-SVC,TECH-A,HOLD");
+    expect(csv).toContain("AUTO_NETWORK");
+    expect(csv).toContain("UPLOADED");
   });
 });
 

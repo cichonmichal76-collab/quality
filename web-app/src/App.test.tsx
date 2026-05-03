@@ -16,6 +16,7 @@ import type {
   DeviceShipmentQueue,
   DeviceShipmentReadiness,
   OperatorRead,
+  ServiceSessionQueue,
   ServiceSessionRead,
   WorkSessionRead,
 } from "./api";
@@ -173,6 +174,97 @@ const componentPayload: DeviceComponentQualityQueue = {
       primary_blocking_component_type: "FAN_MODULE",
       primary_blocking_component_serial_number: "FAN-001",
       recommended_action: "RUN_COMPONENT_QC_OR_REWORK",
+    },
+  ],
+};
+
+const serviceQueuePayload: ServiceSessionQueue = {
+  total_sessions: 2,
+  reuploaded_sessions: 1,
+  returned_count: 2,
+  offset: 0,
+  limit: 100,
+  has_more: false,
+  next_offset: null,
+  filters: {},
+  upload_status_summary: [
+    {
+      upload_status: "UPLOADED",
+      session_count: 2,
+    },
+  ],
+  result_summary: [
+    {
+      result: "PASS",
+      session_count: 1,
+    },
+    {
+      result: "HOLD",
+      session_count: 1,
+    },
+  ],
+  device_type_summary: [
+    {
+      device_type: "DEMO-SVC",
+      session_count: 2,
+    },
+  ],
+  technician_summary: [
+    {
+      technician_id: "TECH-A",
+      session_count: 2,
+    },
+  ],
+  trigger_source_summary: [
+    {
+      client_trigger_source: "AUTO_NETWORK",
+      session_count: 1,
+    },
+    {
+      client_trigger_source: "MANUAL",
+      session_count: 1,
+    },
+  ],
+  sessions: [
+    {
+      id: "svc-row-001",
+      session_id: "SVC-001",
+      device_serial_number: "SVC-DEVICE-001",
+      device_type: "DEMO-SVC",
+      technician_id: "TECH-A",
+      result: "PASS",
+      firmware_version: "1.0.1",
+      bootloader_version: "0.9.0",
+      package_path: "/tmp/SVC-001.zip",
+      package_hash: "hash-001",
+      upload_status: "UPLOADED",
+      upload_count: 2,
+      client_attempt_id: "ATT-001",
+      client_attempt_number: 2,
+      client_trigger_source: "AUTO_NETWORK",
+      upload_correlation_id: "CORR-001",
+      uploaded_at: "2026-05-03T08:00:00Z",
+      created_at: "2026-05-03T07:30:00Z",
+    },
+    {
+      id: "svc-row-002",
+      session_id: "SVC-002",
+      device_serial_number: "SVC-DEVICE-002",
+      device_type: "DEMO-SVC",
+      technician_id: "TECH-A",
+      result: "HOLD",
+      firmware_version: "1.0.2",
+      bootloader_version: "0.9.1",
+      package_path: "/tmp/SVC-002.zip",
+      package_hash: "hash-002",
+      upload_status: "UPLOADED",
+      upload_count: 1,
+      client_attempt_id: "ATT-002",
+      client_attempt_number: 1,
+      client_trigger_source: "MANUAL",
+      upload_correlation_id: "CORR-002",
+      uploaded_at: "2026-05-03T09:00:00Z",
+      created_at: "2026-05-03T08:45:00Z",
     },
   ],
 };
@@ -3268,7 +3360,7 @@ describe("App", () => {
       }),
     ).toHaveAttribute(
       "href",
-      "/?view=shipment&ship_sort_by=created_at&ship_sort_desc=true&ship_limit=100&ship_offset=0&ship_only_blocked=true&ship_only_ready=false&ship_device_type=DEMO-OPS&ship_primary_blocking_code=COMPONENT_QC_NOT_PASSED&comp_sort_by=blocked_components&comp_sort_desc=true&comp_limit=100&comp_offset=0&comp_only_blocking=true&comp_device_type=DEMO-OPS",
+      "/?view=shipment&ship_sort_by=created_at&ship_sort_desc=true&ship_limit=100&ship_offset=0&ship_only_blocked=true&ship_only_ready=false&ship_device_type=DEMO-OPS&ship_primary_blocking_code=COMPONENT_QC_NOT_PASSED&comp_sort_by=blocked_components&comp_sort_desc=true&comp_limit=100&comp_offset=0&comp_only_blocking=true&comp_device_type=DEMO-OPS&svc_sort_by=uploaded_at&svc_sort_desc=true&svc_limit=100&svc_offset=0",
     );
     expect(
       screen.getByRole("link", {
@@ -3276,7 +3368,7 @@ describe("App", () => {
       }),
     ).toHaveAttribute(
       "href",
-      "/?view=components&ship_sort_by=created_at&ship_sort_desc=true&ship_limit=100&ship_offset=0&ship_only_blocked=false&ship_only_ready=false&comp_sort_by=blocked_components&comp_sort_desc=true&comp_limit=100&comp_offset=0&comp_only_blocking=true&comp_device_type=DEMO-OPS&comp_blocking_component_type=FAN_MODULE",
+      "/?view=components&ship_sort_by=created_at&ship_sort_desc=true&ship_limit=100&ship_offset=0&ship_only_blocked=false&ship_only_ready=false&comp_sort_by=blocked_components&comp_sort_desc=true&comp_limit=100&comp_offset=0&comp_only_blocking=true&comp_device_type=DEMO-OPS&comp_blocking_component_type=FAN_MODULE&svc_sort_by=uploaded_at&svc_sort_desc=true&svc_limit=100&svc_offset=0",
     );
     expect(
       screen.getByRole("link", {
@@ -3574,7 +3666,7 @@ describe("App", () => {
     fireEvent.click(await screen.findByRole("button", { name: "COMP-001" }));
 
     const pageLink = await screen.findByRole("link", { name: "Pełna strona" });
-    expect(pageLink).toHaveAttribute("href", "/devices/COMP-001?view=components&ship_sort_by=created_at&ship_sort_desc=true&ship_limit=100&ship_offset=0&ship_only_blocked=false&ship_only_ready=false&comp_sort_by=blocked_components&comp_sort_desc=true&comp_limit=100&comp_offset=0&comp_only_blocking=true&comp_device_type=DEMO-OPS&device_serial=COMP-001&device_type=DEMO-OPS&device_variant=DEFAULT");
+    expect(pageLink).toHaveAttribute("href", "/devices/COMP-001?view=components&ship_sort_by=created_at&ship_sort_desc=true&ship_limit=100&ship_offset=0&ship_only_blocked=false&ship_only_ready=false&comp_sort_by=blocked_components&comp_sort_desc=true&comp_limit=100&comp_offset=0&comp_only_blocking=true&comp_device_type=DEMO-OPS&svc_sort_by=uploaded_at&svc_sort_desc=true&svc_limit=100&svc_offset=0&device_serial=COMP-001&device_type=DEMO-OPS&device_variant=DEFAULT");
   });
 
   it("marks device as ready for shipment from the details drawer", async () => {
@@ -3806,6 +3898,12 @@ describe("App", () => {
           },
           body: JSON.stringify({ production_status: "SHIPPED" }),
         }),
+      );
+    });
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/devices/SHIP-001/shipment-readiness",
+        expect.anything(),
       );
     });
     expect(
@@ -5589,6 +5687,74 @@ describe("App", () => {
     expect(screen.getByLabelText("Limit")).toHaveValue(1);
     expect(fetchMock).toHaveBeenLastCalledWith(
       "/api/component-quality?only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=1",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+  });
+
+  it("loads commissioning queue after switching to service view", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(createJsonResponse(shipmentPayload))
+      .mockResolvedValueOnce(createJsonResponse(serviceQueuePayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("SHIP-001")).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Commissioning i serwis" }),
+    );
+
+    expect(await screen.findByText("SVC-001")).toBeInTheDocument();
+    expect(await screen.findByText("SVC-DEVICE-001")).toBeInTheDocument();
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/service-sessions/queue?sort_by=uploaded_at&sort_desc=true&limit=100",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+  });
+
+  it("applies trigger filter from commissioning summary cards", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(createJsonResponse(shipmentPayload))
+      .mockResolvedValueOnce(createJsonResponse(serviceQueuePayload))
+      .mockResolvedValueOnce(createJsonResponse(serviceQueuePayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("SHIP-001")).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Commissioning i serwis" }),
+    );
+
+    expect(await screen.findByText("SVC-001")).toBeInTheDocument();
+
+    const triggerPanel = screen
+      .getAllByText("Trigger synchronizacji")
+      .find((heading) => heading.closest(".summary-panel"));
+    expect(triggerPanel).toBeDefined();
+
+    fireEvent.click(
+      within(triggerPanel!.closest(".summary-panel") as HTMLElement).getByRole(
+        "button",
+        { name: /Auto po sieci/i },
+      ),
+    );
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/service-sessions/queue?client_trigger_source=AUTO_NETWORK&sort_by=uploaded_at&sort_desc=true&limit=100",
       expect.objectContaining({
         headers: { Accept: "application/json" },
         signal: expect.any(AbortSignal),

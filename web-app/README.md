@@ -1,19 +1,20 @@
 # Aplikacja webowa - Operacje ServiceTrace
 
-Panel webowy dla produkcji i jakości. Aktualny MVP skupia się na dwóch
+Panel webowy dla produkcji, jakości i commissioning. Aktualny MVP skupia się na trzech
 kolejkach operacyjnych:
 
 - gotowość wysyłki (`GET /api/shipment-readiness`)
 - jakość zamontowanych komponentów (`GET /api/component-quality`)
+- commissioning i serwis (`GET /api/service-sessions/queue`)
 
-Obie kolejki wspierają filtrowanie, paginację opartą o `offset/limit`
+Wszystkie trzy kolejki wspierają filtrowanie, paginację opartą o `offset/limit`
 i zapamiętanie w `localStorage`:
 
 - pola `adres bazowy API`
-- aktywnej zakładki `Wysyłka` / `Komponenty`
-- ostatnich filtrów dla obu widoków
+- aktywnej zakładki `Wysyłka` / `Komponenty` / `Commissioning i serwis`
+- ostatnich filtrów dla wszystkich trzech widoków
 
-Panel synchronizuje też aktywną zakładkę, filtry obu kolejek i otwarte
+Panel synchronizuje też aktywną zakładkę, filtry wszystkich kolejek i otwarte
 szczegóły urządzenia z adresem URL. Dzięki temu można odświeżyć stronę albo
 wkleić link do konkretnego kontekstu pracy bez ręcznego odtwarzania stanu.
 Ten sam mechanizm obsługuje też pełny widok szczegółów pod ścieżką
@@ -110,7 +111,7 @@ pełny adres `http://localhost:8000/api`.
 
 Jeżeli chcesz szybko wrócić do stanu domyślnego, użyj przycisku
 `Wyczyść zapisany stan`. Resetuje on adres API, aktywną zakładkę i zapisane
-filtry obu widoków.
+filtry wszystkich trzech widoków.
 
 Jeżeli chcesz szybko zobaczyć niepuste kolejki, najwygodniej uruchom z katalogu
 repo:
@@ -130,6 +131,10 @@ backend pod `http://127.0.0.1:8000`.
 - `Komponenty` - gate jakości komponentów, blokujące typy komponentów, główny
   status jakości, rekomendowane akcje, tabela urządzeń z komponentami
   blokującymi, drawer szczegółów urządzenia i paginacja wyników.
+- `Commissioning i serwis` - kolejka sesji commissioning, status uploadu,
+  wynik sesji, trigger synchronizacji, liczba reuploadów, technik,
+  firmware/bootloader, eksport CSV i przejście do szczegółów urządzenia po
+  numerze seryjnym.
 
 Pełny widok urządzenia zawiera też skróty do gotowych, przefiltrowanych
 kolejek powiązanych z bieżącym problemem, np. do tej samej blokady
@@ -161,7 +166,8 @@ urządzenia z kolejki komponentów, przejście z sekcji `BOM` do przefiltrowanej
 kolejki wysyłki, klikane presety filtrów z kart podsumowań i metryk oraz
 zdejmowanie pojedynczych chipów aktywnych filtrów, a także kopiowanie linku
 bieżącego widoku do schowka, eksport całej aktywnej kolejki do CSV,
-auto-odświeżanie aktywnej kolejki i mockowane scenariusze wykonania akcji
+auto-odświeżanie aktywnej kolejki, mockowany widok `Commissioning i serwis`
+oraz mockowane scenariusze wykonania akcji
 `Oznacz gotowe do wysyłki`, `Oznacz jako wysłane`, `Zamontuj komponent`,
 `Zamknij krytyczne NCR`, `Zapisz final test PASS` oraz
 `Zapisz komponentowy QC PASS`.

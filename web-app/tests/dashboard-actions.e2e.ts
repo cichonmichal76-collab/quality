@@ -1,4 +1,20 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Route } from "@playwright/test";
+
+async function fulfillOptionalServiceDetailsRequests(
+  path: string,
+  route: Route,
+): Promise<boolean> {
+  if (path === "/api/service-sessions" || path === "/api/audit-events") {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: "[]",
+    });
+    return true;
+  }
+
+  return false;
+}
 
 const shipmentQueuePayload = {
   total_devices: 1,
@@ -929,6 +945,10 @@ test("dashboard marks device ready for shipment from the details drawer", async 
       return;
     }
 
+    if (await fulfillOptionalServiceDetailsRequests(path, route)) {
+      return;
+    }
+
     throw new Error(`Unexpected request: ${request.method()} ${path}`);
   });
 
@@ -1077,6 +1097,10 @@ test("dashboard marks ready device as shipped from the details drawer", async ({
       return;
     }
 
+    if (await fulfillOptionalServiceDetailsRequests(path, route)) {
+      return;
+    }
+
     throw new Error(`Unexpected request: ${request.method()} ${path}`);
   });
 
@@ -1205,6 +1229,10 @@ test("dashboard records final test PASS from the details drawer", async ({
           created_at: "2026-05-01T09:10:00Z",
         }),
       });
+      return;
+    }
+
+    if (await fulfillOptionalServiceDetailsRequests(path, route)) {
       return;
     }
 
@@ -1343,6 +1371,10 @@ test("dashboard completes assembly from the details drawer", async ({
           status: "INSTALLED",
         }),
       });
+      return;
+    }
+
+    if (await fulfillOptionalServiceDetailsRequests(path, route)) {
       return;
     }
 
@@ -1533,6 +1565,10 @@ test("dashboard records component QC PASS from the details drawer", async ({
       return;
     }
 
+    if (await fulfillOptionalServiceDetailsRequests(path, route)) {
+      return;
+    }
+
     throw new Error(`Unexpected request: ${request.method()} ${path}`);
   });
 
@@ -1637,6 +1673,10 @@ test("dashboard closes device critical NCRs from the details drawer", async ({
           closed_at: "2026-05-01T09:45:00Z",
         }),
       });
+      return;
+    }
+
+    if (await fulfillOptionalServiceDetailsRequests(path, route)) {
       return;
     }
 

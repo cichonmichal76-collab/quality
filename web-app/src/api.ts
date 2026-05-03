@@ -1,4 +1,4 @@
-export type DashboardMode = "shipment" | "components";
+export type DashboardMode = "shipment" | "components" | "service";
 
 export type LoadState = "idle" | "loading" | "loaded" | "error";
 

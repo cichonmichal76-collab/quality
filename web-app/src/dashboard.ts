@@ -2,6 +2,7 @@ import type {
   DashboardMode,
   DeviceComponentQualityQueue,
   DeviceShipmentQueue,
+  ServiceSessionQueue,
 } from "./api";
 
 const CODE_LABELS: Record<string, string> = {
@@ -21,9 +22,12 @@ const CODE_LABELS: Record<string, string> = {
   CREATED: "Utworzone",
   CRITICAL_NCR_OPEN: "Krytyczne NCR otwarte",
   CRITICAL_OPEN_NCR: "Krytyczne NCR otwarte",
+  DEFERRED_WORKER: "Worker w tle",
   device_serial_number: "Numer seryjny",
   D1_TO_D3: "1-3 dni",
   D3_TO_D7: "3-7 dni",
+  FAIL: "FAIL",
+  HOLD: "HOLD",
   FINAL_TEST_NOT_PASSED: "Final test niezaliczony",
   FINAL_TEST_PASSED: "Final test zaliczony",
   FIX_ASSEMBLY_MISMATCH: "Napraw niezgodność montażu",
@@ -31,6 +35,7 @@ const CODE_LABELS: Record<string, string> = {
   LT_24H: "Poniżej 24h",
   MISSING: "Brak",
   MARK_READY_FOR_SHIPMENT: "Oznacz gotowe do wysyłki",
+  MANUAL: "RÄ™cznie",
   NO_ACTION: "Bez akcji",
   NONE: "Brak decyzji",
   PASS: "Zaliczone",
@@ -53,6 +58,14 @@ const CODE_LABELS: Record<string, string> = {
   stale_bucket: "Świeżość danych",
   true: "Tak",
   false: "Nie",
+  session_id: "Sesja serwisowa",
+  technician_id: "Technik",
+  uploaded_at: "Data uploadu",
+  upload_count: "Liczba uploadĂłw",
+  upload_status: "Status uploadu",
+  UPLOADED: "Wgrane",
+  AUTO_NETWORK: "Auto po sieci",
+  AUTO_READY: "Auto po READY",
   updated_at: "Data aktualizacji",
   variant_code: "Wariant",
 };
@@ -126,7 +139,12 @@ export function buildDashboardCsvFileName(
   view: DashboardMode,
   now: Date = new Date(),
 ): string {
-  const viewSlug = view === "shipment" ? "wysylka" : "komponenty";
+  const viewSlug =
+    view === "shipment"
+      ? "wysylka"
+      : view === "components"
+        ? "komponenty"
+        : "commissioning-serwis";
   const timestamp = [
     now.getUTCFullYear(),
     padFileNameSegment(now.getUTCMonth() + 1),
@@ -244,6 +262,52 @@ export function buildComponentQueueCsv(
     labelForCode(device.stale_bucket),
     device.device_created_at,
     device.device_updated_at,
+  ]);
+
+  return buildCsv(headers, rows);
+}
+
+export function buildServiceSessionQueueCsv(data: ServiceSessionQueue): string {
+  const headers = [
+    "session_id",
+    "device_serial_number",
+    "device_type",
+    "technician_id",
+    "result",
+    "result_label",
+    "upload_status",
+    "upload_status_label",
+    "upload_count",
+    "client_trigger_source",
+    "client_trigger_source_label",
+    "upload_correlation_id",
+    "client_attempt_id",
+    "client_attempt_number",
+    "firmware_version",
+    "bootloader_version",
+    "uploaded_at",
+    "created_at",
+  ];
+
+  const rows = data.sessions.map((session) => [
+    session.session_id,
+    session.device_serial_number,
+    session.device_type ?? "",
+    session.technician_id ?? "",
+    session.result ?? "",
+    labelForCode(session.result),
+    session.upload_status,
+    labelForCode(session.upload_status),
+    session.upload_count,
+    session.client_trigger_source ?? "",
+    labelForCode(session.client_trigger_source),
+    session.upload_correlation_id ?? "",
+    session.client_attempt_id ?? "",
+    session.client_attempt_number ?? "",
+    session.firmware_version ?? "",
+    session.bootloader_version ?? "",
+    session.uploaded_at ?? "",
+    session.created_at,
   ]);
 
   return buildCsv(headers, rows);

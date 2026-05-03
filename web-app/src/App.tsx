@@ -11,6 +11,7 @@ import {
   listAuditEvents,
   listOperators,
   listServiceSessions,
+  listServiceSessionsQueue,
   listWorkSessions,
   optionalBoolean,
   scanAssemblyComponent,
@@ -27,6 +28,7 @@ import type {
   DeviceShipmentReadiness,
   LoadState,
   OperatorRead,
+  ServiceSessionQueue,
   ServiceSessionRead,
   QueryValue,
   WorkSessionRead,
@@ -34,6 +36,7 @@ import type {
 import {
   buildComponentQueueCsv,
   buildDashboardCsvFileName,
+  buildServiceSessionQueueCsv,
   buildShipmentQueueCsv,
   formatDateTime,
   formatDurationLabel,
@@ -48,6 +51,7 @@ const API_STORAGE_KEY = "servicetrace.web.apiBaseUrl";
 const VIEW_STORAGE_KEY = "servicetrace.web.activeView";
 const SHIPMENT_FILTERS_STORAGE_KEY = "servicetrace.web.shipmentFilters";
 const COMPONENT_FILTERS_STORAGE_KEY = "servicetrace.web.componentFilters";
+const SERVICE_FILTERS_STORAGE_KEY = "servicetrace.web.serviceFilters";
 const AUTO_REFRESH_ENABLED_STORAGE_KEY =
   "servicetrace.web.autoRefreshEnabled";
 const AUTO_REFRESH_INTERVAL_STORAGE_KEY =
@@ -118,6 +122,14 @@ const COMPONENT_STATUS_OPTIONS = [
 
 const COMPONENT_STALE_OPTIONS = ["LT_24H", "D1_TO_D3", "D3_TO_D7", "GT_7D"];
 const SHIPMENT_GATE_RESULT_OPTIONS = ["PASS", "BLOCKED", "NONE"];
+const SERVICE_RESULT_OPTIONS = ["PASS", "FAIL", "HOLD"];
+const SERVICE_UPLOAD_STATUS_OPTIONS = ["UPLOADED"];
+const SERVICE_TRIGGER_SOURCE_OPTIONS = [
+  "MANUAL",
+  "AUTO_NETWORK",
+  "AUTO_READY",
+  "DEFERRED_WORKER",
+];
 const AUTO_REFRESH_INTERVAL_OPTIONS = [5000, 15000, 30000, 60000];
 const DEFAULT_AUTO_REFRESH_INTERVAL_MS = 30000;
 const CSV_EXPORT_PAGE_LIMIT = 500;
@@ -142,6 +154,13 @@ const COMPONENT_SORT_OPTIONS = [
   "variant_code",
   "recommended_action",
 ];
+const SERVICE_SORT_OPTIONS = [
+  "uploaded_at",
+  "created_at",
+  "upload_count",
+  "device_serial_number",
+  "session_id",
+];
 
 const URL_VIEW_KEY = "view";
 const URL_DEVICE_SERIAL_KEY = "device_serial";
@@ -149,6 +168,7 @@ const URL_DEVICE_TYPE_KEY = "device_type";
 const URL_DEVICE_VARIANT_KEY = "device_variant";
 const URL_SHIPMENT_PREFIX = "ship_";
 const URL_COMPONENT_PREFIX = "comp_";
+const URL_SERVICE_PREFIX = "svc_";
 const DEVICE_DETAILS_PATH_PREFIX = "/devices/";
 const DEVICE_DETAILS_SECTION_IDS = {
   actions: "akcje",
@@ -227,6 +247,19 @@ interface ComponentFilters {
   offset: number;
 }
 
+interface ServiceFilters {
+  device_serial_number: string;
+  device_type: string;
+  technician_id: string;
+  result: string;
+  upload_status: string;
+  client_trigger_source: string;
+  sort_by: string;
+  sort_desc: boolean;
+  limit: number;
+  offset: number;
+}
+
 interface DeviceSelection {
   serialNumber: string;
   deviceType: string;
@@ -266,6 +299,7 @@ interface DashboardUrlState {
   activeView: DashboardMode | null;
   hasShipmentFilters: boolean;
   hasComponentFilters: boolean;
+  hasServiceFilters: boolean;
   searchParams: URLSearchParams;
   isDevicePage: boolean;
   devicePageSerial: string | null;
@@ -292,6 +326,12 @@ const COMPONENT_TEXT_FILTER_KEYS: Array<keyof ComponentFilters> = [
   "device_type",
   "variant_code",
   "blocking_component_type",
+];
+
+const SERVICE_TEXT_FILTER_KEYS: Array<keyof ServiceFilters> = [
+  "device_serial_number",
+  "device_type",
+  "technician_id",
 ];
 
 const DEFAULT_SHIPMENT_FILTERS: ShipmentFilters = {
@@ -326,6 +366,19 @@ const DEFAULT_COMPONENT_FILTERS: ComponentFilters = {
   offset: 0,
 };
 
+const DEFAULT_SERVICE_FILTERS: ServiceFilters = {
+  device_serial_number: "",
+  device_type: "",
+  technician_id: "",
+  result: "",
+  upload_status: "",
+  client_trigger_source: "",
+  sort_by: "uploaded_at",
+  sort_desc: true,
+  limit: 100,
+  offset: 0,
+};
+
 export function App() {
   const dashboardUrlState = readDashboardUrlState();
   const isDevicePage = dashboardUrlState.isDevicePage;
@@ -353,6 +406,12 @@ export function App() {
       dashboardUrlState.hasComponentFilters,
     );
   });
+  const [serviceFilters, setServiceFilters] = useState(() => {
+    return readServiceFiltersFromUrl(
+      dashboardUrlState.searchParams,
+      dashboardUrlState.hasServiceFilters,
+    );
+  });
   const [
     shipmentRequestFilters,
     flushShipmentRequestFilters,
@@ -373,11 +432,20 @@ export function App() {
       COMPONENT_TEXT_FILTER_KEYS,
       TEXT_FILTER_DEBOUNCE_MS,
     );
+  const [serviceRequestFilters, flushServiceRequestFilters, serviceFiltersPending] =
+    useDebouncedRequestFilters(
+      serviceFilters,
+      SERVICE_TEXT_FILTER_KEYS,
+      TEXT_FILTER_DEBOUNCE_MS,
+    );
   const [shipmentData, setShipmentData] = useState<DeviceShipmentQueue | null>(
     null,
   );
   const [componentData, setComponentData] =
     useState<DeviceComponentQualityQueue | null>(null);
+  const [serviceData, setServiceData] = useState<ServiceSessionQueue | null>(
+    null,
+  );
   const [loadState, setLoadState] = useState<LoadState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [selectedDevice, setSelectedDevice] = useState<DeviceSelection | null>(
@@ -453,15 +521,23 @@ export function App() {
     null,
   );
   const activePath =
-      activeView === "shipment" ? "/shipment-readiness" : "/component-quality";
-    const activeRequestFilters =
-      activeView === "shipment"
-        ? shipmentRequestFilters
-        : componentRequestFilters;
+    activeView === "shipment"
+      ? "/shipment-readiness"
+      : activeView === "components"
+        ? "/component-quality"
+        : "/service-sessions/queue";
+  const activeRequestFilters =
+    activeView === "shipment"
+      ? shipmentRequestFilters
+      : activeView === "components"
+        ? componentRequestFilters
+        : serviceRequestFilters;
   const canExportActiveQueue =
     activeView === "shipment"
       ? Boolean(shipmentData && shipmentData.devices.length > 0)
-      : Boolean(componentData && componentData.devices.length > 0);
+      : activeView === "components"
+        ? Boolean(componentData && componentData.devices.length > 0)
+        : Boolean(serviceData && serviceData.sessions.length > 0);
   const isExportingCsv = csvExportState === "loading";
   const visibleShipmentDevices = shipmentData?.devices ?? [];
   const selectedShipmentDevices = visibleShipmentDevices.filter((device) =>
@@ -553,6 +629,7 @@ export function App() {
     activeView,
     shipmentFilters,
     componentFilters,
+    serviceFilters,
     selectedDevice,
   });
   const selectedDevicePageHref = selectedDevice
@@ -561,6 +638,7 @@ export function App() {
         activeView,
         shipmentFilters,
         componentFilters,
+        serviceFilters,
         selectedDevice,
       })
     : null;
@@ -573,6 +651,7 @@ export function App() {
         component: deviceDetails.component,
         shipmentFilters,
         componentFilters,
+        serviceFilters,
       })
     : null;
   const shipmentActiveFilterChips = buildShipmentActiveFilterChips(
@@ -581,6 +660,7 @@ export function App() {
   const componentActiveFilterChips = buildComponentActiveFilterChips(
     componentFilters,
   );
+  const serviceActiveFilterChips = buildServiceActiveFilterChips(serviceFilters);
 
   const commitShipmentFilters = (nextFilters: ShipmentFilters) => {
     const sanitizedFilters = sanitizeShipmentFilters({
@@ -602,13 +682,28 @@ export function App() {
     flushComponentRequestFilters(sanitizedFilters);
   };
 
+  const commitServiceFilters = (nextFilters: ServiceFilters) => {
+    const sanitizedFilters = {
+      ...nextFilters,
+      limit: clampLimit(nextFilters.limit),
+      offset: clampOffset(nextFilters.offset),
+    };
+    setServiceFilters(sanitizedFilters);
+    flushServiceRequestFilters(sanitizedFilters);
+  };
+
   const clearActiveViewData = (view: DashboardMode) => {
     if (view === "shipment") {
       setShipmentData(null);
       return;
     }
 
-    setComponentData(null);
+    if (view === "components") {
+      setComponentData(null);
+      return;
+    }
+
+    setServiceData(null);
   };
 
   const showCopyFeedback = (
@@ -695,37 +790,69 @@ export function App() {
         return;
       }
 
-      const exportData = await fetchAllPaginatedQueuePages<
-        DeviceComponentQualityQueue,
-        DeviceComponentQuality
-      >(
+      if (activeView === "components") {
+        const exportData = await fetchAllPaginatedQueuePages<
+          DeviceComponentQualityQueue,
+          DeviceComponentQuality
+        >(
+          apiBaseUrl.trim(),
+          "/component-quality",
+          componentQueryParams({
+            ...componentFilters,
+            offset: 0,
+            limit: CSV_EXPORT_PAGE_LIMIT,
+          }),
+        );
+
+        if (exportData.devices.length === 0) {
+          setCsvExportState("error");
+          showCopyFeedback("dashboard", "error", "Brak danych do eksportu.");
+          return;
+        }
+
+        downloadTextFile(
+          buildDashboardCsvFileName("components"),
+          buildComponentQueueCsv(exportData),
+          "text/csv;charset=utf-8",
+        );
+        setCsvExportState("loaded");
+        showCopyFeedback(
+          "dashboard",
+          "success",
+          `Wyeksportowano CSV kolejki komponentów (${formatNumber(
+            exportData.devices.length,
+          )} urządzeń).`,
+        );
+        return;
+      }
+
+      const exportData = await fetchAllPaginatedServiceSessionQueuePages(
         apiBaseUrl.trim(),
-        "/component-quality",
-        componentQueryParams({
-          ...componentFilters,
+        serviceQueryParams({
+          ...serviceFilters,
           offset: 0,
           limit: CSV_EXPORT_PAGE_LIMIT,
         }),
       );
 
-      if (exportData.devices.length === 0) {
+      if (exportData.sessions.length === 0) {
         setCsvExportState("error");
         showCopyFeedback("dashboard", "error", "Brak danych do eksportu.");
         return;
       }
 
       downloadTextFile(
-        buildDashboardCsvFileName("components"),
-        buildComponentQueueCsv(exportData),
+        buildDashboardCsvFileName("service"),
+        buildServiceSessionQueueCsv(exportData),
         "text/csv;charset=utf-8",
       );
       setCsvExportState("loaded");
       showCopyFeedback(
         "dashboard",
         "success",
-        `Wyeksportowano CSV kolejki komponentów (${formatNumber(
-          exportData.devices.length,
-        )} urządzeń).`,
+        `Wyeksportowano CSV kolejki commissioning (${formatNumber(
+          exportData.sessions.length,
+        )} sesji).`,
       );
     } catch {
       setCsvExportState("error");
@@ -1164,12 +1291,12 @@ export function App() {
   const selectDevice = (device: {
     device_serial_number: string;
     device_type: string;
-    device_variant_code: string;
+    device_variant_code?: string;
   }) => {
     setSelectedDevice({
       serialNumber: device.device_serial_number,
       deviceType: device.device_type,
-      variantCode: device.device_variant_code,
+      variantCode: device.device_variant_code ?? "",
     });
   };
 
@@ -1252,6 +1379,7 @@ export function App() {
       activeView,
       shipmentFilters,
       componentFilters,
+      serviceFilters,
       selectedDevice,
     });
     const currentSearch = window.location.search;
@@ -1262,7 +1390,7 @@ export function App() {
 
     const nextUrl = `${window.location.pathname}${nextSearch}${window.location.hash}`;
     window.history.replaceState(null, "", nextUrl);
-  }, [activeView, componentFilters, selectedDevice, shipmentFilters]);
+  }, [activeView, componentFilters, selectedDevice, serviceFilters, shipmentFilters]);
 
   useEffect(() => {
     localStorage.setItem(
@@ -1277,6 +1405,13 @@ export function App() {
       JSON.stringify(componentFilters),
     );
   }, [componentFilters]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      SERVICE_FILTERS_STORAGE_KEY,
+      JSON.stringify(serviceFilters),
+    );
+  }, [serviceFilters]);
 
   useEffect(() => {
     if (selectedFinalTestSessionId) {
@@ -1345,13 +1480,15 @@ export function App() {
     const params =
       activeView === "shipment"
         ? shipmentQueryParams(activeRequestFilters as ShipmentFilters)
-        : componentQueryParams(activeRequestFilters as ComponentFilters);
+        : activeView === "components"
+          ? componentQueryParams(activeRequestFilters as ComponentFilters)
+          : serviceQueryParams(activeRequestFilters as ServiceFilters);
     const url = joinApiUrl(apiBaseUrl.trim(), activePath) + buildQuery(params);
 
     setLoadState("loading");
     setErrorMessage(null);
 
-    fetchJson<DeviceShipmentQueue | DeviceComponentQualityQueue>(
+    fetchJson<DeviceShipmentQueue | DeviceComponentQualityQueue | ServiceSessionQueue>(
       url,
       controller.signal,
     )
@@ -1362,8 +1499,10 @@ export function App() {
 
         if (activeView === "shipment") {
           setShipmentData(payload as DeviceShipmentQueue);
-        } else {
+        } else if (activeView === "components") {
           setComponentData(payload as DeviceComponentQualityQueue);
+        } else {
+          setServiceData(payload as ServiceSessionQueue);
         }
         setLastSuccessfulRefreshAt(new Date().toISOString());
         setLoadState("loaded");
@@ -1977,6 +2116,26 @@ export function App() {
     });
   };
 
+  const updateServiceFilter = <Key extends keyof ServiceFilters>(
+    key: Key,
+    value: ServiceFilters[Key],
+  ) => {
+    setServiceFilters((previous) => {
+      const normalizedValue =
+        key === "limit"
+          ? (clampLimit(value as number) as ServiceFilters[Key])
+          : value;
+      const next = {
+        ...previous,
+        [key]: normalizedValue,
+      } as ServiceFilters;
+      if (key !== "offset") {
+        next.offset = 0;
+      }
+      return next;
+    });
+  };
+
   const applyShipmentSummaryFilter = (
     partialFilters: Partial<ShipmentFilters>,
   ) => {
@@ -2007,6 +2166,20 @@ export function App() {
     } as ComponentFilters);
   };
 
+  const applyServiceSummaryFilter = (partialFilters: Partial<ServiceFilters>) => {
+    commitServiceFilters({
+      ...DEFAULT_SERVICE_FILTERS,
+      device_serial_number: serviceFilters.device_serial_number,
+      device_type: serviceFilters.device_type,
+      technician_id: serviceFilters.technician_id,
+      sort_by: serviceFilters.sort_by,
+      sort_desc: serviceFilters.sort_desc,
+      limit: serviceFilters.limit,
+      ...partialFilters,
+      offset: 0,
+    });
+  };
+
   const removeShipmentActiveFilter = (chipId: string) => {
     const nextFilters = {
       ...shipmentFilters,
@@ -2027,11 +2200,21 @@ export function App() {
     commitComponentFilters(nextFilters);
   };
 
+  const removeServiceActiveFilter = (chipId: string) => {
+    const nextFilters = {
+      ...serviceFilters,
+      [chipId]: DEFAULT_SERVICE_FILTERS[chipId as keyof ServiceFilters],
+      offset: 0,
+    } as ServiceFilters;
+    commitServiceFilters(nextFilters);
+  };
+
   const resetStoredDashboardState = () => {
     localStorage.removeItem(API_STORAGE_KEY);
     localStorage.removeItem(VIEW_STORAGE_KEY);
     localStorage.removeItem(SHIPMENT_FILTERS_STORAGE_KEY);
     localStorage.removeItem(COMPONENT_FILTERS_STORAGE_KEY);
+    localStorage.removeItem(SERVICE_FILTERS_STORAGE_KEY);
     localStorage.removeItem(AUTO_REFRESH_ENABLED_STORAGE_KEY);
     localStorage.removeItem(AUTO_REFRESH_INTERVAL_STORAGE_KEY);
     localStorage.removeItem(FINAL_TEST_SESSION_STORAGE_KEY);
@@ -2039,12 +2222,14 @@ export function App() {
 
     flushShipmentRequestFilters(DEFAULT_SHIPMENT_FILTERS);
     flushComponentRequestFilters(DEFAULT_COMPONENT_FILTERS);
+    flushServiceRequestFilters(DEFAULT_SERVICE_FILTERS);
     setApiBaseUrl(DEFAULT_API_BASE_URL);
     setAutoRefreshEnabled(false);
     setAutoRefreshIntervalMs(DEFAULT_AUTO_REFRESH_INTERVAL_MS);
     setActiveView("shipment");
     setShipmentFilters(DEFAULT_SHIPMENT_FILTERS);
     setComponentFilters(DEFAULT_COMPONENT_FILTERS);
+    setServiceFilters(DEFAULT_SERVICE_FILTERS);
     setSelectedFinalTestSessionId("");
     setSelectedProductionSessionId("");
     setSelectedQualitySessionId("");
@@ -2073,7 +2258,12 @@ export function App() {
       return;
     }
 
-    flushComponentRequestFilters();
+    if (activeView === "components") {
+      flushComponentRequestFilters();
+      return;
+    }
+
+    flushServiceRequestFilters();
   };
 
   const deviceDetailsViewProps = selectedDevice
@@ -2084,6 +2274,7 @@ export function App() {
         queueShortcuts: deviceQueueShortcuts,
         shipmentFilters,
         componentFilters,
+        serviceFilters,
         loadState: deviceDetailsState,
         errorMessage: deviceDetailsError,
         actionState: deviceActionState,
@@ -2283,6 +2474,16 @@ export function App() {
             >
               Komponenty
             </button>
+            <button
+              className={activeView === "service" ? "is-active" : ""}
+              type="button"
+              onClick={() => {
+                flushServiceRequestFilters();
+                setActiveView("service");
+              }}
+            >
+              Commissioning i serwis
+            </button>
           </nav>
 
           {errorMessage ? (
@@ -2365,7 +2566,7 @@ export function App() {
                 }
               />
             </>
-          ) : (
+          ) : activeView === "components" ? (
             <>
               <ComponentFiltersPanel
                 filters={componentFilters}
@@ -2443,6 +2644,42 @@ export function App() {
                 onCloseSelectedComponentNcrs={
                   closeSelectedComponentQueueCriticalNcrs
                 }
+              />
+            </>
+          ) : (
+            <>
+              <ServiceFiltersPanel
+                filters={serviceFilters}
+                onChange={updateServiceFilter}
+                onReset={() => commitServiceFilters(DEFAULT_SERVICE_FILTERS)}
+                onCommitTextFilters={flushServiceRequestFilters}
+                hasPendingTextFilters={serviceFiltersPending}
+                activeFilters={serviceActiveFilterChips}
+                onRemoveActiveFilter={removeServiceActiveFilter}
+              />
+              <ServiceDashboard
+                apiBaseUrl={apiBaseUrl.trim()}
+                data={serviceData}
+                isLoading={loadState === "loading"}
+                onPageChange={(offset) => updateServiceFilter("offset", offset)}
+                onSelectUploadStatus={(uploadStatus) =>
+                  applyServiceSummaryFilter({
+                    upload_status: uploadStatus,
+                  })
+                }
+                onSelectResult={(result) =>
+                  applyServiceSummaryFilter({
+                    result,
+                  })
+                }
+                onSelectTriggerSource={(clientTriggerSource) =>
+                  applyServiceSummaryFilter({
+                    client_trigger_source: clientTriggerSource,
+                  })
+                }
+                fallbackLimit={serviceFilters.limit}
+                onSelectDevice={selectDevice}
+                selectedDeviceSerial={selectedDeviceSerial}
               />
             </>
           )}
@@ -2709,6 +2946,111 @@ function ComponentFiltersPanel({
           label="Tylko blokujące"
           checked={filters.only_blocking}
           onChange={(checked) => onChange("only_blocking", checked)}
+        />
+        <SwitchField
+          label="Malejąco"
+          checked={filters.sort_desc}
+          onChange={(checked) => onChange("sort_desc", checked)}
+        />
+      </div>
+    </section>
+  );
+}
+
+function ServiceFiltersPanel({
+  filters,
+  onChange,
+  onReset,
+  onCommitTextFilters,
+  hasPendingTextFilters,
+  activeFilters,
+  onRemoveActiveFilter,
+}: {
+  filters: ServiceFilters;
+  onChange: <Key extends keyof ServiceFilters>(
+    key: Key,
+    value: ServiceFilters[Key],
+  ) => void;
+  onReset: () => void;
+  onCommitTextFilters: () => void;
+  hasPendingTextFilters: boolean;
+  activeFilters: ActiveFilterChip[];
+  onRemoveActiveFilter: (chipId: string) => void;
+}) {
+  return (
+    <section className="filters-card" aria-label="Filtry commissioning i serwisu">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Synchronizacja commissioning</p>
+          <h2>Filtry commissioning i serwisu</h2>
+        </div>
+        <div className="section-actions">
+          {hasPendingTextFilters ? (
+            <span className="pending-chip">Oczekuje na zastosowanie</span>
+          ) : null}
+          <button className="ghost-button" type="button" onClick={onReset}>
+            Wyczyść
+          </button>
+        </div>
+      </div>
+      {activeFilters.length > 0 ? (
+        <ActiveFilterBar
+          label="Aktywne filtry commissioning i serwisu"
+          chips={activeFilters}
+          onRemove={onRemoveActiveFilter}
+        />
+      ) : null}
+      <div className="filters-grid">
+        <TextField
+          label="Numer seryjny urządzenia"
+          value={filters.device_serial_number}
+          onChange={(value) => onChange("device_serial_number", value)}
+          onCommit={onCommitTextFilters}
+          placeholder="np. DEMO-SVC-001"
+        />
+        <TextField
+          label="Typ urządzenia"
+          value={filters.device_type}
+          onChange={(value) => onChange("device_type", value)}
+          onCommit={onCommitTextFilters}
+          placeholder="np. ZSS-VENT"
+        />
+        <TextField
+          label="Technik"
+          value={filters.technician_id}
+          onChange={(value) => onChange("technician_id", value)}
+          onCommit={onCommitTextFilters}
+          placeholder="np. TECH-A"
+        />
+        <SelectField
+          label="Wynik"
+          value={filters.result}
+          options={SERVICE_RESULT_OPTIONS}
+          onChange={(value) => onChange("result", value)}
+        />
+        <SelectField
+          label="Status uploadu"
+          value={filters.upload_status}
+          options={SERVICE_UPLOAD_STATUS_OPTIONS}
+          onChange={(value) => onChange("upload_status", value)}
+        />
+        <SelectField
+          label="Trigger synchronizacji"
+          value={filters.client_trigger_source}
+          options={SERVICE_TRIGGER_SOURCE_OPTIONS}
+          onChange={(value) => onChange("client_trigger_source", value)}
+        />
+        <SelectField
+          label="Sortowanie"
+          value={filters.sort_by}
+          options={SERVICE_SORT_OPTIONS}
+          onChange={(value) => onChange("sort_by", value)}
+          allowEmpty={false}
+        />
+        <NumberField
+          label="Limit"
+          value={filters.limit}
+          onChange={(value) => onChange("limit", value)}
         />
         <SwitchField
           label="Malejąco"
@@ -3051,8 +3393,130 @@ function ComponentDashboard({
   );
 }
 
+function ServiceDashboard({
+  apiBaseUrl,
+  data,
+  isLoading,
+  onPageChange,
+  onSelectUploadStatus,
+  onSelectResult,
+  onSelectTriggerSource,
+  fallbackLimit,
+  onSelectDevice,
+  selectedDeviceSerial,
+}: {
+  apiBaseUrl: string;
+  data: ServiceSessionQueue | null;
+  isLoading: boolean;
+  onPageChange: (offset: number) => void;
+  onSelectUploadStatus: (status: string) => void;
+  onSelectResult: (result: string) => void;
+  onSelectTriggerSource: (triggerSource: string) => void;
+  fallbackLimit: number;
+  onSelectDevice: (device: {
+    device_serial_number: string;
+    device_type: string;
+    device_variant_code?: string;
+  }) => void;
+  selectedDeviceSerial: string | null;
+}) {
+  const totalSessions = data?.total_sessions ?? 0;
+  const reuploadedSessions = data?.reuploaded_sessions ?? 0;
+  const technicianCount = data?.technician_summary.length ?? 0;
+
+  return (
+    <section className="dashboard-grid" aria-busy={isLoading}>
+      <div className="metrics-grid">
+        <MetricCard
+          title="Sesje"
+          value={formatNumber(totalSessions)}
+          caption={`${formatNumber(data?.returned_count ?? 0)} w bieżącej stronie`}
+        />
+        <MetricCard
+          title="Reuploadowane"
+          value={formatNumber(reuploadedSessions)}
+          caption={`${percentage(reuploadedSessions, totalSessions)} kolejki`}
+          tone="danger"
+        />
+        <MetricCard
+          title="Technicy"
+          value={formatNumber(technicianCount)}
+          caption="Unikalni technicy w filtrze"
+          tone="success"
+        />
+      </div>
+
+      <div className="summary-grid">
+        <SummaryPanel
+          title="Status uploadu"
+          items={data?.upload_status_summary ?? []}
+          emptyMessage="Brak statusów uploadu"
+          getKey={(item) => item.upload_status}
+          getCount={(item) => item.session_count}
+          onSelect={(item) => onSelectUploadStatus(item.upload_status)}
+        />
+        <SummaryPanel
+          title="Wynik commissioning"
+          items={data?.result_summary ?? []}
+          emptyMessage="Brak wyników"
+          getKey={(item) => item.result ?? "NONE"}
+          getCount={(item) => item.session_count}
+          onSelect={(item) => {
+            if (item.result) {
+              onSelectResult(item.result);
+            }
+          }}
+        />
+        <SummaryPanel
+          title="Trigger synchronizacji"
+          items={data?.trigger_source_summary ?? []}
+          emptyMessage="Brak triggerów"
+          getKey={(item) => item.client_trigger_source ?? "NONE"}
+          getCount={(item) => item.session_count}
+          onSelect={(item) => {
+            if (item.client_trigger_source) {
+              onSelectTriggerSource(item.client_trigger_source);
+            }
+          }}
+        />
+      </div>
+
+      <ServiceSessionTable
+        apiBaseUrl={apiBaseUrl}
+        sessions={data?.sessions ?? []}
+        isLoading={isLoading}
+        onSelectDevice={onSelectDevice}
+        selectedDeviceSerial={selectedDeviceSerial}
+      />
+      <PaginationBar
+        label="kolejki commissioning"
+        itemLabel="sesji"
+        total={totalSessions}
+        returned={data?.returned_count ?? 0}
+        offset={data?.offset ?? 0}
+        limit={data?.limit ?? fallbackLimit}
+        hasMore={data?.has_more ?? false}
+        nextOffset={data?.next_offset ?? null}
+        isLoading={isLoading}
+        onPrevious={() =>
+          onPageChange(
+            Math.max((data?.offset ?? 0) - (data?.limit ?? fallbackLimit), 0),
+          )
+        }
+        onNext={() =>
+          onPageChange(
+            data?.next_offset ??
+              (data?.offset ?? 0) + (data?.returned_count ?? 0),
+          )
+        }
+      />
+    </section>
+  );
+}
+
 function PaginationBar({
   label,
+  itemLabel = "urządzeń",
   total,
   returned,
   offset,
@@ -3064,6 +3528,7 @@ function PaginationBar({
   onNext,
 }: {
   label: string;
+  itemLabel?: string;
   total: number;
   returned: number;
   offset: number;
@@ -3086,7 +3551,7 @@ function PaginationBar({
     <section className="pagination-bar" aria-label={`Paginacja ${label}`}>
       <div className="pagination-copy">
         <strong>
-          {formatNumber(start)}-{formatNumber(end)} z {formatNumber(total)} urządzeń
+          {formatNumber(start)}-{formatNumber(end)} z {formatNumber(total)} {itemLabel}
         </strong>
         <span>
           Strona {formatNumber(currentPage)} · limit {formatNumber(limit)}
@@ -3644,6 +4109,129 @@ function ComponentTable({
   );
 }
 
+function ServiceSessionTable({
+  apiBaseUrl,
+  sessions,
+  isLoading,
+  onSelectDevice,
+  selectedDeviceSerial,
+}: {
+  apiBaseUrl: string;
+  sessions: ServiceSessionRead[];
+  isLoading: boolean;
+  onSelectDevice: (device: {
+    device_serial_number: string;
+    device_type: string;
+    device_variant_code?: string;
+  }) => void;
+  selectedDeviceSerial: string | null;
+}) {
+  if (sessions.length === 0) {
+    return (
+      <EmptyTable
+        isLoading={isLoading}
+        label="Brak sesji commissioning w kolejce."
+      />
+    );
+  }
+
+  return (
+    <section className="table-card">
+      <div className="section-heading compact">
+        <div>
+          <p className="eyebrow">Commissioning i serwis</p>
+          <h2>Sesje do synchronizacji i przeglądu</h2>
+        </div>
+        {isLoading ? <span className="loading-chip">Odświeżanie...</span> : null}
+      </div>
+      <div className="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Sesja</th>
+              <th>Urządzenie</th>
+              <th>Typ</th>
+              <th>Wynik</th>
+              <th>Upload</th>
+              <th>Trigger</th>
+              <th>Technik</th>
+              <th>Firmware</th>
+              <th>Czas</th>
+              <th>Paczka</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sessions.map((session) => {
+              const isSelected =
+                selectedDeviceSerial === session.device_serial_number;
+
+              return (
+                <tr
+                  key={session.id}
+                  className={isSelected ? "table-row-selected" : undefined}
+                >
+                  <td>
+                    <strong>{session.session_id}</strong>
+                    <div className="table-subcopy">
+                      Uploady: {formatNumber(session.upload_count)}
+                    </div>
+                  </td>
+                  <td className="serial-cell">
+                    <button
+                      className={`row-link ${isSelected ? "is-selected" : ""}`}
+                      type="button"
+                      onClick={() =>
+                        onSelectDevice({
+                          device_serial_number: session.device_serial_number,
+                          device_type: session.device_type ?? "",
+                        })
+                      }
+                      aria-pressed={isSelected}
+                    >
+                      {session.device_serial_number}
+                    </button>
+                  </td>
+                  <td>{session.device_type ?? "Brak danych"}</td>
+                  <td>
+                    <CodePill value={session.result} />
+                  </td>
+                  <td>
+                    <CodePill value={session.upload_status} />
+                  </td>
+                  <td>
+                    <CodePill value={session.client_trigger_source} />
+                  </td>
+                  <td>{session.technician_id ?? "Brak danych"}</td>
+                  <td>
+                    <strong>{session.firmware_version ?? "Brak danych"}</strong>
+                    <div className="table-subcopy">
+                      BL: {session.bootloader_version ?? "Brak danych"}
+                    </div>
+                  </td>
+                  <td>
+                    <strong>{formatDateTime(session.uploaded_at ?? session.created_at)}</strong>
+                    <div className="table-subcopy">
+                      Utworzono: {formatDateTime(session.created_at)}
+                    </div>
+                  </td>
+                  <td>
+                    <a
+                      className="row-link button-link"
+                      href={buildServiceSessionPackageHref(apiBaseUrl, session.session_id)}
+                    >
+                      Pobierz ZIP
+                    </a>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 interface DeviceDetailsViewProps {
   device: DeviceSelection;
   apiBaseUrl: string;
@@ -3651,6 +4239,7 @@ interface DeviceDetailsViewProps {
   queueShortcuts: DeviceDetailsQueueShortcuts | null;
   shipmentFilters: ShipmentFilters;
   componentFilters: ComponentFilters;
+  serviceFilters: ServiceFilters;
   loadState: LoadState;
   errorMessage: string | null;
   actionState: LoadState;
@@ -3690,6 +4279,7 @@ function DeviceDetailsDrawer({
   queueShortcuts,
   shipmentFilters,
   componentFilters,
+  serviceFilters,
   loadState,
   errorMessage,
   actionState,
@@ -3747,6 +4337,7 @@ function DeviceDetailsDrawer({
           queueShortcuts={queueShortcuts}
           shipmentFilters={shipmentFilters}
           componentFilters={componentFilters}
+          serviceFilters={serviceFilters}
           loadState={loadState}
           errorMessage={errorMessage}
           actionState={actionState}
@@ -3881,6 +4472,7 @@ function DeviceDetailsSurface({
   queueShortcuts,
   shipmentFilters,
   componentFilters,
+  serviceFilters,
   loadState,
   errorMessage,
   actionState,
@@ -4937,6 +5529,7 @@ function DeviceDetailsSurface({
                             deviceType,
                             shipmentFilters,
                             componentFilters,
+                            serviceFilters,
                           })}
                         />
                       ) : null}
@@ -5647,6 +6240,56 @@ function buildComponentActiveFilterChips(
   return chips;
 }
 
+function buildServiceActiveFilterChips(
+  filters: ServiceFilters,
+): ActiveFilterChip[] {
+  const chips: ActiveFilterChip[] = [];
+
+  if (filters.device_serial_number.trim() !== "") {
+    chips.push({
+      id: "device_serial_number",
+      label: `Numer seryjny: ${filters.device_serial_number.trim()}`,
+    });
+  }
+
+  if (filters.device_type.trim() !== "") {
+    chips.push({
+      id: "device_type",
+      label: `Typ urządzenia: ${filters.device_type.trim()}`,
+    });
+  }
+
+  if (filters.technician_id.trim() !== "") {
+    chips.push({
+      id: "technician_id",
+      label: `Technik: ${filters.technician_id.trim()}`,
+    });
+  }
+
+  if (filters.result !== "") {
+    chips.push({
+      id: "result",
+      label: `Wynik: ${labelForCode(filters.result)}`,
+    });
+  }
+
+  if (filters.upload_status !== "") {
+    chips.push({
+      id: "upload_status",
+      label: `Status uploadu: ${labelForCode(filters.upload_status)}`,
+    });
+  }
+
+  if (filters.client_trigger_source !== "") {
+    chips.push({
+      id: "client_trigger_source",
+      label: `Trigger: ${labelForCode(filters.client_trigger_source)}`,
+    });
+  }
+
+  return chips;
+}
+
 function shipmentQueryParams(filters: ShipmentFilters): Record<string, QueryValue> {
   return {
     device_type: filters.device_type,
@@ -5879,6 +6522,67 @@ async function fetchAllPaginatedQueuePages<
   };
 }
 
+function serviceQueryParams(filters: ServiceFilters): Record<string, QueryValue> {
+  return {
+    device_serial_number: filters.device_serial_number,
+    device_type: filters.device_type,
+    technician_id: filters.technician_id,
+    result: filters.result,
+    upload_status: filters.upload_status,
+    client_trigger_source: filters.client_trigger_source,
+    sort_by: filters.sort_by,
+    sort_desc: filters.sort_desc,
+    limit: clampLimit(filters.limit),
+    offset: filters.offset > 0 ? filters.offset : undefined,
+  };
+}
+
+async function fetchAllPaginatedServiceSessionQueuePages(
+  apiBaseUrl: string,
+  baseParams: Record<string, QueryValue>,
+): Promise<ServiceSessionQueue> {
+  let offset = 0;
+  let firstPage: ServiceSessionQueue | null = null;
+  const sessions: ServiceSessionRead[] = [];
+
+  while (true) {
+    const page = await listServiceSessionsQueue(
+      apiBaseUrl,
+      {
+        ...baseParams,
+        limit: CSV_EXPORT_PAGE_LIMIT,
+        offset,
+      },
+    );
+
+    if (firstPage === null) {
+      firstPage = page;
+    }
+
+    sessions.push(...page.sessions);
+
+    if (!page.has_more || page.next_offset === null) {
+      break;
+    }
+
+    offset = page.next_offset;
+  }
+
+  if (firstPage === null) {
+    throw new Error("Nie udało się pobrać danych eksportu.");
+  }
+
+  return {
+    ...firstPage,
+    sessions,
+    returned_count: sessions.length,
+    offset: 0,
+    limit: sessions.length > 0 ? sessions.length : firstPage.limit,
+    has_more: false,
+    next_offset: null,
+  };
+}
+
 function downloadTextFile(
   fileName: string,
   text: string,
@@ -5909,7 +6613,11 @@ function downloadTextFile(
 
 function readStoredDashboardMode(): DashboardMode {
   const storedValue = localStorage.getItem(VIEW_STORAGE_KEY);
-  return storedValue === "components" ? "components" : "shipment";
+  return storedValue === "components"
+    ? "components"
+    : storedValue === "service"
+      ? "service"
+      : "shipment";
 }
 
 function readDashboardUrlState(): DashboardUrlState {
@@ -5920,11 +6628,14 @@ function readDashboardUrlState(): DashboardUrlState {
     activeView:
       searchParams.get(URL_VIEW_KEY) === "components"
         ? "components"
+        : searchParams.get(URL_VIEW_KEY) === "service"
+          ? "service"
         : searchParams.get(URL_VIEW_KEY) === "shipment"
           ? "shipment"
           : null,
     hasShipmentFilters: hasUrlFilterPrefix(searchParams, URL_SHIPMENT_PREFIX),
     hasComponentFilters: hasUrlFilterPrefix(searchParams, URL_COMPONENT_PREFIX),
+    hasServiceFilters: hasUrlFilterPrefix(searchParams, URL_SERVICE_PREFIX),
     searchParams,
     isDevicePage: devicePageSerial !== null,
     devicePageSerial,
@@ -6103,6 +6814,76 @@ function readComponentFiltersFromUrl(
   };
 }
 
+function readServiceFiltersFromUrl(
+  searchParams: URLSearchParams,
+  hasServiceFilters: boolean,
+): ServiceFilters {
+  const baseFilters = hasServiceFilters
+    ? DEFAULT_SERVICE_FILTERS
+    : readStoredServiceFilters();
+
+  return {
+    device_serial_number: readSearchString(
+      searchParams,
+      `${URL_SERVICE_PREFIX}device_serial_number`,
+      baseFilters.device_serial_number,
+    ),
+    device_type: readSearchString(
+      searchParams,
+      `${URL_SERVICE_PREFIX}device_type`,
+      baseFilters.device_type,
+    ),
+    technician_id: readSearchString(
+      searchParams,
+      `${URL_SERVICE_PREFIX}technician_id`,
+      baseFilters.technician_id,
+    ),
+    result: readSearchOption(
+      searchParams,
+      `${URL_SERVICE_PREFIX}result`,
+      SERVICE_RESULT_OPTIONS,
+      baseFilters.result,
+    ),
+    upload_status: readSearchOption(
+      searchParams,
+      `${URL_SERVICE_PREFIX}upload_status`,
+      SERVICE_UPLOAD_STATUS_OPTIONS,
+      baseFilters.upload_status,
+    ),
+    client_trigger_source: readSearchOption(
+      searchParams,
+      `${URL_SERVICE_PREFIX}client_trigger_source`,
+      SERVICE_TRIGGER_SOURCE_OPTIONS,
+      baseFilters.client_trigger_source,
+    ),
+    sort_by: readSearchOption(
+      searchParams,
+      `${URL_SERVICE_PREFIX}sort_by`,
+      SERVICE_SORT_OPTIONS,
+      baseFilters.sort_by,
+    ),
+    sort_desc: readSearchBoolean(
+      searchParams,
+      `${URL_SERVICE_PREFIX}sort_desc`,
+      baseFilters.sort_desc,
+    ),
+    limit: clampLimit(
+      readSearchNumber(
+        searchParams,
+        `${URL_SERVICE_PREFIX}limit`,
+        baseFilters.limit,
+      ),
+    ),
+    offset: clampOffset(
+      readSearchNumber(
+        searchParams,
+        `${URL_SERVICE_PREFIX}offset`,
+        baseFilters.offset,
+      ),
+    ),
+  };
+}
+
 function readSelectedDeviceFromUrl(
   searchParams: URLSearchParams,
   devicePageSerial: string | null = null,
@@ -6247,6 +7028,55 @@ function readStoredComponentFilters(): ComponentFilters {
   };
 }
 
+function readStoredServiceFilters(): ServiceFilters {
+  const storedValue = readStoredObject(SERVICE_FILTERS_STORAGE_KEY);
+
+  return {
+    device_serial_number: readStoredString(
+      storedValue.device_serial_number,
+      DEFAULT_SERVICE_FILTERS.device_serial_number,
+    ),
+    device_type: readStoredString(
+      storedValue.device_type,
+      DEFAULT_SERVICE_FILTERS.device_type,
+    ),
+    technician_id: readStoredString(
+      storedValue.technician_id,
+      DEFAULT_SERVICE_FILTERS.technician_id,
+    ),
+    result: readStoredOption(
+      storedValue.result,
+      SERVICE_RESULT_OPTIONS,
+      DEFAULT_SERVICE_FILTERS.result,
+    ),
+    upload_status: readStoredOption(
+      storedValue.upload_status,
+      SERVICE_UPLOAD_STATUS_OPTIONS,
+      DEFAULT_SERVICE_FILTERS.upload_status,
+    ),
+    client_trigger_source: readStoredOption(
+      storedValue.client_trigger_source,
+      SERVICE_TRIGGER_SOURCE_OPTIONS,
+      DEFAULT_SERVICE_FILTERS.client_trigger_source,
+    ),
+    sort_by: readStoredOption(
+      storedValue.sort_by,
+      SERVICE_SORT_OPTIONS,
+      DEFAULT_SERVICE_FILTERS.sort_by,
+    ),
+    sort_desc: readStoredBoolean(
+      storedValue.sort_desc,
+      DEFAULT_SERVICE_FILTERS.sort_desc,
+    ),
+    limit: clampLimit(
+      readStoredNumber(storedValue.limit, DEFAULT_SERVICE_FILTERS.limit),
+    ),
+    offset: clampOffset(
+      readStoredNumber(storedValue.offset, DEFAULT_SERVICE_FILTERS.offset),
+    ),
+  };
+}
+
 function readStoredObject(storageKey: string): Record<string, unknown> {
   const rawValue = localStorage.getItem(storageKey);
 
@@ -6297,11 +7127,13 @@ function buildDashboardUrlSearch({
   activeView,
   shipmentFilters,
   componentFilters,
+  serviceFilters,
   selectedDevice,
 }: {
   activeView: DashboardMode;
   shipmentFilters: ShipmentFilters;
   componentFilters: ComponentFilters;
+  serviceFilters: ServiceFilters;
   selectedDevice: DeviceSelection | null;
 }): string {
   const searchParams = new URLSearchParams();
@@ -6309,6 +7141,7 @@ function buildDashboardUrlSearch({
   searchParams.set(URL_VIEW_KEY, activeView);
   writeShipmentFiltersToSearchParams(searchParams, shipmentFilters);
   writeComponentFiltersToSearchParams(searchParams, componentFilters);
+  writeServiceFiltersToSearchParams(searchParams, serviceFilters);
 
   if (selectedDevice) {
     searchParams.set(URL_DEVICE_SERIAL_KEY, selectedDevice.serialNumber);
@@ -6331,18 +7164,21 @@ function buildDashboardLocationHref({
   activeView,
   shipmentFilters,
   componentFilters,
+  serviceFilters,
   selectedDevice,
 }: {
   pathname: string;
   activeView: DashboardMode;
   shipmentFilters: ShipmentFilters;
   componentFilters: ComponentFilters;
+  serviceFilters: ServiceFilters;
   selectedDevice: DeviceSelection | null;
 }): string {
   return `${pathname}${buildDashboardUrlSearch({
     activeView,
     shipmentFilters,
     componentFilters,
+    serviceFilters,
     selectedDevice,
   })}`;
 }
@@ -6440,11 +7276,13 @@ function buildDeviceDetailsQueueShortcuts({
   component,
   shipmentFilters,
   componentFilters,
+  serviceFilters,
 }: {
   shipment: DeviceShipmentReadiness;
   component: DeviceComponentQuality;
   shipmentFilters: ShipmentFilters;
   componentFilters: ComponentFilters;
+  serviceFilters: ServiceFilters;
 }): DeviceDetailsQueueShortcuts | null {
   const deviceType = shipment.device_type || component.device_type;
   const shipmentLinks: QueueShortcutLink[] = [];
@@ -6457,6 +7295,7 @@ function buildDeviceDetailsQueueShortcuts({
         deviceType,
         shipmentFilters,
         componentFilters,
+        serviceFilters,
         primaryBlockingCode: shipment.primary_blocking_code,
         recommendedAction: "",
         onlyBlocked: true,
@@ -6476,6 +7315,7 @@ function buildDeviceDetailsQueueShortcuts({
         deviceType,
         shipmentFilters,
         componentFilters,
+        serviceFilters,
         primaryBlockingCode: "",
         recommendedAction: shipment.recommended_action,
         onlyBlocked: !readyAction,
@@ -6493,6 +7333,7 @@ function buildDeviceDetailsQueueShortcuts({
         deviceType,
         shipmentFilters,
         componentFilters,
+        serviceFilters,
         primaryBlockingCode: "BOM_REQUIRED_COMPONENTS_MISSING",
         missingComponentType,
         recommendedAction: "",
@@ -6510,6 +7351,7 @@ function buildDeviceDetailsQueueShortcuts({
         deviceType,
         shipmentFilters,
         componentFilters,
+        serviceFilters,
         blockingComponentType: component.primary_blocking_component_type,
         recommendedAction: "",
       }),
@@ -6528,6 +7370,7 @@ function buildDeviceDetailsQueueShortcuts({
         deviceType,
         shipmentFilters,
         componentFilters,
+        serviceFilters,
         blockingComponentType: "",
         recommendedAction: component.recommended_action,
       }),
@@ -6560,6 +7403,7 @@ function buildShipmentQueueShortcutHref({
   deviceType,
   shipmentFilters,
   componentFilters,
+  serviceFilters,
   primaryBlockingCode,
   missingComponentType = "",
   recommendedAction,
@@ -6571,6 +7415,7 @@ function buildShipmentQueueShortcutHref({
   deviceType: string;
   shipmentFilters: ShipmentFilters;
   componentFilters: ComponentFilters;
+  serviceFilters: ServiceFilters;
   primaryBlockingCode: string;
   missingComponentType?: string;
   recommendedAction: string;
@@ -6594,6 +7439,7 @@ function buildShipmentQueueShortcutHref({
       only_ready: onlyReady,
     }),
     componentFilters,
+    serviceFilters,
     selectedDevice: null,
   });
 }
@@ -6602,12 +7448,14 @@ function buildComponentQueueShortcutHref({
   deviceType,
   shipmentFilters,
   componentFilters,
+  serviceFilters,
   blockingComponentType,
   recommendedAction,
 }: {
   deviceType: string;
   shipmentFilters: ShipmentFilters;
   componentFilters: ComponentFilters;
+  serviceFilters: ServiceFilters;
   blockingComponentType: string;
   recommendedAction: string;
 }): string {
@@ -6622,6 +7470,7 @@ function buildComponentQueueShortcutHref({
       recommended_action: recommendedAction,
       only_blocking: true,
     },
+    serviceFilters,
     selectedDevice: null,
   });
 }
@@ -6639,11 +7488,13 @@ function buildShipmentHistoryQueueShortcuts({
   deviceType,
   shipmentFilters,
   componentFilters,
+  serviceFilters,
 }: {
   event: AuditEvent;
   deviceType: string;
   shipmentFilters: ShipmentFilters;
   componentFilters: ComponentFilters;
+  serviceFilters: ServiceFilters;
 }): QueueShortcutLink[] {
   const links: QueueShortcutLink[] = [];
 
@@ -6656,6 +7507,7 @@ function buildShipmentHistoryQueueShortcuts({
         deviceType,
         shipmentFilters,
         componentFilters,
+        serviceFilters,
         primaryBlockingCode: "",
         recommendedAction: "",
         productionStatus: "",
@@ -6679,6 +7531,7 @@ function buildShipmentHistoryQueueShortcuts({
         deviceType,
         shipmentFilters,
         componentFilters,
+        serviceFilters,
         primaryBlockingCode: "",
         recommendedAction: "",
         productionStatus: requestedStatus,
@@ -6819,6 +7672,55 @@ function writeComponentFiltersToSearchParams(
     searchParams,
     `${URL_COMPONENT_PREFIX}passes_component_quality_gate`,
     filters.passes_component_quality_gate,
+  );
+}
+
+function writeServiceFiltersToSearchParams(
+  searchParams: URLSearchParams,
+  filters: ServiceFilters,
+): void {
+  searchParams.set(`${URL_SERVICE_PREFIX}sort_by`, filters.sort_by);
+  searchParams.set(
+    `${URL_SERVICE_PREFIX}sort_desc`,
+    String(filters.sort_desc),
+  );
+  searchParams.set(
+    `${URL_SERVICE_PREFIX}limit`,
+    String(clampLimit(filters.limit)),
+  );
+  searchParams.set(
+    `${URL_SERVICE_PREFIX}offset`,
+    String(clampOffset(filters.offset)),
+  );
+  setOptionalSearchString(
+    searchParams,
+    `${URL_SERVICE_PREFIX}device_serial_number`,
+    filters.device_serial_number,
+  );
+  setOptionalSearchString(
+    searchParams,
+    `${URL_SERVICE_PREFIX}device_type`,
+    filters.device_type,
+  );
+  setOptionalSearchString(
+    searchParams,
+    `${URL_SERVICE_PREFIX}technician_id`,
+    filters.technician_id,
+  );
+  setOptionalSearchString(
+    searchParams,
+    `${URL_SERVICE_PREFIX}result`,
+    filters.result,
+  );
+  setOptionalSearchString(
+    searchParams,
+    `${URL_SERVICE_PREFIX}upload_status`,
+    filters.upload_status,
+  );
+  setOptionalSearchString(
+    searchParams,
+    `${URL_SERVICE_PREFIX}client_trigger_source`,
+    filters.client_trigger_source,
   );
 }
 

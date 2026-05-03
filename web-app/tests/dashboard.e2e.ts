@@ -2,6 +2,15 @@ import { readFile } from "node:fs/promises";
 
 import { expect, test } from "@playwright/test";
 
+const SEEDED_SERIAL_PATTERNS = {
+  ready: /READY-(?:LOCAL|E2E)-/,
+  assembly: /ASM-(?:LOCAL|E2E)-/,
+  finalTest: /TEST-(?:LOCAL|E2E)-/,
+  componentQc: /CQ-(?:LOCAL|E2E)-/,
+  componentNcr: /CN-(?:LOCAL|E2E)-/,
+  deviceNcr: /DN-(?:LOCAL|E2E)-/,
+};
+
 test("dashboard renders seeded shipment and component queues", async ({
   page,
 }) => {
@@ -17,12 +26,22 @@ test("dashboard renders seeded shipment and component queues", async ({
     .first();
 
   await expect(page.locator(".table-card tbody tr")).toHaveCount(6);
-  await expect(shipmentTable.getByText(/READY-E2E-/)).toBeVisible();
-  await expect(shipmentTable.getByText(/ASM-E2E-/)).toBeVisible();
-  await expect(shipmentTable.getByText(/TEST-E2E-/)).toBeVisible();
-  await expect(shipmentTable.getByText(/CQ-E2E-/)).toBeVisible();
-  await expect(shipmentTable.getByText(/CN-E2E-/)).toBeVisible();
-  await expect(shipmentTable.getByText(/DN-E2E-/)).toBeVisible();
+  await expect(shipmentTable.getByText(SEEDED_SERIAL_PATTERNS.ready)).toBeVisible();
+  await expect(
+    shipmentTable.getByText(SEEDED_SERIAL_PATTERNS.assembly),
+  ).toBeVisible();
+  await expect(
+    shipmentTable.getByText(SEEDED_SERIAL_PATTERNS.finalTest),
+  ).toBeVisible();
+  await expect(
+    shipmentTable.getByText(SEEDED_SERIAL_PATTERNS.componentQc),
+  ).toBeVisible();
+  await expect(
+    shipmentTable.getByText(SEEDED_SERIAL_PATTERNS.componentNcr),
+  ).toBeVisible();
+  await expect(
+    shipmentTable.getByText(SEEDED_SERIAL_PATTERNS.deviceNcr),
+  ).toBeVisible();
   await expect(shipmentActions.getByText("Uruchom final test")).toBeVisible();
   await expect(shipmentActions.getByText("Zamknij krytyczne NCR")).toBeVisible();
   await expect(shipmentActions.getByText(/Doko/)).toBeVisible();
@@ -32,10 +51,132 @@ test("dashboard renders seeded shipment and component queues", async ({
   const componentTable = page.locator(".table-card");
 
   await expect(page.locator(".table-card tbody tr")).toHaveCount(2);
-  await expect(componentTable.getByText(/CQ-E2E-/)).toBeVisible();
-  await expect(componentTable.getByText(/CN-E2E-/)).toBeVisible();
+  await expect(
+    componentTable.getByText(SEEDED_SERIAL_PATTERNS.componentQc),
+  ).toBeVisible();
+  await expect(
+    componentTable.getByText(SEEDED_SERIAL_PATTERNS.componentNcr),
+  ).toBeVisible();
   await expect(componentTable.getByText("QC niezaliczone")).toBeVisible();
   await expect(componentTable.getByText("Krytyczne NCR otwarte")).toBeVisible();
+});
+
+test("dashboard renders mocked commissioning queue and applies trigger preset", async ({
+  page,
+}) => {
+  const baseSessions = [
+    {
+      session_id: "SVC-001",
+      device_serial_number: "SVC-DEVICE-001",
+      device_type: "DEMO-SVC",
+      technician_id: "TECH-001",
+      result: "PASS",
+      upload_status: "UPLOADED",
+      upload_count: 1,
+      firmware_version: "1.2.3",
+      bootloader_version: "0.9.0",
+      client_attempt_id: "ATTEMPT-001",
+      client_attempt_number: 1,
+      client_trigger_source: "MANUAL",
+      upload_correlation_id: "CORR-001",
+      uploaded_at: "2026-05-03T08:10:00Z",
+      created_at: "2026-05-03T08:00:00Z",
+    },
+    {
+      session_id: "SVC-002",
+      device_serial_number: "SVC-DEVICE-002",
+      device_type: "DEMO-SVC",
+      technician_id: "TECH-002",
+      result: "HOLD",
+      upload_status: "UPLOADED",
+      upload_count: 2,
+      firmware_version: "1.2.4",
+      bootloader_version: "0.9.1",
+      client_attempt_id: "ATTEMPT-002",
+      client_attempt_number: 2,
+      client_trigger_source: "AUTO_NETWORK",
+      upload_correlation_id: "CORR-002",
+      uploaded_at: "2026-05-03T09:10:00Z",
+      created_at: "2026-05-03T09:00:00Z",
+    },
+  ];
+
+  await page.route("**/api/service-sessions/queue**", async (route) => {
+    const requestUrl = new URL(route.request().url());
+    const triggerSource = requestUrl.searchParams.get("client_trigger_source");
+    const sessions =
+      triggerSource === "AUTO_NETWORK"
+        ? baseSessions.filter(
+            (session) => session.client_trigger_source === "AUTO_NETWORK",
+          )
+        : baseSessions;
+
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        total_sessions: sessions.length,
+        reuploaded_sessions: sessions.filter((session) => session.upload_count > 1)
+          .length,
+        returned_count: sessions.length,
+        offset: 0,
+        limit: 100,
+        has_more: false,
+        next_offset: null,
+        filters: triggerSource ? { client_trigger_source: triggerSource } : {},
+        upload_status_summary: [{ upload_status: "UPLOADED", session_count: sessions.length }],
+        result_summary: [
+          { result: "PASS", session_count: sessions.filter((session) => session.result === "PASS").length },
+          { result: "HOLD", session_count: sessions.filter((session) => session.result === "HOLD").length },
+        ].filter((item) => item.session_count > 0),
+        device_type_summary: [
+          { device_type: "DEMO-SVC", session_count: sessions.length },
+        ],
+        technician_summary: sessions.map((session) => ({
+          technician_id: session.technician_id,
+          session_count: 1,
+        })),
+        trigger_source_summary: [
+          {
+            client_trigger_source: "MANUAL",
+            session_count: sessions.filter(
+              (session) => session.client_trigger_source === "MANUAL",
+            ).length,
+          },
+          {
+            client_trigger_source: "AUTO_NETWORK",
+            session_count: sessions.filter(
+              (session) => session.client_trigger_source === "AUTO_NETWORK",
+            ).length,
+          },
+        ].filter((item) => item.session_count > 0),
+        sessions,
+      }),
+    });
+  });
+
+  await page.goto("/");
+
+  await expect(page.getByText("API OK")).toBeVisible();
+
+  await page.getByRole("button", { name: "Commissioning i serwis" }).click();
+
+  const serviceTable = page.locator(".table-card");
+  await expect(page.locator(".table-card tbody tr")).toHaveCount(2);
+  await expect(serviceTable.getByText("SVC-001")).toBeVisible();
+  await expect(serviceTable.getByText("SVC-DEVICE-001")).toBeVisible();
+  await expect(serviceTable.getByText("SVC-002")).toBeVisible();
+
+  const triggerPanel = page
+    .locator(".summary-panel")
+    .filter({ hasText: "Trigger synchronizacji" })
+    .first();
+  await triggerPanel.getByRole("button", { name: /Auto po sieci/i }).click();
+
+  await expect(page).toHaveURL(/view=service/);
+  await expect(page).toHaveURL(/svc_client_trigger_source=AUTO_NETWORK/);
+  await expect(page.locator(".table-card tbody tr")).toHaveCount(1);
+  await expect(serviceTable.getByText("SVC-002")).toBeVisible();
 });
 
 test("dashboard paginates shipment and component queues", async ({ page }) => {
@@ -53,15 +194,23 @@ test("dashboard paginates shipment and component queues", async ({ page }) => {
 
   await expect(page.getByText(/1-2 z 6/)).toBeVisible();
   await expect(page.locator(".table-card tbody tr")).toHaveCount(2);
-  await expect(shipmentTable.getByText(/DN-E2E-/)).toBeVisible();
-  await expect(shipmentTable.getByText(/CN-E2E-/)).toBeVisible();
+  await expect(
+    shipmentTable.getByText(SEEDED_SERIAL_PATTERNS.deviceNcr),
+  ).toBeVisible();
+  await expect(
+    shipmentTable.getByText(SEEDED_SERIAL_PATTERNS.componentNcr),
+  ).toBeVisible();
 
   await page.locator(".pagination-bar .primary-button").click();
 
   await expect(page.getByText(/3-4 z 6/)).toBeVisible();
   await expect(page.locator(".table-card tbody tr")).toHaveCount(2);
-  await expect(shipmentTable.getByText(/CQ-E2E-/)).toBeVisible();
-  await expect(shipmentTable.getByText(/TEST-E2E-/)).toBeVisible();
+  await expect(
+    shipmentTable.getByText(SEEDED_SERIAL_PATTERNS.componentQc),
+  ).toBeVisible();
+  await expect(
+    shipmentTable.getByText(SEEDED_SERIAL_PATTERNS.finalTest),
+  ).toBeVisible();
 
   await page.getByRole("button", { name: "Komponenty" }).click();
   const componentTextFields = page.locator(".filters-card input");
@@ -74,13 +223,17 @@ test("dashboard paginates shipment and component queues", async ({ page }) => {
 
   await expect(page.getByText(/1-1 z 2/)).toBeVisible();
   await expect(page.locator(".table-card tbody tr")).toHaveCount(1);
-  await expect(componentTable.getByText(/CQ-E2E-/)).toBeVisible();
+  await expect(
+    componentTable.getByText(SEEDED_SERIAL_PATTERNS.componentQc),
+  ).toBeVisible();
 
   await page.locator(".pagination-bar .primary-button").click();
 
   await expect(page.getByText(/2-2 z 2/)).toBeVisible();
   await expect(page.locator(".table-card tbody tr")).toHaveCount(1);
-  await expect(componentTable.getByText(/CN-E2E-/)).toBeVisible();
+  await expect(
+    componentTable.getByText(SEEDED_SERIAL_PATTERNS.componentNcr),
+  ).toBeVisible();
 });
 
 test("dashboard copies the current link with active filters", async ({
@@ -126,8 +279,8 @@ test("dashboard downloads CSV for the active shipment queue", async ({
   const exportContent = await readFile(exportPath, "utf8");
 
   expect(exportContent).toContain("device_serial_number");
-  expect(exportContent).toContain("READY-E2E-");
-  expect(exportContent).toContain("DN-E2E-");
+  expect(exportContent).toMatch(SEEDED_SERIAL_PATTERNS.ready);
+  expect(exportContent).toMatch(SEEDED_SERIAL_PATTERNS.deviceNcr);
   expect(exportContent).toContain("DEMO-E2E");
 });
 
@@ -247,7 +400,9 @@ test("dashboard applies summary filters from shipment and component actions", as
   await expect(page).toHaveURL(/ship_recommended_action=RUN_FINAL_TEST/);
   await expect(page).toHaveURL(/ship_only_blocked=true/);
   await expect(page.locator(".table-card tbody tr")).toHaveCount(1);
-  await expect(page.locator(".table-card")).toContainText(/TEST-E2E-/);
+  await expect(page.locator(".table-card")).toContainText(
+    SEEDED_SERIAL_PATTERNS.finalTest,
+  );
 
   await page.getByRole("button", { name: "Komponenty" }).click();
   await page.locator(".filters-card input").first().fill("DEMO-E2E");
@@ -266,7 +421,9 @@ test("dashboard applies summary filters from shipment and component actions", as
   ).toHaveURL(/comp_recommended_action=RUN_COMPONENT_QC_OR_REWORK/);
   await expect(page).toHaveURL(/comp_only_blocking=true/);
   await expect(page.locator(".table-card tbody tr")).toHaveCount(1);
-  await expect(page.locator(".table-card")).toContainText(/CQ-E2E-/);
+  await expect(page.locator(".table-card")).toContainText(
+    SEEDED_SERIAL_PATTERNS.componentQc,
+  );
 });
 
 test("dashboard applies metric filters from shipment and component cards", async ({
@@ -283,7 +440,9 @@ test("dashboard applies metric filters from shipment and component cards", async
   await expect(page).toHaveURL(/ship_device_type=DEMO-E2E/);
   await expect(page).toHaveURL(/ship_only_ready=true/);
   await expect(page.locator(".table-card tbody tr")).toHaveCount(1);
-  await expect(page.locator(".table-card")).toContainText(/READY-E2E-/);
+  await expect(page.locator(".table-card")).toContainText(
+    SEEDED_SERIAL_PATTERNS.ready,
+  );
 
   await page.getByRole("button", { name: "Komponenty" }).click();
   await page.locator(".filters-card input").first().fill("DEMO-E2E");
@@ -293,7 +452,9 @@ test("dashboard applies metric filters from shipment and component cards", async
   await expect(page).toHaveURL(/comp_device_type=DEMO-E2E/);
   await expect(page).toHaveURL(/comp_passes_component_quality_gate=true/);
   await expect(page.locator(".table-card tbody tr")).toHaveCount(4);
-  await expect(page.locator(".table-card")).toContainText(/READY-E2E-/);
+  await expect(page.locator(".table-card")).toContainText(
+    SEEDED_SERIAL_PATTERNS.ready,
+  );
 });
 
 test("dashboard shows removable active shipment filter chips", async ({
@@ -368,7 +529,9 @@ test("dashboard restores active tab and filters after reload", async ({
 
   const componentTable = page.locator(".table-card");
   await expect(page.getByText(/2-2 z 2/)).toBeVisible();
-  await expect(componentTable.getByText(/CN-E2E-/)).toBeVisible();
+  await expect(
+    componentTable.getByText(SEEDED_SERIAL_PATTERNS.componentNcr),
+  ).toBeVisible();
 
   await page.reload();
 
@@ -378,7 +541,9 @@ test("dashboard restores active tab and filters after reload", async ({
   await expect(componentTextFields.first()).toHaveValue("DEMO-E2E");
   await expect(componentLimitField).toHaveValue("1");
   await expect(page.getByText(/2-2 z 2/)).toBeVisible();
-  await expect(componentTable.getByText(/CN-E2E-/)).toBeVisible();
+  await expect(
+    componentTable.getByText(SEEDED_SERIAL_PATTERNS.componentNcr),
+  ).toBeVisible();
 });
 
 test("dashboard clears saved state back to defaults", async ({ page }) => {

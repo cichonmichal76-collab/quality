@@ -1,5 +1,8 @@
 import { expect, test } from "@playwright/test";
 
+const SEEDED_COMPONENT_SERIAL = /CQ-(?:LOCAL|E2E)-/;
+const SEEDED_ASSEMBLY_SERIAL = /ASM-(?:LOCAL|E2E)-/;
+
 test("dashboard opens device details from component queue", async ({ page }) => {
   await page.goto("/");
 
@@ -8,11 +11,11 @@ test("dashboard opens device details from component queue", async ({ page }) => 
   await page.getByRole("button", { name: "Komponenty" }).click();
   await page.locator(".filters-card input").first().fill("DEMO-E2E");
 
-  await page.getByRole("button", { name: /CQ-E2E-/ }).click();
+  await page.getByRole("button", { name: SEEDED_COMPONENT_SERIAL }).click();
 
   const drawer = page.getByRole("dialog");
   await expect(drawer).toBeVisible();
-  const heading = drawer.getByRole("heading", { name: /CQ-E2E-/ });
+  const heading = drawer.getByRole("heading", { name: SEEDED_COMPONENT_SERIAL });
   await expect(heading).toBeVisible();
   await expect(drawer.getByText(/Bramka wysy/i)).toBeVisible();
   await expect(drawer.getByText(/Kontrola jako/i)).toBeVisible();
@@ -20,7 +23,7 @@ test("dashboard opens device details from component queue", async ({ page }) => 
 
   await expect(page).toHaveURL(/view=components/);
   await expect(page).toHaveURL(/comp_device_type=DEMO-E2E/);
-  await expect(page).toHaveURL(/device_serial=CQ-E2E-/);
+  await expect(page).toHaveURL(/device_serial=CQ-(?:LOCAL|E2E)-/);
 
   await page.reload();
 
@@ -47,17 +50,17 @@ test("dashboard opens full device details page and returns to queue context", as
 
   await page.getByRole("button", { name: "Komponenty" }).click();
   await page.locator(".filters-card input").first().fill("DEMO-E2E");
-  await page.getByRole("button", { name: /CQ-E2E-/ }).click();
+  await page.getByRole("button", { name: SEEDED_COMPONENT_SERIAL }).click();
 
   const drawer = page.getByRole("dialog");
   await expect(drawer).toBeVisible();
 
   await drawer.getByRole("link", { name: "Pełna strona" }).click();
 
-  await expect(page).toHaveURL(/\/devices\/CQ-E2E-/);
+  await expect(page).toHaveURL(/\/devices\/CQ-(?:LOCAL|E2E)-/);
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(
-    page.getByRole("heading", { name: /CQ-E2E-/ }),
+    page.getByRole("heading", { name: SEEDED_COMPONENT_SERIAL }),
   ).toBeVisible();
   await expect(
     page.getByRole("link", { name: "Wróć do dashboardu" }),
@@ -79,9 +82,9 @@ test("dashboard opens full device details page and returns to queue context", as
 
   await page.reload();
 
-  await expect(page).toHaveURL(/\/devices\/CQ-E2E-.*#historia-gate$/);
+  await expect(page).toHaveURL(/\/devices\/CQ-(?:LOCAL|E2E)-.*#historia-gate$/);
   await expect(
-    page.getByRole("heading", { name: /CQ-E2E-/ }),
+    page.getByRole("heading", { name: SEEDED_COMPONENT_SERIAL }),
   ).toBeVisible();
   await expect(page.getByRole("link", { name: "Historia gate" })).toHaveClass(
     /is-active/,
@@ -91,7 +94,7 @@ test("dashboard opens full device details page and returns to queue context", as
 
   await expect(page).toHaveURL(/view=components/);
   await expect(page).toHaveURL(/comp_device_type=DEMO-E2E/);
-  await expect(page).toHaveURL(/device_serial=CQ-E2E-/);
+  await expect(page).toHaveURL(/device_serial=CQ-(?:LOCAL|E2E)-/);
   await expect(page.getByRole("dialog")).toBeVisible();
 });
 
@@ -104,14 +107,14 @@ test("dashboard jumps from full device page to a filtered related queue", async 
 
   await page.getByRole("button", { name: "Komponenty" }).click();
   await page.locator(".filters-card input").first().fill("DEMO-E2E");
-  await page.getByRole("button", { name: /CQ-E2E-/ }).click();
+  await page.getByRole("button", { name: SEEDED_COMPONENT_SERIAL }).click();
 
   const drawer = page.getByRole("dialog");
   await expect(drawer).toBeVisible();
 
   await drawer.getByRole("link", { name: "Pełna strona" }).click();
 
-  await expect(page).toHaveURL(/\/devices\/CQ-E2E-/);
+  await expect(page).toHaveURL(/\/devices\/CQ-(?:LOCAL|E2E)-/);
   await page
     .getByRole("link", { name: /Pokaż podobne blokady w kolejce komponentów/ })
     .click();
@@ -351,14 +354,14 @@ test("dashboard jumps from BOM details to a filtered shipment queue", async ({
   await expect(page.getByText("API OK")).toBeVisible();
 
   await page.getByLabel("Typ urządzenia").fill("DEMO-E2E");
-  await page.getByRole("button", { name: /ASM-E2E-/ }).click();
+  await page.getByRole("button", { name: SEEDED_ASSEMBLY_SERIAL }).click();
 
   const drawer = page.getByRole("dialog");
   await expect(drawer).toBeVisible();
 
   await drawer.getByRole("link", { name: "Pełna strona" }).click();
 
-  await expect(page).toHaveURL(/\/devices\/ASM-E2E-/);
+  await expect(page).toHaveURL(/\/devices\/ASM-(?:LOCAL|E2E)-/);
   await page.getByRole("link", { name: /Pokaż braki BOM dla/i }).click();
 
   await expect(page).toHaveURL(/\/\?view=shipment/);
@@ -736,7 +739,9 @@ test("dashboard shows commissioning sessions in device details", async ({
 
   const drawer = page.getByRole("dialog");
   await expect(drawer).toBeVisible();
-  await expect(drawer.getByText("Commissioning i serwis")).toBeVisible();
+  await expect(
+    drawer.getByRole("heading", { name: "Commissioning i serwis" }),
+  ).toBeVisible();
   await expect(drawer.getByText("SVC-9001")).toBeVisible();
   await expect(drawer.getByText(/Uploadów: 2/)).toBeVisible();
   await expect(

@@ -610,6 +610,12 @@ td span {
   color: var(--muted);
 }
 
+.table-subcopy {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+}
+
 .serial-cell {
   font-family: "Cascadia Mono", "Consolas", monospace;
   font-weight: 800;
