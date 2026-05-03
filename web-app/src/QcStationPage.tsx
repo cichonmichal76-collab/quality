@@ -243,6 +243,10 @@ export function QcStationPage() {
     waitingItemsSort,
     authState?.operatorId ?? null,
   );
+  const waitingItemsReservationSummary = summarizeWaitingItemsReservations(
+    waitingItems,
+    authState?.operatorId ?? null,
+  );
   const filteredQcRunHistory = filterAndSortQcRunHistory(
     qcRunHistory,
     closedCriticalNcrs,
@@ -893,9 +897,7 @@ export function QcStationPage() {
       if (isProductionItemReservedByOtherOperator(item, authState.operatorId)) {
         setSelectedItem(null);
         setLookupState("error");
-        setLookupError(
-          `Komponent jest zarezerwowany przez operatora ${item.qc_reserved_by_operator_id}.`,
-        );
+        setLookupError(buildReservedByOtherOperatorMessage(item));
         return;
       }
       selectItemForInspection(item);
@@ -914,9 +916,7 @@ export function QcStationPage() {
     }
     if (isProductionItemReservedByOtherOperator(item, authState.operatorId)) {
       setLookupState("error");
-      setLookupError(
-        `Komponent jest zarezerwowany przez operatora ${item.qc_reserved_by_operator_id}.`,
-      );
+      setLookupError(buildReservedByOtherOperatorMessage(item));
       return;
     }
     selectItemForInspection(item);
@@ -1172,9 +1172,7 @@ export function QcStationPage() {
 
     if (isProductionItemReservedByOtherOperator(selectedItem, authState.operatorId)) {
       setSubmitState("error");
-      setSubmitError(
-        `Komponent jest zarezerwowany przez operatora ${selectedItem.qc_reserved_by_operator_id}.`,
-      );
+      setSubmitError(buildReservedByOtherOperatorMessage(selectedItem));
       return;
     }
 
@@ -1709,6 +1707,24 @@ export function QcStationPage() {
                         : "Kolejka idle"}
                 </span>
               </div>
+              <div className="detail-card-grid" data-testid="qc-waiting-summary">
+                <div className="detail-card" data-testid="qc-waiting-summary-all">
+                  <span>Wszystkie</span>
+                  <strong>{waitingItemsReservationSummary.all}</strong>
+                </div>
+                <div className="detail-card" data-testid="qc-waiting-summary-unreserved">
+                  <span>Wolne detale</span>
+                  <strong>{waitingItemsReservationSummary.unreserved}</strong>
+                </div>
+                <div className="detail-card" data-testid="qc-waiting-summary-mine">
+                  <span>Moje rezerwacje</span>
+                  <strong>{waitingItemsReservationSummary.mine}</strong>
+                </div>
+                <div className="detail-card" data-testid="qc-waiting-summary-other">
+                  <span>Cudze rezerwacje</span>
+                  <strong>{waitingItemsReservationSummary.otherReserved}</strong>
+                </div>
+              </div>
               <div className="qc-station-form-grid qc-history-filter-grid">
                 <div className="details-inline-actions qc-history-preset-actions">
                   <button
@@ -1838,8 +1854,12 @@ export function QcStationPage() {
                         <div className="qc-waiting-item-meta">
                           <span>{labelForCode(item.current_status)}</span>
                           {item.qc_reserved_by_operator_id ? (
-                            <span>Zarezerwowane: {item.qc_reserved_by_operator_id}</span>
-                          ) : null}
+                            <span>
+                              Zarezerwowane: {formatWaitingItemReservationLabel(item)}
+                            </span>
+                          ) : (
+                            <span>Wolny detal</span>
+                          )}
                           <span>{formatDateTime(item.produced_at ?? item.created_at)}</span>
                         </div>
                       </button>
@@ -3201,11 +3221,50 @@ function filterAndSortWaitingItems(
   });
 }
 
+function summarizeWaitingItemsReservations(
+  items: ProductionItemRead[],
+  operatorId: string | null,
+): {
+  all: number;
+  unreserved: number;
+  mine: number;
+  otherReserved: number;
+} {
+  return items.reduce(
+    (summary, item) => {
+      summary.all += 1;
+      if (!item.qc_reserved_by_operator_id) {
+        summary.unreserved += 1;
+        return summary;
+      }
+      if (operatorId && item.qc_reserved_by_operator_id === operatorId) {
+        summary.mine += 1;
+        return summary;
+      }
+      summary.otherReserved += 1;
+      return summary;
+    },
+    { all: 0, unreserved: 0, mine: 0, otherReserved: 0 },
+  );
+}
+
 function isProductionItemReservedByOtherOperator(
   item: ProductionItemRead,
   operatorId: string,
 ): boolean {
   return !!item.qc_reserved_by_operator_id && item.qc_reserved_by_operator_id !== operatorId;
+}
+
+function formatWaitingItemReservationLabel(item: ProductionItemRead): string {
+  const operatorLabel = item.qc_reserved_by_operator_id ?? "nieznany operator";
+  if (item.qc_reserved_by_workstation_id) {
+    return `${operatorLabel} @ ${item.qc_reserved_by_workstation_id}`;
+  }
+  return operatorLabel;
+}
+
+function buildReservedByOtherOperatorMessage(item: ProductionItemRead): string {
+  return `Komponent jest zarezerwowany przez operatora ${formatWaitingItemReservationLabel(item)}.`;
 }
 
 function getLatestClosedCriticalNcrTimestamp(

@@ -574,6 +574,14 @@ test("qc station pozwala pobrac detal z kolejki oczekujacych na QC", async ({ pa
 
   await expect(page.getByRole("heading", { name: "Sesja stanowiskowa" })).toBeVisible();
   await expect(page.getByText("3/3 oczekuje")).toBeVisible();
+  await expect(page.getByTestId("qc-waiting-summary-all")).toContainText("3");
+  await expect(page.getByTestId("qc-waiting-summary-unreserved")).toContainText("1");
+  await expect(page.getByTestId("qc-waiting-summary-mine")).toContainText("1");
+  await expect(page.getByTestId("qc-waiting-summary-other")).toContainText("1");
+  await expect(page.getByTestId("qc-waiting-list")).toContainText(
+    "Zarezerwowane: QCOP-OTHER @ QCWS-OTHER",
+  );
+  await expect(page.getByTestId("qc-waiting-list")).toContainText("Wolny detal");
 
   await page.getByLabel("Status kolejki QC").selectOption("REWORK_REQUIRED");
   await expect(page.getByText("1/3 oczekuje")).toBeVisible();

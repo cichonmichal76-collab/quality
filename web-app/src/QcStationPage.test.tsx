@@ -622,6 +622,12 @@ describe("QcStationPage", () => {
     await screen.findByText("Sesja stanowiskowa");
     await screen.findByTestId("qc-waiting-list");
     expect(screen.getByText(/3\/3 oczekuje/i)).toBeInTheDocument();
+    expect(screen.getByTestId("qc-waiting-summary-all")).toHaveTextContent("3");
+    expect(screen.getByTestId("qc-waiting-summary-unreserved")).toHaveTextContent("1");
+    expect(screen.getByTestId("qc-waiting-summary-mine")).toHaveTextContent("1");
+    expect(screen.getByTestId("qc-waiting-summary-other")).toHaveTextContent("1");
+    expect(screen.getByText("Zarezerwowane: QCOP-OTHER @ QCWS-OTHER")).toBeInTheDocument();
+    expect(screen.getByText("Wolny detal")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Rework" }));
     await waitFor(() => {
