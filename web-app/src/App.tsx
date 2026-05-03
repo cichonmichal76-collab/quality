@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { ChangeEvent, CSSProperties, ReactNode } from "react";
 
 import {
+  addQcStepResult,
   buildQuery,
   completeQcRun,
   createFinalTest,
@@ -45,6 +46,7 @@ import {
   labelForCode,
   percentage,
 } from "./dashboard";
+import { QcStationPage } from "./QcStationPage";
 
 import "./App.css";
 
@@ -173,6 +175,7 @@ const URL_SERVICE_PREFIX = "svc_";
 const URL_SERVICE_SESSION_ID_KEY = `${URL_SERVICE_PREFIX}session_id`;
 const DEVICE_DETAILS_PATH_PREFIX = "/devices/";
 const SERVICE_SESSION_DETAILS_PATH_PREFIX = "/service-sessions/";
+const QC_STATION_PATH = "/qc-station";
 const DEVICE_DETAILS_SECTION_IDS = {
   actions: "akcje",
   shipmentGate: "bramka-wysylki",
@@ -396,6 +399,14 @@ const DEFAULT_SERVICE_FILTERS: ServiceFilters = {
 };
 
 export function App() {
+  if (isQcStationPath(window.location.pathname)) {
+    return <QcStationPage />;
+  }
+
+  return <DashboardApp />;
+}
+
+function DashboardApp() {
   const dashboardUrlState = readDashboardUrlState();
   const isDevicePage = dashboardUrlState.isDevicePage;
   const isServiceSessionPage = dashboardUrlState.isServiceSessionPage;
@@ -2689,6 +2700,9 @@ export function App() {
             >
               Commissioning i serwis
             </button>
+            <a className="ghost-button view-shortcut-link" href={QC_STATION_PATH}>
+              Stanowisko QC
+            </a>
           </nav>
 
           {errorMessage ? (
@@ -8177,6 +8191,10 @@ function buildServiceSessionPackageHref(
     apiBaseUrl,
     `/service-sessions/${encodeURIComponent(sessionId)}/package`,
   );
+}
+
+function isQcStationPath(pathname: string): boolean {
+  return pathname === QC_STATION_PATH || pathname === `${QC_STATION_PATH}/`;
 }
 
 function readDevicePageSerial(pathname: string): string | null {

@@ -44,6 +44,13 @@ def add_checklist_step(db: Session, checklist_code: str, payload: QcStepCreate) 
     return step
 
 
+def list_checklist_steps(db: Session, checklist_code: str) -> list[QcStep]:
+    checklist = repository.get_checklist_by_code(db, checklist_code)
+    if not checklist:
+        raise HTTPException(status_code=404, detail="Checklist not found")
+    return repository.list_checklist_steps(db, checklist.id)
+
+
 def create_qc_run(db: Session, payload: QcRunCreate) -> QcRun:
     if repository.get_qc_run(db, payload.run_id):
         raise HTTPException(status_code=409, detail="QC run already exists")

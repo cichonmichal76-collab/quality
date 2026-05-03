@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from dataclasses import asdict, dataclass
 from datetime import timedelta
 from uuid import uuid4
@@ -12,7 +13,14 @@ from sqlalchemy.orm import Session
 
 from app.db import SessionLocal, utc_now
 from app.main import app
-from app.models import AssemblyLink, Device, DeviceBomItem, DeviceBomTemplate
+from app.models import (
+    AssemblyLink,
+    Device,
+    DeviceBomItem,
+    DeviceBomTemplate,
+    ProductionItem,
+    QcChecklist,
+)
 
 DEFAULT_DEVICE_TYPE = "DEMO-OPS"
 DEFAULT_BOM_VERSION = "1.0"
@@ -30,6 +38,10 @@ class SeedResult:
     component_qc_gap_device_serial_number: str
     component_ncr_device_serial_number: str
     device_ncr_device_serial_number: str
+    qc_station_url: str | None = None
+    qc_station_checklist_code: str | None = None
+    qc_station_item_serial_number: str | None = None
+    qc_station_barcode_value: str | None = None
     verified: bool = False
 
 
@@ -61,6 +73,11 @@ SCENARIO_SERIAL_PREFIXES = {
 
 def unique_id(prefix: str, tag: str) -> str:
     return f"{prefix}-{tag}-{uuid4().hex[:6]}"
+
+
+def normalize_seed_token(value: str) -> str:
+    normalized = re.sub(r"[^A-Z0-9]+", "-", value.upper()).strip("-")
+    return normalized or "DEMO"
 
 
 def ensure_ok(response: Response, context: str) -> dict:
@@ -105,6 +122,7 @@ def try_get_existing_seed_result(device_type: str) -> SeedResult | None:
         bom_version=DEFAULT_BOM_VERSION,
         shipment_queue_url=f"/api/shipment-readiness?device_type={device_type}",
         component_quality_url=f"/api/component-quality?device_type={device_type}",
+        **read_existing_qc_station_assets(device_type),
         verified=False,
         **scenario_serials,
     )
@@ -322,6 +340,142 @@ def create_qc_passed_item(
     return {
         "item_serial_number": item_serial_number,
         "barcode_value": barcode_value,
+    }
+
+
+def read_existing_qc_station_assets(device_type: str) -> dict[str, str | None]:
+    token = normalize_seed_token(device_type)
+    checklist_code = f"QC-STATION-{token}"
+    item_serial_number = f"QCITEM-{token}"
+    barcode_value = f"QCBC-{token}"
+
+    with SessionLocal() as db:
+        checklist_exists = (
+            db.query(QcChecklist)
+            .filter(QcChecklist.checklist_code == checklist_code)
+            .first()
+            is not None
+        )
+        item_exists = (
+            db.query(ProductionItem)
+            .filter(
+                ProductionItem.item_serial_number == item_serial_number,
+                ProductionItem.barcode_value == barcode_value,
+            )
+            .first()
+            is not None
+        )
+
+    return {
+        "qc_station_url": "/qc-station" if checklist_exists and item_exists else None,
+        "qc_station_checklist_code": checklist_code if checklist_exists else None,
+        "qc_station_item_serial_number": item_serial_number if item_exists else None,
+        "qc_station_barcode_value": barcode_value if item_exists else None,
+    }
+
+
+def ensure_qc_station_assets(
+    client: TestClient,
+    session: dict,
+    *,
+    device_type: str,
+) -> dict[str, str]:
+    token = normalize_seed_token(device_type)
+    checklist_code = f"QC-STATION-{token}"
+    item_serial_number = f"QCITEM-{token}"
+    barcode_value = f"QCBC-{token}"
+
+    with SessionLocal() as db:
+        checklist_exists = (
+            db.query(QcChecklist)
+            .filter(QcChecklist.checklist_code == checklist_code)
+            .first()
+            is not None
+        )
+        item_exists = (
+            db.query(ProductionItem)
+            .filter(
+                ProductionItem.item_serial_number == item_serial_number,
+                ProductionItem.barcode_value == barcode_value,
+            )
+            .first()
+            is not None
+        )
+
+    if not checklist_exists:
+        ensure_ok(
+            client.post(
+                "/api/qc-checklists",
+                json={
+                    "checklist_code": checklist_code,
+                    "name": f"Stanowisko QC {device_type}",
+                    "process_stage": "COMPONENT_QC",
+                    "version": "1.0",
+                    "is_active": True,
+                },
+            ),
+            f"create QC station checklist {checklist_code}",
+        )
+        ensure_ok(
+            client.post(
+                f"/api/qc-checklists/{checklist_code}/steps",
+                json={
+                    "step_order": 1,
+                    "title": "Zmierz szerokość radiatora",
+                    "instruction": "Użyj suwmiarki cyfrowej i wpisz pomiar w milimetrach.",
+                    "requires_measurement": True,
+                    "blocking_on_fail": True,
+                    "expected_value": "25.0",
+                    "unit": "mm",
+                    "tolerance_min": 24.8,
+                    "tolerance_max": 25.2,
+                },
+            ),
+            f"create QC station measurement step {checklist_code}",
+        )
+        ensure_ok(
+            client.post(
+                f"/api/qc-checklists/{checklist_code}/steps",
+                json={
+                    "step_order": 2,
+                    "title": "Potwierdź czytelność etykiety",
+                    "instruction": "Sprawdź zgodność nadruku z kartą detalu i czytelność kodu.",
+                    "requires_measurement": False,
+                    "blocking_on_fail": True,
+                    "expected_value": "Czytelna etykieta",
+                },
+            ),
+            f"create QC station label step {checklist_code}",
+        )
+
+    if not item_exists:
+        ensure_ok(
+            client.post(
+                "/api/production-items",
+                json={
+                    "item_serial_number": item_serial_number,
+                    "barcode_value": barcode_value,
+                    "item_type": "FAN_MODULE",
+                    "work_session_id": session["work_session_id"],
+                    "workstation_id": session["workstation_id"],
+                },
+            ),
+            f"create QC station production item {item_serial_number}",
+        )
+
+    ensure_ok(
+        client.patch(
+            f"/api/production-items/{item_serial_number}/status",
+            json={"current_status": "PRODUCED"},
+        ),
+        f"set QC station production item {item_serial_number} to PRODUCED",
+    )
+
+    return {
+        "qc_station_url": "/qc-station",
+        "qc_station_checklist_code": checklist_code,
+        "qc_station_item_serial_number": item_serial_number,
+        "qc_station_barcode_value": barcode_value,
     }
 
 
@@ -548,6 +702,13 @@ def seed_operations_dashboard_demo(
     client = TestClient(app)
     existing_result = try_get_existing_seed_result(device_type)
     if existing_result is not None:
+        qc_station_assets = ensure_qc_station_assets(
+            client,
+            start_work_session(client, f"{tag}-QC-STATION"),
+            device_type=device_type,
+        )
+        for key, value in qc_station_assets.items():
+            setattr(existing_result, key, value)
         if verify:
             verify_dashboard_seed(client, device_type=device_type)
             existing_result.verified = True
@@ -569,6 +730,11 @@ def seed_operations_dashboard_demo(
         client,
         f"{tag}-Q",
         role="QUALITY_INSPECTOR",
+    )
+    qc_station_assets = ensure_qc_station_assets(
+        client,
+        production_session,
+        device_type=device_type,
     )
 
     ready_serial = unique_id("READY", tag)
@@ -791,6 +957,7 @@ def seed_operations_dashboard_demo(
         component_qc_gap_device_serial_number=component_qc_gap_serial,
         component_ncr_device_serial_number=component_ncr_serial,
         device_ncr_device_serial_number=device_ncr_serial,
+        **qc_station_assets,
         verified=verify,
     )
 

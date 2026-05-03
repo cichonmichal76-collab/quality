@@ -11,6 +11,15 @@ def list_checklists(db: Session) -> list[QcChecklist]:
     return db.query(QcChecklist).order_by(QcChecklist.created_at.desc()).all()
 
 
+def list_checklist_steps(db: Session, checklist_id: str) -> list[QcStep]:
+    return (
+        db.query(QcStep)
+        .filter(QcStep.checklist_id == checklist_id)
+        .order_by(QcStep.step_order.asc(), QcStep.id.asc())
+        .all()
+    )
+
+
 def get_qc_run(db: Session, run_id: str) -> QcRun | None:
     return db.query(QcRun).filter(QcRun.run_id == run_id).first()
 

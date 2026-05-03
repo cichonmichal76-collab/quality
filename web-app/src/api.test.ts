@@ -1,13 +1,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  addQcStepResult,
   buildQuery,
   completeQcRun,
   createFinalTest,
   createQcRun,
+  getProductionItemByBarcode,
   getServiceSession,
   joinApiUrl,
   listOperators,
+  listQcChecklists,
+  listQcChecklistSteps,
   listServiceSessions,
   listServiceSessionsQueue,
   listWorkSessions,
@@ -456,6 +460,113 @@ describe("createQcRun", () => {
   });
 });
 
+describe("listQcChecklists", () => {
+  it("pobiera aktywne checklisty QC", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => [
+        {
+          id: "CHK-001",
+          checklist_code: "QC-COMP-001",
+          name: "Kontrola wentylatora",
+          process_stage: "COMPONENT_QC",
+          version: "1.0",
+          is_active: true,
+          created_at: "2026-05-03T08:00:00Z",
+        },
+      ],
+    } satisfies Partial<Response>);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const payload = await listQcChecklists("/api");
+
+    expect(payload).toHaveLength(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/qc-checklists",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+      }),
+    );
+  });
+});
+
+describe("listQcChecklistSteps", () => {
+  it("pobiera kroki checklisty QC po checklist_code", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => [
+        {
+          id: "STEP-001",
+          checklist_id: "CHK-001",
+          step_order: 1,
+          title: "Zmierz szerokość",
+          instruction: "Użyj suwmiarki.",
+          requires_photo: false,
+          requires_measurement: true,
+          blocking_on_fail: true,
+          expected_value: "25.0",
+          unit: "mm",
+          tolerance_min: 24.8,
+          tolerance_max: 25.2,
+        },
+      ],
+    } satisfies Partial<Response>);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const payload = await listQcChecklistSteps("/api", "QC-COMP-001");
+
+    expect(payload[0]?.requires_measurement).toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/qc-checklists/QC-COMP-001/steps",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+      }),
+    );
+  });
+});
+
+describe("getProductionItemByBarcode", () => {
+  it("pobiera detal po barcode do stanowiska QC", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => ({
+        id: "ITEM-ROW-001",
+        item_serial_number: "FAN-001",
+        barcode_value: "BC-FAN-001",
+        item_type: "FAN_MODULE",
+        part_number: "PN-FAN-001",
+        revision: "A",
+        drawing_number: null,
+        drawing_revision: null,
+        production_order: null,
+        material_batch: null,
+        machine_id: null,
+        created_by_operator_id: "OP-001",
+        current_status: "PRODUCED",
+        produced_at: "2026-05-03T08:00:00Z",
+        created_at: "2026-05-03T08:00:00Z",
+      }),
+    } satisfies Partial<Response>);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const payload = await getProductionItemByBarcode("/api", "BC-FAN-001");
+
+    expect(payload.item_serial_number).toBe("FAN-001");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/production-items/by-barcode/BC-FAN-001",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+      }),
+    );
+  });
+});
+
 describe("completeQcRun", () => {
   it("wysyła POST form-data zamykający komponentowy QC run wynikiem FAIL", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
@@ -490,6 +601,86 @@ describe("completeQcRun", () => {
           "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
         },
         body: "result=FAIL",
+      }),
+    );
+  });
+  it("wysyła pusty formularz, gdy backend sam wylicza wynik runu", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => ({
+        run_id: "QC-WEB-002",
+        item_serial_number: "FAN-901",
+        barcode_value: "BC-FAN-901",
+        checklist_id: "CHK-001",
+        process_stage: "COMPONENT_QC",
+        work_session_id: "WS-QA-001",
+        id: "QC-ROW-002",
+        status: "COMPLETED",
+        result: "PASS",
+        started_at: "2026-05-03T09:20:00Z",
+        ended_at: "2026-05-03T09:21:00Z",
+      }),
+    } satisfies Partial<Response>);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const payload = await completeQcRun("/api", "QC-WEB-002");
+
+    expect(payload.result).toBe("PASS");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/qc-runs/QC-WEB-002/complete",
+      expect.objectContaining({
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+        },
+        body: "",
+      }),
+    );
+  });
+});
+
+describe("addQcStepResult", () => {
+  it("wysyła JSON z wynikiem kroku i pomiarem", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => ({
+        id: "STEP-RESULT-001",
+        qc_run_id: "QC-ROW-001",
+        step_id: "STEP-001",
+        status: "PASS",
+        measurement_value: 25.1,
+        comment: "Pomiar w normie",
+        mcu_snapshot: null,
+        created_at: "2026-05-03T09:20:15Z",
+      }),
+    } satisfies Partial<Response>);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const payload = await addQcStepResult("/api", "QC-WEB-001", "STEP-001", {
+      status: "PASS",
+      measurement_value: 25.1,
+      comment: "Pomiar w normie",
+    });
+
+    expect(payload.measurement_value).toBe(25.1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/qc-runs/QC-WEB-001/steps/STEP-001/result",
+      expect.objectContaining({
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          status: "PASS",
+          measurement_value: 25.1,
+          comment: "Pomiar w normie",
+        }),
       }),
     );
   });

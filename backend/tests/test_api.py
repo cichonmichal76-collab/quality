@@ -2811,6 +2811,11 @@ def test_qc_run_fail_updates_item_and_creates_ncr():
     assert step.status_code == 200
     step_id = step.json()["id"]
 
+    steps = client.get(f"/api/qc-checklists/{checklist_code}/steps")
+    assert steps.status_code == 200
+    assert [row["title"] for row in steps.json()] == ["Measure width"]
+    assert steps.json()[0]["requires_measurement"] is True
+
     run_id = unique_id("QCRUN")
     qc_run = client.post(
         "/api/qc-runs",

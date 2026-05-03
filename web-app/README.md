@@ -163,6 +163,29 @@ Widok `Wysyłka` ma też tekstowy filtr `Brakujący typ BOM`, który pozwala
 zawęzić kolejkę do urządzeń z tym samym brakującym komponentem wymaganym przez
 resolved BOM.
 
+## Stanowisko QC
+
+Nowa trasa `/qc-station` dowozi brakujacy krok stanowiskowy z PRD:
+- skan barcode komponentu
+- wybor aktywnej checklisty QC
+- wpisanie pomiarow albo wyniku kontroli
+- zapis poszczegolnych krokow QC
+- domkniecie runu i ustawienie komponentu na `QC_PASSED` albo `QC_FAILED`
+
+Po uruchomieniu:
+
+```bash
+python scripts/dev_dashboard_demo.py --reload
+```
+
+seed przygotowuje tez dane do tego widoku:
+- checklista `QC-STATION-{DEVICE_TYPE}`
+- komponent `QCITEM-{DEVICE_TYPE}`
+- barcode `QCBC-{DEVICE_TYPE}`
+
+Dla lokalnego `DEMO-LOCAL` mozna od razu otworzyc `/qc-station`
+i zeskanowac `QCBC-DEMO-LOCAL`.
+
 ## Walidacja
 
 ```bash

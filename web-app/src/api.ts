@@ -68,6 +68,49 @@ export interface WorkSessionRead {
   ended_at: string | null;
 }
 
+export interface ProductionItemRead {
+  id: string;
+  item_serial_number: string;
+  barcode_value: string;
+  item_type: string;
+  part_number: string | null;
+  revision: string | null;
+  drawing_number: string | null;
+  drawing_revision: string | null;
+  production_order: string | null;
+  material_batch: string | null;
+  machine_id: string | null;
+  created_by_operator_id: string | null;
+  current_status: string;
+  produced_at: string | null;
+  created_at: string;
+}
+
+export interface QcChecklistRead {
+  id: string;
+  checklist_code: string;
+  name: string;
+  process_stage: string;
+  version: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface QcStepRead {
+  id: string;
+  checklist_id: string;
+  step_order: number;
+  title: string;
+  instruction: string | null;
+  requires_photo: boolean;
+  requires_measurement: boolean;
+  blocking_on_fail: boolean;
+  expected_value: string | null;
+  unit: string | null;
+  tolerance_min: number | null;
+  tolerance_max: number | null;
+}
+
 export interface ServiceSessionRead {
   id: string;
   session_id: string;
@@ -336,6 +379,20 @@ export interface QcRunRead extends QcRunCreatePayload {
   ended_at: string | null;
 }
 
+export interface QcStepResultCreatePayload {
+  status: string;
+  measurement_value?: number;
+  comment?: string;
+  mcu_snapshot?: Record<string, unknown>;
+}
+
+export interface QcStepResultRead extends QcStepResultCreatePayload {
+  id: string;
+  qc_run_id: string;
+  step_id: string;
+  created_at: string;
+}
+
 export interface AssemblyScanPayload {
   child_barcode_value: string;
   component_type: string;
@@ -562,6 +619,44 @@ export async function listOperators(
   );
 }
 
+export async function listQcChecklists(
+  apiBaseUrl: string,
+  signal?: AbortSignal,
+): Promise<QcChecklistRead[]> {
+  return fetchJson<QcChecklistRead[]>(
+    joinApiUrl(apiBaseUrl, "/qc-checklists"),
+    signal,
+  );
+}
+
+export async function listQcChecklistSteps(
+  apiBaseUrl: string,
+  checklistCode: string,
+  signal?: AbortSignal,
+): Promise<QcStepRead[]> {
+  return fetchJson<QcStepRead[]>(
+    joinApiUrl(
+      apiBaseUrl,
+      `/qc-checklists/${encodeURIComponent(checklistCode)}/steps`,
+    ),
+    signal,
+  );
+}
+
+export async function getProductionItemByBarcode(
+  apiBaseUrl: string,
+  barcodeValue: string,
+  signal?: AbortSignal,
+): Promise<ProductionItemRead> {
+  return fetchJson<ProductionItemRead>(
+    joinApiUrl(
+      apiBaseUrl,
+      `/production-items/by-barcode/${encodeURIComponent(barcodeValue)}`,
+    ),
+    signal,
+  );
+}
+
 export async function listServiceSessions(
   apiBaseUrl: string,
   params: {
@@ -660,12 +755,29 @@ export async function createQcRun(
 export async function completeQcRun(
   apiBaseUrl: string,
   runId: string,
-  result: "PASS" | "FAIL",
+  result?: "PASS" | "FAIL",
   signal?: AbortSignal,
 ): Promise<QcRunRead> {
   return postForm<QcRunRead>(
     joinApiUrl(apiBaseUrl, `/qc-runs/${encodeURIComponent(runId)}/complete`),
-    { result },
+    result ? { result } : {},
+    signal,
+  );
+}
+
+export async function addQcStepResult(
+  apiBaseUrl: string,
+  runId: string,
+  stepId: string,
+  payload: QcStepResultCreatePayload,
+  signal?: AbortSignal,
+): Promise<QcStepResultRead> {
+  return postJson<QcStepResultRead>(
+    joinApiUrl(
+      apiBaseUrl,
+      `/qc-runs/${encodeURIComponent(runId)}/steps/${encodeURIComponent(stepId)}/result`,
+    ),
+    payload,
     signal,
   );
 }

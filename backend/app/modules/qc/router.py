@@ -28,6 +28,14 @@ def list_checklists(db: Session = Depends(get_db)):
     return repository.list_checklists(db)
 
 
+@router.get("/qc-checklists/{checklist_code}/steps", response_model=list[QcStepRead])
+def list_checklist_steps(
+    checklist_code: str,
+    db: Session = Depends(get_db),
+):
+    return service.list_checklist_steps(db, checklist_code)
+
+
 @router.post("/qc-checklists/{checklist_code}/steps", response_model=QcStepRead)
 def add_checklist_step(
     checklist_code: str,

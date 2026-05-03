@@ -370,6 +370,97 @@ select:focus {
   gap: 18px;
 }
 
+.qc-station-shell {
+  display: grid;
+  gap: 20px;
+}
+
+.qc-station-hero {
+  grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.85fr);
+}
+
+.qc-station-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 18px;
+}
+
+.qc-station-form-grid,
+.qc-step-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.qc-station-lookup-form {
+  display: grid;
+  gap: 14px;
+}
+
+.qc-station-item-grid {
+  margin-top: 16px;
+}
+
+.qc-station-run-section {
+  gap: 16px;
+}
+
+.qc-step-list {
+  display: grid;
+  gap: 14px;
+}
+
+.qc-step-card {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgb(255 255 255 / 88%);
+  padding: 16px;
+}
+
+.qc-step-card h3 {
+  margin: 0;
+  font-size: 1.08rem;
+}
+
+.qc-step-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.qc-step-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.qc-step-comment-field {
+  grid-column: 1 / -1;
+}
+
+.qc-result-banner {
+  display: grid;
+  gap: 6px;
+  border: 1px solid rgb(38 118 83 / 24%);
+  border-radius: 8px;
+  background: rgb(38 118 83 / 12%);
+  color: var(--success);
+  padding: 14px 16px;
+}
+
+.qc-station-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 .metrics-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1155,6 +1246,9 @@ td span {
   .hero,
   .filters-grid,
   .metrics-grid,
+  .qc-station-grid,
+  .qc-station-form-grid,
+  .qc-step-form-grid,
    .summary-grid,
    .details-grid,
    .details-key-grid,
@@ -1176,6 +1270,9 @@ td span {
   .hero,
   .filters-grid,
   .metrics-grid,
+  .qc-station-grid,
+  .qc-station-form-grid,
+  .qc-step-form-grid,
    .summary-grid,
    .details-grid,
    .details-key-grid,
@@ -1239,6 +1336,16 @@ td span {
 
   .details-header-actions .button-link,
   .details-header-actions .ghost-button {
+    width: 100%;
+  }
+
+  .qc-step-card-header,
+  .qc-station-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .qc-station-toolbar .primary-button {
     width: 100%;
   }
 
