@@ -179,6 +179,134 @@ test("dashboard renders mocked commissioning queue and applies trigger preset", 
   await expect(serviceTable.getByText("SVC-002")).toBeVisible();
 });
 
+test("dashboard restores selected commissioning session after reload", async ({
+  page,
+}) => {
+  await page.route("**/api/service-sessions/queue**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        total_sessions: 1,
+        reuploaded_sessions: 1,
+        returned_count: 1,
+        offset: 0,
+        limit: 100,
+        has_more: false,
+        next_offset: null,
+        filters: {},
+        upload_status_summary: [{ upload_status: "UPLOADED", session_count: 1 }],
+        result_summary: [{ result: "PASS", session_count: 1 }],
+        device_type_summary: [{ device_type: "DEMO-SVC", session_count: 1 }],
+        technician_summary: [{ technician_id: "TECH-001", session_count: 1 }],
+        trigger_source_summary: [
+          { client_trigger_source: "MANUAL", session_count: 1 },
+        ],
+        sessions: [
+          {
+            session_id: "SVC-001",
+            device_serial_number: "SVC-DEVICE-001",
+            device_type: "DEMO-SVC",
+            technician_id: "TECH-001",
+            result: "PASS",
+            upload_status: "UPLOADED",
+            upload_count: 1,
+            firmware_version: "1.2.3",
+            bootloader_version: "0.9.0",
+            client_attempt_id: "ATTEMPT-001",
+            client_attempt_number: 1,
+            client_trigger_source: "MANUAL",
+            upload_correlation_id: "CORR-001",
+            uploaded_at: "2026-05-03T08:10:00Z",
+            created_at: "2026-05-03T08:00:00Z",
+          },
+        ],
+      }),
+    });
+  });
+
+  await page.route("**/api/service-sessions/SVC-001", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        id: "svc-row-001",
+        session_id: "SVC-001",
+        device_serial_number: "SVC-DEVICE-001",
+        device_type: "DEMO-SVC",
+        technician_id: "TECH-001",
+        result: "PASS",
+        upload_status: "UPLOADED",
+        upload_count: 1,
+        firmware_version: "1.2.3",
+        bootloader_version: "0.9.0",
+        client_attempt_id: "ATTEMPT-001",
+        client_attempt_number: 1,
+        client_trigger_source: "MANUAL",
+        upload_correlation_id: "CORR-001",
+        uploaded_at: "2026-05-03T08:10:00Z",
+        package_path: "/tmp/SVC-001.zip",
+        package_hash: "HASH-001",
+      }),
+    });
+  });
+
+  await page.route("**/api/audit-events**", async (route) => {
+    const requestUrl = new URL(route.request().url());
+    if (
+      requestUrl.searchParams.get("entity_type") === "SERVICE_SESSION" &&
+      requestUrl.searchParams.get("entity_id") === "SVC-001"
+    ) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          {
+            id: "AUD-SVC-001",
+            event_type: "SERVICE_SESSION_PACKAGE_REUPLOADED",
+            entity_type: "SERVICE_SESSION",
+            entity_id: "SVC-001",
+            work_session_id: null,
+            result: "UPLOADED",
+            created_at: "2026-05-03T08:10:00Z",
+            message: "Service session package reuploaded",
+            payload: {
+              client_trigger_source: "MANUAL",
+              upload_count: 1,
+              upload_correlation_id: "CORR-001",
+            },
+          },
+        ]),
+      });
+      return;
+    }
+
+    await route.continue();
+  });
+
+  await page.goto("/");
+
+  await expect(page.getByText("API OK")).toBeVisible();
+
+  await page.getByRole("button", { name: "Commissioning i serwis" }).click();
+  await page.getByRole("button", { name: "SVC-001" }).click();
+
+  const drawer = page.getByRole("dialog");
+  await expect(drawer.getByRole("heading", { name: "SVC-001" })).toBeVisible();
+  await expect(page).toHaveURL(/view=service/);
+  await expect(page).toHaveURL(/svc_session_id=SVC-001/);
+
+  await page.reload();
+
+  await expect(
+    page.getByRole("button", { name: "Commissioning i serwis" }),
+  ).toHaveClass(/is-active/);
+  await expect(
+    page.getByRole("dialog").getByRole("heading", { name: "SVC-001" }),
+  ).toBeVisible();
+  await expect(page).toHaveURL(/svc_session_id=SVC-001/);
+});
+
 test("dashboard paginates shipment and component queues", async ({ page }) => {
   await page.goto("/");
 

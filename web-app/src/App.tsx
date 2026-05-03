@@ -170,6 +170,7 @@ const URL_DEVICE_VARIANT_KEY = "device_variant";
 const URL_SHIPMENT_PREFIX = "ship_";
 const URL_COMPONENT_PREFIX = "comp_";
 const URL_SERVICE_PREFIX = "svc_";
+const URL_SERVICE_SESSION_ID_KEY = `${URL_SERVICE_PREFIX}session_id`;
 const DEVICE_DETAILS_PATH_PREFIX = "/devices/";
 const DEVICE_DETAILS_SECTION_IDS = {
   actions: "akcje",
@@ -301,6 +302,7 @@ interface DashboardUrlState {
   hasShipmentFilters: boolean;
   hasComponentFilters: boolean;
   hasServiceFilters: boolean;
+  selectedServiceSessionId: string | null;
   searchParams: URLSearchParams;
   isDevicePage: boolean;
   devicePageSerial: string | null;
@@ -458,7 +460,7 @@ export function App() {
   );
   const [selectedServiceSessionId, setSelectedServiceSessionId] = useState<
     string | null
-  >(null);
+  >(() => dashboardUrlState.selectedServiceSessionId);
   const [deviceDetails, setDeviceDetails] = useState<DeviceDetailsPayload | null>(
     null,
   );
@@ -645,6 +647,7 @@ export function App() {
     componentFilters,
     serviceFilters,
     selectedDevice,
+    selectedServiceSessionId,
   });
   const selectedDevicePageHref = selectedDevice
     ? buildDashboardLocationHref({
@@ -654,6 +657,7 @@ export function App() {
         componentFilters,
         serviceFilters,
         selectedDevice,
+        selectedServiceSessionId,
       })
     : null;
   const assemblyComponentTypeOptions = buildAssemblyComponentTypeOptions(
@@ -1401,6 +1405,7 @@ export function App() {
       componentFilters,
       serviceFilters,
       selectedDevice,
+      selectedServiceSessionId,
     });
     const currentSearch = window.location.search;
 
@@ -1410,7 +1415,14 @@ export function App() {
 
     const nextUrl = `${window.location.pathname}${nextSearch}${window.location.hash}`;
     window.history.replaceState(null, "", nextUrl);
-  }, [activeView, componentFilters, selectedDevice, serviceFilters, shipmentFilters]);
+  }, [
+    activeView,
+    componentFilters,
+    selectedDevice,
+    selectedServiceSessionId,
+    serviceFilters,
+    shipmentFilters,
+  ]);
 
   useEffect(() => {
     localStorage.setItem(
@@ -7024,19 +7036,25 @@ function readStoredDashboardMode(): DashboardMode {
 function readDashboardUrlState(): DashboardUrlState {
   const searchParams = new URLSearchParams(window.location.search);
   const devicePageSerial = readDevicePageSerial(window.location.pathname);
-
-  return {
-    activeView:
-      searchParams.get(URL_VIEW_KEY) === "components"
-        ? "components"
-        : searchParams.get(URL_VIEW_KEY) === "service"
-          ? "service"
+  const activeView =
+    searchParams.get(URL_VIEW_KEY) === "components"
+      ? "components"
+      : searchParams.get(URL_VIEW_KEY) === "service"
+        ? "service"
         : searchParams.get(URL_VIEW_KEY) === "shipment"
           ? "shipment"
-          : null,
+          : null;
+
+  return {
+    activeView,
     hasShipmentFilters: hasUrlFilterPrefix(searchParams, URL_SHIPMENT_PREFIX),
     hasComponentFilters: hasUrlFilterPrefix(searchParams, URL_COMPONENT_PREFIX),
     hasServiceFilters: hasUrlFilterPrefix(searchParams, URL_SERVICE_PREFIX),
+    selectedServiceSessionId: readSelectedServiceSessionIdFromUrl(
+      searchParams,
+      activeView,
+      devicePageSerial,
+    ),
     searchParams,
     isDevicePage: devicePageSerial !== null,
     devicePageSerial,
@@ -7429,6 +7447,19 @@ function readStoredComponentFilters(): ComponentFilters {
   };
 }
 
+function readSelectedServiceSessionIdFromUrl(
+  searchParams: URLSearchParams,
+  activeView: DashboardMode | null,
+  devicePageSerial: string | null = null,
+): string | null {
+  if (activeView !== "service" || devicePageSerial !== null) {
+    return null;
+  }
+
+  const sessionId = searchParams.get(URL_SERVICE_SESSION_ID_KEY)?.trim() ?? "";
+  return sessionId === "" ? null : sessionId;
+}
+
 function readStoredServiceFilters(): ServiceFilters {
   const storedValue = readStoredObject(SERVICE_FILTERS_STORAGE_KEY);
 
@@ -7530,12 +7561,14 @@ function buildDashboardUrlSearch({
   componentFilters,
   serviceFilters,
   selectedDevice,
+  selectedServiceSessionId = null,
 }: {
   activeView: DashboardMode;
   shipmentFilters: ShipmentFilters;
   componentFilters: ComponentFilters;
   serviceFilters: ServiceFilters;
   selectedDevice: DeviceSelection | null;
+  selectedServiceSessionId?: string | null;
 }): string {
   const searchParams = new URLSearchParams();
 
@@ -7556,6 +7589,10 @@ function buildDashboardUrlSearch({
     }
   }
 
+  if (!selectedDevice && selectedServiceSessionId?.trim()) {
+    searchParams.set(URL_SERVICE_SESSION_ID_KEY, selectedServiceSessionId.trim());
+  }
+
   const search = searchParams.toString();
   return search ? `?${search}` : "";
 }
@@ -7567,6 +7604,7 @@ function buildDashboardLocationHref({
   componentFilters,
   serviceFilters,
   selectedDevice,
+  selectedServiceSessionId = null,
 }: {
   pathname: string;
   activeView: DashboardMode;
@@ -7574,6 +7612,7 @@ function buildDashboardLocationHref({
   componentFilters: ComponentFilters;
   serviceFilters: ServiceFilters;
   selectedDevice: DeviceSelection | null;
+  selectedServiceSessionId?: string | null;
 }): string {
   return `${pathname}${buildDashboardUrlSearch({
     activeView,
@@ -7581,6 +7620,7 @@ function buildDashboardLocationHref({
     componentFilters,
     serviceFilters,
     selectedDevice,
+    selectedServiceSessionId,
   })}`;
 }
 

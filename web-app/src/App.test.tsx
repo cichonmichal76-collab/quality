@@ -1988,6 +1988,51 @@ describe("App", () => {
     ).toBeInTheDocument();
   });
 
+  it("hydrates service view and selected commissioning session from URL", async () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/?view=service&svc_device_type=DEMO-SVC&svc_sort_by=uploaded_at&svc_sort_desc=true&svc_limit=100&svc_offset=0&svc_session_id=SVC-001",
+    );
+
+    const fetchMock = vi.fn((input: string | URL | Request) => {
+      const url = String(input);
+
+      if (
+        url ===
+        "/api/service-sessions/queue?device_type=DEMO-SVC&sort_by=uploaded_at&sort_desc=true&limit=100"
+      ) {
+        return Promise.resolve(createJsonResponse(serviceQueuePayload));
+      }
+
+      if (url === "/api/service-sessions/SVC-001") {
+        return Promise.resolve(createJsonResponse(serviceSessionDetailsPayload));
+      }
+
+      if (
+        url ===
+        "/api/audit-events?entity_type=SERVICE_SESSION&entity_id=SVC-001"
+      ) {
+        return Promise.resolve(createJsonResponse(serviceSessionAuditPayload));
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("SVC-001")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Commissioning i serwis" }),
+    ).toHaveClass("is-active");
+    expect(screen.getByLabelText("Typ urządzenia")).toHaveValue("DEMO-SVC");
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "SVC-001" }),
+    ).toBeInTheDocument();
+  });
+
   it("syncs active tab, filters and selected device into URL", async () => {
     const fetchMock = vi.fn((input: string | URL | Request) => {
       const url = String(input);
@@ -5828,6 +5873,17 @@ describe("App", () => {
         signal: expect.any(AbortSignal),
       }),
     );
+
+    await waitFor(() =>
+      expect(window.location.search).toContain("svc_session_id=SVC-001"),
+    );
+
+    fireEvent.click(within(drawer).getByRole("button", { name: "Zamknij" }));
+
+    await waitFor(() =>
+      expect(window.location.search).not.toContain("svc_session_id=SVC-001"),
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("applies trigger filter from commissioning summary cards", async () => {
