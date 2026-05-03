@@ -89,6 +89,48 @@ export interface ServiceSessionRead {
   created_at: string;
 }
 
+export interface ServiceSessionUploadStatusSummary {
+  upload_status: string;
+  session_count: number;
+}
+
+export interface ServiceSessionResultSummary {
+  result: string | null;
+  session_count: number;
+}
+
+export interface ServiceSessionDeviceTypeSummary {
+  device_type: string | null;
+  session_count: number;
+}
+
+export interface ServiceSessionTechnicianSummary {
+  technician_id: string | null;
+  session_count: number;
+}
+
+export interface ServiceSessionTriggerSourceSummary {
+  client_trigger_source: string | null;
+  session_count: number;
+}
+
+export interface ServiceSessionQueue {
+  total_sessions: number;
+  reuploaded_sessions: number;
+  returned_count: number;
+  offset: number;
+  limit: number;
+  has_more: boolean;
+  next_offset: number | null;
+  filters: Record<string, string | boolean | number | null>;
+  upload_status_summary: ServiceSessionUploadStatusSummary[];
+  result_summary: ServiceSessionResultSummary[];
+  device_type_summary: ServiceSessionDeviceTypeSummary[];
+  technician_summary: ServiceSessionTechnicianSummary[];
+  trigger_source_summary: ServiceSessionTriggerSourceSummary[];
+  sessions: ServiceSessionRead[];
+}
+
 export interface NonconformityRead {
   id: string;
   ncr_id: string;
@@ -529,6 +571,28 @@ export async function listServiceSessions(
 ): Promise<ServiceSessionRead[]> {
   return fetchJson<ServiceSessionRead[]>(
     joinApiUrl(apiBaseUrl, `/service-sessions${buildQuery(params)}`),
+    signal,
+  );
+}
+
+export async function listServiceSessionsQueue(
+  apiBaseUrl: string,
+  params: {
+    device_serial_number?: string;
+    device_type?: string;
+    technician_id?: string;
+    result?: string;
+    upload_status?: string;
+    client_trigger_source?: string;
+    sort_by?: string;
+    sort_desc?: boolean;
+    offset?: number;
+    limit?: number;
+  } = {},
+  signal?: AbortSignal,
+): Promise<ServiceSessionQueue> {
+  return fetchJson<ServiceSessionQueue>(
+    joinApiUrl(apiBaseUrl, `/service-sessions/queue${buildQuery(params)}`),
     signal,
   );
 }

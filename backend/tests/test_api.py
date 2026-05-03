@@ -6376,6 +6376,148 @@ def test_service_session_upload_list_and_download(tmp_path, monkeypatch):
     )
 
 
+def test_service_session_queue_supports_filters_and_pagination(tmp_path, monkeypatch):
+    import app.services.files as file_storage
+
+    monkeypatch.setattr(file_storage, "STORAGE_DIR", tmp_path)
+
+    uploads = [
+        {
+            "session_id": unique_id("SVC"),
+            "device_serial_number": unique_id("VENT"),
+            "technician_id": "TECH-A",
+            "device_type": "VENT-PRO",
+            "result": "PASS",
+            "client_attempt_id": "SYNC-Q-0001",
+            "client_attempt_number": "1",
+            "client_trigger_source": "MANUAL",
+            "file_bytes": b"svc-queue-1",
+        },
+        {
+            "session_id": unique_id("SVC"),
+            "device_serial_number": unique_id("VENT"),
+            "technician_id": "TECH-B",
+            "device_type": "VENT-LITE",
+            "result": "FAIL",
+            "client_attempt_id": "SYNC-Q-0002",
+            "client_attempt_number": "1",
+            "client_trigger_source": "AUTO_READY",
+            "file_bytes": b"svc-queue-2",
+        },
+        {
+            "session_id": unique_id("SVC"),
+            "device_serial_number": unique_id("MON"),
+            "technician_id": "TECH-A",
+            "device_type": "MONITOR",
+            "result": "PASS",
+            "client_attempt_id": "SYNC-Q-0003",
+            "client_attempt_number": "1",
+            "client_trigger_source": "AUTO_NETWORK",
+            "file_bytes": b"svc-queue-3",
+        },
+    ]
+
+    for upload_data in uploads:
+        response = client.post(
+            "/api/service-sessions/upload",
+            data={
+                "session_id": upload_data["session_id"],
+                "device_serial_number": upload_data["device_serial_number"],
+                "technician_id": upload_data["technician_id"],
+                "device_type": upload_data["device_type"],
+                "result": upload_data["result"],
+                "client_attempt_id": upload_data["client_attempt_id"],
+                "client_attempt_number": upload_data["client_attempt_number"],
+                "client_trigger_source": upload_data["client_trigger_source"],
+            },
+            files={
+                "file": (
+                    f"{upload_data['session_id']}.zip",
+                    upload_data["file_bytes"],
+                    "application/zip",
+                )
+            },
+        )
+        assert response.status_code == 200
+
+    reupload = client.post(
+        "/api/service-sessions/upload",
+        data={
+            "session_id": uploads[0]["session_id"],
+            "device_serial_number": uploads[0]["device_serial_number"],
+            "technician_id": uploads[0]["technician_id"],
+            "device_type": uploads[0]["device_type"],
+            "result": uploads[0]["result"],
+            "client_attempt_id": "SYNC-Q-0004",
+            "client_attempt_number": "2",
+            "client_trigger_source": "AUTO_NETWORK",
+        },
+        files={
+            "file": (
+                f"{uploads[0]['session_id']}-retry.zip",
+                b"svc-queue-1-retry",
+                "application/zip",
+            )
+        },
+    )
+    assert reupload.status_code == 200
+    assert reupload.json()["upload_count"] == 2
+
+    queue = client.get(
+        "/api/service-sessions/queue"
+        "?technician_id=TECH-A&sort_by=upload_count&sort_desc=true&offset=0&limit=1"
+    )
+    assert queue.status_code == 200
+    payload = queue.json()
+    assert payload["total_sessions"] == 2
+    assert payload["reuploaded_sessions"] == 1
+    assert payload["returned_count"] == 1
+    assert payload["has_more"] is True
+    assert payload["next_offset"] == 1
+    assert payload["filters"]["technician_id"] == "TECH-A"
+    assert payload["filters"]["sort_by"] == "upload_count"
+    assert payload["filters"]["sort_desc"] is True
+    assert [row["session_id"] for row in payload["sessions"]] == [uploads[0]["session_id"]]
+    assert payload["sessions"][0]["upload_count"] == 2
+    assert payload["upload_status_summary"] == [
+        {"upload_status": "UPLOADED", "session_count": 2}
+    ]
+    assert payload["result_summary"] == [{"result": "PASS", "session_count": 2}]
+    assert payload["device_type_summary"] == [
+        {"device_type": "MONITOR", "session_count": 1},
+        {"device_type": "VENT-PRO", "session_count": 1},
+    ]
+    assert payload["technician_summary"] == [{"technician_id": "TECH-A", "session_count": 2}]
+    assert payload["trigger_source_summary"] == [
+        {"client_trigger_source": "AUTO_NETWORK", "session_count": 2},
+    ]
+
+    second_page = client.get(
+        "/api/service-sessions/queue"
+        "?technician_id=TECH-A&sort_by=upload_count&sort_desc=true&offset=1&limit=1"
+    )
+    assert second_page.status_code == 200
+    second_payload = second_page.json()
+    assert second_payload["returned_count"] == 1
+    assert second_payload["has_more"] is False
+    assert second_payload["next_offset"] is None
+    assert [row["session_id"] for row in second_payload["sessions"]] == [uploads[2]["session_id"]]
+
+    device_type_filtered = client.get("/api/service-sessions/queue?device_type=VENT-PRO")
+    assert device_type_filtered.status_code == 200
+    assert [row["session_id"] for row in device_type_filtered.json()["sessions"]] == [
+        uploads[0]["session_id"]
+    ]
+
+    invalid_sort = client.get("/api/service-sessions/queue?sort_by=unsupported")
+    assert invalid_sort.status_code == 400
+    assert invalid_sort.json()["detail"] == "Unsupported service session sort field"
+
+    invalid_limit = client.get("/api/service-sessions/queue?limit=0")
+    assert invalid_limit.status_code == 400
+    assert invalid_limit.json()["detail"] == "limit must be >= 1"
+
+
 def test_file_upload_and_download(tmp_path, monkeypatch):
     import app.services.files as file_storage
 

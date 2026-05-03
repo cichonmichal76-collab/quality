@@ -649,6 +649,48 @@ class ServiceSessionRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ServiceSessionUploadStatusSummaryRead(BaseModel):
+    upload_status: str
+    session_count: int
+
+
+class ServiceSessionResultSummaryRead(BaseModel):
+    result: str | None = None
+    session_count: int
+
+
+class ServiceSessionDeviceTypeSummaryRead(BaseModel):
+    device_type: str | None = None
+    session_count: int
+
+
+class ServiceSessionTechnicianSummaryRead(BaseModel):
+    technician_id: str | None = None
+    session_count: int
+
+
+class ServiceSessionTriggerSourceSummaryRead(BaseModel):
+    client_trigger_source: str | None = None
+    session_count: int
+
+
+class ServiceSessionQueueRead(BaseModel):
+    total_sessions: int
+    reuploaded_sessions: int
+    returned_count: int
+    offset: int
+    limit: int
+    has_more: bool
+    next_offset: int | None = None
+    filters: dict[str, str | bool | int | None]
+    upload_status_summary: list[ServiceSessionUploadStatusSummaryRead]
+    result_summary: list[ServiceSessionResultSummaryRead]
+    device_type_summary: list[ServiceSessionDeviceTypeSummaryRead]
+    technician_summary: list[ServiceSessionTechnicianSummaryRead]
+    trigger_source_summary: list[ServiceSessionTriggerSourceSummaryRead]
+    sessions: list[ServiceSessionRead]
+
+
 class FileRead(BaseModel):
     id: str
     related_entity_type: str

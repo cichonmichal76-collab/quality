@@ -10,6 +10,15 @@ from app.models import ServiceSession
 from app.modules.service import repository, rules
 from app.services.files import save_upload
 
+MAX_QUEUE_LIMIT = 500
+VALID_SERVICE_SESSION_SORT_FIELDS = {
+    "session_id",
+    "device_serial_number",
+    "created_at",
+    "uploaded_at",
+    "upload_count",
+}
+
 
 def upload_service_session(
     db: Session,
@@ -129,6 +138,47 @@ def list_service_sessions(
     return repository.list_service_sessions(
         db,
         device_serial_number=device_serial_number,
+    )
+
+
+def list_service_sessions_queue(
+    db: Session,
+    *,
+    device_serial_number: str | None = None,
+    device_type: str | None = None,
+    technician_id: str | None = None,
+    result: str | None = None,
+    upload_status: str | None = None,
+    client_trigger_source: str | None = None,
+    sort_by: str = "uploaded_at",
+    sort_desc: bool | None = None,
+    offset: int = 0,
+    limit: int = 100,
+) -> dict[str, object]:
+    if offset < 0:
+        raise HTTPException(status_code=400, detail="offset must be >= 0")
+    if limit < 1:
+        raise HTTPException(status_code=400, detail="limit must be >= 1")
+    if limit > MAX_QUEUE_LIMIT:
+        raise HTTPException(status_code=400, detail=f"limit must be <= {MAX_QUEUE_LIMIT}")
+    if sort_by not in VALID_SERVICE_SESSION_SORT_FIELDS:
+        raise HTTPException(status_code=400, detail="Unsupported service session sort field")
+
+    effective_sort_desc = (
+        sort_desc if sort_desc is not None else sort_by in {"created_at", "uploaded_at", "upload_count"}
+    )
+    return repository.list_service_sessions_queue(
+        db,
+        device_serial_number=device_serial_number,
+        device_type=device_type,
+        technician_id=technician_id,
+        result=result,
+        upload_status=upload_status,
+        client_trigger_source=client_trigger_source,
+        sort_by=sort_by,
+        sort_desc=effective_sort_desc,
+        offset=offset,
+        limit=limit,
     )
 
 

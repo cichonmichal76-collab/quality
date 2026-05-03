@@ -7,6 +7,7 @@ import {
   createQcRun,
   joinApiUrl,
   listOperators,
+  listServiceSessionsQueue,
   listWorkSessions,
   optionalBoolean,
   scanAssemblyComponent,
@@ -202,6 +203,67 @@ describe("listOperators", () => {
     expect(payload[0]?.role).toBe("FINAL_TEST_OPERATOR");
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/operators",
+      expect.objectContaining({
+        headers: { Accept: "application/json" },
+      }),
+    );
+  });
+});
+
+describe("listServiceSessionsQueue", () => {
+  it("pobiera kolejke commissioning z filtrami, sortowaniem i paginacja", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => ({
+        total_sessions: 2,
+        reuploaded_sessions: 1,
+        returned_count: 1,
+        offset: 0,
+        limit: 1,
+        has_more: true,
+        next_offset: 1,
+        filters: {
+          technician_id: "TECH-A",
+          sort_by: "upload_count",
+          sort_desc: true,
+          offset: 0,
+          limit: 1,
+        },
+        upload_status_summary: [{ upload_status: "UPLOADED", session_count: 2 }],
+        result_summary: [{ result: "PASS", session_count: 2 }],
+        device_type_summary: [{ device_type: "VENT-PRO", session_count: 2 }],
+        technician_summary: [{ technician_id: "TECH-A", session_count: 2 }],
+        trigger_source_summary: [
+          { client_trigger_source: "AUTO_NETWORK", session_count: 2 },
+        ],
+        sessions: [
+          {
+            session_id: "SVC-001",
+            device_serial_number: "DEV-001",
+            technician_id: "TECH-A",
+            upload_count: 2,
+            upload_status: "UPLOADED",
+            created_at: "2026-05-02T10:00:00Z",
+          },
+        ],
+      }),
+    } satisfies Partial<Response>);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const payload = await listServiceSessionsQueue("/api", {
+      technician_id: "TECH-A",
+      sort_by: "upload_count",
+      sort_desc: true,
+      offset: 0,
+      limit: 1,
+    });
+
+    expect(payload.reuploaded_sessions).toBe(1);
+    expect(payload.sessions[0]?.upload_count).toBe(2);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/service-sessions/queue?technician_id=TECH-A&sort_by=upload_count&sort_desc=true&offset=0&limit=1",
       expect.objectContaining({
         headers: { Accept: "application/json" },
       }),

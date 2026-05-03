@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.modules.service import service
-from app.schemas import ServiceSessionRead
+from app.schemas import ServiceSessionQueueRead, ServiceSessionRead
 
 router = APIRouter(tags=["service"])
 
@@ -47,6 +47,35 @@ def list_service_sessions(
     return service.list_service_sessions(
         db,
         device_serial_number=device_serial_number,
+    )
+
+
+@router.get("/service-sessions/queue", response_model=ServiceSessionQueueRead)
+def list_service_sessions_queue(
+    device_serial_number: str | None = None,
+    device_type: str | None = None,
+    technician_id: str | None = None,
+    result: str | None = None,
+    upload_status: str | None = None,
+    client_trigger_source: str | None = None,
+    sort_by: str = "uploaded_at",
+    sort_desc: bool | None = None,
+    offset: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+):
+    return service.list_service_sessions_queue(
+        db,
+        device_serial_number=device_serial_number,
+        device_type=device_type,
+        technician_id=technician_id,
+        result=result,
+        upload_status=upload_status,
+        client_trigger_source=client_trigger_source,
+        sort_by=sort_by,
+        sort_desc=sort_desc,
+        offset=offset,
+        limit=limit,
     )
 
 
