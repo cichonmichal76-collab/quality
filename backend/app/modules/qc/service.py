@@ -411,50 +411,9 @@ def get_qc_run_or_404(db: Session, run_id: str) -> QcRun:
 
 def get_qc_run_details(db: Session, run_id: str) -> QcRunDetailsRead:
     run = get_qc_run_or_404(db, run_id)
-    checklist = None
-    if run.checklist_id:
-        checklist = db.query(QcChecklist).filter(QcChecklist.id == run.checklist_id).first()
-
-    step_results = repository.list_step_results_for_run(db, run.id)
-    checklist_steps = repository.list_checklist_steps(db, run.checklist_id) if run.checklist_id else []
-    steps_by_id = {step.id: step for step in checklist_steps}
-    detailed_step_results: list[QcRunStepResultDetailRead] = []
-    for result in step_results:
-        step = steps_by_id.get(result.step_id)
-        detailed_step_results.append(
-            QcRunStepResultDetailRead(
-                id=result.id,
-                qc_run_id=result.qc_run_id,
-                step_id=result.step_id,
-                step_order=step.step_order if step is not None else 0,
-                step_title=step.title if step is not None else result.step_id,
-                evaluation_mode=step.evaluation_mode if step is not None else "MANUAL",
-                result_input_label=step.result_input_label if step is not None else None,
-                control_area=step.control_area if step is not None else None,
-                expected_value=step.expected_value if step is not None else None,
-                tolerance_min=float(step.tolerance_min)
-                if step is not None and step.tolerance_min is not None
-                else None,
-                tolerance_max=float(step.tolerance_max)
-                if step is not None and step.tolerance_max is not None
-                else None,
-                unit=step.unit if step is not None else None,
-                status=result.status,
-                measurement_value=float(result.measurement_value)
-                if result.measurement_value is not None
-                else None,
-                observed_value=result.observed_value,
-                comment=result.comment,
-                mcu_snapshot=result.mcu_snapshot,
-                created_at=result.created_at,
-            )
-        )
-    detailed_step_results.sort(key=lambda row: (row.step_order, row.created_at, row.id))
-
-    completed_audit_event = repository.get_latest_run_completed_audit_event(db, run.run_id)
-    completed_payload = completed_audit_event.payload if completed_audit_event else {}
-    if not isinstance(completed_payload, dict):
-        completed_payload = {}
+    checklist = _get_checklist_for_run(db, run)
+    detailed_step_results = _build_qc_run_step_details(db, run)
+    completed_payload = _get_completed_qc_run_payload(db, run.run_id)
 
     return QcRunDetailsRead(
         id=run.id,
@@ -477,10 +436,7 @@ def get_qc_run_details(db: Session, run_id: str) -> QcRunDetailsRead:
             completed_payload.get("failure_disposition")
         ),
         step_results=detailed_step_results,
-        evidence_files=[
-            FileRead.model_validate(file)
-            for file in repository.list_run_evidence_files(db, run.run_id)
-        ],
+        evidence_files=_build_qc_run_evidence_files(db, run.run_id),
     )
 
 
@@ -694,6 +650,77 @@ def _compute_step_status(step: QcStep, payload: QcStepResultCreate) -> str:
         )
     normalized = _normalize_run_result(payload.status)
     return normalized or payload.status
+
+
+def _get_checklist_for_run(db: Session, run: QcRun) -> QcChecklist | None:
+    if not run.checklist_id:
+        return None
+    return db.query(QcChecklist).filter(QcChecklist.id == run.checklist_id).first()
+
+
+def _build_qc_run_step_details(
+    db: Session,
+    run: QcRun,
+) -> list[QcRunStepResultDetailRead]:
+    step_results = repository.list_step_results_for_run(db, run.id)
+    checklist_steps = (
+        repository.list_checklist_steps(db, run.checklist_id) if run.checklist_id else []
+    )
+    steps_by_id = {step.id: step for step in checklist_steps}
+
+    detailed_step_results = [
+        _build_qc_step_result_detail(result, steps_by_id.get(result.step_id))
+        for result in step_results
+    ]
+    detailed_step_results.sort(key=lambda row: (row.step_order, row.created_at, row.id))
+    return detailed_step_results
+
+
+def _build_qc_step_result_detail(
+    result: QcStepResult,
+    step: QcStep | None,
+) -> QcRunStepResultDetailRead:
+    return QcRunStepResultDetailRead(
+        id=result.id,
+        qc_run_id=result.qc_run_id,
+        step_id=result.step_id,
+        step_order=step.step_order if step is not None else 0,
+        step_title=step.title if step is not None else result.step_id,
+        evaluation_mode=step.evaluation_mode if step is not None else "MANUAL",
+        result_input_label=step.result_input_label if step is not None else None,
+        control_area=step.control_area if step is not None else None,
+        expected_value=step.expected_value if step is not None else None,
+        tolerance_min=float(step.tolerance_min)
+        if step is not None and step.tolerance_min is not None
+        else None,
+        tolerance_max=float(step.tolerance_max)
+        if step is not None and step.tolerance_max is not None
+        else None,
+        unit=step.unit if step is not None else None,
+        status=result.status,
+        measurement_value=float(result.measurement_value)
+        if result.measurement_value is not None
+        else None,
+        observed_value=result.observed_value,
+        comment=result.comment,
+        mcu_snapshot=result.mcu_snapshot,
+        created_at=result.created_at,
+    )
+
+
+def _get_completed_qc_run_payload(db: Session, run_id: str) -> dict[str, object]:
+    completed_audit_event = repository.get_latest_run_completed_audit_event(db, run_id)
+    completed_payload = completed_audit_event.payload if completed_audit_event else {}
+    if isinstance(completed_payload, dict):
+        return completed_payload
+    return {}
+
+
+def _build_qc_run_evidence_files(db: Session, run_id: str) -> list[FileRead]:
+    return [
+        FileRead.model_validate(file)
+        for file in repository.list_run_evidence_files(db, run_id)
+    ]
 
 
 def _derive_run_result(db: Session, run: QcRun) -> str:
