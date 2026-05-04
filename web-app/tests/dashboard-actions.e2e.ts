@@ -1,15 +1,34 @@
 import { expect, test, type Route } from "@playwright/test";
 
+import { fulfillJson } from "./dashboard.e2e-helpers";
+
 async function fulfillOptionalServiceDetailsRequests(
   path: string,
   route: Route,
 ): Promise<boolean> {
   if (path === "/api/service-sessions" || path === "/api/audit-events") {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: "[]",
-    });
+    await fulfillJson(route, []);
+    return true;
+  }
+
+  return false;
+}
+
+async function fulfillOptionalActionContextRequests(
+  path: string,
+  route: Route,
+): Promise<boolean> {
+  if (await fulfillOptionalServiceDetailsRequests(path, route)) {
+    return true;
+  }
+
+  if (path === "/api/work-sessions") {
+    await fulfillJson(route, workSessionsPayload);
+    return true;
+  }
+
+  if (path === "/api/operators") {
+    await fulfillJson(route, operatorsPayload);
     return true;
   }
 
@@ -1179,24 +1198,6 @@ test("dashboard records final test PASS from the details drawer", async ({
       return;
     }
 
-    if (path === "/api/work-sessions") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(workSessionsPayload),
-      });
-      return;
-    }
-
-    if (path === "/api/operators") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(operatorsPayload),
-      });
-      return;
-    }
-
     if (path === "/api/final-tests" && request.method() === "POST") {
       postRequests += 1;
       const payload = request.postDataJSON() as {
@@ -1232,7 +1233,7 @@ test("dashboard records final test PASS from the details drawer", async ({
       return;
     }
 
-    if (await fulfillOptionalServiceDetailsRequests(path, route)) {
+    if (await fulfillOptionalActionContextRequests(path, route)) {
       return;
     }
 
@@ -1315,24 +1316,6 @@ test("dashboard completes assembly from the details drawer", async ({
       return;
     }
 
-    if (path === "/api/work-sessions") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(workSessionsPayload),
-      });
-      return;
-    }
-
-    if (path === "/api/operators") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(operatorsPayload),
-      });
-      return;
-    }
-
     if (
       path === "/api/devices/ASM-001/assembly/scan-component" &&
       request.method() === "POST"
@@ -1374,7 +1357,7 @@ test("dashboard completes assembly from the details drawer", async ({
       return;
     }
 
-    if (await fulfillOptionalServiceDetailsRequests(path, route)) {
+    if (await fulfillOptionalActionContextRequests(path, route)) {
       return;
     }
 
@@ -1475,24 +1458,6 @@ test("dashboard records component QC PASS from the details drawer", async ({
       return;
     }
 
-    if (path === "/api/work-sessions") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(workSessionsPayload),
-      });
-      return;
-    }
-
-    if (path === "/api/operators") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(operatorsPayload),
-      });
-      return;
-    }
-
     if (path === "/api/qc-runs" && request.method() === "POST") {
       createRequests += 1;
       const payload = request.postDataJSON() as {
@@ -1565,7 +1530,7 @@ test("dashboard records component QC PASS from the details drawer", async ({
       return;
     }
 
-    if (await fulfillOptionalServiceDetailsRequests(path, route)) {
+    if (await fulfillOptionalActionContextRequests(path, route)) {
       return;
     }
 
@@ -2128,24 +2093,6 @@ test("dashboard records bulk component QC PASS from selected queue rows", async 
       return;
     }
 
-    if (path === "/api/work-sessions") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(workSessionsPayload),
-      });
-      return;
-    }
-
-    if (path === "/api/operators") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(operatorsPayload),
-      });
-      return;
-    }
-
     if (
       (path === "/api/devices/COMP-QC-001/component-quality" ||
         path === "/api/devices/COMP-QC-002/component-quality") &&
@@ -2229,6 +2176,10 @@ test("dashboard records bulk component QC PASS from selected queue rows", async 
           ended_at: "2026-05-01T09:21:00Z",
         }),
       });
+      return;
+    }
+
+    if (await fulfillOptionalActionContextRequests(path, route)) {
       return;
     }
 
@@ -2402,24 +2353,6 @@ test("dashboard closes selected component critical NCRs from bulk actions", asyn
       return;
     }
 
-    if (path === "/api/work-sessions") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(workSessionsPayload),
-      });
-      return;
-    }
-
-    if (path === "/api/operators") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(operatorsPayload),
-      });
-      return;
-    }
-
     if (
       (path === "/api/devices/COMP-NCR-001/component-quality" ||
         path === "/api/devices/COMP-NCR-002/component-quality") &&
@@ -2464,6 +2397,10 @@ test("dashboard closes selected component critical NCRs from bulk actions", asyn
           corrective_action: `Zamknięte zbiorczo z kolejki komponentów dla ${serialNumber}.`,
         }),
       });
+      return;
+    }
+
+    if (await fulfillOptionalActionContextRequests(path, route)) {
       return;
     }
 
