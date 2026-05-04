@@ -1,6 +1,11 @@
 import { readFile } from "node:fs/promises";
 
 import { expect, test } from "@playwright/test";
+import {
+  buildServiceSession,
+  fulfillJson,
+  fulfillServiceSessionsQueue,
+} from "./dashboard.e2e-helpers";
 
 const SEEDED_SERIAL_PATTERNS = {
   ready: /READY-(?:LOCAL|E2E)-/,
@@ -65,30 +70,12 @@ test("dashboard renders mocked commissioning queue and applies trigger preset", 
   page,
 }) => {
   const baseSessions = [
-    {
-      session_id: "SVC-001",
-      device_serial_number: "SVC-DEVICE-001",
-      device_type: "DEMO-SVC",
-      technician_id: "TECH-001",
-      result: "PASS",
-      upload_status: "UPLOADED",
-      upload_count: 1,
-      firmware_version: "1.2.3",
-      bootloader_version: "0.9.0",
-      client_attempt_id: "ATTEMPT-001",
-      client_attempt_number: 1,
-      client_trigger_source: "MANUAL",
-      upload_correlation_id: "CORR-001",
-      uploaded_at: "2026-05-03T08:10:00Z",
-      created_at: "2026-05-03T08:00:00Z",
-    },
-    {
+    buildServiceSession(),
+    buildServiceSession({
       session_id: "SVC-002",
       device_serial_number: "SVC-DEVICE-002",
-      device_type: "DEMO-SVC",
       technician_id: "TECH-002",
       result: "HOLD",
-      upload_status: "UPLOADED",
       upload_count: 2,
       firmware_version: "1.2.4",
       bootloader_version: "0.9.1",
@@ -98,7 +85,7 @@ test("dashboard renders mocked commissioning queue and applies trigger preset", 
       upload_correlation_id: "CORR-002",
       uploaded_at: "2026-05-03T09:10:00Z",
       created_at: "2026-05-03T09:00:00Z",
-    },
+    }),
   ];
 
   await page.route("**/api/service-sessions/queue**", async (route) => {
@@ -118,48 +105,11 @@ test("dashboard renders mocked commissioning queue and applies trigger preset", 
       sessions = sessions.filter((session) => session.upload_count > 1);
     }
 
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        total_sessions: sessions.length,
-        reuploaded_sessions: sessions.filter((session) => session.upload_count > 1)
-          .length,
-        returned_count: sessions.length,
-        offset: 0,
-        limit: 100,
-        has_more: false,
-        next_offset: null,
-        filters: triggerSource ? { client_trigger_source: triggerSource } : {},
-        upload_status_summary: [{ upload_status: "UPLOADED", session_count: sessions.length }],
-        result_summary: [
-          { result: "PASS", session_count: sessions.filter((session) => session.result === "PASS").length },
-          { result: "HOLD", session_count: sessions.filter((session) => session.result === "HOLD").length },
-        ].filter((item) => item.session_count > 0),
-        device_type_summary: [
-          { device_type: "DEMO-SVC", session_count: sessions.length },
-        ],
-        technician_summary: sessions.map((session) => ({
-          technician_id: session.technician_id,
-          session_count: 1,
-        })),
-        trigger_source_summary: [
-          {
-            client_trigger_source: "MANUAL",
-            session_count: sessions.filter(
-              (session) => session.client_trigger_source === "MANUAL",
-            ).length,
-          },
-          {
-            client_trigger_source: "AUTO_NETWORK",
-            session_count: sessions.filter(
-              (session) => session.client_trigger_source === "AUTO_NETWORK",
-            ).length,
-          },
-        ].filter((item) => item.session_count > 0),
-        sessions,
-      }),
-    });
+    await fulfillServiceSessionsQueue(
+      route,
+      sessions,
+      triggerSource ? { client_trigger_source: triggerSource } : {},
+    );
   });
 
   await page.goto("/");
@@ -190,30 +140,12 @@ test("dashboard applies reuploaded preset in commissioning queue", async ({
   page,
 }) => {
   const baseSessions = [
-    {
-      session_id: "SVC-001",
-      device_serial_number: "SVC-DEVICE-001",
-      device_type: "DEMO-SVC",
-      technician_id: "TECH-001",
-      result: "PASS",
-      upload_status: "UPLOADED",
-      upload_count: 1,
-      firmware_version: "1.2.3",
-      bootloader_version: "0.9.0",
-      client_attempt_id: "ATTEMPT-001",
-      client_attempt_number: 1,
-      client_trigger_source: "MANUAL",
-      upload_correlation_id: "CORR-001",
-      uploaded_at: "2026-05-03T08:10:00Z",
-      created_at: "2026-05-03T08:00:00Z",
-    },
-    {
+    buildServiceSession(),
+    buildServiceSession({
       session_id: "SVC-002",
       device_serial_number: "SVC-DEVICE-002",
-      device_type: "DEMO-SVC",
       technician_id: "TECH-002",
       result: "HOLD",
-      upload_status: "UPLOADED",
       upload_count: 2,
       firmware_version: "1.2.4",
       bootloader_version: "0.9.1",
@@ -223,7 +155,7 @@ test("dashboard applies reuploaded preset in commissioning queue", async ({
       upload_correlation_id: "CORR-002",
       uploaded_at: "2026-05-03T09:10:00Z",
       created_at: "2026-05-03T09:00:00Z",
-    },
+    }),
   ];
 
   await page.route("**/api/service-sessions/queue**", async (route) => {
@@ -234,48 +166,11 @@ test("dashboard applies reuploaded preset in commissioning queue", async ({
       ? baseSessions.filter((session) => session.upload_count > 1)
       : baseSessions;
 
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        total_sessions: sessions.length,
-        reuploaded_sessions: sessions.filter((session) => session.upload_count > 1)
-          .length,
-        returned_count: sessions.length,
-        offset: 0,
-        limit: 100,
-        has_more: false,
-        next_offset: null,
-        filters: onlyReuploaded ? { only_reuploaded: true } : {},
-        upload_status_summary: [{ upload_status: "UPLOADED", session_count: sessions.length }],
-        result_summary: [
-          { result: "PASS", session_count: sessions.filter((session) => session.result === "PASS").length },
-          { result: "HOLD", session_count: sessions.filter((session) => session.result === "HOLD").length },
-        ].filter((item) => item.session_count > 0),
-        device_type_summary: [
-          { device_type: "DEMO-SVC", session_count: sessions.length },
-        ],
-        technician_summary: sessions.map((session) => ({
-          technician_id: session.technician_id,
-          session_count: 1,
-        })),
-        trigger_source_summary: [
-          {
-            client_trigger_source: "MANUAL",
-            session_count: sessions.filter(
-              (session) => session.client_trigger_source === "MANUAL",
-            ).length,
-          },
-          {
-            client_trigger_source: "AUTO_NETWORK",
-            session_count: sessions.filter(
-              (session) => session.client_trigger_source === "AUTO_NETWORK",
-            ).length,
-          },
-        ].filter((item) => item.session_count > 0),
-        sessions,
-      }),
-    });
+    await fulfillServiceSessionsQueue(
+      route,
+      sessions,
+      onlyReuploaded ? { only_reuploaded: true } : {},
+    );
   });
 
   await page.goto("/");
@@ -299,73 +194,20 @@ test("dashboard applies reuploaded preset in commissioning queue", async ({
 test("dashboard restores selected commissioning session after reload", async ({
   page,
 }) => {
+  const session = buildServiceSession();
+
   await page.route("**/api/service-sessions/queue**", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        total_sessions: 1,
-        reuploaded_sessions: 1,
-        returned_count: 1,
-        offset: 0,
-        limit: 100,
-        has_more: false,
-        next_offset: null,
-        filters: {},
-        upload_status_summary: [{ upload_status: "UPLOADED", session_count: 1 }],
-        result_summary: [{ result: "PASS", session_count: 1 }],
-        device_type_summary: [{ device_type: "DEMO-SVC", session_count: 1 }],
-        technician_summary: [{ technician_id: "TECH-001", session_count: 1 }],
-        trigger_source_summary: [
-          { client_trigger_source: "MANUAL", session_count: 1 },
-        ],
-        sessions: [
-          {
-            session_id: "SVC-001",
-            device_serial_number: "SVC-DEVICE-001",
-            device_type: "DEMO-SVC",
-            technician_id: "TECH-001",
-            result: "PASS",
-            upload_status: "UPLOADED",
-            upload_count: 1,
-            firmware_version: "1.2.3",
-            bootloader_version: "0.9.0",
-            client_attempt_id: "ATTEMPT-001",
-            client_attempt_number: 1,
-            client_trigger_source: "MANUAL",
-            upload_correlation_id: "CORR-001",
-            uploaded_at: "2026-05-03T08:10:00Z",
-            created_at: "2026-05-03T08:00:00Z",
-          },
-        ],
-      }),
-    });
+    await fulfillServiceSessionsQueue(route, [session]);
   });
 
   await page.route("**/api/service-sessions/SVC-001", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
+    await fulfillJson(route, {
         id: "svc-row-001",
-        session_id: "SVC-001",
-        device_serial_number: "SVC-DEVICE-001",
-        device_type: "DEMO-SVC",
-        technician_id: "TECH-001",
-        result: "PASS",
-        upload_status: "UPLOADED",
-        upload_count: 1,
-        firmware_version: "1.2.3",
-        bootloader_version: "0.9.0",
-        client_attempt_id: "ATTEMPT-001",
-        client_attempt_number: 1,
-        client_trigger_source: "MANUAL",
-        upload_correlation_id: "CORR-001",
+        ...session,
         uploaded_at: "2026-05-03T08:10:00Z",
         package_path: "/tmp/SVC-001.zip",
         package_hash: "HASH-001",
-      }),
-    });
+      });
   });
 
   await page.route("**/api/audit-events**", async (route) => {
