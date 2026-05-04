@@ -225,50 +225,32 @@ describe("QcStationPage", () => {
   });
 
   it("logowanie RFID automatycznie uzupelnia login operatora", async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      const method = init?.method ?? "GET";
-
-      if (url.endsWith("/api/operators")) {
-        return jsonResponse([buildDemoOperator()]);
-      }
-
-      if (url.endsWith("/api/workstations")) {
-        return jsonResponse([buildDemoWorkstation()]);
-      }
-
-      if (url.endsWith("/api/qc-checklists")) {
-        return jsonResponse([buildDemoChecklist()]);
-      }
-
-      if (url.includes("/api/qc-waiting-items")) {
-        return jsonResponse([]);
-      }
-
-      if (url.endsWith("/api/auth/rfid-login") && method === "POST") {
-        return jsonResponse(
-          buildDemoSession({
-            id: "SESSION-ROW-002",
-            work_session_id: "WS-QA-002",
-            started_at: "2026-05-03T08:15:00Z",
-          }),
-        );
-      }
-
-      if (url.endsWith("/api/qc-checklists/QC-STATION-DEMO-LOCAL/steps")) {
-        return jsonResponse([]);
-      }
-
-      if (
-        url.includes("/open-critical-ncrs") ||
-        url.includes("/closed-critical-ncrs") ||
-        url.includes("/runs?limit=10")
-      ) {
-        return jsonResponse([]);
-      }
-
-      throw new Error(`Unexpected request: ${method} ${url}`);
-    });
+    const fetchMock = createFetchMock([
+      { matcher: "/api/operators", response: [buildDemoOperator()] },
+      { matcher: "/api/workstations", response: [buildDemoWorkstation()] },
+      { matcher: "/api/qc-checklists", response: [buildDemoChecklist()] },
+      { matcher: (url) => url.includes("/api/qc-waiting-items"), response: [] },
+      {
+        matcher: "/api/auth/rfid-login",
+        method: "POST",
+        response: buildDemoSession({
+          id: "SESSION-ROW-002",
+          work_session_id: "WS-QA-002",
+          started_at: "2026-05-03T08:15:00Z",
+        }),
+      },
+      {
+        matcher: "/api/qc-checklists/QC-STATION-DEMO-LOCAL/steps",
+        response: [],
+      },
+      {
+        matcher: (url) =>
+          url.includes("/open-critical-ncrs") ||
+          url.includes("/closed-critical-ncrs") ||
+          url.includes("/runs?limit=10"),
+        response: [],
+      },
+    ]);
 
     vi.stubGlobal("fetch", fetchMock);
     window.history.replaceState(null, "", "/qc-station");
@@ -651,88 +633,57 @@ describe("QcStationPage", () => {
   it("pozwala zamknac krytyczne NCR i przywrocic detal do reworku", async () => {
     let releasedForRework = false;
 
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      const method = init?.method ?? "GET";
-
-      if (url.endsWith("/api/operators")) {
-        return jsonResponse([buildDemoOperator()]);
-      }
-
-      if (url.endsWith("/api/workstations")) {
-        return jsonResponse([buildDemoWorkstation()]);
-      }
-
-      if (url.endsWith("/api/qc-checklists")) {
-        return jsonResponse([
+    const fetchMock = createFetchMock([
+      { matcher: "/api/operators", response: [buildDemoOperator()] },
+      { matcher: "/api/workstations", response: [buildDemoWorkstation()] },
+      {
+        matcher: "/api/qc-checklists",
+        response: [
           buildDemoChecklist({
             id: "CHK-REWORK",
             checklist_code: "QC-REWORK",
             name: "Kontrola po reworku",
             component_type: "FAN_MODULE",
           }),
-        ]);
-      }
-
-      if (url.includes("/api/qc-waiting-items")) {
-        return jsonResponse([
-          {
+        ],
+      },
+      {
+        matcher: (url) => url.includes("/api/qc-waiting-items"),
+        response: () => [
+          buildDemoItem({
             id: "ITEM-ROW-REWORK",
             item_serial_number: "QCITEM-DEMO-REWORK",
             barcode_value: "QCBC-DEMO-REWORK",
-            item_type: "FAN_MODULE",
             part_number: "PN-FAN-REWORK",
-            revision: "A",
-            drawing_number: null,
-            drawing_revision: null,
-            production_order: null,
-            material_batch: null,
-            machine_id: null,
-            created_by_operator_id: "QCOP-DEMO-LOCAL",
             current_status: releasedForRework ? "REWORK_REQUIRED" : "QC_FAILED",
             produced_at: "2026-05-03T08:16:00Z",
             created_at: "2026-05-03T08:16:00Z",
-          },
-        ]);
-      }
-
-      if (url.endsWith("/api/auth/operator-login") && method === "POST") {
-        return jsonResponse(
-          buildDemoSession({
-            id: "SESSION-ROW-REWORK",
-            work_session_id: "WS-QA-REWORK",
           }),
-        );
-      }
-
-      if (url.endsWith("/api/qc-checklists/QC-REWORK/steps")) {
-        return jsonResponse([
-          {
+        ],
+      },
+      {
+        matcher: "/api/auth/operator-login",
+        method: "POST",
+        response: buildDemoSession({
+          id: "SESSION-ROW-REWORK",
+          work_session_id: "WS-QA-REWORK",
+        }),
+      },
+      {
+        matcher: "/api/qc-checklists/QC-REWORK/steps",
+        response: [
+          buildDemoStep({
             id: "STEP-REWORK-001",
             checklist_id: "CHK-REWORK",
-            step_order: 1,
             title: "Potwierdz rework",
             instruction: "Kontrola po poprawce.",
             control_area: "Obudowa",
-            evaluation_mode: "MANUAL",
-            result_input_label: null,
-            region_x: null,
-            region_y: null,
-            region_width: null,
-            region_height: null,
-            requires_photo: false,
-            requires_measurement: false,
-            blocking_on_fail: true,
-            expected_value: null,
-            unit: null,
-            tolerance_min: null,
-            tolerance_max: null,
-          },
-        ]);
-      }
-
-      if (url.endsWith("/api/qc-items/QCITEM-DEMO-REWORK/open-critical-ncrs")) {
-        return jsonResponse(
+          }),
+        ],
+      },
+      {
+        matcher: "/api/qc-items/QCITEM-DEMO-REWORK/open-critical-ncrs",
+        response: () =>
           releasedForRework
             ? []
             : [
@@ -751,11 +702,10 @@ describe("QcStationPage", () => {
                   closed_at: null,
                 },
               ],
-        );
-      }
-
-      if (url.endsWith("/api/qc-items/QCITEM-DEMO-REWORK/closed-critical-ncrs?limit=10")) {
-        return jsonResponse(
+      },
+      {
+        matcher: "/api/qc-items/QCITEM-DEMO-REWORK/closed-critical-ncrs?limit=10",
+        response: () =>
           releasedForRework
             ? [
                 {
@@ -775,30 +725,27 @@ describe("QcStationPage", () => {
                 },
               ]
             : [],
-        );
-      }
-
-      if (url.endsWith("/api/qc-items/QCITEM-DEMO-REWORK/runs?limit=10")) {
-        return jsonResponse([
-          {
+      },
+      {
+        matcher: "/api/qc-items/QCITEM-DEMO-REWORK/runs?limit=10",
+        response: [
+          buildDemoRun({
             id: "QC-ROW-REWORK",
             run_id: "QC-WEB-REWORK",
             item_serial_number: "QCITEM-DEMO-REWORK",
             barcode_value: "QCBC-DEMO-REWORK",
             checklist_id: "CHK-REWORK",
-            process_stage: "COMPONENT_QC",
             work_session_id: "WS-QA-REWORK",
-            operator_id: "QCOP-DEMO-LOCAL",
             status: "COMPLETED",
             result: "FAIL",
             started_at: "2026-05-03T08:17:00Z",
             ended_at: "2026-05-03T08:19:00Z",
-          },
-        ]);
-      }
-
-      if (url.endsWith("/api/qc-runs/QC-WEB-REWORK/details")) {
-        return jsonResponse({
+          }),
+        ],
+      },
+      {
+        matcher: "/api/qc-runs/QC-WEB-REWORK/details",
+        response: {
           id: "QC-ROW-REWORK",
           run_id: "QC-WEB-REWORK",
           device_serial_number: null,
@@ -851,43 +798,32 @@ describe("QcStationPage", () => {
               created_at: "2026-05-03T08:18:00Z",
             },
           ],
-        });
-      }
-
-      if (
-        url.endsWith("/api/qc-items/QCITEM-DEMO-REWORK/release-for-rework") &&
-        method === "POST"
-      ) {
-        releasedForRework = true;
-        return jsonResponse({
-          id: "ITEM-ROW-REWORK",
-          item_serial_number: "QCITEM-DEMO-REWORK",
-          barcode_value: "QCBC-DEMO-REWORK",
-          item_type: "FAN_MODULE",
-          part_number: "PN-FAN-REWORK",
-          revision: "A",
-          drawing_number: null,
-          drawing_revision: null,
-          production_order: null,
-          material_batch: null,
-          machine_id: null,
-          created_by_operator_id: "QCOP-DEMO-LOCAL",
-          current_status: "REWORK_REQUIRED",
-          produced_at: "2026-05-03T08:16:00Z",
-          created_at: "2026-05-03T08:16:00Z",
-        });
-      }
-
-      if (
-        url.includes("/open-critical-ncrs") ||
-        url.includes("/closed-critical-ncrs") ||
-        url.includes("/runs?limit=10")
-      ) {
-        return jsonResponse([]);
-      }
-
-      throw new Error(`Unexpected request: ${method} ${url}`);
-    });
+        },
+      },
+      {
+        matcher: "/api/qc-items/QCITEM-DEMO-REWORK/release-for-rework",
+        method: "POST",
+        response: () => {
+          releasedForRework = true;
+          return buildDemoItem({
+            id: "ITEM-ROW-REWORK",
+            item_serial_number: "QCITEM-DEMO-REWORK",
+            barcode_value: "QCBC-DEMO-REWORK",
+            part_number: "PN-FAN-REWORK",
+            current_status: "REWORK_REQUIRED",
+            produced_at: "2026-05-03T08:16:00Z",
+            created_at: "2026-05-03T08:16:00Z",
+          });
+        },
+      },
+      {
+        matcher: (url) =>
+          url.includes("/open-critical-ncrs") ||
+          url.includes("/closed-critical-ncrs") ||
+          url.includes("/runs?limit=10"),
+        response: [],
+      },
+    ]);
 
     vi.stubGlobal("fetch", fetchMock);
     window.history.replaceState(null, "", "/qc-station");
@@ -957,91 +893,66 @@ describe("QcStationPage", () => {
   });
 
   it("filtruje i sortuje historie runow QC oraz zamkniete NCR", async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      const method = init?.method ?? "GET";
-
-      if (url.endsWith("/api/operators")) {
-        return jsonResponse([buildDemoOperator()]);
-      }
-
-      if (url.endsWith("/api/workstations")) {
-        return jsonResponse([buildDemoWorkstation()]);
-      }
-
-      if (url.endsWith("/api/qc-checklists")) {
-        return jsonResponse([
+    const fetchMock = createFetchMock([
+      { matcher: "/api/operators", response: [buildDemoOperator()] },
+      { matcher: "/api/workstations", response: [buildDemoWorkstation()] },
+      {
+        matcher: "/api/qc-checklists",
+        response: [
           buildDemoChecklist({
             id: "CHK-HISTORY",
             checklist_code: "QC-HISTORY",
             name: "Kontrola historii",
             component_type: "FAN_MODULE",
           }),
-        ]);
-      }
-
-      if (url.includes("/api/qc-waiting-items")) {
-        return jsonResponse([
-          {
+        ],
+      },
+      {
+        matcher: (url) => url.includes("/api/qc-waiting-items"),
+        response: [
+          buildDemoItem({
             id: "ITEM-ROW-HISTORY",
             item_serial_number: "QCITEM-DEMO-HISTORY",
             barcode_value: "QCBC-DEMO-HISTORY",
-            item_type: "FAN_MODULE",
             part_number: "PN-FAN-HISTORY",
-            revision: "A",
-            drawing_number: null,
-            drawing_revision: null,
-            production_order: null,
-            material_batch: null,
-            machine_id: null,
-            created_by_operator_id: "QCOP-DEMO-LOCAL",
             current_status: "REWORK_REQUIRED",
             produced_at: "2026-05-03T08:16:00Z",
             created_at: "2026-05-03T08:16:00Z",
-          },
-        ]);
-      }
-
-      if (url.endsWith("/api/production-items/by-barcode/QCBC-DEMO-HISTORY")) {
-        return jsonResponse({
+          }),
+        ],
+      },
+      {
+        matcher: "/api/production-items/by-barcode/QCBC-DEMO-HISTORY",
+        response: buildDemoItem({
           id: "ITEM-ROW-HISTORY",
           item_serial_number: "QCITEM-DEMO-HISTORY",
           barcode_value: "QCBC-DEMO-HISTORY",
-          item_type: "FAN_MODULE",
           part_number: "PN-FAN-HISTORY",
-          revision: "A",
-          drawing_number: null,
-          drawing_revision: null,
-          production_order: null,
-          material_batch: null,
-          machine_id: null,
-          created_by_operator_id: "QCOP-DEMO-LOCAL",
           current_status: "REWORK_REQUIRED",
           produced_at: "2026-05-03T08:16:00Z",
           created_at: "2026-05-03T08:16:00Z",
-        });
-      }
-
-      if (url.endsWith("/api/auth/operator-login") && method === "POST") {
-        return jsonResponse(
-          buildDemoSession({
-            id: "ROW-SESSION-HISTORY",
-            work_session_id: "WS-QA-HISTORY",
-            started_at: "2026-05-03T08:00:00Z",
-          }),
-        );
-      }
-
-      if (url.endsWith("/api/qc-checklists/QC-HISTORY/steps")) {
-        return jsonResponse([]);
-      }
-
-      if (url.endsWith("/api/qc-items/QCITEM-DEMO-HISTORY/open-critical-ncrs")) {
-        return jsonResponse([]);
-      }
-
-      if (url.endsWith("/api/qc-items/QCITEM-DEMO-HISTORY/closed-critical-ncrs?limit=10")) {
-        return jsonResponse([
+        }),
+      },
+      {
+        matcher: "/api/auth/operator-login",
+        method: "POST",
+        response: buildDemoSession({
+          id: "ROW-SESSION-HISTORY",
+          work_session_id: "WS-QA-HISTORY",
+          started_at: "2026-05-03T08:00:00Z",
+        }),
+      },
+      {
+        matcher: "/api/qc-checklists/QC-HISTORY/steps",
+        response: [],
+      },
+      {
+        matcher: "/api/qc-items/QCITEM-DEMO-HISTORY/open-critical-ncrs",
+        response: [],
+      },
+      {
+        matcher: "/api/qc-items/QCITEM-DEMO-HISTORY/closed-critical-ncrs?limit=10",
+        response: [
           {
             id: "NCR-NEW",
             ncr_id: "NCR-QC-HISTORY-NEW",
@@ -1070,58 +981,52 @@ describe("QcStationPage", () => {
             detected_at: "2026-05-03T08:10:00Z",
             closed_at: "2026-05-03T08:12:00Z",
           },
-        ]);
-      }
-
-      if (url.endsWith("/api/qc-items/QCITEM-DEMO-HISTORY/runs?limit=10")) {
-        return jsonResponse([
-          {
+        ],
+      },
+      {
+        matcher: "/api/qc-items/QCITEM-DEMO-HISTORY/runs?limit=10",
+        response: [
+          buildDemoRun({
             id: "QC-ROW-FAIL-NEW",
             run_id: "QC-WEB-FAIL-NEW",
             item_serial_number: "QCITEM-DEMO-HISTORY",
             barcode_value: "QCBC-DEMO-HISTORY",
             checklist_id: "CHK-HISTORY",
-            process_stage: "COMPONENT_QC",
             work_session_id: "WS-QA-HISTORY",
-            operator_id: "QCOP-DEMO-LOCAL",
             status: "COMPLETED",
             result: "FAIL",
             started_at: "2026-05-03T08:28:00Z",
             ended_at: "2026-05-03T08:29:00Z",
-          },
-          {
+          }),
+          buildDemoRun({
             id: "QC-ROW-PASS-OLD",
             run_id: "QC-WEB-PASS-OLD",
             item_serial_number: "QCITEM-DEMO-HISTORY",
             barcode_value: "QCBC-DEMO-HISTORY",
             checklist_id: "CHK-HISTORY",
-            process_stage: "COMPONENT_QC",
             work_session_id: "WS-QA-HISTORY",
-            operator_id: "QCOP-DEMO-LOCAL",
             status: "COMPLETED",
             result: "PASS",
             started_at: "2026-05-03T08:05:00Z",
             ended_at: "2026-05-03T08:06:00Z",
-          },
-          {
+          }),
+          buildDemoRun({
             id: "QC-ROW-POST-REWORK",
             run_id: "QC-WEB-POST-REWORK",
             item_serial_number: "QCITEM-DEMO-HISTORY",
             barcode_value: "QCBC-DEMO-HISTORY",
             checklist_id: "CHK-HISTORY",
-            process_stage: "COMPONENT_QC",
             work_session_id: "WS-QA-HISTORY",
-            operator_id: "QCOP-DEMO-LOCAL",
             status: "COMPLETED",
             result: "PASS",
             started_at: "2026-05-03T08:31:00Z",
             ended_at: "2026-05-03T08:33:00Z",
-          },
-        ]);
-      }
-
-      if (url.endsWith("/api/qc-runs/QC-WEB-FAIL-NEW/details")) {
-        return jsonResponse({
+          }),
+        ],
+      },
+      {
+        matcher: "/api/qc-runs/QC-WEB-FAIL-NEW/details",
+        response: {
           id: "QC-ROW-FAIL-NEW",
           run_id: "QC-WEB-FAIL-NEW",
           device_serial_number: null,
@@ -1141,11 +1046,11 @@ describe("QcStationPage", () => {
           failure_disposition: "OPEN_CRITICAL_NCR",
           step_results: [],
           evidence_files: [],
-        });
-      }
-
-      if (url.endsWith("/api/qc-runs/QC-WEB-PASS-OLD/details")) {
-        return jsonResponse({
+        },
+      },
+      {
+        matcher: "/api/qc-runs/QC-WEB-PASS-OLD/details",
+        response: {
           id: "QC-ROW-PASS-OLD",
           run_id: "QC-WEB-PASS-OLD",
           device_serial_number: null,
@@ -1165,11 +1070,11 @@ describe("QcStationPage", () => {
           failure_disposition: null,
           step_results: [],
           evidence_files: [],
-        });
-      }
-
-      if (url.endsWith("/api/qc-runs/QC-WEB-POST-REWORK/details")) {
-        return jsonResponse({
+        },
+      },
+      {
+        matcher: "/api/qc-runs/QC-WEB-POST-REWORK/details",
+        response: {
           id: "QC-ROW-POST-REWORK",
           run_id: "QC-WEB-POST-REWORK",
           device_serial_number: null,
@@ -1189,11 +1094,9 @@ describe("QcStationPage", () => {
           failure_disposition: null,
           step_results: [],
           evidence_files: [],
-        });
-      }
-
-      throw new Error(`Unexpected request: ${method} ${url}`);
-    });
+        },
+      },
+    ]);
 
     vi.stubGlobal("fetch", fetchMock);
     window.history.replaceState(null, "", "/qc-station");
