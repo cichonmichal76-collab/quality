@@ -5,11 +5,7 @@ import {
   addQcStepResult,
   completeQcRun,
   createQcRun,
-  getQcRunDetails,
   getProductionItemByBarcode,
-  listQcItemClosedCriticalNcrs,
-  listQcItemOpenCriticalNcrs,
-  listQcRunsForItem,
   operatorLogin,
   releaseQcItemReservation,
   releaseQcItemForRework,
@@ -22,6 +18,7 @@ import { QcStationQueuePanel } from "./QcStationQueuePanel";
 import { QcStationRunPanel } from "./QcStationRunPanel";
 import { useQcStationChecklistSteps } from "./useQcStationChecklistSteps";
 import { useQcStationContext } from "./useQcStationContext";
+import { useQcStationHistory } from "./useQcStationHistory";
 import { useQcStationWaitingItems } from "./useQcStationWaitingItems";
 import {
   buildReservedByOtherOperatorMessage,
@@ -62,14 +59,9 @@ import {
 } from "./QcStationShared";
 import type {
   LoadState,
-  NonconformityRead,
   OperatorRead,
   ProductionItemRead,
-  QcChecklistRead,
-  QcRunDetailsRead,
   QcRunRead,
-  QcStepRead,
-  WorkstationRead,
 } from "./api";
 import { labelForCode } from "./dashboard";
 
@@ -143,20 +135,6 @@ export function QcStationPage() {
   const [reservationState, setReservationState] = useState<LoadState>("idle");
   const [reservationError, setReservationError] = useState<string | null>(null);
   const [reservationSuccess, setReservationSuccess] = useState<string | null>(null);
-  const [openCriticalNcrsState, setOpenCriticalNcrsState] = useState<LoadState>("idle");
-  const [openCriticalNcrsError, setOpenCriticalNcrsError] = useState<string | null>(null);
-  const [openCriticalNcrs, setOpenCriticalNcrs] = useState<NonconformityRead[]>([]);
-  const [closedCriticalNcrsState, setClosedCriticalNcrsState] = useState<LoadState>("idle");
-  const [closedCriticalNcrsError, setClosedCriticalNcrsError] = useState<string | null>(null);
-  const [closedCriticalNcrs, setClosedCriticalNcrs] = useState<NonconformityRead[]>([]);
-  const [qcRunHistoryState, setQcRunHistoryState] = useState<LoadState>("idle");
-  const [qcRunHistoryError, setQcRunHistoryError] = useState<string | null>(null);
-  const [qcRunHistory, setQcRunHistory] = useState<QcRunRead[]>([]);
-  const [selectedHistoryRunId, setSelectedHistoryRunId] = useState<string | null>(null);
-  const [selectedHistoryRunDetails, setSelectedHistoryRunDetails] =
-    useState<QcRunDetailsRead | null>(null);
-  const [qcRunDetailsState, setQcRunDetailsState] = useState<LoadState>("idle");
-  const [qcRunDetailsError, setQcRunDetailsError] = useState<string | null>(null);
   const [qcRunHistoryFilter, setQcRunHistoryFilter] =
     useState<QcRunHistoryFilter>("ALL");
   const [qcRunHistorySort, setQcRunHistorySort] =
@@ -180,6 +158,29 @@ export function QcStationPage() {
     useQcStationChecklistSteps(apiBaseUrl, selectedChecklistCode, !!authState);
   const { waitingItemsState, waitingItemsError, waitingItems, reloadWaitingItems } =
     useQcStationWaitingItems(apiBaseUrl, !!authState);
+  const {
+    openCriticalNcrsState,
+    openCriticalNcrsError,
+    openCriticalNcrs,
+    setOpenCriticalNcrs,
+    closedCriticalNcrsState,
+    closedCriticalNcrsError,
+    closedCriticalNcrs,
+    qcRunHistoryState,
+    qcRunHistoryError,
+    qcRunHistory,
+    selectedHistoryRunId,
+    setSelectedHistoryRunId,
+    selectedHistoryRunDetails,
+    qcRunDetailsState,
+    qcRunDetailsError,
+    resetHistoryState,
+  } = useQcStationHistory(
+    apiBaseUrl,
+    !!authState,
+    selectedItem?.item_serial_number ?? null,
+    selectedItem?.current_status ?? null,
+  );
   const stepPreviews = buildStepPreviews(steps, stepDrafts);
   const referenceOverlayAreas = buildStationOverlayAreas(steps);
   const predictedRunResult = deriveDraftRunResult(steps, stepDrafts);
@@ -246,19 +247,7 @@ export function QcStationPage() {
   };
 
   const resetHistoryAndNcrState = () => {
-    setOpenCriticalNcrs([]);
-    setOpenCriticalNcrsState("idle");
-    setOpenCriticalNcrsError(null);
-    setClosedCriticalNcrs([]);
-    setClosedCriticalNcrsState("idle");
-    setClosedCriticalNcrsError(null);
-    setQcRunHistory([]);
-    setQcRunHistoryState("idle");
-    setQcRunHistoryError(null);
-    setSelectedHistoryRunId(null);
-    setSelectedHistoryRunDetails(null);
-    setQcRunDetailsState("idle");
-    setQcRunDetailsError(null);
+    resetHistoryState();
   };
 
   const resetSelectedItemWorkflowState = () => {
@@ -298,118 +287,6 @@ export function QcStationPage() {
   }, [activeWorkstations, authState, operators]);
 
   useEffect(() => {
-    const trimmedApiBaseUrl = apiBaseUrl.trim();
-    if (!trimmedApiBaseUrl || !authState || !selectedItem) {
-      setOpenCriticalNcrs([]);
-      setOpenCriticalNcrsState("idle");
-      setOpenCriticalNcrsError(null);
-      return;
-    }
-
-    const controller = new AbortController();
-    let isCurrentRequest = true;
-    setOpenCriticalNcrsState("loading");
-    setOpenCriticalNcrsError(null);
-
-    listQcItemOpenCriticalNcrs(
-      trimmedApiBaseUrl,
-      selectedItem.item_serial_number,
-      controller.signal,
-    )
-      .then((rows) => {
-        if (!isCurrentRequest) {
-          return;
-        }
-
-        setOpenCriticalNcrs(rows);
-        setOpenCriticalNcrsState("loaded");
-      })
-      .catch((error: unknown) => {
-        if (!isCurrentRequest || controller.signal.aborted) {
-          return;
-        }
-
-        setOpenCriticalNcrs([]);
-        setOpenCriticalNcrsState("error");
-        setOpenCriticalNcrsError(
-          getErrorMessage(error, "Nie udalo sie pobrac otwartych NCR dla detalu."),
-        );
-      });
-
-    return () => {
-      isCurrentRequest = false;
-      controller.abort();
-    };
-  }, [apiBaseUrl, authState, selectedItem]);
-
-  useEffect(() => {
-    const trimmedApiBaseUrl = apiBaseUrl.trim();
-    if (!trimmedApiBaseUrl || !authState || !selectedItem) {
-      setClosedCriticalNcrs([]);
-      setClosedCriticalNcrsState("idle");
-      setClosedCriticalNcrsError(null);
-      setQcRunHistory([]);
-      setQcRunHistoryState("idle");
-      setQcRunHistoryError(null);
-      setSelectedHistoryRunId(null);
-      return;
-    }
-
-    const controller = new AbortController();
-    let isCurrentRequest = true;
-    setClosedCriticalNcrsState("loading");
-    setClosedCriticalNcrsError(null);
-    setQcRunHistoryState("loading");
-    setQcRunHistoryError(null);
-
-    Promise.all([
-      listQcItemClosedCriticalNcrs(
-        trimmedApiBaseUrl,
-        selectedItem.item_serial_number,
-        10,
-        controller.signal,
-      ),
-      listQcRunsForItem(
-        trimmedApiBaseUrl,
-        selectedItem.item_serial_number,
-        10,
-        controller.signal,
-      ),
-    ])
-      .then(([closedNcrRows, qcRunRows]) => {
-        if (!isCurrentRequest) {
-          return;
-        }
-
-        setClosedCriticalNcrs(closedNcrRows);
-        setClosedCriticalNcrsState("loaded");
-        setQcRunHistory(qcRunRows);
-        setQcRunHistoryState("loaded");
-      })
-      .catch((error: unknown) => {
-        if (!isCurrentRequest || controller.signal.aborted) {
-          return;
-        }
-
-        const message = getErrorMessage(
-          error,
-          "Nie udalo sie pobrac historii kontroli albo zamknietych NCR dla detalu.",
-        );
-        setClosedCriticalNcrs([]);
-        setClosedCriticalNcrsState("error");
-        setClosedCriticalNcrsError(message);
-        setQcRunHistory([]);
-        setQcRunHistoryState("error");
-        setQcRunHistoryError(message);
-      });
-
-    return () => {
-      isCurrentRequest = false;
-      controller.abort();
-    };
-  }, [apiBaseUrl, authState, selectedItem]);
-
-  useEffect(() => {
     if (filteredQcRunHistory.length === 0) {
       if (selectedHistoryRunId !== null) {
         setSelectedHistoryRunId(null);
@@ -424,47 +301,6 @@ export function QcStationPage() {
       setSelectedHistoryRunId(filteredQcRunHistory[0]?.run_id ?? null);
     }
   }, [filteredQcRunHistory, selectedHistoryRunId]);
-
-  useEffect(() => {
-    const trimmedApiBaseUrl = apiBaseUrl.trim();
-    if (!trimmedApiBaseUrl || !authState || !selectedItem || !selectedHistoryRunId) {
-      setSelectedHistoryRunDetails(null);
-      setQcRunDetailsState("idle");
-      setQcRunDetailsError(null);
-      return;
-    }
-
-    const controller = new AbortController();
-    let isCurrentRequest = true;
-    setQcRunDetailsState("loading");
-    setQcRunDetailsError(null);
-
-    getQcRunDetails(trimmedApiBaseUrl, selectedHistoryRunId, controller.signal)
-      .then((details) => {
-        if (!isCurrentRequest) {
-          return;
-        }
-
-        setSelectedHistoryRunDetails(details);
-        setQcRunDetailsState("loaded");
-      })
-      .catch((error: unknown) => {
-        if (!isCurrentRequest || controller.signal.aborted) {
-          return;
-        }
-
-        setSelectedHistoryRunDetails(null);
-        setQcRunDetailsState("error");
-        setQcRunDetailsError(
-          getErrorMessage(error, "Nie udalo sie pobrac szczegolow wybranego runu QC."),
-        );
-      });
-
-    return () => {
-      isCurrentRequest = false;
-      controller.abort();
-    };
-  }, [apiBaseUrl, authState, selectedItem, selectedHistoryRunId]);
 
   useEffect(() => {
     setLookupError(null);
