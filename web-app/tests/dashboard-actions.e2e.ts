@@ -88,6 +88,37 @@ async function fulfillShipmentDeviceDetailRequests(
   return false;
 }
 
+async function fulfillQueueRequest(
+  path: string,
+  route: Route,
+  endpointPath: string,
+  body: unknown,
+): Promise<boolean> {
+  if (path === endpointPath) {
+    await fulfillJson(route, body);
+    return true;
+  }
+
+  return false;
+}
+
+async function fulfillMappedComponentQualityRequests(
+  path: string,
+  route: Route,
+  detailsBySerial: Record<string, unknown>,
+): Promise<boolean> {
+  const matchedSerialNumber = Object.keys(detailsBySerial).find(
+    (serialNumber) => path === `/api/devices/${serialNumber}/component-quality`,
+  );
+
+  if (!matchedSerialNumber) {
+    return false;
+  }
+
+  await fulfillJson(route, detailsBySerial[matchedSerialNumber]);
+  return true;
+}
+
 const shipmentQueuePayload = {
   total_devices: 1,
   ready_count: 1,
@@ -1673,16 +1704,16 @@ test("dashboard marks selected shipment devices ready from bulk actions", async 
     const url = new URL(request.url());
     const path = url.pathname;
 
-    if (path === "/api/shipment-readiness") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(
-          readyMarked
-            ? refreshedBulkShipmentQueuePayload
-            : bulkShipmentQueuePayload,
-        ),
-      });
+    if (
+      await fulfillQueueRequest(
+        path,
+        route,
+        "/api/shipment-readiness",
+        readyMarked
+          ? refreshedBulkShipmentQueuePayload
+          : bulkShipmentQueuePayload,
+      )
+    ) {
       return;
     }
 
@@ -1823,16 +1854,16 @@ test("dashboard closes selected shipment device critical NCRs from bulk actions"
     const url = new URL(request.url());
     const path = url.pathname;
 
-    if (path === "/api/shipment-readiness") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(
-          ncrClosed
-            ? refreshedBulkShipmentNcrQueuePayload
-            : bulkShipmentNcrQueuePayload,
-        ),
-      });
+    if (
+      await fulfillQueueRequest(
+        path,
+        route,
+        "/api/shipment-readiness",
+        ncrClosed
+          ? refreshedBulkShipmentNcrQueuePayload
+          : bulkShipmentNcrQueuePayload,
+      )
+    ) {
       return;
     }
 
@@ -2012,41 +2043,38 @@ test("dashboard records bulk component QC PASS from selected queue rows", async 
     const url = new URL(request.url());
     const path = url.pathname;
 
-    if (path === "/api/shipment-readiness") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(shipmentQueuePayload),
-      });
-      return;
-    }
-
-    if (path === "/api/component-quality") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(
-          componentQcRecorded
-            ? refreshedBulkComponentQcQueuePayload
-            : bulkComponentQcQueuePayload,
-        ),
-      });
+    if (
+      await fulfillQueueRequest(
+        path,
+        route,
+        "/api/shipment-readiness",
+        shipmentQueuePayload,
+      )
+    ) {
       return;
     }
 
     if (
-      (path === "/api/devices/COMP-QC-001/component-quality" ||
-        path === "/api/devices/COMP-QC-002/component-quality") &&
-      request.method() === "GET"
+      await fulfillQueueRequest(
+        path,
+        route,
+        "/api/component-quality",
+        componentQcRecorded
+          ? refreshedBulkComponentQcQueuePayload
+          : bulkComponentQcQueuePayload,
+      )
     ) {
-      const serialNumber = path.includes("COMP-QC-001")
-        ? "COMP-QC-001"
-        : "COMP-QC-002";
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(componentQcDetailsBySerial[serialNumber]),
-      });
+      return;
+    }
+
+    if (
+      request.method() === "GET" &&
+      (await fulfillMappedComponentQualityRequests(
+        path,
+        route,
+        componentQcDetailsBySerial,
+      ))
+    ) {
       return;
     }
 
@@ -2272,41 +2300,38 @@ test("dashboard closes selected component critical NCRs from bulk actions", asyn
     const url = new URL(request.url());
     const path = url.pathname;
 
-    if (path === "/api/shipment-readiness") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(shipmentQueuePayload),
-      });
-      return;
-    }
-
-    if (path === "/api/component-quality") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(
-          ncrClosed
-            ? refreshedBulkComponentQueuePayload
-            : bulkComponentQueuePayload,
-        ),
-      });
+    if (
+      await fulfillQueueRequest(
+        path,
+        route,
+        "/api/shipment-readiness",
+        shipmentQueuePayload,
+      )
+    ) {
       return;
     }
 
     if (
-      (path === "/api/devices/COMP-NCR-001/component-quality" ||
-        path === "/api/devices/COMP-NCR-002/component-quality") &&
-      request.method() === "GET"
+      await fulfillQueueRequest(
+        path,
+        route,
+        "/api/component-quality",
+        ncrClosed
+          ? refreshedBulkComponentQueuePayload
+          : bulkComponentQueuePayload,
+      )
     ) {
-      const serialNumber = path.includes("COMP-NCR-001")
-        ? "COMP-NCR-001"
-        : "COMP-NCR-002";
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(componentBulkDetailsBySerial[serialNumber]),
-      });
+      return;
+    }
+
+    if (
+      request.method() === "GET" &&
+      (await fulfillMappedComponentQualityRequests(
+        path,
+        route,
+        componentBulkDetailsBySerial,
+      ))
+    ) {
       return;
     }
 
