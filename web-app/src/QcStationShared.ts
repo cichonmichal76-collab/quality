@@ -21,6 +21,8 @@ export interface QcStationAuthState {
   loginMethod: "PASSWORD" | "RFID";
 }
 
+export type LoginMethod = "PASSWORD" | "RFID";
+
 export interface StepDraft {
   status: "PASS" | "FAIL";
   measurementValue: string;
