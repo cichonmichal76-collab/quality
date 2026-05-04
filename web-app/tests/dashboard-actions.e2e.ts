@@ -1707,10 +1707,7 @@ test("dashboard closes device critical NCRs from the details drawer", async ({
       });
       deviceNcrClosed = true;
 
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
+      await fulfillJson(route, {
           id: "NCR-ROW-001",
           ncr_id: "NCR-DEVICE-001",
           device_serial_number: "SHIP-001",
@@ -1723,8 +1720,7 @@ test("dashboard closes device critical NCRs from the details drawer", async ({
           status: "CLOSED",
           detected_at: "2026-05-01T09:10:00Z",
           closed_at: "2026-05-01T09:45:00Z",
-        }),
-      });
+        });
       return;
     }
 
@@ -2010,16 +2006,12 @@ test("dashboard closes selected shipment device critical NCRs from bulk actions"
       });
       ncrClosed = true;
 
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
+      await fulfillJson(route, {
           id: `ROW-${ncrId}`,
           ncr_id: ncrId,
           status: "CLOSED",
           corrective_action: `Zamknięte zbiorczo z kolejki wysyłki dla ${serialNumber}.`,
-        }),
-      });
+        });
       return;
     }
 
@@ -2468,16 +2460,12 @@ test("dashboard closes selected component critical NCRs from bulk actions", asyn
       });
       ncrClosed = true;
 
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
+      await fulfillJson(route, {
           id: `ROW-${ncrId}`,
           ncr_id: ncrId,
           status: "CLOSED",
           corrective_action: `Zamknięte zbiorczo z kolejki komponentów dla ${serialNumber}.`,
-        }),
-      });
+        });
       return;
     }
 
