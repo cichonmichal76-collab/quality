@@ -1,55 +1,35 @@
 import { expect, test } from "@playwright/test";
+import {
+  buildAdminChecklist,
+  buildAdminOperator,
+  buildAdminWorkstation,
+  fulfillJson,
+} from "./admin.e2e-helpers";
 
 test("admin page creates operator and updates workstation", async ({ page }) => {
-  const operators = [
-    {
-      id: "OP-ROW-001",
-      operator_id: "QCOP-EXISTING",
-      full_name: "Istniejacy operator",
-      role: "QUALITY_INSPECTOR",
-      login_name: "qc-existing",
-      rfid_uid_hash: "RFID-EXISTING",
-      is_active: true,
-      created_at: "2026-05-03T08:00:00Z",
-    },
-  ];
-  const workstations = [
-    {
-      id: "WS-ROW-001",
-      workstation_id: "QCWS-001",
-      name: "Stacja QC 1",
-      area: "QA",
-      station_type: "QC",
-      is_active: true,
-    },
-  ];
+  const operators = [buildAdminOperator()];
+  const workstations = [buildAdminWorkstation()];
 
   await page.route("**/api/operators", async (route) => {
     if (route.request().method() === "POST") {
       const payload = route.request().postDataJSON() as Record<string, unknown>;
       operators.unshift({
-        id: "OP-ROW-NEW",
-        operator_id: String(payload.operator_id),
-        full_name: String(payload.full_name),
-        role: String(payload.role),
-        login_name: String(payload.login_name ?? ""),
-        rfid_uid_hash: String(payload.rfid_uid_hash ?? ""),
-        is_active: Boolean(payload.is_active),
-        created_at: "2026-05-03T10:00:00Z",
+        ...buildAdminOperator({
+          id: "OP-ROW-NEW",
+          operator_id: String(payload.operator_id),
+          full_name: String(payload.full_name),
+          role: String(payload.role),
+          login_name: String(payload.login_name ?? ""),
+          rfid_uid_hash: String(payload.rfid_uid_hash ?? ""),
+          is_active: Boolean(payload.is_active),
+          created_at: "2026-05-03T10:00:00Z",
+        }),
       });
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(operators[0]),
-      });
+      await fulfillJson(route, operators[0]);
       return;
     }
 
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify(operators),
-    });
+    await fulfillJson(route, operators);
   });
 
   await page.route("**/api/workstations", async (route) => {
@@ -58,11 +38,7 @@ test("admin page creates operator and updates workstation", async ({ page }) => 
       return;
     }
 
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify(workstations),
-    });
+    await fulfillJson(route, workstations);
   });
 
   await page.route("**/api/workstations/QCWS-001", async (route) => {
@@ -71,11 +47,7 @@ test("admin page creates operator and updates workstation", async ({ page }) => 
       ...workstations[0],
       ...payload,
     };
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify(workstations[0]),
-    });
+    await fulfillJson(route, workstations[0]);
   });
 
   await page.goto("/admin");
@@ -110,85 +82,53 @@ test("admin page configures product qc for bom component", async ({ page }) => {
   let createdStepPayload: Record<string, unknown> | null = null;
 
   await page.route("**/api/operators", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify([]),
-    });
+    await fulfillJson(route, []);
   });
 
   await page.route("**/api/workstations", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify([]),
-    });
+    await fulfillJson(route, []);
   });
 
   await page.route(
     "**/api/qc-product-configurations/DEMO-OPS?variant_code=DEFAULT",
     async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          device_type: "DEMO-OPS",
-          variant_code: "DEFAULT",
-          items: [
-            {
-              component_type: "SCREW_M4",
-              substitution_group: null,
-              required_part_number: "M4-12",
-              required_revision: null,
-              required_drawing_number: null,
-              required_drawing_revision: null,
-              quantity_required: 4,
-              is_required: true,
-              checklist_code: configurationLoaded ? "QC-DEMO-OPS-DEFAULT-SCREW-M4" : null,
-              checklist_name: configurationLoaded ? "Kontrola sruby M4" : null,
-              checklist_version: configurationLoaded ? "1.0" : null,
-              checklist_is_active: configurationLoaded,
-              skip_component_qc: false,
-              reference_image_file_id: configurationLoaded ? "FILE-001" : null,
-              configured_step_count: configurationLoaded ? 1 : 0,
-            },
-          ],
-        }),
+      await fulfillJson(route, {
+        device_type: "DEMO-OPS",
+        variant_code: "DEFAULT",
+        items: [
+          {
+            component_type: "SCREW_M4",
+            substitution_group: null,
+            required_part_number: "M4-12",
+            required_revision: null,
+            required_drawing_number: null,
+            required_drawing_revision: null,
+            quantity_required: 4,
+            is_required: true,
+            checklist_code: configurationLoaded ? "QC-DEMO-OPS-DEFAULT-SCREW-M4" : null,
+            checklist_name: configurationLoaded ? "Kontrola sruby M4" : null,
+            checklist_version: configurationLoaded ? "1.0" : null,
+            checklist_is_active: configurationLoaded,
+            skip_component_qc: false,
+            reference_image_file_id: configurationLoaded ? "FILE-001" : null,
+            configured_step_count: configurationLoaded ? 1 : 0,
+          },
+        ],
       });
     },
   );
 
   await page.route("**/api/qc-checklists?device_type=DEMO-OPS**", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify([
-        {
-          id: "CHK-001",
-          checklist_code: "QC-DEMO-OPS-DEFAULT-SCREW-M4",
-          name: "Kontrola sruby M4",
-          process_stage: "COMPONENT_QC",
-          version: "1.0",
-          device_type: "DEMO-OPS",
-          variant_code: "DEFAULT",
-          component_type: "SCREW_M4",
-          skip_component_qc: false,
-          reference_image_file_id: "FILE-001",
-          is_active: true,
-          created_at: "2026-05-03T11:00:00Z",
-        },
-      ]),
-    });
+    await fulfillJson(route, [
+      buildAdminChecklist({ reference_image_file_id: "FILE-001" }),
+    ]);
   });
 
   await page.route("**/api/qc-checklists/QC-DEMO-OPS-DEFAULT-SCREW-M4/steps", async (route) => {
     if (route.request().method() === "POST") {
       createdStepPayload = route.request().postDataJSON() as Record<string, unknown>;
       configurationLoaded = true;
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
+      await fulfillJson(route, {
           id: "STEP-001",
           checklist_id: "CHK-001",
           step_order: 1,
@@ -208,14 +148,10 @@ test("admin page configures product qc for bom component", async ({ page }) => {
           unit: null,
           tolerance_min: null,
           tolerance_max: null,
-        }),
-      });
+        });
       return;
     }
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify([
+    await fulfillJson(route, [
         {
           id: "STEP-001",
           checklist_id: "CHK-001",
@@ -237,31 +173,13 @@ test("admin page configures product qc for bom component", async ({ page }) => {
           tolerance_min: null,
           tolerance_max: null,
         },
-      ]),
-    });
+      ]);
   });
 
   await page.route("**/api/qc-checklists", async (route) => {
     if (route.request().method() === "POST") {
       configurationLoaded = true;
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          id: "CHK-001",
-          checklist_code: "QC-DEMO-OPS-DEFAULT-SCREW-M4",
-          name: "Kontrola sruby M4",
-          process_stage: "COMPONENT_QC",
-          version: "1.0",
-          device_type: "DEMO-OPS",
-          variant_code: "DEFAULT",
-          component_type: "SCREW_M4",
-          skip_component_qc: false,
-          reference_image_file_id: null,
-          is_active: true,
-          created_at: "2026-05-03T11:00:00Z",
-        }),
-      });
+      await fulfillJson(route, buildAdminChecklist());
       return;
     }
 
@@ -271,24 +189,7 @@ test("admin page configures product qc for bom component", async ({ page }) => {
   await page.route(
     "**/api/qc-checklists/QC-DEMO-OPS-DEFAULT-SCREW-M4/reference-image",
     async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          id: "CHK-001",
-          checklist_code: "QC-DEMO-OPS-DEFAULT-SCREW-M4",
-          name: "Kontrola sruby M4",
-          process_stage: "COMPONENT_QC",
-          version: "1.0",
-          device_type: "DEMO-OPS",
-          variant_code: "DEFAULT",
-          component_type: "SCREW_M4",
-          skip_component_qc: false,
-          reference_image_file_id: "FILE-001",
-          is_active: true,
-          created_at: "2026-05-03T11:00:00Z",
-        }),
-      });
+      await fulfillJson(route, buildAdminChecklist({ reference_image_file_id: "FILE-001" }));
     },
   );
 
