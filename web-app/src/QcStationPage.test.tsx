@@ -292,129 +292,78 @@ describe("QcStationPage", () => {
   });
 
   it("klikniecie komponentu z kolejki oczekujacych podstawia detal do kontroli", async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      const method = init?.method ?? "GET";
-
-      if (url.endsWith("/api/operators")) {
-        return jsonResponse([buildDemoOperator()]);
-      }
-
-      if (url.endsWith("/api/workstations")) {
-        return jsonResponse([buildDemoWorkstation()]);
-      }
-
-      if (url.endsWith("/api/qc-checklists")) {
-        return jsonResponse([
-          buildDemoChecklist({ component_type: "FAN_MODULE" }),
-        ]);
-      }
-
-      if (url.includes("/api/qc-waiting-items")) {
-        return jsonResponse([
-          {
+    const fetchMock = createFetchMock([
+      { matcher: "/api/operators", response: [buildDemoOperator()] },
+      { matcher: "/api/workstations", response: [buildDemoWorkstation()] },
+      {
+        matcher: "/api/qc-checklists",
+        response: [buildDemoChecklist({ component_type: "FAN_MODULE" })],
+      },
+      {
+        matcher: (url) => url.includes("/api/qc-waiting-items"),
+        response: [
+          buildDemoItem({
             id: "ITEM-ROW-QUEUE",
             item_serial_number: "QCITEM-DEMO-QUEUE",
             barcode_value: "QCBC-DEMO-QUEUE",
-            item_type: "FAN_MODULE",
             part_number: "PN-FAN-002",
             revision: "B",
-            drawing_number: null,
-            drawing_revision: null,
-            production_order: null,
-            material_batch: null,
-            machine_id: null,
-            created_by_operator_id: "QCOP-DEMO-LOCAL",
-            current_status: "PRODUCED",
             produced_at: "2026-05-03T08:15:00Z",
             created_at: "2026-05-03T08:15:00Z",
-            qc_reserved_by_operator_id: null,
-            qc_reserved_by_workstation_id: null,
-            qc_reserved_at: null,
-          },
-          {
+          }),
+          buildDemoItem({
             id: "ITEM-ROW-QUEUE-REWORK",
             item_serial_number: "QCITEM-DEMO-QUEUE-REWORK",
             barcode_value: "QCBC-DEMO-QUEUE-REWORK",
-            item_type: "FAN_MODULE",
             part_number: "PN-FAN-003",
             revision: "C",
-            drawing_number: null,
-            drawing_revision: null,
-            production_order: null,
-            material_batch: null,
-            machine_id: null,
-            created_by_operator_id: "QCOP-DEMO-LOCAL",
             current_status: "REWORK_REQUIRED",
             produced_at: "2026-05-03T08:20:00Z",
             created_at: "2026-05-03T08:20:00Z",
             qc_reserved_by_operator_id: "QCOP-DEMO-LOCAL",
             qc_reserved_by_workstation_id: "QCWS-DEMO-LOCAL",
             qc_reserved_at: "2026-05-03T08:22:00Z",
-          },
-          {
+          }),
+          buildDemoItem({
             id: "ITEM-ROW-QUEUE-OTHER",
             item_serial_number: "QCITEM-DEMO-QUEUE-OTHER",
             barcode_value: "QCBC-DEMO-QUEUE-OTHER",
-            item_type: "FAN_MODULE",
             part_number: "PN-FAN-004",
             revision: "D",
-            drawing_number: null,
-            drawing_revision: null,
-            production_order: null,
-            material_batch: null,
-            machine_id: null,
-            created_by_operator_id: "QCOP-OTHER",
-            current_status: "PRODUCED",
             produced_at: "2026-05-03T08:25:00Z",
             created_at: "2026-05-03T08:25:00Z",
+            created_by_operator_id: "QCOP-OTHER",
             qc_reserved_by_operator_id: "QCOP-OTHER",
             qc_reserved_by_workstation_id: "QCWS-OTHER",
             qc_reserved_at: "2026-05-03T08:26:00Z",
-          },
-        ]);
-      }
-
-      if (url.endsWith("/api/auth/operator-login") && method === "POST") {
-        return jsonResponse(buildDemoSession());
-      }
-
-      if (url.endsWith("/api/qc-checklists/QC-STATION-DEMO-LOCAL/steps")) {
-        return jsonResponse([
-          {
+          }),
+        ],
+      },
+      {
+        matcher: "/api/auth/operator-login",
+        method: "POST",
+        response: buildDemoSession(),
+      },
+      {
+        matcher: "/api/qc-checklists/QC-STATION-DEMO-LOCAL/steps",
+        response: [
+          buildDemoStep({
             id: "STEP-001",
             checklist_id: "CHK-001",
-            step_order: 1,
             title: "Sprawdz wyglad",
             instruction: "Porownaj detal ze wzorcem.",
             control_area: "Front",
-            evaluation_mode: "MANUAL",
-            result_input_label: null,
-            region_x: null,
-            region_y: null,
-            region_width: null,
-            region_height: null,
-            requires_photo: false,
-            requires_measurement: false,
-            blocking_on_fail: true,
-            expected_value: null,
-            unit: null,
-            tolerance_min: null,
-            tolerance_max: null,
-          },
-        ]);
-      }
-
-      if (
-        url.includes("/open-critical-ncrs") ||
-        url.includes("/closed-critical-ncrs") ||
-        url.includes("/runs?limit=10")
-      ) {
-        return jsonResponse([]);
-      }
-
-      throw new Error(`Unexpected request: ${method} ${url}`);
-    });
+          }),
+        ],
+      },
+      {
+        matcher: (url) =>
+          url.includes("/open-critical-ncrs") ||
+          url.includes("/closed-critical-ncrs") ||
+          url.includes("/runs?limit=10"),
+        response: [],
+      },
+    ]);
 
     vi.stubGlobal("fetch", fetchMock);
     window.history.replaceState(null, "", "/qc-station");
@@ -502,20 +451,12 @@ describe("QcStationPage", () => {
   });
 
   it("dobiera checkliste po typie komponentu i wymaga danych dla FAIL", async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      const method = init?.method ?? "GET";
-
-      if (url.endsWith("/api/operators")) {
-        return jsonResponse([buildDemoOperator()]);
-      }
-
-      if (url.endsWith("/api/workstations")) {
-        return jsonResponse([buildDemoWorkstation()]);
-      }
-
-      if (url.endsWith("/api/qc-checklists")) {
-        return jsonResponse([
+    const fetchMock = createFetchMock([
+      { matcher: "/api/operators", response: [buildDemoOperator()] },
+      { matcher: "/api/workstations", response: [buildDemoWorkstation()] },
+      {
+        matcher: "/api/qc-checklists",
+        response: [
           buildDemoChecklist({
             id: "CHK-GENERIC",
             checklist_code: "QC-GENERIC",
@@ -527,171 +468,126 @@ describe("QcStationPage", () => {
             name: "Kontrola silikonu",
             component_type: "SILICONE_PACK",
           }),
-        ]);
-      }
-
-      if (url.includes("/api/qc-waiting-items")) {
-        return jsonResponse([
-          {
+        ],
+      },
+      {
+        matcher: (url) => url.includes("/api/qc-waiting-items"),
+        response: [
+          buildDemoItem({
             id: "ITEM-ROW-FAIL",
             item_serial_number: "QCITEM-DEMO-FAIL",
             barcode_value: "QCBC-DEMO-FAIL",
             item_type: "SILICONE_PACK",
             part_number: "PN-SIL-001",
-            revision: "A",
-            drawing_number: null,
-            drawing_revision: null,
-            production_order: null,
-            material_batch: null,
-            machine_id: null,
-            created_by_operator_id: "QCOP-DEMO-LOCAL",
             current_status: "REWORK_REQUIRED",
             produced_at: "2026-05-03T08:16:00Z",
             created_at: "2026-05-03T08:16:00Z",
-          },
-        ]);
-      }
-
-      if (url.endsWith("/api/auth/operator-login") && method === "POST") {
-        return jsonResponse({
+          }),
+        ],
+      },
+      {
+        matcher: "/api/auth/operator-login",
+        method: "POST",
+        response: buildDemoSession({
           id: "SESSION-ROW-FAIL",
           work_session_id: "WS-QA-FAIL",
-          operator_id: "QCOP-DEMO-LOCAL",
-          workstation_id: "QCWS-DEMO-LOCAL",
-          machine_id: null,
-          status: "ACTIVE",
-          started_at: "2026-05-03T08:10:00Z",
-          ended_at: null,
-        });
-      }
-
-      if (url.endsWith("/api/qc-checklists/QC-GENERIC/steps")) {
-        return jsonResponse([]);
-      }
-
-      if (url.endsWith("/api/qc-checklists/QC-SEAL/steps")) {
-        return jsonResponse([
-          {
+        }),
+      },
+      {
+        matcher: "/api/qc-checklists/QC-GENERIC/steps",
+        response: [],
+      },
+      {
+        matcher: "/api/qc-checklists/QC-SEAL/steps",
+        response: [
+          buildDemoStep({
             id: "STEP-FAIL-001",
             checklist_id: "CHK-SEAL",
-            step_order: 1,
             title: "Udokumentuj stan powloki",
             instruction: "Sprawdz czy silikon nie ma pekniec i sladow zabrudzen.",
             control_area: "Powierzchnia worka",
-            evaluation_mode: "MANUAL",
-            result_input_label: null,
-            region_x: null,
-            region_y: null,
-            region_width: null,
-            region_height: null,
             requires_photo: true,
-            requires_measurement: false,
-            blocking_on_fail: true,
-            expected_value: null,
-            unit: null,
-            tolerance_min: null,
-            tolerance_max: null,
-          },
-        ]);
-      }
-
-      if (url.endsWith("/api/qc-runs") && method === "POST") {
-        return jsonResponse({
+          }),
+        ],
+      },
+      {
+        matcher: "/api/qc-runs",
+        method: "POST",
+        response: buildDemoRun({
           id: "QC-ROW-FAIL",
           run_id: "QC-WEB-FAIL",
           item_serial_number: "QCITEM-DEMO-FAIL",
           barcode_value: "QCBC-DEMO-FAIL",
           checklist_id: "CHK-SEAL",
-          process_stage: "COMPONENT_QC",
           work_session_id: "WS-QA-FAIL",
-          operator_id: "QCOP-DEMO-LOCAL",
-          status: "IN_PROGRESS",
-          result: null,
           started_at: "2026-05-03T08:17:00Z",
-          ended_at: null,
-        });
-      }
-
-      if (url.endsWith("/steps/STEP-FAIL-001/result") && method === "POST") {
-        return jsonResponse({
+        }),
+      },
+      {
+        matcher: /\/steps\/STEP-FAIL-001\/result$/,
+        method: "POST",
+        response: {
           id: "STEP-RESULT-FAIL-001",
           qc_run_id: "QC-WEB-FAIL",
           step_id: "STEP-FAIL-001",
           status: "FAIL",
           comment: "Rysa na worku silikonowym",
-        });
-      }
-
-      if (url.endsWith("/complete") && method === "POST") {
-        return jsonResponse({
+        },
+      },
+      {
+        matcher: "/complete",
+        method: "POST",
+        response: buildDemoRun({
           id: "QC-ROW-FAIL",
           run_id: "QC-WEB-FAIL",
           item_serial_number: "QCITEM-DEMO-FAIL",
           barcode_value: "QCBC-DEMO-FAIL",
           checklist_id: "CHK-SEAL",
-          process_stage: "COMPONENT_QC",
           work_session_id: "WS-QA-FAIL",
-          operator_id: "QCOP-DEMO-LOCAL",
           status: "COMPLETED",
           result: "FAIL",
           started_at: "2026-05-03T08:17:00Z",
           ended_at: "2026-05-03T08:19:00Z",
-        });
-      }
-
-      if (url.endsWith("/api/production-items/by-barcode/QCBC-DEMO-FAIL")) {
-        return jsonResponse({
+        }),
+      },
+      {
+        matcher: "/api/production-items/by-barcode/QCBC-DEMO-FAIL",
+        response: buildDemoItem({
           id: "ITEM-ROW-FAIL",
           item_serial_number: "QCITEM-DEMO-FAIL",
           barcode_value: "QCBC-DEMO-FAIL",
           item_type: "SILICONE_PACK",
           part_number: "PN-SIL-001",
-          revision: "A",
-          drawing_number: null,
-          drawing_revision: null,
-          production_order: null,
-          material_batch: null,
-          machine_id: null,
-          created_by_operator_id: "QCOP-DEMO-LOCAL",
           current_status: "REWORK_REQUIRED",
           produced_at: "2026-05-03T08:16:00Z",
           created_at: "2026-05-03T08:16:00Z",
-        });
-      }
-
-      if (url.endsWith("/api/qc-items/QCITEM-DEMO-FAIL/reserve") && method === "POST") {
-        return jsonResponse({
+        }),
+      },
+      {
+        matcher: "/api/qc-items/QCITEM-DEMO-FAIL/reserve",
+        method: "POST",
+        response: buildDemoItem({
           id: "ITEM-ROW-FAIL",
           item_serial_number: "QCITEM-DEMO-FAIL",
           barcode_value: "QCBC-DEMO-FAIL",
           item_type: "SILICONE_PACK",
           part_number: "PN-SIL-001",
-          revision: "A",
-          drawing_number: null,
-          drawing_revision: null,
-          production_order: null,
-          material_batch: null,
-          machine_id: null,
-          created_by_operator_id: "QCOP-DEMO-LOCAL",
+          current_status: "REWORK_REQUIRED",
+          produced_at: "2026-05-03T08:16:00Z",
+          created_at: "2026-05-03T08:16:00Z",
           qc_reserved_by_operator_id: "QCOP-DEMO-LOCAL",
           qc_reserved_by_workstation_id: "QCWS-DEMO-LOCAL",
           qc_reserved_at: "2026-05-03T08:16:30Z",
-          current_status: "REWORK_REQUIRED",
-          produced_at: "2026-05-03T08:16:00Z",
-          created_at: "2026-05-03T08:16:00Z",
-        });
-      }
-
-      if (
-        url.includes("/open-critical-ncrs") ||
-        url.includes("/closed-critical-ncrs") ||
-        url.includes("/runs?limit=10")
-      ) {
-        return jsonResponse([]);
-      }
-
-      throw new Error(`Unexpected request: ${method} ${url}`);
-    });
+        }),
+      },
+      {
+        matcher: (url) =>
+          url.includes("/open-critical-ncrs") ||
+          url.includes("/closed-critical-ncrs") ||
+          url.includes("/runs?limit=10"),
+        response: [],
+      },
+    ]);
 
     vi.stubGlobal("fetch", fetchMock);
     window.history.replaceState(null, "", "/qc-station");
