@@ -1,6 +1,7 @@
 import { joinApiUrl } from "./api";
 import type { LoadState, ProductionItemRead, QcChecklistRead, QcRunRead, QcStepRead } from "./api";
-import type { QcReferenceArea, StepDraft, StepPreview, StepDraftMap } from "./QcStationShared";
+import type { StepDraft, StepPreview, StepDraftMap } from "./QcStationShared";
+import type { QcReferenceArea } from "./QcStationPresentation";
 import { formatDateTime, labelForCode } from "./dashboard";
 import { QcReferenceImage } from "./QcReferenceImage";
 

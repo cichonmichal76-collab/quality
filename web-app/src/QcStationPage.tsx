@@ -2,6 +2,12 @@ import { useState } from "react";
 
 import { QcStationHistoryPanel } from "./QcStationHistoryPanel";
 import { QcStationLoginScreen } from "./QcStationLoginScreen";
+import {
+  buildStationOverlayAreas,
+  formatChecklistLabel,
+  formatTolerance,
+  formatWorkstationLabel,
+} from "./QcStationPresentation";
 import { QcStationQueuePanel } from "./QcStationQueuePanel";
 import { QcStationRunPanel } from "./QcStationRunPanel";
 import { useQcStationAuth } from "./useQcStationAuth";
@@ -12,14 +18,10 @@ import { useQcStationUiState } from "./useQcStationUiState";
 import { useQcStationWaitingItems } from "./useQcStationWaitingItems";
 import { useQcStationWorkflow } from "./useQcStationWorkflow";
 import {
-  buildStationOverlayAreas,
   buildStepPreviews,
   createDefaultStepDraft,
   deriveDraftRunResult,
-  formatChecklistLabel,
-  formatTolerance,
   formatWaitingItemReservationLabel,
-  formatWorkstationLabel,
   isProductionItemReservedByOtherOperator,
   normalizeStepEvaluationMode,
 } from "./QcStationShared";
