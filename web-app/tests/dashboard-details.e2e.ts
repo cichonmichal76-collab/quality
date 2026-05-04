@@ -1,4 +1,9 @@
 import { expect, test } from "@playwright/test";
+import {
+  buildServiceSession,
+  fulfillJson,
+  fulfillServiceSessionsQueue,
+} from "./dashboard.e2e-helpers";
 
 const SEEDED_COMPONENT_SERIAL = /CQ-(?:LOCAL|E2E)-/;
 const SEEDED_ASSEMBLY_SERIAL = /ASM-(?:LOCAL|E2E)-/;
@@ -136,6 +141,22 @@ test("dashboard jumps from full device page to a filtered related queue", async 
 test("dashboard shows commissioning sync history in device details", async ({
   page,
 }) => {
+  const serviceSession = buildServiceSession({
+    session_id: "SVC-SESSION-001",
+    device_serial_number: "SVC-001",
+    technician_id: "TECH-001",
+    result: "PASS",
+    firmware_version: "1.2.4",
+    bootloader_version: "0.9.8",
+    upload_count: 2,
+    client_attempt_id: "SYNC-TRY-0002",
+    client_attempt_number: 2,
+    client_trigger_source: "AUTO_NETWORK",
+    upload_correlation_id: "SRV-UP-0002",
+    uploaded_at: "2026-05-01T09:45:00Z",
+    created_at: "2026-05-01T09:30:00Z",
+  });
+
   await page.route("**/api/**", async (route) => {
     const url = new URL(route.request().url());
 
@@ -242,32 +263,14 @@ test("dashboard shows commissioning sync history in device details", async ({
     }
 
     if (url.pathname === "/api/service-sessions") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([
-          {
-            id: "svc-db-1",
-            session_id: "SVC-SESSION-001",
-            device_serial_number: "SVC-001",
-            device_type: "DEMO-SVC",
-            technician_id: "TECH-001",
-            result: "PASS",
-            firmware_version: "1.2.4",
-            bootloader_version: "0.9.8",
-            package_path: "/tmp/service-package.zip",
-            package_hash: "hash-svc-001",
-            upload_status: "UPLOADED",
-            upload_count: 2,
-            client_attempt_id: "SYNC-TRY-0002",
-            client_attempt_number: 2,
-            client_trigger_source: "AUTO_NETWORK",
-            upload_correlation_id: "SRV-UP-0002",
-            uploaded_at: "2026-05-01T09:45:00Z",
-            created_at: "2026-05-01T09:30:00Z",
-          },
-        ]),
-      });
+      await fulfillJson(route, [
+        {
+          id: "svc-db-1",
+          ...serviceSession,
+          package_path: "/tmp/service-package.zip",
+          package_hash: "hash-svc-001",
+        },
+      ]);
       return;
     }
 
@@ -347,6 +350,22 @@ test("dashboard shows commissioning sync history in device details", async ({
 test("dashboard opens commissioning session details from service queue", async ({
   page,
 }) => {
+  const serviceSession = buildServiceSession({
+    session_id: "SVC-SESSION-001",
+    device_serial_number: "SVC-DEVICE-001",
+    technician_id: "TECH-001",
+    result: "PASS",
+    firmware_version: "1.0.9",
+    bootloader_version: "0.9.9",
+    upload_count: 3,
+    client_attempt_id: "ATT-001",
+    client_attempt_number: 3,
+    client_trigger_source: "DEFERRED_WORKER",
+    upload_correlation_id: "CORR-001",
+    uploaded_at: "2026-05-03T08:00:00Z",
+    created_at: "2026-05-03T07:30:00Z",
+  });
+
   await page.route("**/api/**", async (route) => {
     const url = new URL(route.request().url());
 
@@ -402,99 +421,23 @@ test("dashboard opens commissioning session details from service queue", async (
     }
 
     if (url.pathname === "/api/service-sessions/queue") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          total_sessions: 1,
-          reuploaded_sessions: 1,
-          returned_count: 1,
-          offset: 0,
-          limit: 100,
-          has_more: false,
-          next_offset: null,
-          filters: {},
-          upload_status_summary: [
-            {
-              upload_status: "UPLOADED",
-              session_count: 1,
-            },
-          ],
-          result_summary: [
-            {
-              result: "PASS",
-              session_count: 1,
-            },
-          ],
-          device_type_summary: [
-            {
-              device_type: "DEMO-SVC",
-              session_count: 1,
-            },
-          ],
-          technician_summary: [
-            {
-              technician_id: "TECH-001",
-              session_count: 1,
-            },
-          ],
-          trigger_source_summary: [
-            {
-              client_trigger_source: "DEFERRED_WORKER",
-              session_count: 1,
-            },
-          ],
-          sessions: [
-            {
-              id: "svc-row-001",
-              session_id: "SVC-SESSION-001",
-              device_serial_number: "SVC-DEVICE-001",
-              device_type: "DEMO-SVC",
-              technician_id: "TECH-001",
-              result: "PASS",
-              firmware_version: "1.0.9",
-              bootloader_version: "0.9.9",
-              package_path: "/tmp/SVC-SESSION-001.zip",
-              package_hash: "hash-001",
-              upload_status: "UPLOADED",
-              upload_count: 3,
-              client_attempt_id: "ATT-001",
-              client_attempt_number: 3,
-              client_trigger_source: "DEFERRED_WORKER",
-              upload_correlation_id: "CORR-001",
-              uploaded_at: "2026-05-03T08:00:00Z",
-              created_at: "2026-05-03T07:30:00Z",
-            },
-          ],
-        }),
-      });
+      await fulfillServiceSessionsQueue(route, [
+        {
+          id: "svc-row-001",
+          ...serviceSession,
+          package_path: "/tmp/SVC-SESSION-001.zip",
+          package_hash: "hash-001",
+        },
+      ]);
       return;
     }
 
     if (url.pathname === "/api/service-sessions/SVC-SESSION-001") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          id: "svc-row-001",
-          session_id: "SVC-SESSION-001",
-          device_serial_number: "SVC-DEVICE-001",
-          device_type: "DEMO-SVC",
-          technician_id: "TECH-001",
-          result: "PASS",
-          firmware_version: "1.0.9",
-          bootloader_version: "0.9.9",
-          package_path: "/tmp/SVC-SESSION-001.zip",
-          package_hash: "hash-001",
-          upload_status: "UPLOADED",
-          upload_count: 3,
-          client_attempt_id: "ATT-001",
-          client_attempt_number: 3,
-          client_trigger_source: "DEFERRED_WORKER",
-          upload_correlation_id: "CORR-001",
-          uploaded_at: "2026-05-03T08:00:00Z",
-          created_at: "2026-05-03T07:30:00Z",
-        }),
+      await fulfillJson(route, {
+        id: "svc-row-001",
+        ...serviceSession,
+        package_path: "/tmp/SVC-SESSION-001.zip",
+        package_hash: "hash-001",
       });
       return;
     }

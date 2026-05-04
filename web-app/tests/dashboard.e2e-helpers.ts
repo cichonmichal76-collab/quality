@@ -55,6 +55,12 @@ export async function fulfillServiceSessionsQueue(
   sessions: ServiceSessionFixture[],
   filters: Record<string, unknown> = {},
 ) {
+  const resultValues = [...new Set(sessions.map((session) => session.result))];
+  const deviceTypes = [...new Set(sessions.map((session) => session.device_type))];
+  const triggerSources = [
+    ...new Set(sessions.map((session) => session.client_trigger_source)),
+  ];
+
   await fulfillJson(route, {
     total_sessions: sessions.length,
     reuploaded_sessions: sessions.filter((session) => session.upload_count > 1).length,
@@ -67,18 +73,19 @@ export async function fulfillServiceSessionsQueue(
     upload_status_summary: [
       { upload_status: "UPLOADED", session_count: sessions.length },
     ].filter((item) => item.session_count > 0),
-    result_summary: ["PASS", "HOLD", "FAIL"].map((result) => ({
+    result_summary: resultValues.map((result) => ({
       result,
       session_count: sessions.filter((session) => session.result === result).length,
     })).filter((item) => item.session_count > 0),
-    device_type_summary: sessions.length
-      ? [{ device_type: sessions[0].device_type, session_count: sessions.length }]
-      : [],
+    device_type_summary: deviceTypes.map((deviceType) => ({
+      device_type: deviceType,
+      session_count: sessions.filter((session) => session.device_type === deviceType).length,
+    })),
     technician_summary: sessions.map((session) => ({
       technician_id: session.technician_id,
       session_count: 1,
     })),
-    trigger_source_summary: ["MANUAL", "AUTO_NETWORK"].map((source) => ({
+    trigger_source_summary: triggerSources.map((source) => ({
       client_trigger_source: source,
       session_count: sessions.filter(
         (session) => session.client_trigger_source === source,
