@@ -1,11 +1,13 @@
 import type { FormEvent, ReactNode } from "react";
 
 import type { LoadState, NonconformityRead, ProductionItemRead } from "./api";
+import type {
+  WaitingItemsFilter,
+  WaitingItemsReservationFilter,
+  WaitingItemsReservationSummary,
+  WaitingItemsSort,
+} from "./QcStationShared";
 import { formatDateTime, labelForCode } from "./dashboard";
-
-type WaitingItemsFilter = "ALL" | "PRODUCED" | "REWORK_REQUIRED";
-type WaitingItemsReservationFilter = "ALL" | "UNRESERVED" | "MINE" | "OTHER_RESERVED";
-type WaitingItemsSort = "OLDEST" | "NEWEST";
 type WaitingPreset =
   | "PRODUCED"
   | "REWORK_REQUIRED"
@@ -13,13 +15,6 @@ type WaitingPreset =
   | "MINE"
   | "OTHER_RESERVED"
   | "RESET";
-
-interface WaitingItemsReservationSummary {
-  all: number;
-  unreserved: number;
-  mine: number;
-  otherReserved: number;
-}
 
 interface QcStationQueuePanelProps {
   authStateOperatorId: string | null;

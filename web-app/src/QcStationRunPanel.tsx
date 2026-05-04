@@ -1,31 +1,8 @@
 import { joinApiUrl } from "./api";
 import type { LoadState, ProductionItemRead, QcChecklistRead, QcRunRead, QcStepRead } from "./api";
+import type { QcReferenceArea, StepDraft, StepPreview, StepDraftMap } from "./QcStationShared";
 import { formatDateTime, labelForCode } from "./dashboard";
 import { QcReferenceImage } from "./QcReferenceImage";
-
-interface StepDraft {
-  status: "PASS" | "FAIL";
-  measurementValue: string;
-  observedValue: string;
-  comment: string;
-}
-
-interface StepPreview {
-  kind: "success" | "error";
-  message: string;
-}
-
-type StepDraftMap = Record<string, StepDraft>;
-
-interface QcReferenceArea {
-  id: string;
-  label: string;
-  title: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
 
 interface QcStationRunPanelProps {
   apiBaseUrl: string;

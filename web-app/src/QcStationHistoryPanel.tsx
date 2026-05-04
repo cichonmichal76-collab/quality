@@ -5,11 +5,12 @@ import type {
   QcRunDetailsRead,
   QcRunRead,
 } from "./api";
+import type {
+  ClosedCriticalNcrSort,
+  QcRunHistoryFilter,
+  QcRunHistorySort,
+} from "./QcStationShared";
 import { formatDateTime, labelForCode } from "./dashboard";
-
-type QcRunHistoryFilter = "ALL" | "FAIL" | "PASS" | "POST_LATEST_REWORK";
-type QcRunHistorySort = "NEWEST" | "OLDEST";
-type ClosedCriticalNcrSort = "NEWEST" | "OLDEST";
 type QcHistoryPreset = "LATEST_FAIL" | "LATEST_PASS" | "POST_LATEST_REWORK" | "RESET";
 
 interface QcStationHistoryPanelProps {
