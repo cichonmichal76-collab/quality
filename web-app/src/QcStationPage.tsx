@@ -262,6 +262,55 @@ export function QcStationPage() {
     closedCriticalNcrSort,
   );
 
+  const resetRunOutcomeState = () => {
+    setSubmitState("idle");
+    setSubmitError(null);
+    setSubmitSuccess(null);
+    setCompletedRun(null);
+    setFailureReason("");
+    setFailureComment("");
+    setFailureDisposition("OPEN_CRITICAL_NCR");
+  };
+
+  const resetReservationFeedbackState = () => {
+    setReservationState("idle");
+    setReservationError(null);
+    setReservationSuccess(null);
+  };
+
+  const resetReworkState = () => {
+    setReworkAction("");
+    setReworkActionState("idle");
+    setReworkActionError(null);
+    setReworkActionSuccess(null);
+  };
+
+  const resetHistoryAndNcrState = () => {
+    setOpenCriticalNcrs([]);
+    setOpenCriticalNcrsState("idle");
+    setOpenCriticalNcrsError(null);
+    setClosedCriticalNcrs([]);
+    setClosedCriticalNcrsState("idle");
+    setClosedCriticalNcrsError(null);
+    setQcRunHistory([]);
+    setQcRunHistoryState("idle");
+    setQcRunHistoryError(null);
+    setSelectedHistoryRunId(null);
+    setSelectedHistoryRunDetails(null);
+    setQcRunDetailsState("idle");
+    setQcRunDetailsError(null);
+  };
+
+  const resetSelectedItemWorkflowState = () => {
+    setLookupState("idle");
+    setLookupError(null);
+    resetRunOutcomeState();
+    resetReworkState();
+    resetReservationFeedbackState();
+    setSelectedItem(null);
+    setBarcodeValue("");
+  };
+
   useEffect(() => {
     localStorage.setItem(API_STORAGE_KEY, apiBaseUrl);
   }, [apiBaseUrl]);
@@ -673,30 +722,9 @@ export function QcStationPage() {
 
   useEffect(() => {
     setLookupError(null);
-    setSubmitState("idle");
-    setSubmitError(null);
-    setSubmitSuccess(null);
-    setCompletedRun(null);
-    setFailureReason("");
-    setFailureComment("");
-    setFailureDisposition("OPEN_CRITICAL_NCR");
-    setOpenCriticalNcrs([]);
-    setOpenCriticalNcrsState("idle");
-    setOpenCriticalNcrsError(null);
-    setClosedCriticalNcrs([]);
-    setClosedCriticalNcrsState("idle");
-    setClosedCriticalNcrsError(null);
-    setQcRunHistory([]);
-    setQcRunHistoryState("idle");
-    setQcRunHistoryError(null);
-    setSelectedHistoryRunId(null);
-    setSelectedHistoryRunDetails(null);
-    setQcRunDetailsState("idle");
-    setQcRunDetailsError(null);
-    setReworkAction("");
-    setReworkActionState("idle");
-    setReworkActionError(null);
-    setReworkActionSuccess(null);
+    resetRunOutcomeState();
+    resetHistoryAndNcrState();
+    resetReworkState();
   }, [authState, selectedChecklistCode, selectedItem?.barcode_value]);
 
   const handleManualLoginSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -844,20 +872,9 @@ export function QcStationPage() {
     setBarcodeValue(item.barcode_value);
     setLookupState("loaded");
     setLookupError(null);
-    setSubmitState("idle");
-    setSubmitError(null);
-    setSubmitSuccess(null);
-    setCompletedRun(null);
-    setFailureReason("");
-    setFailureComment("");
-    setFailureDisposition("OPEN_CRITICAL_NCR");
-    setReworkAction("");
-    setReworkActionState("idle");
-    setReworkActionError(null);
-    setReworkActionSuccess(null);
-    setReservationState("idle");
-    setReservationError(null);
-    setReservationSuccess(null);
+    resetRunOutcomeState();
+    resetReworkState();
+    resetReservationFeedbackState();
   };
 
   const handleLookupSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -1215,32 +1232,12 @@ export function QcStationPage() {
       setManualLoginName(authState.operatorLoginName);
     }
     setManualPassword("");
-    setBarcodeValue("");
     setRfidUidHash("");
-    setFailureReason("");
-    setFailureComment("");
-    setFailureDisposition("OPEN_CRITICAL_NCR");
-    setReworkAction("");
-    setReworkActionState("idle");
-    setReworkActionError(null);
-    setReworkActionSuccess(null);
-    setLookupState("idle");
-    setLookupError(null);
-    setSelectedItem(null);
+    resetSelectedItemWorkflowState();
     setWaitingItems([]);
     setWaitingItemsState("idle");
     setWaitingItemsError(null);
-    setReservationState("idle");
-    setReservationError(null);
-    setReservationSuccess(null);
-    setSubmitState("idle");
-    setSubmitError(null);
-    setSubmitSuccess(null);
-    setCompletedRun(null);
-    setReworkAction("");
-    setReworkActionState("idle");
-    setReworkActionError(null);
-    setReworkActionSuccess(null);
+    resetHistoryAndNcrState();
     setAuthState(null);
     setAuthMessage("Sesja stanowiskowa zostala wylogowana lokalnie.");
   };
@@ -1279,21 +1276,7 @@ export function QcStationPage() {
     });
     setManualLoginName(operatorLoginName);
     setSelectedWorkstationId(session.workstation_id);
-    setLookupState("idle");
-    setLookupError(null);
-    setSelectedItem(null);
-    setBarcodeValue("");
-    setSubmitState("idle");
-    setSubmitError(null);
-    setSubmitSuccess(null);
-    setCompletedRun(null);
-    setReworkAction("");
-    setReworkActionState("idle");
-    setReworkActionError(null);
-    setReworkActionSuccess(null);
-    setReservationState("idle");
-    setReservationError(null);
-    setReservationSuccess(null);
+    resetSelectedItemWorkflowState();
   };
 
   return (
@@ -1494,25 +1477,7 @@ export function QcStationPage() {
               reworkActionSuccess={reworkActionSuccess}
               onBarcodeValueChange={setBarcodeValue}
               onLookupSubmit={handleLookupSubmit}
-              onResetSelectedItem={() => {
-                setSelectedItem(null);
-                setLookupState("idle");
-                setLookupError(null);
-                setSubmitError(null);
-                setSubmitSuccess(null);
-                setCompletedRun(null);
-                setFailureReason("");
-                setFailureComment("");
-                setFailureDisposition("OPEN_CRITICAL_NCR");
-                setReworkAction("");
-                setReworkActionState("idle");
-                setReworkActionError(null);
-                setReworkActionSuccess(null);
-                setReservationState("idle");
-                setReservationError(null);
-                setReservationSuccess(null);
-                setBarcodeValue("");
-              }}
+              onResetSelectedItem={resetSelectedItemWorkflowState}
               onApplyWaitingItemsPreset={applyWaitingItemsPreset}
               onWaitingItemsFilterChange={setWaitingItemsFilter}
               onWaitingItemsReservationFilterChange={setWaitingItemsReservationFilter}
