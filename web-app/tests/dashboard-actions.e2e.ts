@@ -119,6 +119,84 @@ async function fulfillMappedComponentQualityRequests(
   return true;
 }
 
+async function fulfillDeviceStatusUpdateRequest(
+  requestPath: string,
+  requestMethod: string,
+  route: Route,
+  options: {
+    deviceSerialNumbers: string[];
+    expectedProductionStatus: string;
+    updatedAt: string;
+    onMatched: (deviceSerialNumber: string) => void;
+  },
+): Promise<boolean> {
+  const {
+    deviceSerialNumbers,
+    expectedProductionStatus,
+    updatedAt,
+    onMatched,
+  } = options;
+
+  if (requestMethod !== "PATCH") {
+    return false;
+  }
+
+  const matchedSerialNumber = deviceSerialNumbers.find(
+    (deviceSerialNumber) =>
+      requestPath === `/api/devices/${deviceSerialNumber}/status`,
+  );
+
+  if (!matchedSerialNumber) {
+    return false;
+  }
+
+  onMatched(matchedSerialNumber);
+
+  await fulfillJson(route, {
+    id: `DEV-${matchedSerialNumber}`,
+    device_serial_number: matchedSerialNumber,
+    device_type: "DEMO-OPS",
+    variant_code: "DEFAULT",
+    hardware_version: null,
+    firmware_version: null,
+    bootloader_version: null,
+    created_by: null,
+    production_status: expectedProductionStatus,
+    created_at: "2026-05-01T08:00:00Z",
+    updated_at: updatedAt,
+  });
+  return true;
+}
+
+async function fulfillNcrCloseRequest(
+  requestPath: string,
+  requestMethod: string,
+  route: Route,
+  options: {
+    ncrIds: string[];
+    responseBuilder: (ncrId: string) => unknown;
+    onMatched: (ncrId: string) => void;
+  },
+): Promise<boolean> {
+  const { ncrIds, responseBuilder, onMatched } = options;
+
+  if (requestMethod !== "PATCH") {
+    return false;
+  }
+
+  const matchedNcrId = ncrIds.find(
+    (ncrId) => requestPath === `/api/nonconformities/${ncrId}`,
+  );
+
+  if (!matchedNcrId) {
+    return false;
+  }
+
+  onMatched(matchedNcrId);
+  await fulfillJson(route, responseBuilder(matchedNcrId));
+  return true;
+}
+
 const shipmentQueuePayload = {
   total_devices: 1,
   ready_count: 1,
@@ -1003,30 +1081,20 @@ test("dashboard marks device ready for shipment from the details drawer", async 
       return;
     }
 
-    if (path === "/api/devices/SHIP-001/status" && request.method() === "PATCH") {
-      patchRequests += 1;
-      expect(request.postDataJSON()).toEqual({
-        production_status: "READY_FOR_SHIPMENT",
-      });
-      markedReady = true;
-
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          id: "DEV-001",
-          device_serial_number: "SHIP-001",
-          device_type: "DEMO-OPS",
-          variant_code: "DEFAULT",
-          hardware_version: null,
-          firmware_version: null,
-          bootloader_version: null,
-          created_by: null,
-          production_status: "READY_FOR_SHIPMENT",
-          created_at: "2026-05-01T08:00:00Z",
-          updated_at: "2026-05-01T10:15:00Z",
-        }),
-      });
+    if (
+      await fulfillDeviceStatusUpdateRequest(path, request.method(), route, {
+        deviceSerialNumbers: ["SHIP-001"],
+        expectedProductionStatus: "READY_FOR_SHIPMENT",
+        updatedAt: "2026-05-01T10:15:00Z",
+        onMatched: () => {
+          patchRequests += 1;
+          expect(request.postDataJSON()).toEqual({
+            production_status: "READY_FOR_SHIPMENT",
+          });
+          markedReady = true;
+        },
+      })
+    ) {
       return;
     }
 
@@ -1137,30 +1205,20 @@ test("dashboard marks ready device as shipped from the details drawer", async ({
       return;
     }
 
-    if (path === "/api/devices/SHIP-001/status" && request.method() === "PATCH") {
-      patchRequests += 1;
-      expect(request.postDataJSON()).toEqual({
-        production_status: "SHIPPED",
-      });
-      shipped = true;
-
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          id: "DEV-001",
-          device_serial_number: "SHIP-001",
-          device_type: "DEMO-OPS",
-          variant_code: "DEFAULT",
-          hardware_version: null,
-          firmware_version: null,
-          bootloader_version: null,
-          created_by: null,
-          production_status: "SHIPPED",
-          created_at: "2026-05-01T08:00:00Z",
-          updated_at: "2026-05-01T11:00:00Z",
-        }),
-      });
+    if (
+      await fulfillDeviceStatusUpdateRequest(path, request.method(), route, {
+        deviceSerialNumbers: ["SHIP-001"],
+        expectedProductionStatus: "SHIPPED",
+        updatedAt: "2026-05-01T11:00:00Z",
+        onMatched: () => {
+          patchRequests += 1;
+          expect(request.postDataJSON()).toEqual({
+            production_status: "SHIPPED",
+          });
+          shipped = true;
+        },
+      })
+    ) {
       return;
     }
 
