@@ -18,6 +18,21 @@ type ServiceSessionFixture = {
   created_at: string;
 };
 
+type ServiceSessionAuditEvent = {
+  id: string;
+  event_type: string;
+  entity_type: string;
+  entity_id: string;
+  work_session_id: string | null;
+  operator_id: string | null;
+  workstation_id: string | null;
+  machine_id: string | null;
+  result: string | null;
+  message: string;
+  payload: Record<string, unknown>;
+  created_at: string;
+};
+
 const baseServiceSession: ServiceSessionFixture = {
   session_id: "SVC-001",
   device_serial_number: "SVC-DEVICE-001",
@@ -36,10 +51,45 @@ const baseServiceSession: ServiceSessionFixture = {
   created_at: "2026-05-03T08:00:00Z",
 };
 
+const baseServiceSessionAuditEvent: ServiceSessionAuditEvent = {
+  id: "AUD-SVC-001",
+  event_type: "SERVICE_SESSION_PACKAGE_REUPLOADED",
+  entity_type: "SERVICE_SESSION",
+  entity_id: "SVC-SESSION-001",
+  work_session_id: null,
+  operator_id: "TECH-001",
+  workstation_id: null,
+  machine_id: null,
+  result: "UPLOADED",
+  message: "Service session package reuploaded",
+  payload: {
+    upload_count: 3,
+    package_hash: "hash-001",
+    upload_correlation_id: "CORR-001",
+    client_attempt_id: "ATT-001",
+    client_attempt_number: 3,
+    client_trigger_source: "DEFERRED_WORKER",
+  },
+  created_at: "2026-05-03T08:05:00Z",
+};
+
 export function buildServiceSession(
   overrides: Partial<ServiceSessionFixture> = {},
 ): ServiceSessionFixture {
   return { ...baseServiceSession, ...overrides };
+}
+
+export function buildServiceSessionAuditEvent(
+  overrides: Partial<ServiceSessionAuditEvent> = {},
+): ServiceSessionAuditEvent {
+  return {
+    ...baseServiceSessionAuditEvent,
+    ...overrides,
+    payload: {
+      ...baseServiceSessionAuditEvent.payload,
+      ...(overrides.payload ?? {}),
+    },
+  };
 }
 
 export async function fulfillJson(route: Route, body: unknown) {
