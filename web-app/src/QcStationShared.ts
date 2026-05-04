@@ -42,9 +42,21 @@ export type WaitingItemsReservationFilter =
   | "MINE"
   | "OTHER_RESERVED";
 export type WaitingItemsSort = "OLDEST" | "NEWEST";
+export type WaitingItemsPreset =
+  | "PRODUCED"
+  | "REWORK_REQUIRED"
+  | "UNRESERVED"
+  | "MINE"
+  | "OTHER_RESERVED"
+  | "RESET";
 export type QcRunHistoryFilter = "ALL" | "FAIL" | "PASS" | "POST_LATEST_REWORK";
 export type QcRunHistorySort = "NEWEST" | "OLDEST";
 export type ClosedCriticalNcrSort = "NEWEST" | "OLDEST";
+export type QcRunHistoryPreset =
+  | "LATEST_FAIL"
+  | "LATEST_PASS"
+  | "POST_LATEST_REWORK"
+  | "RESET";
 
 export interface QcReferenceArea {
   id: string;
@@ -61,6 +73,18 @@ export interface WaitingItemsReservationSummary {
   unreserved: number;
   mine: number;
   otherReserved: number;
+}
+
+export interface WaitingItemsPresetState {
+  filter: WaitingItemsFilter;
+  reservationFilter: WaitingItemsReservationFilter;
+  sort: WaitingItemsSort;
+}
+
+export interface QcRunHistoryPresetState {
+  filter: QcRunHistoryFilter;
+  sort: QcRunHistorySort;
+  closedCriticalNcrSort: ClosedCriticalNcrSort;
 }
 
 export function buildInitialStepDrafts(steps: QcStepRead[]): StepDraftMap {
@@ -490,6 +514,56 @@ export function summarizeWaitingItemsReservations(
   );
 }
 
+export function resolveWaitingItemsPreset(
+  preset: WaitingItemsPreset,
+): WaitingItemsPresetState {
+  if (preset === "PRODUCED") {
+    return {
+      filter: "PRODUCED",
+      reservationFilter: "ALL",
+      sort: "OLDEST",
+    };
+  }
+
+  if (preset === "REWORK_REQUIRED") {
+    return {
+      filter: "REWORK_REQUIRED",
+      reservationFilter: "ALL",
+      sort: "OLDEST",
+    };
+  }
+
+  if (preset === "UNRESERVED") {
+    return {
+      filter: "ALL",
+      reservationFilter: "UNRESERVED",
+      sort: "OLDEST",
+    };
+  }
+
+  if (preset === "MINE") {
+    return {
+      filter: "ALL",
+      reservationFilter: "MINE",
+      sort: "OLDEST",
+    };
+  }
+
+  if (preset === "OTHER_RESERVED") {
+    return {
+      filter: "ALL",
+      reservationFilter: "OTHER_RESERVED",
+      sort: "OLDEST",
+    };
+  }
+
+  return {
+    filter: "ALL",
+    reservationFilter: "ALL",
+    sort: "OLDEST",
+  };
+}
+
 export function isProductionItemReservedByOtherOperator(
   item: ProductionItemRead,
   operatorId: string,
@@ -543,6 +617,40 @@ export function sortClosedCriticalNcrs(
       ? right.ncr_id.localeCompare(left.ncr_id, "pl")
       : left.ncr_id.localeCompare(right.ncr_id, "pl");
   });
+}
+
+export function resolveQcRunHistoryPreset(
+  preset: QcRunHistoryPreset,
+): QcRunHistoryPresetState {
+  if (preset === "LATEST_FAIL") {
+    return {
+      filter: "FAIL",
+      sort: "NEWEST",
+      closedCriticalNcrSort: "NEWEST",
+    };
+  }
+
+  if (preset === "LATEST_PASS") {
+    return {
+      filter: "PASS",
+      sort: "NEWEST",
+      closedCriticalNcrSort: "NEWEST",
+    };
+  }
+
+  if (preset === "POST_LATEST_REWORK") {
+    return {
+      filter: "POST_LATEST_REWORK",
+      sort: "NEWEST",
+      closedCriticalNcrSort: "NEWEST",
+    };
+  }
+
+  return {
+    filter: "ALL",
+    sort: "NEWEST",
+    closedCriticalNcrSort: "NEWEST",
+  };
 }
 
 export function createClientQcRunId(): string {

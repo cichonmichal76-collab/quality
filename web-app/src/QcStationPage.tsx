@@ -46,17 +46,21 @@ import {
   normalizeStepEvaluationMode,
   prepareStepPayload,
   readStoredAuthState,
+  resolveQcRunHistoryPreset,
   resolveChecklistCodeForItem,
+  resolveWaitingItemsPreset,
   sortClosedCriticalNcrs,
   summarizeWaitingItemsReservations,
   type ClosedCriticalNcrSort,
   type QcRunHistoryFilter,
+  type QcRunHistoryPreset,
   type QcRunHistorySort,
   type QcStationAuthState,
   type StepDraft,
   type StepDraftMap,
   type StepPreview,
   type WaitingItemsFilter,
+  type WaitingItemsPreset,
   type WaitingItemsReservationFilter,
   type WaitingItemsSort,
 } from "./QcStationShared";
@@ -980,75 +984,18 @@ export function QcStationPage() {
     }
   };
 
-  const applyHistoryPreset = (preset: "LATEST_FAIL" | "LATEST_PASS" | "POST_LATEST_REWORK" | "RESET") => {
-    if (preset === "LATEST_FAIL") {
-      setQcRunHistoryFilter("FAIL");
-      setQcRunHistorySort("NEWEST");
-      return;
-    }
-    if (preset === "LATEST_PASS") {
-      setQcRunHistoryFilter("PASS");
-      setQcRunHistorySort("NEWEST");
-      return;
-    }
-    if (preset === "POST_LATEST_REWORK") {
-      setQcRunHistoryFilter("POST_LATEST_REWORK");
-      setQcRunHistorySort("NEWEST");
-      setClosedCriticalNcrSort("NEWEST");
-      return;
-    }
-    setQcRunHistoryFilter("ALL");
-    setQcRunHistorySort("NEWEST");
-    setClosedCriticalNcrSort("NEWEST");
+  const applyHistoryPreset = (preset: QcRunHistoryPreset) => {
+    const nextState = resolveQcRunHistoryPreset(preset);
+    setQcRunHistoryFilter(nextState.filter);
+    setQcRunHistorySort(nextState.sort);
+    setClosedCriticalNcrSort(nextState.closedCriticalNcrSort);
   };
 
-  const applyWaitingItemsPreset = (
-    preset:
-      | "PRODUCED"
-      | "REWORK_REQUIRED"
-      | "UNRESERVED"
-      | "MINE"
-      | "OTHER_RESERVED"
-      | "RESET",
-  ) => {
-    if (preset === "PRODUCED") {
-      setWaitingItemsFilter("PRODUCED");
-      setWaitingItemsReservationFilter("ALL");
-      setWaitingItemsSort("OLDEST");
-      return;
-    }
-
-    if (preset === "REWORK_REQUIRED") {
-      setWaitingItemsFilter("REWORK_REQUIRED");
-      setWaitingItemsReservationFilter("ALL");
-      setWaitingItemsSort("OLDEST");
-      return;
-    }
-
-    if (preset === "UNRESERVED") {
-      setWaitingItemsFilter("ALL");
-      setWaitingItemsReservationFilter("UNRESERVED");
-      setWaitingItemsSort("OLDEST");
-      return;
-    }
-
-    if (preset === "MINE") {
-      setWaitingItemsFilter("ALL");
-      setWaitingItemsReservationFilter("MINE");
-      setWaitingItemsSort("OLDEST");
-      return;
-    }
-
-    if (preset === "OTHER_RESERVED") {
-      setWaitingItemsFilter("ALL");
-      setWaitingItemsReservationFilter("OTHER_RESERVED");
-      setWaitingItemsSort("OLDEST");
-      return;
-    }
-
-    setWaitingItemsFilter("ALL");
-    setWaitingItemsReservationFilter("ALL");
-    setWaitingItemsSort("OLDEST");
+  const applyWaitingItemsPreset = (preset: WaitingItemsPreset) => {
+    const nextState = resolveWaitingItemsPreset(preset);
+    setWaitingItemsFilter(nextState.filter);
+    setWaitingItemsReservationFilter(nextState.reservationFilter);
+    setWaitingItemsSort(nextState.sort);
   };
 
   const handleReleaseForRework = async () => {
