@@ -1350,15 +1350,12 @@ test("dashboard records final test PASS from the details drawer", async ({
     const path = url.pathname;
 
     if (path === "/api/shipment-readiness") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(
-          finalTestRecorded
-            ? shipmentAfterFinalTestPassQueuePayload
-            : shipmentFinalTestQueuePayload,
-        ),
-      });
+      await fulfillJson(
+        route,
+        finalTestRecorded
+          ? shipmentAfterFinalTestPassQueuePayload
+          : shipmentFinalTestQueuePayload,
+      );
       return;
     }
 
@@ -1390,22 +1387,18 @@ test("dashboard records final test PASS from the details drawer", async ({
       expect(payload.test_run_id).toMatch(/^FT-WEB-TEST-001-/);
       finalTestRecorded = true;
 
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          id: "FT-ROW-001",
-          test_run_id: payload.test_run_id,
-          device_serial_number: "TEST-001",
-          operator_id: "OP-FT-001",
-          result: "PASS",
-          firmware_version: null,
-          bootloader_version: null,
-          report_path: null,
-          mcu_log_path: null,
-          work_session_id: "WS-FT-001",
-          created_at: "2026-05-01T09:10:00Z",
-        }),
+      await fulfillJson(route, {
+        id: "FT-ROW-001",
+        test_run_id: payload.test_run_id,
+        device_serial_number: "TEST-001",
+        operator_id: "OP-FT-001",
+        result: "PASS",
+        firmware_version: null,
+        bootloader_version: null,
+        report_path: null,
+        mcu_log_path: null,
+        work_session_id: "WS-FT-001",
+        created_at: "2026-05-01T09:10:00Z",
       });
       return;
     }
@@ -1446,15 +1439,12 @@ test("dashboard completes assembly from the details drawer", async ({
     const path = url.pathname;
 
     if (path === "/api/shipment-readiness") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(
-          assemblyCompleted
-            ? shipmentAssemblyAfterQueuePayload
-            : shipmentAssemblyQueuePayload,
-        ),
-      });
+      await fulfillJson(
+        route,
+        assemblyCompleted
+          ? shipmentAssemblyAfterQueuePayload
+          : shipmentAssemblyQueuePayload,
+      );
       return;
     }
 
@@ -1493,23 +1483,19 @@ test("dashboard completes assembly from the details drawer", async ({
       expect(payload.work_session_id).toBe("WS-PROD-001");
       assemblyCompleted = true;
 
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          id: "ASM-LINK-001",
-          parent_device_serial_number: "ASM-001",
-          child_item_serial_number: "FAN-777",
-          child_barcode_value: "BC-FAN-777",
-          component_type: "FAN_MODULE_V2",
-          installed_by: "OP-PROD-001",
-          installed_at: "2026-05-02T08:20:00Z",
-          workstation_id: "PR-ST-01",
-          scan_event_id: "SCAN-001",
-          bom_template_id: "BOM-01",
-          bom_version: "1.2",
-          status: "INSTALLED",
-        }),
+      await fulfillJson(route, {
+        id: "ASM-LINK-001",
+        parent_device_serial_number: "ASM-001",
+        child_item_serial_number: "FAN-777",
+        child_barcode_value: "BC-FAN-777",
+        component_type: "FAN_MODULE_V2",
+        installed_by: "OP-PROD-001",
+        installed_at: "2026-05-02T08:20:00Z",
+        workstation_id: "PR-ST-01",
+        scan_event_id: "SCAN-001",
+        bom_template_id: "BOM-01",
+        bom_version: "1.2",
+        status: "INSTALLED",
       });
       return;
     }
@@ -1559,24 +1545,17 @@ test("dashboard records component QC PASS from the details drawer", async ({
     const path = url.pathname;
 
     if (path === "/api/shipment-readiness") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(shipmentQueuePayload),
-      });
+      await fulfillJson(route, shipmentQueuePayload);
       return;
     }
 
     if (path === "/api/component-quality") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(
-          componentQcRecorded
-            ? componentActionAfterPassQueuePayload
-            : componentActionQueuePayload,
-        ),
-      });
+      await fulfillJson(
+        route,
+        componentQcRecorded
+          ? componentActionAfterPassQueuePayload
+          : componentActionQueuePayload,
+      );
       return;
     }
 
