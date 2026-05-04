@@ -10,8 +10,6 @@ import {
   listQcItemClosedCriticalNcrs,
   listQcItemOpenCriticalNcrs,
   listQcRunsForItem,
-  listQcWaitingItems,
-  listQcChecklistSteps,
   operatorLogin,
   releaseQcItemReservation,
   releaseQcItemForRework,
@@ -22,9 +20,10 @@ import { QcStationHistoryPanel } from "./QcStationHistoryPanel";
 import { QcStationLoginScreen } from "./QcStationLoginScreen";
 import { QcStationQueuePanel } from "./QcStationQueuePanel";
 import { QcStationRunPanel } from "./QcStationRunPanel";
+import { useQcStationChecklistSteps } from "./useQcStationChecklistSteps";
 import { useQcStationContext } from "./useQcStationContext";
+import { useQcStationWaitingItems } from "./useQcStationWaitingItems";
 import {
-  buildInitialStepDrafts,
   buildReservedByOtherOperatorMessage,
   buildStationOverlayAreas,
   buildStepPreviews,
@@ -135,10 +134,6 @@ export function QcStationPage() {
   const [lookupState, setLookupState] = useState<LoadState>("idle");
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<ProductionItemRead | null>(null);
-  const [waitingItemsState, setWaitingItemsState] = useState<LoadState>("idle");
-  const [waitingItemsError, setWaitingItemsError] = useState<string | null>(null);
-  const [waitingItems, setWaitingItems] = useState<ProductionItemRead[]>([]);
-  const [waitingItemsReloadKey, setWaitingItemsReloadKey] = useState(0);
   const [waitingItemsFilter, setWaitingItemsFilter] =
     useState<WaitingItemsFilter>("ALL");
   const [waitingItemsReservationFilter, setWaitingItemsReservationFilter] =
@@ -172,10 +167,6 @@ export function QcStationPage() {
   const [reworkActionState, setReworkActionState] = useState<LoadState>("idle");
   const [reworkActionError, setReworkActionError] = useState<string | null>(null);
   const [reworkActionSuccess, setReworkActionSuccess] = useState<string | null>(null);
-  const [stepsState, setStepsState] = useState<LoadState>("idle");
-  const [stepsError, setStepsError] = useState<string | null>(null);
-  const [steps, setSteps] = useState<QcStepRead[]>([]);
-  const [stepDrafts, setStepDrafts] = useState<StepDraftMap>({});
   const [failureReason, setFailureReason] = useState("");
   const [failureComment, setFailureComment] = useState("");
   const [failureDisposition, setFailureDisposition] = useState<
@@ -185,6 +176,10 @@ export function QcStationPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
   const [completedRun, setCompletedRun] = useState<QcRunRead | null>(null);
+  const { stepsState, stepsError, steps, stepDrafts, setStepDrafts } =
+    useQcStationChecklistSteps(apiBaseUrl, selectedChecklistCode, !!authState);
+  const { waitingItemsState, waitingItemsError, waitingItems, reloadWaitingItems } =
+    useQcStationWaitingItems(apiBaseUrl, !!authState);
   const stepPreviews = buildStepPreviews(steps, stepDrafts);
   const referenceOverlayAreas = buildStationOverlayAreas(steps);
   const predictedRunResult = deriveDraftRunResult(steps, stepDrafts);
@@ -301,97 +296,6 @@ export function QcStationPage() {
       setAuthError("Zapisane stanowisko nie jest juz aktywne. Zaloguj sie ponownie.");
     }
   }, [activeWorkstations, authState, operators]);
-
-  useEffect(() => {
-    const trimmedApiBaseUrl = apiBaseUrl.trim();
-    if (!trimmedApiBaseUrl || !selectedChecklistCode || !authState) {
-      setSteps([]);
-      setStepDrafts({});
-      setStepsState("idle");
-      setStepsError(null);
-      return;
-    }
-
-    const controller = new AbortController();
-    let isCurrentRequest = true;
-    setStepsState("loading");
-    setStepsError(null);
-
-    listQcChecklistSteps(trimmedApiBaseUrl, selectedChecklistCode, controller.signal)
-      .then((stepRows) => {
-        if (!isCurrentRequest) {
-          return;
-        }
-
-        setSteps(stepRows);
-        setStepDrafts(buildInitialStepDrafts(stepRows));
-        setStepsState("loaded");
-      })
-      .catch((error: unknown) => {
-        if (!isCurrentRequest || controller.signal.aborted) {
-          return;
-        }
-
-        setSteps([]);
-        setStepDrafts({});
-        setStepsState("error");
-        setStepsError(
-          getErrorMessage(error, "Nie udalo sie zaladowac krokow checklisty."),
-        );
-      });
-
-    return () => {
-      isCurrentRequest = false;
-      controller.abort();
-    };
-  }, [apiBaseUrl, authState, selectedChecklistCode]);
-
-  useEffect(() => {
-    const trimmedApiBaseUrl = apiBaseUrl.trim();
-    if (!trimmedApiBaseUrl || !authState) {
-      setWaitingItems([]);
-      setWaitingItemsState("idle");
-      setWaitingItemsError(null);
-      return;
-    }
-
-    const controller = new AbortController();
-    let isCurrentRequest = true;
-    setWaitingItemsState("loading");
-    setWaitingItemsError(null);
-
-    listQcWaitingItems(
-      trimmedApiBaseUrl,
-      {
-        limit: 25,
-      },
-      controller.signal,
-    )
-      .then((items) => {
-        if (!isCurrentRequest) {
-          return;
-        }
-
-        setWaitingItems(items);
-        setWaitingItemsState("loaded");
-      })
-      .catch((error: unknown) => {
-        if (!isCurrentRequest || controller.signal.aborted) {
-          return;
-        }
-
-        setWaitingItems([]);
-        setWaitingItemsState("error");
-        setWaitingItemsError(
-          getErrorMessage(error, "Nie udalo sie pobrac kolejki komponentow oczekujacych na QC."),
-        );
-      });
-
-    return () => {
-      isCurrentRequest = false;
-      controller.abort();
-    };
-  }, [apiBaseUrl, authState, waitingItemsReloadKey]);
 
   useEffect(() => {
     const trimmedApiBaseUrl = apiBaseUrl.trim();
@@ -799,7 +703,7 @@ export function QcStationPage() {
         operator_id: authState.operatorId,
       });
       setSelectedItem(reservedItem);
-      setWaitingItemsReloadKey((currentValue) => currentValue + 1);
+      reloadWaitingItems();
       setReservationState("loaded");
       setReservationSuccess(
         `Detal ${reservedItem.item_serial_number} zostal zarezerwowany na stanowisku ${authState.workstationName}.`,
@@ -832,7 +736,7 @@ export function QcStationPage() {
         },
       );
       setSelectedItem(releasedItem);
-      setWaitingItemsReloadKey((currentValue) => currentValue + 1);
+      reloadWaitingItems();
       setReservationState("loaded");
       setReservationSuccess(`Zwolniono rezerwacje detalu ${releasedItem.item_serial_number}.`);
     } catch (error) {
@@ -901,7 +805,7 @@ export function QcStationPage() {
         },
       );
       setSelectedItem(refreshedItem);
-      setWaitingItemsReloadKey((currentValue) => currentValue + 1);
+      reloadWaitingItems();
       setOpenCriticalNcrs([]);
       setReworkActionState("loaded");
       setReworkActionSuccess(
@@ -1019,7 +923,7 @@ export function QcStationPage() {
               operator_id: authState.operatorId,
             });
       setSelectedItem(reservedItem);
-      setWaitingItemsReloadKey((currentValue) => currentValue + 1);
+      reloadWaitingItems();
 
       const runId = createClientQcRunId();
       await createQcRun(trimmedApiBaseUrl, {
@@ -1053,7 +957,7 @@ export function QcStationPage() {
       );
 
       setSelectedItem(refreshedItem);
-      setWaitingItemsReloadKey((currentValue) => currentValue + 1);
+      reloadWaitingItems();
       setCompletedRun(completed);
       setSubmitState("loaded");
       setSubmitSuccess(
@@ -1076,9 +980,6 @@ export function QcStationPage() {
     setManualPassword("");
     setRfidUidHash("");
     resetSelectedItemWorkflowState();
-    setWaitingItems([]);
-    setWaitingItemsState("idle");
-    setWaitingItemsError(null);
     resetHistoryAndNcrState();
     setAuthState(null);
     setAuthMessage("Sesja stanowiskowa zostala wylogowana lokalnie.");
