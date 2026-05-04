@@ -1184,30 +1184,15 @@ test("dashboard records final test PASS from the details drawer", async ({
       return;
     }
 
-    if (path === "/api/devices/TEST-001/shipment-readiness") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(
-          finalTestRecorded
-            ? shipmentAfterFinalTestPassDetailsPayload
-            : shipmentFinalTestDetailsPayload,
-        ),
-      });
-      return;
-    }
-
-    if (path === "/api/devices/TEST-001/component-quality") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(componentFinalTestDetailsPayload),
-      });
-      return;
-    }
-
     if (
-      await fulfillEmptyShipmentGateHistoryRequest(path, route, ["TEST-001"])
+      await fulfillShipmentDeviceDetailRequests(path, route, {
+        deviceSerialNumber: "TEST-001",
+        shipmentReadiness: finalTestRecorded
+          ? shipmentAfterFinalTestPassDetailsPayload
+          : shipmentFinalTestDetailsPayload,
+        componentQuality: componentFinalTestDetailsPayload,
+        shipmentGateHistory: [],
+      })
     ) {
       return;
     }
@@ -1295,34 +1280,17 @@ test("dashboard completes assembly from the details drawer", async ({
       return;
     }
 
-    if (path === "/api/devices/ASM-001/shipment-readiness") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(
-          assemblyCompleted
-            ? shipmentAssemblyAfterDetailsPayload
-            : shipmentAssemblyDetailsPayload,
-        ),
-      });
-      return;
-    }
-
-    if (path === "/api/devices/ASM-001/component-quality") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(
-          assemblyCompleted
-            ? componentAssemblyAfterDetailsPayload
-            : componentAssemblyDetailsPayload,
-        ),
-      });
-      return;
-    }
-
     if (
-      await fulfillEmptyShipmentGateHistoryRequest(path, route, ["ASM-001"])
+      await fulfillShipmentDeviceDetailRequests(path, route, {
+        deviceSerialNumber: "ASM-001",
+        shipmentReadiness: assemblyCompleted
+          ? shipmentAssemblyAfterDetailsPayload
+          : shipmentAssemblyDetailsPayload,
+        componentQuality: assemblyCompleted
+          ? componentAssemblyAfterDetailsPayload
+          : componentAssemblyDetailsPayload,
+        shipmentGateHistory: [],
+      })
     ) {
       return;
     }
@@ -1434,34 +1402,17 @@ test("dashboard records component QC PASS from the details drawer", async ({
       return;
     }
 
-    if (path === "/api/devices/COMP-001/shipment-readiness") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(
-          componentQcRecorded
-            ? componentActionAfterPassShipmentDetailsPayload
-            : componentActionShipmentDetailsPayload,
-        ),
-      });
-      return;
-    }
-
-    if (path === "/api/devices/COMP-001/component-quality") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(
-          componentQcRecorded
-            ? componentActionAfterPassComponentDetailsPayload
-            : componentActionComponentDetailsPayload,
-        ),
-      });
-      return;
-    }
-
     if (
-      await fulfillEmptyShipmentGateHistoryRequest(path, route, ["COMP-001"])
+      await fulfillShipmentDeviceDetailRequests(path, route, {
+        deviceSerialNumber: "COMP-001",
+        shipmentReadiness: componentQcRecorded
+          ? componentActionAfterPassShipmentDetailsPayload
+          : componentActionShipmentDetailsPayload,
+        componentQuality: componentQcRecorded
+          ? componentActionAfterPassComponentDetailsPayload
+          : componentActionComponentDetailsPayload,
+        shipmentGateHistory: [],
+      })
     ) {
       return;
     }
