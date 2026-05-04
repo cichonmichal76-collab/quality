@@ -226,3 +226,44 @@ export async function fulfillDeviceDetailsRequests(
 
   return false;
 }
+
+export async function fulfillServiceSessionDetailRequests(
+  path: string,
+  route: Route,
+  options: {
+    sessionId: string;
+    queueSessions?: ServiceSessionFixture[];
+    queueFilters?: Record<string, unknown>;
+    sessionDetails?: unknown;
+    auditEvents?: unknown;
+  },
+) {
+  const { sessionId, queueSessions, queueFilters, sessionDetails, auditEvents } =
+    options;
+  const url = new URL(route.request().url());
+
+  if (queueSessions && path === "/api/service-sessions/queue") {
+    await fulfillServiceSessionsQueue(route, queueSessions, queueFilters);
+    return true;
+  }
+
+  if (
+    sessionDetails !== undefined &&
+    path === `/api/service-sessions/${sessionId}`
+  ) {
+    await fulfillJson(route, sessionDetails);
+    return true;
+  }
+
+  if (
+    auditEvents !== undefined &&
+    path === "/api/audit-events" &&
+    url.searchParams.get("entity_type") === "SERVICE_SESSION" &&
+    url.searchParams.get("entity_id") === sessionId
+  ) {
+    await fulfillJson(route, auditEvents);
+    return true;
+  }
+
+  return false;
+}

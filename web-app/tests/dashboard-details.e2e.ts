@@ -4,6 +4,7 @@ import {
   buildServiceSessionAuditEvent,
   fulfillDeviceDetailsRequests,
   fulfillJson,
+  fulfillServiceSessionDetailRequests,
   fulfillServiceSessionsQueue,
 } from "./dashboard.e2e-helpers";
 
@@ -396,37 +397,24 @@ test("dashboard opens commissioning session details from service queue", async (
       return;
     }
 
-    if (url.pathname === "/api/service-sessions/queue") {
-      await fulfillServiceSessionsQueue(route, [
-        {
+    if (
+      await fulfillServiceSessionDetailRequests(url.pathname, route, {
+        sessionId: "SVC-SESSION-001",
+        queueSessions: [
+          {
+            id: "svc-row-001",
+            ...serviceSession,
+            package_path: "/tmp/SVC-SESSION-001.zip",
+            package_hash: "hash-001",
+          },
+        ],
+        sessionDetails: {
           id: "svc-row-001",
           ...serviceSession,
           package_path: "/tmp/SVC-SESSION-001.zip",
           package_hash: "hash-001",
         },
-      ]);
-      return;
-    }
-
-    if (url.pathname === "/api/service-sessions/SVC-SESSION-001") {
-      await fulfillJson(route, {
-        id: "svc-row-001",
-        ...serviceSession,
-        package_path: "/tmp/SVC-SESSION-001.zip",
-        package_hash: "hash-001",
-      });
-      return;
-    }
-
-    if (
-      url.pathname === "/api/audit-events" &&
-      url.searchParams.get("entity_type") === "SERVICE_SESSION" &&
-      url.searchParams.get("entity_id") === "SVC-SESSION-001"
-    ) {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([
+        auditEvents: [
           {
             id: "AUD-SVC-001",
             event_type: "SERVICE_SESSION_PACKAGE_REUPLOADED",
@@ -448,8 +436,9 @@ test("dashboard opens commissioning session details from service queue", async (
             },
             created_at: "2026-05-03T08:05:00Z",
           },
-        ]),
-      });
+        ],
+      })
+    ) {
       return;
     }
 
@@ -549,47 +538,39 @@ test("dashboard opens full commissioning session page and returns to queue conte
       return;
     }
 
-    if (url.pathname === "/api/service-sessions/queue") {
-      await fulfillServiceSessionsQueue(route, [
-        {
+    if (
+      await fulfillServiceSessionDetailRequests(url.pathname, route, {
+        sessionId: "SVC-SESSION-001",
+        queueSessions: [
+          {
+            id: "svc-row-001",
+            ...serviceSession,
+            package_path: "/tmp/SVC-SESSION-001.zip",
+            package_hash: "hash-001",
+          },
+        ],
+        sessionDetails: {
           id: "svc-row-001",
           ...serviceSession,
           package_path: "/tmp/SVC-SESSION-001.zip",
           package_hash: "hash-001",
         },
-      ]);
-      return;
-    }
-
-    if (url.pathname === "/api/service-sessions/SVC-SESSION-001") {
-      await fulfillJson(route, {
-        id: "svc-row-001",
-        ...serviceSession,
-        package_path: "/tmp/SVC-SESSION-001.zip",
-        package_hash: "hash-001",
-      });
-      return;
-    }
-
-    if (
-      url.pathname === "/api/audit-events" &&
-      url.searchParams.get("entity_type") === "SERVICE_SESSION" &&
-      url.searchParams.get("entity_id") === "SVC-SESSION-001"
+        auditEvents: [
+          buildServiceSessionAuditEvent({
+            entity_id: "SVC-SESSION-001",
+            operator_id: "TECH-001",
+            payload: {
+              upload_count: 3,
+              package_hash: "hash-001",
+              upload_correlation_id: "CORR-001",
+              client_attempt_id: "ATT-001",
+              client_attempt_number: 3,
+              client_trigger_source: "DEFERRED_WORKER",
+            },
+          }),
+        ],
+      })
     ) {
-      await fulfillJson(route, [
-        buildServiceSessionAuditEvent({
-          entity_id: "SVC-SESSION-001",
-          operator_id: "TECH-001",
-          payload: {
-            upload_count: 3,
-            package_hash: "hash-001",
-            upload_correlation_id: "CORR-001",
-            client_attempt_id: "ATT-001",
-            client_attempt_number: 3,
-            client_trigger_source: "DEFERRED_WORKER",
-          },
-        }),
-      ]);
       return;
     }
 
@@ -713,47 +694,39 @@ test("dashboard jumps from commissioning sync audit to a filtered service queue"
       return;
     }
 
-    if (url.pathname === "/api/service-sessions/queue") {
-      await fulfillServiceSessionsQueue(route, [
-        {
+    if (
+      await fulfillServiceSessionDetailRequests(url.pathname, route, {
+        sessionId: "SVC-SESSION-001",
+        queueSessions: [
+          {
+            id: "svc-row-001",
+            ...serviceSession,
+            package_path: "/tmp/SVC-SESSION-001.zip",
+            package_hash: "hash-001",
+          },
+        ],
+        sessionDetails: {
           id: "svc-row-001",
           ...serviceSession,
           package_path: "/tmp/SVC-SESSION-001.zip",
           package_hash: "hash-001",
         },
-      ]);
-      return;
-    }
-
-    if (url.pathname === "/api/service-sessions/SVC-SESSION-001") {
-      await fulfillJson(route, {
-        id: "svc-row-001",
-        ...serviceSession,
-        package_path: "/tmp/SVC-SESSION-001.zip",
-        package_hash: "hash-001",
-      });
-      return;
-    }
-
-    if (
-      url.pathname === "/api/audit-events" &&
-      url.searchParams.get("entity_type") === "SERVICE_SESSION" &&
-      url.searchParams.get("entity_id") === "SVC-SESSION-001"
+        auditEvents: [
+          buildServiceSessionAuditEvent({
+            entity_id: "SVC-SESSION-001",
+            operator_id: "TECH-001",
+            payload: {
+              upload_count: 3,
+              package_hash: "hash-001",
+              upload_correlation_id: "CORR-001",
+              client_attempt_id: "ATT-001",
+              client_attempt_number: 3,
+              client_trigger_source: "DEFERRED_WORKER",
+            },
+          }),
+        ],
+      })
     ) {
-      await fulfillJson(route, [
-        buildServiceSessionAuditEvent({
-          entity_id: "SVC-SESSION-001",
-          operator_id: "TECH-001",
-          payload: {
-            upload_count: 3,
-            package_hash: "hash-001",
-            upload_correlation_id: "CORR-001",
-            client_attempt_id: "ATT-001",
-            client_attempt_number: 3,
-            client_trigger_source: "DEFERRED_WORKER",
-          },
-        }),
-      ]);
       return;
     }
 
@@ -882,35 +855,31 @@ test("dashboard jumps from commissioning sync audit to reuploaded service queue"
       return;
     }
 
-    if (url.pathname === "/api/service-sessions/SVC-SESSION-001") {
-      await fulfillJson(route, {
-        id: "svc-row-001",
-        ...serviceSession,
-        package_path: "/tmp/SVC-SESSION-001.zip",
-        package_hash: "hash-001",
-      });
-      return;
-    }
-
     if (
-      url.pathname === "/api/audit-events" &&
-      url.searchParams.get("entity_type") === "SERVICE_SESSION" &&
-      url.searchParams.get("entity_id") === "SVC-SESSION-001"
+      await fulfillServiceSessionDetailRequests(url.pathname, route, {
+        sessionId: "SVC-SESSION-001",
+        sessionDetails: {
+          id: "svc-row-001",
+          ...serviceSession,
+          package_path: "/tmp/SVC-SESSION-001.zip",
+          package_hash: "hash-001",
+        },
+        auditEvents: [
+          buildServiceSessionAuditEvent({
+            entity_id: "SVC-SESSION-001",
+            operator_id: "TECH-001",
+            payload: {
+              upload_count: 3,
+              package_hash: "hash-001",
+              upload_correlation_id: "CORR-001",
+              client_attempt_id: "ATT-001",
+              client_attempt_number: 3,
+              client_trigger_source: "DEFERRED_WORKER",
+            },
+          }),
+        ],
+      })
     ) {
-      await fulfillJson(route, [
-        buildServiceSessionAuditEvent({
-          entity_id: "SVC-SESSION-001",
-          operator_id: "TECH-001",
-          payload: {
-            upload_count: 3,
-            package_hash: "hash-001",
-            upload_correlation_id: "CORR-001",
-            client_attempt_id: "ATT-001",
-            client_attempt_number: 3,
-            client_trigger_source: "DEFERRED_WORKER",
-          },
-        }),
-      ]);
       return;
     }
 
