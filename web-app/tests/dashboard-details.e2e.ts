@@ -1197,6 +1197,22 @@ test("dashboard jumps from shipment gate history to a filtered shipment queue", 
 test("dashboard shows commissioning sessions in device details", async ({
   page,
 }) => {
+  const serviceSession = buildServiceSession({
+    session_id: "SVC-9001",
+    device_serial_number: "SVC-001",
+    technician_id: "TECH-001",
+    result: "PASS",
+    firmware_version: "1.2.4",
+    bootloader_version: "0.9.8",
+    upload_count: 2,
+    client_attempt_id: "SYNC-UPLOAD-0002",
+    client_attempt_number: 2,
+    client_trigger_source: "AUTO_NETWORK",
+    upload_correlation_id: "SRV-UP-SVC001",
+    uploaded_at: "2026-05-01T10:30:00Z",
+    created_at: "2026-05-01T10:00:00Z",
+  });
+
   await page.route("**/api/**", async (route) => {
     const url = new URL(route.request().url());
 
@@ -1313,32 +1329,14 @@ test("dashboard shows commissioning sessions in device details", async ({
     }
 
     if (url.pathname === "/api/service-sessions") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([
-          {
-            id: "svc-db-1",
-            session_id: "SVC-9001",
-            device_serial_number: "SVC-001",
-            device_type: "DEMO-SVC",
-            technician_id: "TECH-001",
-            result: "PASS",
-            firmware_version: "1.2.4",
-            bootloader_version: "0.9.8",
-            package_path: "/tmp/service-package.zip",
-            package_hash: "hash-svc-001",
-            upload_status: "UPLOADED",
-            upload_count: 2,
-            client_attempt_id: "SYNC-UPLOAD-0002",
-            client_attempt_number: 2,
-            client_trigger_source: "AUTO_NETWORK",
-            upload_correlation_id: "SRV-UP-SVC001",
-            uploaded_at: "2026-05-01T10:30:00Z",
-            created_at: "2026-05-01T10:00:00Z",
-          },
-        ]),
-      });
+      await fulfillJson(route, [
+        {
+          id: "svc-db-1",
+          ...serviceSession,
+          package_path: "/tmp/service-package.zip",
+          package_hash: "hash-svc-001",
+        },
+      ]);
       return;
     }
 
