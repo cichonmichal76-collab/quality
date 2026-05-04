@@ -1667,6 +1667,36 @@ test("dashboard closes device critical NCRs from the details drawer", async ({
     }
 
     if (
+      await fulfillNcrCloseRequest(path, request.method(), route, {
+        ncrIds: ["NCR-DEVICE-001"],
+        onMatched: () => {
+          patchRequests += 1;
+          expect(request.postDataJSON()).toEqual({
+            status: "CLOSED",
+            corrective_action: "Zamknięte z panelu operacyjnego dla SHIP-001.",
+          });
+          deviceNcrClosed = true;
+        },
+        responseBuilder: () => ({
+          id: "NCR-ROW-001",
+          ncr_id: "NCR-DEVICE-001",
+          device_serial_number: "SHIP-001",
+          component_serial_number: null,
+          process_stage: "FINAL_TEST",
+          description: "Otwarte NCR urzÄ…dzenia",
+          severity: "CRITICAL",
+          detected_by: "OP-10",
+          corrective_action: "ZamkniÄ™te z panelu operacyjnego dla SHIP-001.",
+          status: "CLOSED",
+          detected_at: "2026-05-01T09:10:00Z",
+          closed_at: "2026-05-01T09:45:00Z",
+        }),
+      })
+    ) {
+      return;
+    }
+
+    if (
       path === "/api/nonconformities/NCR-DEVICE-001" &&
       request.method() === "PATCH"
     ) {
@@ -1948,6 +1978,34 @@ test("dashboard closes selected shipment device critical NCRs from bulk actions"
           ? refreshedBulkShipmentNcrQueuePayload
           : bulkShipmentNcrQueuePayload,
       )
+    ) {
+      return;
+    }
+
+    if (
+      await fulfillNcrCloseRequest(path, request.method(), route, {
+        ncrIds: ["NCR-DEVICE-BULK-001", "NCR-DEVICE-BULK-002"],
+        onMatched: (ncrId) => {
+          patchRequests += 1;
+          const serialNumber =
+            ncrId === "NCR-DEVICE-BULK-001" ? "BULK-NCR-001" : "BULK-NCR-002";
+          expect(request.postDataJSON()).toEqual({
+            status: "CLOSED",
+            corrective_action: `Zamknięte zbiorczo z kolejki wysyłki dla ${serialNumber}.`,
+          });
+          ncrClosed = true;
+        },
+        responseBuilder: (ncrId) => {
+          const serialNumber =
+            ncrId === "NCR-DEVICE-BULK-001" ? "BULK-NCR-001" : "BULK-NCR-002";
+          return {
+            id: `ROW-${ncrId}`,
+            ncr_id: ncrId,
+            status: "CLOSED",
+            corrective_action: `ZamkniÄ™te zbiorczo z kolejki wysyĹ‚ki dla ${serialNumber}.`,
+          };
+        },
+      })
     ) {
       return;
     }
@@ -2378,6 +2436,34 @@ test("dashboard closes selected component critical NCRs from bulk actions", asyn
         route,
         componentBulkDetailsBySerial,
       ))
+    ) {
+      return;
+    }
+
+    if (
+      await fulfillNcrCloseRequest(path, request.method(), route, {
+        ncrIds: ["NCR-COMP-BULK-001", "NCR-COMP-BULK-002"],
+        onMatched: (ncrId) => {
+          patchRequests += 1;
+          const serialNumber =
+            ncrId === "NCR-COMP-BULK-001" ? "COMP-NCR-001" : "COMP-NCR-002";
+          expect(request.postDataJSON()).toEqual({
+            status: "CLOSED",
+            corrective_action: `Zamknięte zbiorczo z kolejki komponentów dla ${serialNumber}.`,
+          });
+          ncrClosed = true;
+        },
+        responseBuilder: (ncrId) => {
+          const serialNumber =
+            ncrId === "NCR-COMP-BULK-001" ? "COMP-NCR-001" : "COMP-NCR-002";
+          return {
+            id: `ROW-${ncrId}`,
+            ncr_id: ncrId,
+            status: "CLOSED",
+            corrective_action: `ZamkniÄ™te zbiorczo z kolejki komponentĂłw dla ${serialNumber}.`,
+          };
+        },
+      })
     ) {
       return;
     }
