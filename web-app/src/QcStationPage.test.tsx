@@ -2,6 +2,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 import { App } from "./App";
+import {
+  buildDemoChecklist,
+  buildDemoOperator,
+  buildDemoSession,
+  buildDemoWorkstation,
+  jsonResponse,
+} from "./QcStationTestUtils";
 
 afterEach(() => {
   cleanup();
@@ -18,49 +25,16 @@ describe("QcStationPage", () => {
       const method = init?.method ?? "GET";
 
       if (url.endsWith("/api/operators")) {
-        return jsonResponse([
-          {
-            id: "OP-ROW-001",
-            operator_id: "QCOP-DEMO-LOCAL",
-            full_name: "Demo QC Inspector",
-            role: "QUALITY_INSPECTOR",
-            login_name: "qc-demo-local",
-            rfid_uid_hash: "QCRFID-DEMO-LOCAL",
-            is_active: true,
-            created_at: "2026-05-03T08:00:00Z",
-          },
-        ]);
+        return jsonResponse([buildDemoOperator()]);
       }
 
       if (url.endsWith("/api/workstations")) {
-        return jsonResponse([
-          {
-            id: "WS-ROW-001",
-            workstation_id: "QCWS-DEMO-LOCAL",
-            name: "QC Station Demo",
-            area: "QA",
-            station_type: "QC",
-            is_active: true,
-          },
-        ]);
+        return jsonResponse([buildDemoWorkstation()]);
       }
 
       if (url.endsWith("/api/qc-checklists")) {
         return jsonResponse([
-          {
-            id: "CHK-001",
-            checklist_code: "QC-STATION-DEMO-LOCAL",
-            name: "Kontrola wentylatora",
-            process_stage: "COMPONENT_QC",
-            version: "1.0",
-            device_type: null,
-            variant_code: null,
-            component_type: null,
-            skip_component_qc: false,
-            reference_image_file_id: "FILE-REF-001",
-            is_active: true,
-            created_at: "2026-05-03T08:00:00Z",
-          },
+          buildDemoChecklist({ reference_image_file_id: "FILE-REF-001" }),
         ]);
       }
 
@@ -87,16 +61,7 @@ describe("QcStationPage", () => {
       }
 
       if (url.endsWith("/api/auth/operator-login") && method === "POST") {
-        return jsonResponse({
-          id: "SESSION-ROW-001",
-          work_session_id: "WS-QA-001",
-          operator_id: "QCOP-DEMO-LOCAL",
-          workstation_id: "QCWS-DEMO-LOCAL",
-          machine_id: null,
-          status: "ACTIVE",
-          started_at: "2026-05-03T08:10:00Z",
-          ended_at: null,
-        });
+        return jsonResponse(buildDemoSession());
       }
 
       if (url.endsWith("/api/qc-checklists/QC-STATION-DEMO-LOCAL/steps")) {
@@ -338,50 +303,15 @@ describe("QcStationPage", () => {
       const method = init?.method ?? "GET";
 
       if (url.endsWith("/api/operators")) {
-        return jsonResponse([
-          {
-            id: "OP-ROW-001",
-            operator_id: "QCOP-DEMO-LOCAL",
-            full_name: "Demo QC Inspector",
-            role: "QUALITY_INSPECTOR",
-            login_name: "qc-demo-local",
-            rfid_uid_hash: "QCRFID-DEMO-LOCAL",
-            is_active: true,
-            created_at: "2026-05-03T08:00:00Z",
-          },
-        ]);
+        return jsonResponse([buildDemoOperator()]);
       }
 
       if (url.endsWith("/api/workstations")) {
-        return jsonResponse([
-          {
-            id: "WS-ROW-001",
-            workstation_id: "QCWS-DEMO-LOCAL",
-            name: "QC Station Demo",
-            area: "QA",
-            station_type: "QC",
-            is_active: true,
-          },
-        ]);
+        return jsonResponse([buildDemoWorkstation()]);
       }
 
       if (url.endsWith("/api/qc-checklists")) {
-        return jsonResponse([
-          {
-            id: "CHK-001",
-            checklist_code: "QC-STATION-DEMO-LOCAL",
-            name: "Kontrola wentylatora",
-            process_stage: "COMPONENT_QC",
-            version: "1.0",
-            device_type: null,
-            variant_code: null,
-            component_type: null,
-            skip_component_qc: false,
-            reference_image_file_id: null,
-            is_active: true,
-            created_at: "2026-05-03T08:00:00Z",
-          },
-        ]);
+        return jsonResponse([buildDemoChecklist()]);
       }
 
       if (url.includes("/api/qc-waiting-items")) {
@@ -389,16 +319,13 @@ describe("QcStationPage", () => {
       }
 
       if (url.endsWith("/api/auth/rfid-login") && method === "POST") {
-        return jsonResponse({
-          id: "SESSION-ROW-002",
-          work_session_id: "WS-QA-002",
-          operator_id: "QCOP-DEMO-LOCAL",
-          workstation_id: "QCWS-DEMO-LOCAL",
-          machine_id: null,
-          status: "ACTIVE",
-          started_at: "2026-05-03T08:15:00Z",
-          ended_at: null,
-        });
+        return jsonResponse(
+          buildDemoSession({
+            id: "SESSION-ROW-002",
+            work_session_id: "WS-QA-002",
+            started_at: "2026-05-03T08:15:00Z",
+          }),
+        );
       }
 
       if (url.endsWith("/api/qc-checklists/QC-STATION-DEMO-LOCAL/steps")) {
@@ -443,49 +370,16 @@ describe("QcStationPage", () => {
       const method = init?.method ?? "GET";
 
       if (url.endsWith("/api/operators")) {
-        return jsonResponse([
-          {
-            id: "OP-ROW-001",
-            operator_id: "QCOP-DEMO-LOCAL",
-            full_name: "Demo QC Inspector",
-            role: "QUALITY_INSPECTOR",
-            login_name: "qc-demo-local",
-            rfid_uid_hash: "QCRFID-DEMO-LOCAL",
-            is_active: true,
-            created_at: "2026-05-03T08:00:00Z",
-          },
-        ]);
+        return jsonResponse([buildDemoOperator()]);
       }
 
       if (url.endsWith("/api/workstations")) {
-        return jsonResponse([
-          {
-            id: "WS-ROW-001",
-            workstation_id: "QCWS-DEMO-LOCAL",
-            name: "QC Station Demo",
-            area: "QA",
-            station_type: "QC",
-            is_active: true,
-          },
-        ]);
+        return jsonResponse([buildDemoWorkstation()]);
       }
 
       if (url.endsWith("/api/qc-checklists")) {
         return jsonResponse([
-          {
-            id: "CHK-001",
-            checklist_code: "QC-STATION-DEMO-LOCAL",
-            name: "Kontrola wentylatora",
-            process_stage: "COMPONENT_QC",
-            version: "1.0",
-            device_type: null,
-            variant_code: null,
-            component_type: "FAN_MODULE",
-            skip_component_qc: false,
-            reference_image_file_id: null,
-            is_active: true,
-            created_at: "2026-05-03T08:00:00Z",
-          },
+          buildDemoChecklist({ component_type: "FAN_MODULE" }),
         ]);
       }
 
@@ -555,16 +449,7 @@ describe("QcStationPage", () => {
       }
 
       if (url.endsWith("/api/auth/operator-login") && method === "POST") {
-        return jsonResponse({
-          id: "SESSION-ROW-001",
-          work_session_id: "WS-QA-001",
-          operator_id: "QCOP-DEMO-LOCAL",
-          workstation_id: "QCWS-DEMO-LOCAL",
-          machine_id: null,
-          status: "ACTIVE",
-          started_at: "2026-05-03T08:10:00Z",
-          ended_at: null,
-        });
+        return jsonResponse(buildDemoSession());
       }
 
       if (url.endsWith("/api/qc-checklists/QC-STATION-DEMO-LOCAL/steps")) {
@@ -695,63 +580,26 @@ describe("QcStationPage", () => {
       const method = init?.method ?? "GET";
 
       if (url.endsWith("/api/operators")) {
-        return jsonResponse([
-          {
-            id: "OP-ROW-001",
-            operator_id: "QCOP-DEMO-LOCAL",
-            full_name: "Demo QC Inspector",
-            role: "QUALITY_INSPECTOR",
-            login_name: "qc-demo-local",
-            rfid_uid_hash: "QCRFID-DEMO-LOCAL",
-            is_active: true,
-            created_at: "2026-05-03T08:00:00Z",
-          },
-        ]);
+        return jsonResponse([buildDemoOperator()]);
       }
 
       if (url.endsWith("/api/workstations")) {
-        return jsonResponse([
-          {
-            id: "WS-ROW-001",
-            workstation_id: "QCWS-DEMO-LOCAL",
-            name: "QC Station Demo",
-            area: "QA",
-            station_type: "QC",
-            is_active: true,
-          },
-        ]);
+        return jsonResponse([buildDemoWorkstation()]);
       }
 
       if (url.endsWith("/api/qc-checklists")) {
         return jsonResponse([
-          {
+          buildDemoChecklist({
             id: "CHK-GENERIC",
             checklist_code: "QC-GENERIC",
             name: "Checklista ogolna",
-            process_stage: "COMPONENT_QC",
-            version: "1.0",
-            device_type: null,
-            variant_code: null,
-            component_type: null,
-            skip_component_qc: false,
-            reference_image_file_id: null,
-            is_active: true,
-            created_at: "2026-05-03T08:00:00Z",
-          },
-          {
+          }),
+          buildDemoChecklist({
             id: "CHK-SEAL",
             checklist_code: "QC-SEAL",
             name: "Kontrola silikonu",
-            process_stage: "COMPONENT_QC",
-            version: "1.0",
-            device_type: null,
-            variant_code: null,
             component_type: "SILICONE_PACK",
-            skip_component_qc: false,
-            reference_image_file_id: null,
-            is_active: true,
-            created_at: "2026-05-03T08:00:00Z",
-          },
+          }),
         ]);
       }
 
@@ -985,49 +833,21 @@ describe("QcStationPage", () => {
       const method = init?.method ?? "GET";
 
       if (url.endsWith("/api/operators")) {
-        return jsonResponse([
-          {
-            id: "OP-ROW-001",
-            operator_id: "QCOP-DEMO-LOCAL",
-            full_name: "Demo QC Inspector",
-            role: "QUALITY_INSPECTOR",
-            login_name: "qc-demo-local",
-            rfid_uid_hash: "QCRFID-DEMO-LOCAL",
-            is_active: true,
-            created_at: "2026-05-03T08:00:00Z",
-          },
-        ]);
+        return jsonResponse([buildDemoOperator()]);
       }
 
       if (url.endsWith("/api/workstations")) {
-        return jsonResponse([
-          {
-            id: "WS-ROW-001",
-            workstation_id: "QCWS-DEMO-LOCAL",
-            name: "QC Station Demo",
-            area: "QA",
-            station_type: "QC",
-            is_active: true,
-          },
-        ]);
+        return jsonResponse([buildDemoWorkstation()]);
       }
 
       if (url.endsWith("/api/qc-checklists")) {
         return jsonResponse([
-          {
+          buildDemoChecklist({
             id: "CHK-REWORK",
             checklist_code: "QC-REWORK",
             name: "Kontrola po reworku",
-            process_stage: "COMPONENT_QC",
-            version: "1.0",
-            device_type: null,
-            variant_code: null,
             component_type: "FAN_MODULE",
-            skip_component_qc: false,
-            reference_image_file_id: null,
-            is_active: true,
-            created_at: "2026-05-03T08:00:00Z",
-          },
+          }),
         ]);
       }
 
@@ -1054,16 +874,12 @@ describe("QcStationPage", () => {
       }
 
       if (url.endsWith("/api/auth/operator-login") && method === "POST") {
-        return jsonResponse({
-          id: "SESSION-ROW-REWORK",
-          work_session_id: "WS-QA-REWORK",
-          operator_id: "QCOP-DEMO-LOCAL",
-          workstation_id: "QCWS-DEMO-LOCAL",
-          machine_id: null,
-          status: "ACTIVE",
-          started_at: "2026-05-03T08:10:00Z",
-          ended_at: null,
-        });
+        return jsonResponse(
+          buildDemoSession({
+            id: "SESSION-ROW-REWORK",
+            work_session_id: "WS-QA-REWORK",
+          }),
+        );
       }
 
       if (url.endsWith("/api/qc-checklists/QC-REWORK/steps")) {
@@ -1323,49 +1139,21 @@ describe("QcStationPage", () => {
       const method = init?.method ?? "GET";
 
       if (url.endsWith("/api/operators")) {
-        return jsonResponse([
-          {
-            id: "OP-ROW-001",
-            operator_id: "QCOP-DEMO-LOCAL",
-            full_name: "Demo QC Inspector",
-            role: "QUALITY_INSPECTOR",
-            login_name: "qc-demo-local",
-            rfid_uid_hash: "QCRFID-DEMO-LOCAL",
-            is_active: true,
-            created_at: "2026-05-03T08:00:00Z",
-          },
-        ]);
+        return jsonResponse([buildDemoOperator()]);
       }
 
       if (url.endsWith("/api/workstations")) {
-        return jsonResponse([
-          {
-            id: "WS-ROW-001",
-            workstation_id: "QCWS-DEMO-LOCAL",
-            name: "QC Station Demo",
-            area: "QA",
-            station_type: "QC",
-            is_active: true,
-          },
-        ]);
+        return jsonResponse([buildDemoWorkstation()]);
       }
 
       if (url.endsWith("/api/qc-checklists")) {
         return jsonResponse([
-          {
+          buildDemoChecklist({
             id: "CHK-HISTORY",
             checklist_code: "QC-HISTORY",
             name: "Kontrola historii",
-            process_stage: "COMPONENT_QC",
-            version: "1.0",
-            device_type: null,
-            variant_code: null,
             component_type: "FAN_MODULE",
-            skip_component_qc: false,
-            reference_image_file_id: null,
-            is_active: true,
-            created_at: "2026-05-03T08:00:00Z",
-          },
+          }),
         ]);
       }
 
@@ -1412,16 +1200,13 @@ describe("QcStationPage", () => {
       }
 
       if (url.endsWith("/api/auth/operator-login") && method === "POST") {
-        return jsonResponse({
-          id: "ROW-SESSION-HISTORY",
-          work_session_id: "WS-QA-HISTORY",
-          operator_id: "QCOP-DEMO-LOCAL",
-          workstation_id: "QCWS-DEMO-LOCAL",
-          machine_id: null,
-          status: "ACTIVE",
-          started_at: "2026-05-03T08:00:00Z",
-          ended_at: null,
-        });
+        return jsonResponse(
+          buildDemoSession({
+            id: "ROW-SESSION-HISTORY",
+            work_session_id: "WS-QA-HISTORY",
+            started_at: "2026-05-03T08:00:00Z",
+          }),
+        );
       }
 
       if (url.endsWith("/api/qc-checklists/QC-HISTORY/steps")) {
@@ -1660,12 +1445,3 @@ describe("QcStationPage", () => {
     });
   });
 });
-
-function jsonResponse(payload: unknown): Response {
-  return {
-    ok: true,
-    status: 200,
-    statusText: "OK",
-    json: async () => payload,
-  } as Response;
-}
