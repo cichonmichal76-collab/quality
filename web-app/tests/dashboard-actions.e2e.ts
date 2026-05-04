@@ -197,6 +197,95 @@ async function fulfillNcrCloseRequest(
   return true;
 }
 
+async function fulfillQcRunCreateRequest(
+  requestPath: string,
+  requestMethod: string,
+  route: Route,
+  options: {
+    onMatched: (payload: {
+      run_id: string;
+      device_serial_number: string;
+      item_serial_number: string;
+      barcode_value: string;
+      process_stage: string;
+      work_session_id: string;
+    }) => void;
+  },
+): Promise<boolean> {
+  if (requestPath !== "/api/qc-runs" || requestMethod !== "POST") {
+    return false;
+  }
+
+  const payload = route.request().postDataJSON() as {
+    run_id: string;
+    device_serial_number: string;
+    item_serial_number: string;
+    barcode_value: string;
+    process_stage: string;
+    work_session_id: string;
+  };
+
+  options.onMatched(payload);
+  await fulfillJson(route, {
+    id: `QC-ROW-${payload.item_serial_number}`,
+    run_id: payload.run_id,
+    device_serial_number: payload.device_serial_number,
+    item_serial_number: payload.item_serial_number,
+    barcode_value: payload.barcode_value,
+    checklist_id: null,
+    process_stage: payload.process_stage,
+    operator_id: "OP-QA-001",
+    work_session_id: payload.work_session_id,
+    status: "IN_PROGRESS",
+    result: null,
+    started_at: "2026-05-01T09:20:00Z",
+    ended_at: null,
+  });
+  return true;
+}
+
+async function fulfillQcRunCompleteRequest(
+  requestPath: string,
+  requestMethod: string,
+  route: Route,
+  options: {
+    runIds?: string[];
+    onMatched: (runId: string) => void;
+  },
+): Promise<boolean> {
+  if (requestMethod !== "POST") {
+    return false;
+  }
+
+  const match = requestPath.match(/^\/api\/qc-runs\/([^/]+)\/complete$/);
+  if (!match) {
+    return false;
+  }
+
+  const runId = match[1];
+  if (options.runIds && !options.runIds.includes(runId)) {
+    return false;
+  }
+
+  options.onMatched(runId);
+  await fulfillJson(route, {
+    id: `QC-ROW-${runId}`,
+    run_id: runId,
+    device_serial_number: "COMP-QC-001",
+    item_serial_number: "FAN-001",
+    barcode_value: "BC-FAN-001",
+    checklist_id: null,
+    process_stage: "COMPONENT_QC",
+    operator_id: "OP-QA-001",
+    work_session_id: "WS-QA-001",
+    status: "COMPLETED",
+    result: "PASS",
+    started_at: "2026-05-01T09:20:00Z",
+    ended_at: "2026-05-01T09:21:00Z",
+  });
+  return true;
+}
+
 const shipmentQueuePayload = {
   total_devices: 1,
   ready_count: 1,
@@ -1506,75 +1595,34 @@ test("dashboard records component QC PASS from the details drawer", async ({
       return;
     }
 
-    if (path === "/api/qc-runs" && request.method() === "POST") {
-      createRequests += 1;
-      const payload = request.postDataJSON() as {
-        run_id: string;
-        device_serial_number: string;
-        item_serial_number: string;
-        barcode_value: string;
-        process_stage: string;
-        work_session_id: string;
-      };
-      qcRunId = payload.run_id;
+    if (
+      await fulfillQcRunCreateRequest(path, request.method(), route, {
+        onMatched: (payload) => {
+          createRequests += 1;
+          qcRunId = payload.run_id;
 
-      expect(payload.device_serial_number).toBe("COMP-001");
-      expect(payload.item_serial_number).toBe("FAN-001");
-      expect(payload.barcode_value).toBe("BC-FAN-001");
-      expect(payload.process_stage).toBe("COMPONENT_QC");
-      expect(payload.work_session_id).toBe("WS-QA-001");
-      expect(payload.run_id).toMatch(/^QC-WEB-FAN-001-/);
-
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          id: "QC-ROW-001",
-          run_id: payload.run_id,
-          device_serial_number: "COMP-001",
-          item_serial_number: "FAN-001",
-          barcode_value: "BC-FAN-001",
-          checklist_id: null,
-          process_stage: "COMPONENT_QC",
-          operator_id: "OP-QA-001",
-          work_session_id: "WS-QA-001",
-          status: "IN_PROGRESS",
-          result: null,
-          started_at: "2026-05-01T09:20:00Z",
-          ended_at: null,
-        }),
-      });
+          expect(payload.device_serial_number).toBe("COMP-001");
+          expect(payload.item_serial_number).toBe("FAN-001");
+          expect(payload.barcode_value).toBe("BC-FAN-001");
+          expect(payload.process_stage).toBe("COMPONENT_QC");
+          expect(payload.work_session_id).toBe("WS-QA-001");
+          expect(payload.run_id).toMatch(/^QC-WEB-FAN-001-/);
+        },
+      })
+    ) {
       return;
     }
 
     if (
-      qcRunId &&
-      path === `/api/qc-runs/${qcRunId}/complete` &&
-      request.method() === "POST"
+      await fulfillQcRunCompleteRequest(path, request.method(), route, {
+        runIds: qcRunId ? [qcRunId] : [],
+        onMatched: () => {
+          completeRequests += 1;
+          componentQcRecorded = true;
+          expect(request.postData()).toBe("result=PASS");
+        },
+      })
     ) {
-      completeRequests += 1;
-      componentQcRecorded = true;
-      expect(request.postData()).toBe("result=PASS");
-
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          id: "QC-ROW-001",
-          run_id: qcRunId,
-          device_serial_number: "COMP-001",
-          item_serial_number: "FAN-001",
-          barcode_value: "BC-FAN-001",
-          checklist_id: null,
-          process_stage: "COMPONENT_QC",
-          operator_id: "OP-QA-001",
-          work_session_id: "WS-QA-001",
-          status: "COMPLETED",
-          result: "PASS",
-          started_at: "2026-05-01T09:20:00Z",
-          ended_at: "2026-05-01T09:21:00Z",
-        }),
-      });
       return;
     }
 
@@ -2136,73 +2184,35 @@ test("dashboard records bulk component QC PASS from selected queue rows", async 
       return;
     }
 
-    if (path === "/api/qc-runs" && request.method() === "POST") {
-      createRequests += 1;
-      const payload = request.postDataJSON() as {
-        run_id: string;
-        device_serial_number: string;
-        item_serial_number: string;
-        barcode_value: string;
-        process_stage: string;
-        work_session_id: string;
-      };
-      qcRunIds.push(payload.run_id);
+    if (
+      await fulfillQcRunCreateRequest(path, request.method(), route, {
+        onMatched: (payload) => {
+          createRequests += 1;
+          qcRunIds.push(payload.run_id);
 
-      expect(payload.work_session_id).toBe("WS-QA-001");
-      expect(payload.process_stage).toBe("COMPONENT_QC");
-      expect(["COMP-QC-001", "COMP-QC-002"]).toContain(
-        payload.device_serial_number,
-      );
-      expect(["FAN-001", "FAN-002"]).toContain(payload.item_serial_number);
-      expect(["BC-FAN-001", "BC-FAN-002"]).toContain(payload.barcode_value);
-
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          id: `QC-ROW-${payload.item_serial_number}`,
-          run_id: payload.run_id,
-          device_serial_number: payload.device_serial_number,
-          item_serial_number: payload.item_serial_number,
-          barcode_value: payload.barcode_value,
-          checklist_id: null,
-          process_stage: "COMPONENT_QC",
-          operator_id: "OP-QA-001",
-          work_session_id: "WS-QA-001",
-          status: "IN_PROGRESS",
-          result: null,
-          started_at: "2026-05-01T09:20:00Z",
-          ended_at: null,
-        }),
-      });
+          expect(payload.work_session_id).toBe("WS-QA-001");
+          expect(payload.process_stage).toBe("COMPONENT_QC");
+          expect(["COMP-QC-001", "COMP-QC-002"]).toContain(
+            payload.device_serial_number,
+          );
+          expect(["FAN-001", "FAN-002"]).toContain(payload.item_serial_number);
+          expect(["BC-FAN-001", "BC-FAN-002"]).toContain(payload.barcode_value);
+        },
+      })
+    ) {
       return;
     }
 
-    const completeMatch = path.match(/^\/api\/qc-runs\/([^/]+)\/complete$/);
-    if (completeMatch && request.method() === "POST") {
-      completeRequests += 1;
-      componentQcRecorded = true;
-      expect(request.postData()).toBe("result=PASS");
-
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          id: `QC-ROW-${completeMatch[1]}`,
-          run_id: completeMatch[1],
-          device_serial_number: "COMP-QC-001",
-          item_serial_number: "FAN-001",
-          barcode_value: "BC-FAN-001",
-          checklist_id: null,
-          process_stage: "COMPONENT_QC",
-          operator_id: "OP-QA-001",
-          work_session_id: "WS-QA-001",
-          status: "COMPLETED",
-          result: "PASS",
-          started_at: "2026-05-01T09:20:00Z",
-          ended_at: "2026-05-01T09:21:00Z",
-        }),
-      });
+    if (
+      await fulfillQcRunCompleteRequest(path, request.method(), route, {
+        runIds: qcRunIds,
+        onMatched: () => {
+          completeRequests += 1;
+          componentQcRecorded = true;
+          expect(request.postData()).toBe("result=PASS");
+        },
+      })
+    ) {
       return;
     }
 
