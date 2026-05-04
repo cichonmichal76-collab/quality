@@ -35,6 +35,24 @@ async function fulfillOptionalActionContextRequests(
   return false;
 }
 
+async function fulfillEmptyShipmentGateHistoryRequest(
+  path: string,
+  route: Route,
+  deviceSerialNumbers: string[],
+): Promise<boolean> {
+  if (
+    deviceSerialNumbers.some(
+      (deviceSerialNumber) =>
+        path === `/api/devices/${deviceSerialNumber}/shipment-gate-history`,
+    )
+  ) {
+    await fulfillJson(route, []);
+    return true;
+  }
+
+  return false;
+}
+
 const shipmentQueuePayload = {
   total_devices: 1,
   ready_count: 1,
@@ -1189,12 +1207,9 @@ test("dashboard records final test PASS from the details drawer", async ({
       return;
     }
 
-    if (path === "/api/devices/TEST-001/shipment-gate-history") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([]),
-      });
+    if (
+      await fulfillEmptyShipmentGateHistoryRequest(path, route, ["TEST-001"])
+    ) {
       return;
     }
 
@@ -1307,12 +1322,9 @@ test("dashboard completes assembly from the details drawer", async ({
       return;
     }
 
-    if (path === "/api/devices/ASM-001/shipment-gate-history") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([]),
-      });
+    if (
+      await fulfillEmptyShipmentGateHistoryRequest(path, route, ["ASM-001"])
+    ) {
       return;
     }
 
@@ -1449,12 +1461,9 @@ test("dashboard records component QC PASS from the details drawer", async ({
       return;
     }
 
-    if (path === "/api/devices/COMP-001/shipment-gate-history") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([]),
-      });
+    if (
+      await fulfillEmptyShipmentGateHistoryRequest(path, route, ["COMP-001"])
+    ) {
       return;
     }
 
@@ -1600,12 +1609,9 @@ test("dashboard closes device critical NCRs from the details drawer", async ({
       return;
     }
 
-    if (path === "/api/devices/SHIP-001/shipment-gate-history") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([]),
-      });
+    if (
+      await fulfillEmptyShipmentGateHistoryRequest(path, route, ["SHIP-001"])
+    ) {
       return;
     }
 
