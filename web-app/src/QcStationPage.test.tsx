@@ -10,6 +10,7 @@ import {
   buildDemoSession,
   buildDemoStep,
   buildDemoWorkstation,
+  createFetchMock,
   jsonResponse,
 } from "./QcStationTestUtils";
 
@@ -23,34 +24,31 @@ afterEach(() => {
 describe("QcStationPage", () => {
   it("po logowaniu haslem pozwala wykonac kontrole QC", async () => {
     let barcodeLookupCount = 0;
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      const method = init?.method ?? "GET";
-
-      if (url.endsWith("/api/operators")) {
-        return jsonResponse([buildDemoOperator()]);
-      }
-
-      if (url.endsWith("/api/workstations")) {
-        return jsonResponse([buildDemoWorkstation()]);
-      }
-
-      if (url.endsWith("/api/qc-checklists")) {
-        return jsonResponse([
-          buildDemoChecklist({ reference_image_file_id: "FILE-REF-001" }),
-        ]);
-      }
-
-      if (url.includes("/api/qc-waiting-items")) {
-        return jsonResponse([buildDemoItem()]);
-      }
-
-      if (url.endsWith("/api/auth/operator-login") && method === "POST") {
-        return jsonResponse(buildDemoSession());
-      }
-
-      if (url.endsWith("/api/qc-checklists/QC-STATION-DEMO-LOCAL/steps")) {
-        return jsonResponse([
+    const fetchMock = createFetchMock([
+      {
+        matcher: "/api/operators",
+        response: [buildDemoOperator()],
+      },
+      {
+        matcher: "/api/workstations",
+        response: [buildDemoWorkstation()],
+      },
+      {
+        matcher: "/api/qc-checklists",
+        response: [buildDemoChecklist({ reference_image_file_id: "FILE-REF-001" })],
+      },
+      {
+        matcher: (url) => url.includes("/api/qc-waiting-items"),
+        response: [buildDemoItem()],
+      },
+      {
+        matcher: "/api/auth/operator-login",
+        method: "POST",
+        response: buildDemoSession(),
+      },
+      {
+        matcher: "/api/qc-checklists/QC-STATION-DEMO-LOCAL/steps",
+        response: [
           buildDemoStep({
             id: "STEP-001",
             checklist_id: "CHK-001",
@@ -84,74 +82,72 @@ describe("QcStationPage", () => {
             region_height: 18,
             expected_value: "A2-70",
           }),
-        ]);
-      }
-
-      if (url.endsWith("/api/production-items/by-barcode/QCBC-DEMO-LOCAL")) {
-        barcodeLookupCount += 1;
-        return jsonResponse(
-          buildDemoItem({
+        ],
+      },
+      {
+        matcher: "/api/production-items/by-barcode/QCBC-DEMO-LOCAL",
+        response: () => {
+          barcodeLookupCount += 1;
+          return buildDemoItem({
             current_status: barcodeLookupCount > 1 ? "QC_PASSED" : "PRODUCED",
-          }),
-        );
-      }
-
-      if (url.endsWith("/api/qc-items/QCITEM-DEMO-LOCAL/reserve") && method === "POST") {
-        return jsonResponse(
-          buildDemoItem({
-            qc_reserved_by_operator_id: "QCOP-DEMO-LOCAL",
-            qc_reserved_by_workstation_id: "QCWS-DEMO-LOCAL",
-            qc_reserved_at: "2026-05-03T08:10:30Z",
-          }),
-        );
-      }
-
-      if (url.endsWith("/api/qc-runs") && method === "POST") {
-        return jsonResponse(buildDemoRun());
-      }
-
-      if (url.endsWith("/steps/STEP-001/result") && method === "POST") {
-        return jsonResponse({
+          });
+        },
+      },
+      {
+        matcher: "/api/qc-items/QCITEM-DEMO-LOCAL/reserve",
+        method: "POST",
+        response: buildDemoItem({
+          qc_reserved_by_operator_id: "QCOP-DEMO-LOCAL",
+          qc_reserved_by_workstation_id: "QCWS-DEMO-LOCAL",
+          qc_reserved_at: "2026-05-03T08:10:30Z",
+        }),
+      },
+      {
+        matcher: "/api/qc-runs",
+        method: "POST",
+        response: buildDemoRun(),
+      },
+      {
+        matcher: /\/steps\/STEP-001\/result$/,
+        method: "POST",
+        response: {
           id: "STEP-RESULT-001",
           qc_run_id: "QC-WEB-STATIC",
           step_id: "STEP-001",
           status: "PASS",
           measurement_value: 25.1,
           comment: "Pomiar OK",
-        });
-      }
-
-      if (url.endsWith("/steps/STEP-002/result") && method === "POST") {
-        return jsonResponse({
+        },
+      },
+      {
+        matcher: /\/steps\/STEP-002\/result$/,
+        method: "POST",
+        response: {
           id: "STEP-RESULT-002",
           qc_run_id: "QC-WEB-STATIC",
           step_id: "STEP-002",
           status: "PASS",
           observed_value: "A2-70",
           comment: "Etykieta OK",
-        });
-      }
-
-      if (url.endsWith("/complete") && method === "POST") {
-        return jsonResponse(
-          buildDemoRun({
-            status: "COMPLETED",
-            result: "PASS",
-            ended_at: "2026-05-03T08:12:00Z",
-          }),
-        );
-      }
-
-      if (
-        url.includes("/open-critical-ncrs") ||
-        url.includes("/closed-critical-ncrs") ||
-        url.includes("/runs?limit=10")
-      ) {
-        return jsonResponse([]);
-      }
-
-      throw new Error(`Unexpected request: ${method} ${url}`);
-    });
+        },
+      },
+      {
+        matcher: "/complete",
+        method: "POST",
+        response: buildDemoRun({
+          status: "COMPLETED",
+          result: "PASS",
+          ended_at: "2026-05-03T08:12:00Z",
+        }),
+      },
+      {
+        matcher: (url) =>
+          url.includes("/open-critical-ncrs") ||
+          url.includes("/closed-critical-ncrs") ||
+          url.includes("/runs?limit=10"),
+        response: [],
+      },
+    ]);
 
     vi.stubGlobal("fetch", fetchMock);
     window.history.replaceState(null, "", "/qc-station");
