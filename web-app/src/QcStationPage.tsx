@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { QcStationHistoryPanel } from "./QcStationHistoryPanel";
 import { QcStationLoginScreen } from "./QcStationLoginScreen";
@@ -8,6 +8,7 @@ import { useQcStationAuth } from "./useQcStationAuth";
 import { useQcStationChecklistSteps } from "./useQcStationChecklistSteps";
 import { useQcStationContext } from "./useQcStationContext";
 import { useQcStationHistory } from "./useQcStationHistory";
+import { useQcStationUiState } from "./useQcStationUiState";
 import { useQcStationWaitingItems } from "./useQcStationWaitingItems";
 import { useQcStationWorkflow } from "./useQcStationWorkflow";
 import {
@@ -15,26 +16,12 @@ import {
   buildStepPreviews,
   createDefaultStepDraft,
   deriveDraftRunResult,
-  filterAndSortQcRunHistory,
-  filterAndSortWaitingItems,
   formatChecklistLabel,
   formatTolerance,
   formatWaitingItemReservationLabel,
   formatWorkstationLabel,
   isProductionItemReservedByOtherOperator,
   normalizeStepEvaluationMode,
-  resolveQcRunHistoryPreset,
-  resolveWaitingItemsPreset,
-  sortClosedCriticalNcrs,
-  summarizeWaitingItemsReservations,
-  type ClosedCriticalNcrSort,
-  type QcRunHistoryFilter,
-  type QcRunHistoryPreset,
-  type QcRunHistorySort,
-  type WaitingItemsFilter,
-  type WaitingItemsPreset,
-  type WaitingItemsReservationFilter,
-  type WaitingItemsSort,
 } from "./QcStationShared";
 import { labelForCode } from "./dashboard";
 const QC_FAILURE_REASON_OPTIONS = [
@@ -82,18 +69,6 @@ export function QcStationPage() {
     selectedChecklist,
     selectedWorkstation,
   } = useQcStationContext();
-  const [waitingItemsFilter, setWaitingItemsFilter] =
-    useState<WaitingItemsFilter>("ALL");
-  const [waitingItemsReservationFilter, setWaitingItemsReservationFilter] =
-    useState<WaitingItemsReservationFilter>("ALL");
-  const [waitingItemsSort, setWaitingItemsSort] =
-    useState<WaitingItemsSort>("OLDEST");
-  const [qcRunHistoryFilter, setQcRunHistoryFilter] =
-    useState<QcRunHistoryFilter>("ALL");
-  const [qcRunHistorySort, setQcRunHistorySort] =
-    useState<QcRunHistorySort>("NEWEST");
-  const [closedCriticalNcrSort, setClosedCriticalNcrSort] =
-    useState<ClosedCriticalNcrSort>("NEWEST");
   const { stepsState, stepsError, steps, stepDrafts, setStepDrafts } =
     useQcStationChecklistSteps(apiBaseUrl, selectedChecklistCode, !!authState);
   const { waitingItemsState, waitingItemsError, waitingItems, reloadWaitingItems } =
@@ -188,27 +163,33 @@ export function QcStationPage() {
     !!authState &&
     !!selectedItem &&
     selectedItem.qc_reserved_by_operator_id === authState.operatorId;
-  const filteredWaitingItems = filterAndSortWaitingItems(
-    waitingItems,
+  const {
     waitingItemsFilter,
+    setWaitingItemsFilter,
     waitingItemsReservationFilter,
+    setWaitingItemsReservationFilter,
     waitingItemsSort,
-    authState?.operatorId ?? null,
-  );
-  const waitingItemsReservationSummary = summarizeWaitingItemsReservations(
+    setWaitingItemsSort,
+    qcRunHistoryFilter,
+    setQcRunHistoryFilter,
+    qcRunHistorySort,
+    setQcRunHistorySort,
+    closedCriticalNcrSort,
+    setClosedCriticalNcrSort,
+    filteredWaitingItems,
+    waitingItemsReservationSummary,
+    filteredQcRunHistory,
+    sortedClosedCriticalNcrs,
+    applyHistoryPreset,
+    applyWaitingItemsPreset,
+  } = useQcStationUiState({
     waitingItems,
-    authState?.operatorId ?? null,
-  );
-  const filteredQcRunHistory = filterAndSortQcRunHistory(
     qcRunHistory,
     closedCriticalNcrs,
-    qcRunHistoryFilter,
-    qcRunHistorySort,
-  );
-  const sortedClosedCriticalNcrs = sortClosedCriticalNcrs(
-    closedCriticalNcrs,
-    closedCriticalNcrSort,
-  );
+    authOperatorId: authState?.operatorId ?? null,
+    selectedHistoryRunId,
+    setSelectedHistoryRunId,
+  });
 
   const resetHistoryAndNcrState = () => {
     resetHistoryState();
@@ -246,36 +227,6 @@ export function QcStationPage() {
     onResetSelectedItemWorkflowState: resetSelectedItemWorkflowState,
     onResetHistoryAndNcrState: resetHistoryAndNcrState,
   });
-
-  useEffect(() => {
-    if (filteredQcRunHistory.length === 0) {
-      if (selectedHistoryRunId !== null) {
-        setSelectedHistoryRunId(null);
-      }
-      return;
-    }
-
-    const hasSelectedRun = filteredQcRunHistory.some(
-      (run) => run.run_id === selectedHistoryRunId,
-    );
-    if (!hasSelectedRun) {
-      setSelectedHistoryRunId(filteredQcRunHistory[0]?.run_id ?? null);
-    }
-  }, [filteredQcRunHistory, selectedHistoryRunId]);
-
-  const applyHistoryPreset = (preset: QcRunHistoryPreset) => {
-    const nextState = resolveQcRunHistoryPreset(preset);
-    setQcRunHistoryFilter(nextState.filter);
-    setQcRunHistorySort(nextState.sort);
-    setClosedCriticalNcrSort(nextState.closedCriticalNcrSort);
-  };
-
-  const applyWaitingItemsPreset = (preset: WaitingItemsPreset) => {
-    const nextState = resolveWaitingItemsPreset(preset);
-    setWaitingItemsFilter(nextState.filter);
-    setWaitingItemsReservationFilter(nextState.reservationFilter);
-    setWaitingItemsSort(nextState.sort);
-  };
 
   return (
     <main className="app-shell qc-station-shell">
