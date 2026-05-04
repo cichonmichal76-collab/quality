@@ -1,4 +1,12 @@
 import { expect, test } from "@playwright/test";
+import {
+  buildQcDemoChecklist,
+  buildQcDemoItem,
+  buildQcDemoOperator,
+  buildQcDemoSession,
+  buildQcDemoWorkstation,
+  fulfillJson,
+} from "./qc-station.e2e-helpers";
 
 test("qc station starts from login screen and supports RFID entry", async ({ page }) => {
   let barcodeLookupCount = 0;
@@ -9,91 +17,25 @@ test("qc station starts from login screen and supports RFID entry", async ({ pag
     const method = route.request().method();
 
     if (pathname === "/api/operators") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([
-          {
-            id: "ROW-OP-001",
-            operator_id: "QCOP-DEMO-LOCAL",
-            full_name: "Anna Kontrola",
-            role: "QUALITY_INSPECTOR",
-            login_name: "qc-demo-local",
-            rfid_uid_hash: "QCRFID-DEMO-LOCAL",
-            is_active: true,
-            created_at: "2026-05-03T07:55:00Z",
-          },
-        ]),
-      });
+      await fulfillJson(route, [buildQcDemoOperator()]);
       return;
     }
 
     if (pathname === "/api/workstations") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([
-          {
-            id: "ROW-WS-001",
-            workstation_id: "QCWS-DEMO-LOCAL",
-            name: "QC Station Demo",
-            area: "QA",
-            station_type: "QC",
-            is_active: true,
-          },
-        ]),
-      });
+      await fulfillJson(route, [buildQcDemoWorkstation()]);
       return;
     }
 
     if (pathname === "/api/qc-checklists") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([
-          {
-            id: "CHK-001",
-            checklist_code: "QC-STATION-DEMO-LOCAL",
-            name: "Kontrola wentylatora",
-            process_stage: "COMPONENT_QC",
-            version: "1.0",
-            device_type: null,
-            variant_code: null,
-            component_type: null,
-            skip_component_qc: false,
-            reference_image_file_id: "FILE-REF-001",
-            is_active: true,
-            created_at: "2026-05-03T08:05:00Z",
-          },
-        ]),
-      });
+      await fulfillJson(
+        route,
+        [buildQcDemoChecklist({ reference_image_file_id: "FILE-REF-001" })],
+      );
       return;
     }
 
     if (pathname === "/api/qc-waiting-items") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([
-          {
-            id: "ITEM-ROW-001",
-            item_serial_number: "QCITEM-DEMO-LOCAL",
-            barcode_value: "QCBC-DEMO-LOCAL",
-            item_type: "FAN_MODULE",
-            part_number: "PN-FAN-001",
-            revision: "A",
-            drawing_number: null,
-            drawing_revision: null,
-            production_order: null,
-            material_batch: null,
-            machine_id: null,
-            created_by_operator_id: "QCOP-DEMO-LOCAL",
-            current_status: "PRODUCED",
-            produced_at: "2026-05-03T08:10:00Z",
-            created_at: "2026-05-03T08:10:00Z",
-          },
-        ]),
-      });
+      await fulfillJson(route, [buildQcDemoItem()]);
       return;
     }
 
@@ -107,20 +49,7 @@ test("qc station starts from login screen and supports RFID entry", async ({ pag
     }
 
     if (pathname === "/api/auth/rfid-login" && method === "POST") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          id: "ROW-SESSION-001",
-          work_session_id: "WS-QA-001",
-          operator_id: "QCOP-DEMO-LOCAL",
-          workstation_id: "QCWS-DEMO-LOCAL",
-          machine_id: null,
-          status: "ACTIVE",
-          started_at: "2026-05-03T08:00:00Z",
-          ended_at: null,
-        }),
-      });
+      await fulfillJson(route, buildQcDemoSession());
       return;
     }
 
@@ -178,55 +107,24 @@ test("qc station starts from login screen and supports RFID entry", async ({ pag
 
     if (pathname === "/api/production-items/by-barcode/QCBC-DEMO-LOCAL") {
       barcodeLookupCount += 1;
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          id: "ITEM-ROW-001",
-          item_serial_number: "QCITEM-DEMO-LOCAL",
-          barcode_value: "QCBC-DEMO-LOCAL",
-          item_type: "FAN_MODULE",
-          part_number: "PN-FAN-001",
-          revision: "A",
-          drawing_number: null,
-          drawing_revision: null,
-          production_order: null,
-          material_batch: null,
-          machine_id: null,
-          created_by_operator_id: "QCOP-DEMO-LOCAL",
+      await fulfillJson(
+        route,
+        buildQcDemoItem({
           current_status: barcodeLookupCount > 1 ? "QC_PASSED" : "PRODUCED",
-          produced_at: "2026-05-03T08:10:00Z",
-          created_at: "2026-05-03T08:10:00Z",
         }),
-      });
+      );
       return;
     }
 
     if (pathname === "/api/qc-items/QCITEM-DEMO-LOCAL/reserve" && method === "POST") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          id: "ITEM-ROW-001",
-          item_serial_number: "QCITEM-DEMO-LOCAL",
-          barcode_value: "QCBC-DEMO-LOCAL",
-          item_type: "FAN_MODULE",
-          part_number: "PN-FAN-001",
-          revision: "A",
-          drawing_number: null,
-          drawing_revision: null,
-          production_order: null,
-          material_batch: null,
-          machine_id: null,
-          created_by_operator_id: "QCOP-DEMO-LOCAL",
+      await fulfillJson(
+        route,
+        buildQcDemoItem({
           qc_reserved_by_operator_id: "QCOP-DEMO-LOCAL",
           qc_reserved_by_workstation_id: "QCWS-DEMO-LOCAL",
           qc_reserved_at: "2026-05-03T08:10:30Z",
-          current_status: "PRODUCED",
-          produced_at: "2026-05-03T08:10:00Z",
-          created_at: "2026-05-03T08:10:00Z",
         }),
-      });
+      );
       return;
     }
 
@@ -370,152 +268,72 @@ test("qc station pozwala pobrac detal z kolejki oczekujacych na QC", async ({ pa
     const method = route.request().method();
 
     if (pathname === "/api/operators") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([
-          {
-            id: "ROW-OP-001",
-            operator_id: "QCOP-DEMO-LOCAL",
-            full_name: "Anna Kontrola",
-            role: "QUALITY_INSPECTOR",
-            login_name: "qc-demo-local",
-            rfid_uid_hash: "QCRFID-DEMO-LOCAL",
-            is_active: true,
-            created_at: "2026-05-03T07:55:00Z",
-          },
-        ]),
-      });
+      await fulfillJson(route, [buildQcDemoOperator()]);
       return;
     }
 
     if (pathname === "/api/workstations") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([
-          {
-            id: "ROW-WS-001",
-            workstation_id: "QCWS-DEMO-LOCAL",
-            name: "QC Station Demo",
-            area: "QA",
-            station_type: "QC",
-            is_active: true,
-          },
-        ]),
-      });
+      await fulfillJson(route, [buildQcDemoWorkstation()]);
       return;
     }
 
     if (pathname === "/api/qc-checklists") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([
-          {
-            id: "CHK-001",
-            checklist_code: "QC-STATION-DEMO-LOCAL",
-            name: "Kontrola wentylatora",
-            process_stage: "COMPONENT_QC",
-            version: "1.0",
-            device_type: null,
-            variant_code: null,
-            component_type: "FAN_MODULE",
-            skip_component_qc: false,
-            reference_image_file_id: null,
-            is_active: true,
-            created_at: "2026-05-03T08:05:00Z",
-          },
-        ]),
-      });
+      await fulfillJson(
+        route,
+        [buildQcDemoChecklist({ component_type: "FAN_MODULE" })],
+      );
       return;
     }
 
     if (pathname === "/api/qc-waiting-items") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([
-          {
-            id: "ITEM-ROW-QUEUE",
-            item_serial_number: "QCITEM-DEMO-QUEUE",
-            barcode_value: "QCBC-DEMO-QUEUE",
-            item_type: "FAN_MODULE",
-            part_number: "PN-FAN-002",
-            revision: "B",
-            drawing_number: null,
-            drawing_revision: null,
-            production_order: null,
-            material_batch: null,
-            machine_id: null,
-            created_by_operator_id: "QCOP-DEMO-LOCAL",
-            current_status: "PRODUCED",
-            produced_at: "2026-05-03T08:15:00Z",
-            created_at: "2026-05-03T08:15:00Z",
-            qc_reserved_by_operator_id: null,
-            qc_reserved_by_workstation_id: null,
-            qc_reserved_at: null,
-          },
-          {
-            id: "ITEM-ROW-QUEUE-REWORK",
-            item_serial_number: "QCITEM-DEMO-QUEUE-REWORK",
-            barcode_value: "QCBC-DEMO-QUEUE-REWORK",
-            item_type: "FAN_MODULE",
-            part_number: "PN-FAN-003",
-            revision: "C",
-            drawing_number: null,
-            drawing_revision: null,
-            production_order: null,
-            material_batch: null,
-            machine_id: null,
-            created_by_operator_id: "QCOP-DEMO-LOCAL",
-            current_status: "REWORK_REQUIRED",
-            produced_at: "2026-05-03T08:20:00Z",
-            created_at: "2026-05-03T08:20:00Z",
-            qc_reserved_by_operator_id: "QCOP-DEMO-LOCAL",
-            qc_reserved_by_workstation_id: "QCWS-DEMO-LOCAL",
-            qc_reserved_at: "2026-05-03T08:22:00Z",
-          },
-          {
-            id: "ITEM-ROW-QUEUE-OTHER",
-            item_serial_number: "QCITEM-DEMO-QUEUE-OTHER",
-            barcode_value: "QCBC-DEMO-QUEUE-OTHER",
-            item_type: "FAN_MODULE",
-            part_number: "PN-FAN-004",
-            revision: "D",
-            drawing_number: null,
-            drawing_revision: null,
-            production_order: null,
-            material_batch: null,
-            machine_id: null,
-            created_by_operator_id: "QCOP-OTHER",
-            current_status: "PRODUCED",
-            produced_at: "2026-05-03T08:25:00Z",
-            created_at: "2026-05-03T08:25:00Z",
-            qc_reserved_by_operator_id: "QCOP-OTHER",
-            qc_reserved_by_workstation_id: "QCWS-OTHER",
-            qc_reserved_at: "2026-05-03T08:26:00Z",
-          },
-        ]),
-      });
+      await fulfillJson(route, [
+        buildQcDemoItem({
+          id: "ITEM-ROW-QUEUE",
+          item_serial_number: "QCITEM-DEMO-QUEUE",
+          barcode_value: "QCBC-DEMO-QUEUE",
+          part_number: "PN-FAN-002",
+          revision: "B",
+          produced_at: "2026-05-03T08:15:00Z",
+          created_at: "2026-05-03T08:15:00Z",
+        }),
+        buildQcDemoItem({
+          id: "ITEM-ROW-QUEUE-REWORK",
+          item_serial_number: "QCITEM-DEMO-QUEUE-REWORK",
+          barcode_value: "QCBC-DEMO-QUEUE-REWORK",
+          part_number: "PN-FAN-003",
+          revision: "C",
+          current_status: "REWORK_REQUIRED",
+          produced_at: "2026-05-03T08:20:00Z",
+          created_at: "2026-05-03T08:20:00Z",
+          qc_reserved_by_operator_id: "QCOP-DEMO-LOCAL",
+          qc_reserved_by_workstation_id: "QCWS-DEMO-LOCAL",
+          qc_reserved_at: "2026-05-03T08:22:00Z",
+        }),
+        buildQcDemoItem({
+          id: "ITEM-ROW-QUEUE-OTHER",
+          item_serial_number: "QCITEM-DEMO-QUEUE-OTHER",
+          barcode_value: "QCBC-DEMO-QUEUE-OTHER",
+          part_number: "PN-FAN-004",
+          revision: "D",
+          created_by_operator_id: "QCOP-OTHER",
+          produced_at: "2026-05-03T08:25:00Z",
+          created_at: "2026-05-03T08:25:00Z",
+          qc_reserved_by_operator_id: "QCOP-OTHER",
+          qc_reserved_by_workstation_id: "QCWS-OTHER",
+          qc_reserved_at: "2026-05-03T08:26:00Z",
+        }),
+      ]);
       return;
     }
 
     if (pathname === "/api/auth/operator-login" && method === "POST") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
+      await fulfillJson(
+        route,
+        buildQcDemoSession({
           id: "ROW-SESSION-003",
           work_session_id: "WS-QA-003",
-          operator_id: "QCOP-DEMO-LOCAL",
-          workstation_id: "QCWS-DEMO-LOCAL",
-          machine_id: null,
-          status: "ACTIVE",
-          started_at: "2026-05-03T08:00:00Z",
-          ended_at: null,
         }),
-      });
+      );
       return;
     }
 
@@ -628,109 +446,53 @@ test("qc station pozwala zamknac NCR i przywrocic detal do reworku", async ({ pa
     const method = route.request().method();
 
     if (pathname === "/api/operators") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([
-          {
-            id: "ROW-OP-001",
-            operator_id: "QCOP-DEMO-LOCAL",
-            full_name: "Anna Kontrola",
-            role: "QUALITY_INSPECTOR",
-            login_name: "qc-demo-local",
-            rfid_uid_hash: "QCRFID-DEMO-LOCAL",
-            is_active: true,
-            created_at: "2026-05-03T07:55:00Z",
-          },
-        ]),
-      });
+      await fulfillJson(route, [buildQcDemoOperator()]);
       return;
     }
 
     if (pathname === "/api/workstations") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([
-          {
-            id: "ROW-WS-001",
-            workstation_id: "QCWS-DEMO-LOCAL",
-            name: "QC Station Demo",
-            area: "QA",
-            station_type: "QC",
-            is_active: true,
-          },
-        ]),
-      });
+      await fulfillJson(route, [buildQcDemoWorkstation()]);
       return;
     }
 
     if (pathname === "/api/qc-checklists") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([
-          {
+      await fulfillJson(
+        route,
+        [
+          buildQcDemoChecklist({
             id: "CHK-REWORK",
             checklist_code: "QC-REWORK",
             name: "Kontrola po reworku",
-            process_stage: "COMPONENT_QC",
-            version: "1.0",
-            device_type: null,
-            variant_code: null,
             component_type: "FAN_MODULE",
-            skip_component_qc: false,
-            reference_image_file_id: null,
-            is_active: true,
-            created_at: "2026-05-03T08:05:00Z",
-          },
-        ]),
-      });
+          }),
+        ],
+      );
       return;
     }
 
     if (pathname === "/api/qc-waiting-items") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([
-          {
-            id: "ITEM-ROW-REWORK",
-            item_serial_number: "QCITEM-DEMO-REWORK",
-            barcode_value: "QCBC-DEMO-REWORK",
-            item_type: "FAN_MODULE",
-            part_number: "PN-FAN-REWORK",
-            revision: "A",
-            drawing_number: null,
-            drawing_revision: null,
-            production_order: null,
-            material_batch: null,
-            machine_id: null,
-            created_by_operator_id: "QCOP-DEMO-LOCAL",
-            current_status: releasedForRework ? "REWORK_REQUIRED" : "QC_FAILED",
-            produced_at: "2026-05-03T08:16:00Z",
-            created_at: "2026-05-03T08:16:00Z",
-          },
-        ]),
-      });
+      await fulfillJson(route, [
+        buildQcDemoItem({
+          id: "ITEM-ROW-REWORK",
+          item_serial_number: "QCITEM-DEMO-REWORK",
+          barcode_value: "QCBC-DEMO-REWORK",
+          part_number: "PN-FAN-REWORK",
+          current_status: releasedForRework ? "REWORK_REQUIRED" : "QC_FAILED",
+          produced_at: "2026-05-03T08:16:00Z",
+          created_at: "2026-05-03T08:16:00Z",
+        }),
+      ]);
       return;
     }
 
     if (pathname === "/api/auth/operator-login" && method === "POST") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
+      await fulfillJson(
+        route,
+        buildQcDemoSession({
           id: "ROW-SESSION-REWORK",
           work_session_id: "WS-QA-REWORK",
-          operator_id: "QCOP-DEMO-LOCAL",
-          workstation_id: "QCWS-DEMO-LOCAL",
-          machine_id: null,
-          status: "ACTIVE",
-          started_at: "2026-05-03T08:00:00Z",
-          ended_at: null,
         }),
-      });
+      );
       return;
     }
 
