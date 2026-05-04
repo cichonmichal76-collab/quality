@@ -4,8 +4,11 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { App } from "./App";
 import {
   buildDemoChecklist,
+  buildDemoItem,
   buildDemoOperator,
+  buildDemoRun,
   buildDemoSession,
+  buildDemoStep,
   buildDemoWorkstation,
   jsonResponse,
 } from "./QcStationTestUtils";
@@ -39,25 +42,7 @@ describe("QcStationPage", () => {
       }
 
       if (url.includes("/api/qc-waiting-items")) {
-        return jsonResponse([
-          {
-            id: "ITEM-ROW-001",
-            item_serial_number: "QCITEM-DEMO-LOCAL",
-            barcode_value: "QCBC-DEMO-LOCAL",
-            item_type: "FAN_MODULE",
-            part_number: "PN-FAN-001",
-            revision: "A",
-            drawing_number: null,
-            drawing_revision: null,
-            production_order: null,
-            material_batch: null,
-            machine_id: null,
-            created_by_operator_id: "QCOP-DEMO-LOCAL",
-            current_status: "PRODUCED",
-            produced_at: "2026-05-03T08:10:00Z",
-            created_at: "2026-05-03T08:10:00Z",
-          },
-        ]);
+        return jsonResponse([buildDemoItem()]);
       }
 
       if (url.endsWith("/api/auth/operator-login") && method === "POST") {
@@ -66,10 +51,9 @@ describe("QcStationPage", () => {
 
       if (url.endsWith("/api/qc-checklists/QC-STATION-DEMO-LOCAL/steps")) {
         return jsonResponse([
-          {
+          buildDemoStep({
             id: "STEP-001",
             checklist_id: "CHK-001",
-            step_order: 1,
             title: "Zmierz szerokosc",
             instruction: "Uzyj suwmiarki.",
             control_area: "Obudowa wentylatora",
@@ -79,15 +63,13 @@ describe("QcStationPage", () => {
             region_y: 18,
             region_width: 58,
             region_height: 34,
-            requires_photo: false,
             requires_measurement: true,
-            blocking_on_fail: true,
             expected_value: "25.0",
             unit: "mm",
             tolerance_min: 24.8,
             tolerance_max: 25.2,
-          },
-          {
+          }),
+          buildDemoStep({
             id: "STEP-002",
             checklist_id: "CHK-001",
             step_order: 2,
@@ -100,76 +82,32 @@ describe("QcStationPage", () => {
             region_y: 60,
             region_width: 24,
             region_height: 18,
-            requires_photo: false,
-            requires_measurement: false,
-            blocking_on_fail: true,
             expected_value: "A2-70",
-            unit: null,
-            tolerance_min: null,
-            tolerance_max: null,
-          },
+          }),
         ]);
       }
 
       if (url.endsWith("/api/production-items/by-barcode/QCBC-DEMO-LOCAL")) {
         barcodeLookupCount += 1;
-        return jsonResponse({
-          id: "ITEM-ROW-001",
-          item_serial_number: "QCITEM-DEMO-LOCAL",
-          barcode_value: "QCBC-DEMO-LOCAL",
-          item_type: "FAN_MODULE",
-          part_number: "PN-FAN-001",
-          revision: "A",
-          drawing_number: null,
-          drawing_revision: null,
-          production_order: null,
-          material_batch: null,
-          machine_id: null,
-          created_by_operator_id: "QCOP-DEMO-LOCAL",
-          current_status: barcodeLookupCount > 1 ? "QC_PASSED" : "PRODUCED",
-          produced_at: "2026-05-03T08:10:00Z",
-          created_at: "2026-05-03T08:10:00Z",
-        });
+        return jsonResponse(
+          buildDemoItem({
+            current_status: barcodeLookupCount > 1 ? "QC_PASSED" : "PRODUCED",
+          }),
+        );
       }
 
       if (url.endsWith("/api/qc-items/QCITEM-DEMO-LOCAL/reserve") && method === "POST") {
-        return jsonResponse({
-          id: "ITEM-ROW-001",
-          item_serial_number: "QCITEM-DEMO-LOCAL",
-          barcode_value: "QCBC-DEMO-LOCAL",
-          item_type: "FAN_MODULE",
-          part_number: "PN-FAN-001",
-          revision: "A",
-          drawing_number: null,
-          drawing_revision: null,
-          production_order: null,
-          material_batch: null,
-          machine_id: null,
-          created_by_operator_id: "QCOP-DEMO-LOCAL",
-          qc_reserved_by_operator_id: "QCOP-DEMO-LOCAL",
-          qc_reserved_by_workstation_id: "QCWS-DEMO-LOCAL",
-          qc_reserved_at: "2026-05-03T08:10:30Z",
-          current_status: "PRODUCED",
-          produced_at: "2026-05-03T08:10:00Z",
-          created_at: "2026-05-03T08:10:00Z",
-        });
+        return jsonResponse(
+          buildDemoItem({
+            qc_reserved_by_operator_id: "QCOP-DEMO-LOCAL",
+            qc_reserved_by_workstation_id: "QCWS-DEMO-LOCAL",
+            qc_reserved_at: "2026-05-03T08:10:30Z",
+          }),
+        );
       }
 
       if (url.endsWith("/api/qc-runs") && method === "POST") {
-        return jsonResponse({
-          id: "QC-ROW-001",
-          run_id: "QC-WEB-STATIC",
-          item_serial_number: "QCITEM-DEMO-LOCAL",
-          barcode_value: "QCBC-DEMO-LOCAL",
-          checklist_id: "CHK-001",
-          process_stage: "COMPONENT_QC",
-          work_session_id: "WS-QA-001",
-          operator_id: "QCOP-DEMO-LOCAL",
-          status: "IN_PROGRESS",
-          result: null,
-          started_at: "2026-05-03T08:11:00Z",
-          ended_at: null,
-        });
+        return jsonResponse(buildDemoRun());
       }
 
       if (url.endsWith("/steps/STEP-001/result") && method === "POST") {
@@ -195,20 +133,13 @@ describe("QcStationPage", () => {
       }
 
       if (url.endsWith("/complete") && method === "POST") {
-        return jsonResponse({
-          id: "QC-ROW-001",
-          run_id: "QC-WEB-STATIC",
-          item_serial_number: "QCITEM-DEMO-LOCAL",
-          barcode_value: "QCBC-DEMO-LOCAL",
-          checklist_id: "CHK-001",
-          process_stage: "COMPONENT_QC",
-          work_session_id: "WS-QA-001",
-          operator_id: "QCOP-DEMO-LOCAL",
-          status: "COMPLETED",
-          result: "PASS",
-          started_at: "2026-05-03T08:11:00Z",
-          ended_at: "2026-05-03T08:12:00Z",
-        });
+        return jsonResponse(
+          buildDemoRun({
+            status: "COMPLETED",
+            result: "PASS",
+            ended_at: "2026-05-03T08:12:00Z",
+          }),
+        );
       }
 
       if (
