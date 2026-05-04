@@ -53,6 +53,41 @@ async function fulfillEmptyShipmentGateHistoryRequest(
   return false;
 }
 
+async function fulfillShipmentDeviceDetailRequests(
+  path: string,
+  route: Route,
+  options: {
+    deviceSerialNumber: string;
+    shipmentReadiness: unknown;
+    componentQuality: unknown;
+    shipmentGateHistory: unknown;
+  },
+): Promise<boolean> {
+  const {
+    deviceSerialNumber,
+    shipmentReadiness,
+    componentQuality,
+    shipmentGateHistory,
+  } = options;
+
+  if (path === `/api/devices/${deviceSerialNumber}/shipment-readiness`) {
+    await fulfillJson(route, shipmentReadiness);
+    return true;
+  }
+
+  if (path === `/api/devices/${deviceSerialNumber}/component-quality`) {
+    await fulfillJson(route, componentQuality);
+    return true;
+  }
+
+  if (path === `/api/devices/${deviceSerialNumber}/shipment-gate-history`) {
+    await fulfillJson(route, shipmentGateHistory);
+    return true;
+  }
+
+  return false;
+}
+
 const shipmentQueuePayload = {
   total_devices: 1,
   ready_count: 1,
@@ -894,11 +929,10 @@ test("dashboard marks device ready for shipment from the details drawer", async 
       return;
     }
 
-    if (path === "/api/devices/SHIP-001/shipment-readiness") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
+    if (
+      await fulfillShipmentDeviceDetailRequests(path, route, {
+        deviceSerialNumber: "SHIP-001",
+        shipmentReadiness: {
           ...shipmentDetailsPayload,
           production_status: markedReady ? "READY_FOR_SHIPMENT" : "FINAL_TEST_PASSED",
           device_updated_at: markedReady
@@ -913,45 +947,28 @@ test("dashboard marks device ready for shipment from the details drawer", async 
               ? "2026-05-01T10:15:00Z"
               : "2026-05-01T09:05:00Z",
           },
-        }),
-      });
-      return;
-    }
-
-    if (path === "/api/devices/SHIP-001/component-quality") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(componentDetailsPayload),
-      });
-      return;
-    }
-
-    if (path === "/api/devices/SHIP-001/shipment-gate-history") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(
-          markedReady
-            ? [
-                {
-                  id: "AUD-3",
-                  event_type: "SHIPMENT_GATE_PASSED",
-                  entity_type: "DEVICE",
-                  entity_id: "SHIP-001",
-                  work_session_id: "WS-12",
-                  operator_id: "OP-12",
-                  workstation_id: "ST-12",
-                  machine_id: null,
-                  result: "PASS",
-                  message: "Shipment gate passed",
-                  payload: { requested_status: "READY_FOR_SHIPMENT" },
-                  created_at: "2026-05-01T10:15:00Z",
-                },
-              ]
-            : [],
-        ),
-      });
+        },
+        componentQuality: componentDetailsPayload,
+        shipmentGateHistory: markedReady
+          ? [
+              {
+                id: "AUD-3",
+                event_type: "SHIPMENT_GATE_PASSED",
+                entity_type: "DEVICE",
+                entity_id: "SHIP-001",
+                work_session_id: "WS-12",
+                operator_id: "OP-12",
+                workstation_id: "ST-12",
+                machine_id: null,
+                result: "PASS",
+                message: "Shipment gate passed",
+                payload: { requested_status: "READY_FOR_SHIPMENT" },
+                created_at: "2026-05-01T10:15:00Z",
+              },
+            ]
+          : [],
+      })
+    ) {
       return;
     }
 
@@ -1033,11 +1050,10 @@ test("dashboard marks ready device as shipped from the details drawer", async ({
       return;
     }
 
-    if (path === "/api/devices/SHIP-001/shipment-readiness") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
+    if (
+      await fulfillShipmentDeviceDetailRequests(path, route, {
+        deviceSerialNumber: "SHIP-001",
+        shipmentReadiness: {
           ...shipmentDetailsPayload,
           production_status: shipped ? "SHIPPED" : "READY_FOR_SHIPMENT",
           device_updated_at: shipped
@@ -1050,60 +1066,43 @@ test("dashboard marks ready device as shipped from the details drawer", async ({
             recommended_action: "MARK_READY_FOR_SHIPMENT",
             created_at: "2026-05-01T10:15:00Z",
           },
-        }),
-      });
-      return;
-    }
-
-    if (path === "/api/devices/SHIP-001/component-quality") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(componentDetailsPayload),
-      });
-      return;
-    }
-
-    if (path === "/api/devices/SHIP-001/shipment-gate-history") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(
-          shipped
-            ? [
-                {
-                  id: "AUD-4",
-                  event_type: "DEVICE_STATUS_UPDATED",
-                  entity_type: "DEVICE",
-                  entity_id: "SHIP-001",
-                  work_session_id: null,
-                  operator_id: null,
-                  workstation_id: null,
-                  machine_id: null,
-                  result: "SHIPPED",
-                  message: "Device marked as shipped",
-                  payload: { requested_status: "SHIPPED" },
-                  created_at: "2026-05-01T11:00:00Z",
-                },
-              ]
-            : [
-                {
-                  id: "AUD-3",
-                  event_type: "SHIPMENT_GATE_PASSED",
-                  entity_type: "DEVICE",
-                  entity_id: "SHIP-001",
-                  work_session_id: "WS-12",
-                  operator_id: "OP-12",
-                  workstation_id: "ST-12",
-                  machine_id: null,
-                  result: "PASS",
-                  message: "Shipment gate passed",
-                  payload: { requested_status: "READY_FOR_SHIPMENT" },
-                  created_at: "2026-05-01T10:15:00Z",
-                },
-              ],
-        ),
-      });
+        },
+        componentQuality: componentDetailsPayload,
+        shipmentGateHistory: shipped
+          ? [
+              {
+                id: "AUD-4",
+                event_type: "DEVICE_STATUS_UPDATED",
+                entity_type: "DEVICE",
+                entity_id: "SHIP-001",
+                work_session_id: null,
+                operator_id: null,
+                workstation_id: null,
+                machine_id: null,
+                result: "SHIPPED",
+                message: "Device marked as shipped",
+                payload: { requested_status: "SHIPPED" },
+                created_at: "2026-05-01T11:00:00Z",
+              },
+            ]
+          : [
+              {
+                id: "AUD-3",
+                event_type: "SHIPMENT_GATE_PASSED",
+                entity_type: "DEVICE",
+                entity_id: "SHIP-001",
+                work_session_id: "WS-12",
+                operator_id: "OP-12",
+                workstation_id: "ST-12",
+                machine_id: null,
+                result: "PASS",
+                message: "Shipment gate passed",
+                payload: { requested_status: "READY_FOR_SHIPMENT" },
+                created_at: "2026-05-01T10:15:00Z",
+              },
+            ],
+      })
+    ) {
       return;
     }
 
@@ -1587,30 +1586,15 @@ test("dashboard closes device critical NCRs from the details drawer", async ({
       return;
     }
 
-    if (path === "/api/devices/SHIP-001/shipment-readiness") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(
-          deviceNcrClosed
-            ? shipmentDetailsWithoutDeviceNcrPayload
-            : shipmentDetailsWithDeviceNcrPayload,
-        ),
-      });
-      return;
-    }
-
-    if (path === "/api/devices/SHIP-001/component-quality") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(componentDetailsPayload),
-      });
-      return;
-    }
-
     if (
-      await fulfillEmptyShipmentGateHistoryRequest(path, route, ["SHIP-001"])
+      await fulfillShipmentDeviceDetailRequests(path, route, {
+        deviceSerialNumber: "SHIP-001",
+        shipmentReadiness: deviceNcrClosed
+          ? shipmentDetailsWithoutDeviceNcrPayload
+          : shipmentDetailsWithDeviceNcrPayload,
+        componentQuality: componentDetailsPayload,
+        shipmentGateHistory: [],
+      })
     ) {
       return;
     }
