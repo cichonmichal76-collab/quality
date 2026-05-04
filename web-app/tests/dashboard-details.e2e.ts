@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import {
   buildServiceSession,
   buildServiceSessionAuditEvent,
+  fulfillDeviceDetailsRequests,
   fulfillJson,
   fulfillServiceSessionsQueue,
 } from "./dashboard.e2e-helpers";
@@ -206,11 +207,10 @@ test("dashboard shows commissioning sync history in device details", async ({
       return;
     }
 
-    if (url.pathname === "/api/devices/SVC-001/shipment-readiness") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
+    if (
+      await fulfillDeviceDetailsRequests(url.pathname, route, {
+        deviceSerialNumber: "SVC-001",
+        shipmentReadiness: {
           device_serial_number: "SVC-001",
           device_type: "DEMO-SVC",
           device_variant_code: "DEFAULT",
@@ -232,16 +232,8 @@ test("dashboard shows commissioning sync history in device details", async ({
           primary_blocking_message: "Final test nie przeszedl.",
           recommended_action: "RUN_FINAL_TEST",
           latest_shipment_gate_decision: null,
-        }),
-      });
-      return;
-    }
-
-    if (url.pathname === "/api/devices/SVC-001/component-quality") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
+        },
+        componentQuality: {
           device_serial_number: "SVC-001",
           device_type: "DEMO-SVC",
           device_variant_code: "DEFAULT",
@@ -258,61 +250,44 @@ test("dashboard shows commissioning sync history in device details", async ({
           stale_bucket: "LT_24H",
           recommended_action: "NONE",
           components: [],
-        }),
-      });
-      return;
-    }
-
-    if (url.pathname === "/api/service-sessions") {
-      await fulfillJson(route, [
-        {
-          id: "svc-db-1",
-          ...serviceSession,
-          package_path: "/tmp/service-package.zip",
-          package_hash: "hash-svc-001",
         },
-      ]);
-      return;
-    }
-
-    if (url.pathname === "/api/audit-events") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([
+        serviceSessions: [
           {
-            id: "AUD-SVC-2",
-            event_type: "SERVICE_SESSION_PACKAGE_REUPLOADED",
-            entity_type: "SERVICE_SESSION",
-            entity_id: "SVC-SESSION-001",
-            work_session_id: null,
-            operator_id: "TECH-001",
-            workstation_id: null,
-            machine_id: null,
-            result: "UPLOADED",
-            message: "Service session package reuploaded",
-            payload: {
-              device_serial_number: "SVC-001",
-              package_hash: "hash-svc-001",
-              upload_correlation_id: "SRV-UP-0002",
-              upload_count: 2,
-              client_attempt_id: "SYNC-TRY-0002",
-              client_attempt_number: 2,
-              client_trigger_source: "AUTO_NETWORK",
-            },
-            created_at: "2026-05-01T09:45:00Z",
+            id: "svc-db-1",
+            ...serviceSession,
+            package_path: "/tmp/service-package.zip",
+            package_hash: "hash-svc-001",
           },
-        ]),
-      });
-      return;
-    }
-
-    if (url.pathname === "/api/devices/SVC-001/shipment-gate-history") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([]),
-      });
+        ],
+        auditEvents: {
+          body: [
+            {
+              id: "AUD-SVC-2",
+              event_type: "SERVICE_SESSION_PACKAGE_REUPLOADED",
+              entity_type: "SERVICE_SESSION",
+              entity_id: "SVC-SESSION-001",
+              work_session_id: null,
+              operator_id: "TECH-001",
+              workstation_id: null,
+              machine_id: null,
+              result: "UPLOADED",
+              message: "Service session package reuploaded",
+              payload: {
+                device_serial_number: "SVC-001",
+                package_hash: "hash-svc-001",
+                upload_correlation_id: "SRV-UP-0002",
+                upload_count: 2,
+                client_attempt_id: "SYNC-TRY-0002",
+                client_attempt_number: 2,
+                client_trigger_source: "AUTO_NETWORK",
+              },
+              created_at: "2026-05-01T09:45:00Z",
+            },
+          ],
+        },
+        shipmentGateHistory: [],
+      })
+    ) {
       return;
     }
 
@@ -1267,11 +1242,10 @@ test("dashboard shows commissioning sessions in device details", async ({
       return;
     }
 
-    if (url.pathname === "/api/devices/SVC-001/shipment-readiness") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
+    if (
+      await fulfillDeviceDetailsRequests(url.pathname, route, {
+        deviceSerialNumber: "SVC-001",
+        shipmentReadiness: {
           device_serial_number: "SVC-001",
           device_type: "DEMO-SVC",
           device_variant_code: "DEFAULT",
@@ -1297,16 +1271,8 @@ test("dashboard shows commissioning sessions in device details", async ({
           recommended_action: "RESOLVE_COMPONENT_QUALITY",
           blocking_reasons: [],
           blocking_checks: [],
-        }),
-      });
-      return;
-    }
-
-    if (url.pathname === "/api/devices/SVC-001/component-quality") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
+        },
+        componentQuality: {
           device_serial_number: "SVC-001",
           device_type: "DEMO-SVC",
           device_variant_code: "DEFAULT",
@@ -1323,29 +1289,21 @@ test("dashboard shows commissioning sessions in device details", async ({
           primary_blocking_component_serial_number: null,
           recommended_action: "NO_ACTION",
           components: [],
-        }),
-      });
-      return;
-    }
-
-    if (url.pathname === "/api/service-sessions") {
-      await fulfillJson(route, [
-        {
-          id: "svc-db-1",
-          ...serviceSession,
-          package_path: "/tmp/service-package.zip",
-          package_hash: "hash-svc-001",
         },
-      ]);
-      return;
-    }
-
-    if (url.pathname === "/api/devices/SVC-001/shipment-gate-history") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([]),
-      });
+        serviceSessions: [
+          {
+            id: "svc-db-1",
+            ...serviceSession,
+            package_path: "/tmp/service-package.zip",
+            package_hash: "hash-svc-001",
+          },
+        ],
+        auditEvents: {
+          body: [],
+        },
+        shipmentGateHistory: [],
+      })
+    ) {
       return;
     }
 

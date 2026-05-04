@@ -144,3 +144,85 @@ export async function fulfillServiceSessionsQueue(
     sessions,
   });
 }
+
+export async function fulfillDeviceDetailsRequests(
+  path: string,
+  route: Route,
+  options: {
+    deviceSerialNumber: string;
+    shipmentReadiness?: unknown;
+    componentQuality?: unknown;
+    shipmentGateHistory?: unknown;
+    serviceSessions?: unknown;
+    workSessions?: unknown;
+    operators?: unknown;
+    auditEvents?: {
+      body: unknown;
+      searchParams?: Record<string, string>;
+    };
+  },
+) {
+  const {
+    deviceSerialNumber,
+    shipmentReadiness,
+    componentQuality,
+    shipmentGateHistory,
+    serviceSessions,
+    workSessions,
+    operators,
+    auditEvents,
+  } = options;
+
+  if (
+    shipmentReadiness !== undefined &&
+    path === `/api/devices/${deviceSerialNumber}/shipment-readiness`
+  ) {
+    await fulfillJson(route, shipmentReadiness);
+    return true;
+  }
+
+  if (
+    componentQuality !== undefined &&
+    path === `/api/devices/${deviceSerialNumber}/component-quality`
+  ) {
+    await fulfillJson(route, componentQuality);
+    return true;
+  }
+
+  if (
+    shipmentGateHistory !== undefined &&
+    path === `/api/devices/${deviceSerialNumber}/shipment-gate-history`
+  ) {
+    await fulfillJson(route, shipmentGateHistory);
+    return true;
+  }
+
+  if (serviceSessions !== undefined && path === "/api/service-sessions") {
+    await fulfillJson(route, serviceSessions);
+    return true;
+  }
+
+  if (workSessions !== undefined && path === "/api/work-sessions") {
+    await fulfillJson(route, workSessions);
+    return true;
+  }
+
+  if (operators !== undefined && path === "/api/operators") {
+    await fulfillJson(route, operators);
+    return true;
+  }
+
+  if (auditEvents && path === "/api/audit-events") {
+    const url = new URL(route.request().url());
+    const matchesAuditSearch = Object.entries(auditEvents.searchParams ?? {}).every(
+      ([key, value]) => url.searchParams.get(key) === value,
+    );
+
+    if (matchesAuditSearch) {
+      await fulfillJson(route, auditEvents.body);
+      return true;
+    }
+  }
+
+  return false;
+}
