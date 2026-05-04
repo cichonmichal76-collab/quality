@@ -1114,16 +1114,14 @@ test("dashboard marks device ready for shipment from the details drawer", async 
     const url = new URL(request.url());
     const path = url.pathname;
 
-    if (path === "/api/shipment-readiness") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(
-          markedReady
-            ? shipmentReadyQueuePayload
-            : shipmentQueuePayload,
-        ),
-      });
+    if (
+      await fulfillQueueRequest(
+        path,
+        route,
+        "/api/shipment-readiness",
+        markedReady ? shipmentReadyQueuePayload : shipmentQueuePayload,
+      )
+    ) {
       return;
     }
 
@@ -1227,14 +1225,14 @@ test("dashboard marks ready device as shipped from the details drawer", async ({
     const url = new URL(request.url());
     const path = url.pathname;
 
-    if (path === "/api/shipment-readiness") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(
-          shipped ? shipmentShippedQueuePayload : shipmentReadyQueuePayload,
-        ),
-      });
+    if (
+      await fulfillQueueRequest(
+        path,
+        route,
+        "/api/shipment-readiness",
+        shipped ? shipmentShippedQueuePayload : shipmentReadyQueuePayload,
+      )
+    ) {
       return;
     }
 
@@ -1644,12 +1642,14 @@ test("dashboard closes device critical NCRs from the details drawer", async ({
     const url = new URL(request.url());
     const path = url.pathname;
 
-    if (path === "/api/shipment-readiness") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(shipmentQueuePayload),
-      });
+    if (
+      await fulfillQueueRequest(
+        path,
+        route,
+        "/api/shipment-readiness",
+        shipmentQueuePayload,
+      )
+    ) {
       return;
     }
 
@@ -1833,37 +1833,19 @@ test("dashboard marks selected shipment devices ready from bulk actions", async 
     }
 
     if (
-      (path === "/api/devices/BULK-READY-001/status" ||
-        path === "/api/devices/BULK-READY-002/status") &&
-      request.method() === "PATCH"
+      await fulfillDeviceStatusUpdateRequest(path, request.method(), route, {
+        deviceSerialNumbers: ["BULK-READY-001", "BULK-READY-002"],
+        expectedProductionStatus: "READY_FOR_SHIPMENT",
+        updatedAt: "2026-05-01T10:15:00Z",
+        onMatched: () => {
+          patchRequests += 1;
+          expect(request.postDataJSON()).toEqual({
+            production_status: "READY_FOR_SHIPMENT",
+          });
+          readyMarked = true;
+        },
+      })
     ) {
-      patchRequests += 1;
-      expect(request.postDataJSON()).toEqual({
-        production_status: "READY_FOR_SHIPMENT",
-      });
-      readyMarked = true;
-
-      const serialNumber = path.includes("BULK-READY-001")
-        ? "BULK-READY-001"
-        : "BULK-READY-002";
-
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          id: `DEV-${serialNumber}`,
-          device_serial_number: serialNumber,
-          device_type: "DEMO-OPS",
-          variant_code: "DEFAULT",
-          hardware_version: null,
-          firmware_version: null,
-          bootloader_version: null,
-          created_by: null,
-          production_status: "READY_FOR_SHIPMENT",
-          created_at: "2026-05-01T08:00:00Z",
-          updated_at: "2026-05-01T10:15:00Z",
-        }),
-      });
       return;
     }
 
