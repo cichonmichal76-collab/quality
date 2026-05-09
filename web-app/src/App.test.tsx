@@ -1678,6 +1678,23 @@ function createPaginatedComponentQueueFetchMock() {
   ]);
 }
 
+function createServiceSessionPageFetchMock() {
+  return createFetchMock([
+    {
+      matcher: "/api/service-sessions/queue?device_type=DEMO-SVC&sort_by=uploaded_at&sort_desc=true&limit=100",
+      response: serviceQueuePayload,
+    },
+    {
+      matcher: "/api/service-sessions/SVC-001",
+      response: serviceSessionDetailsPayload,
+    },
+    {
+      matcher: "/api/audit-events?entity_type=SERVICE_SESSION&entity_id=SVC-001",
+      response: serviceSessionAuditPayload,
+    },
+  ]);
+}
+
 async function flushAppEffects() {
   await act(async () => {
     await Promise.resolve();
@@ -2158,20 +2175,7 @@ describe("App", () => {
       "/?view=service&svc_device_type=DEMO-SVC&svc_sort_by=uploaded_at&svc_sort_desc=true&svc_limit=100&svc_offset=0&svc_session_id=SVC-001",
     );
 
-    const fetchMock = createFetchMock([
-      {
-        matcher: "/api/service-sessions/queue?device_type=DEMO-SVC&sort_by=uploaded_at&sort_desc=true&limit=100",
-        response: serviceQueuePayload,
-      },
-      {
-        matcher: "/api/service-sessions/SVC-001",
-        response: serviceSessionDetailsPayload,
-      },
-      {
-        matcher: "/api/audit-events?entity_type=SERVICE_SESSION&entity_id=SVC-001",
-        response: serviceSessionAuditPayload,
-      },
-    ]);
+    const fetchMock = createServiceSessionPageFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
@@ -2253,20 +2257,7 @@ describe("App", () => {
       "/service-sessions/SVC-001?view=service&svc_device_type=DEMO-SVC&svc_sort_by=uploaded_at&svc_sort_desc=true&svc_limit=100&svc_offset=0&svc_session_id=SVC-001",
     );
 
-    const fetchMock = createFetchMock([
-      {
-        matcher: "/api/service-sessions/queue?device_type=DEMO-SVC&sort_by=uploaded_at&sort_desc=true&limit=100",
-        response: serviceQueuePayload,
-      },
-      {
-        matcher: "/api/service-sessions/SVC-001",
-        response: serviceSessionDetailsPayload,
-      },
-      {
-        matcher: "/api/audit-events?entity_type=SERVICE_SESSION&entity_id=SVC-001",
-        response: serviceSessionAuditPayload,
-      },
-    ]);
+    const fetchMock = createServiceSessionPageFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
