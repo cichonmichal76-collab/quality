@@ -1695,6 +1695,27 @@ function createServiceSessionPageFetchMock() {
   ]);
 }
 
+function createServiceSessionDrawerFetchMock() {
+  return createFetchMock([
+    {
+      matcher: "/api/shipment-readiness?sort_by=created_at&sort_desc=true&limit=100",
+      response: shipmentPayload,
+    },
+    {
+      matcher: "/api/service-sessions/queue?sort_by=uploaded_at&sort_desc=true&limit=100",
+      response: serviceQueuePayload,
+    },
+    {
+      matcher: "/api/service-sessions/SVC-001",
+      response: serviceSessionDetailsPayload,
+    },
+    {
+      matcher: "/api/audit-events?entity_type=SERVICE_SESSION&entity_id=SVC-001",
+      response: serviceSessionAuditPayload,
+    },
+  ]);
+}
+
 function createShipmentCsvExportFetchMock(
   firstPage: DeviceShipmentQueue,
   secondPage: DeviceShipmentQueue,
@@ -5663,24 +5684,7 @@ describe("App", () => {
   });
 
   it("opens commissioning session details drawer from service queue", async () => {
-    const fetchMock = createFetchMock([
-      {
-        matcher: "/api/shipment-readiness?sort_by=created_at&sort_desc=true&limit=100",
-        response: shipmentPayload,
-      },
-      {
-        matcher: "/api/service-sessions/queue?sort_by=uploaded_at&sort_desc=true&limit=100",
-        response: serviceQueuePayload,
-      },
-      {
-        matcher: "/api/service-sessions/SVC-001",
-        response: serviceSessionDetailsPayload,
-      },
-      {
-        matcher: "/api/audit-events?entity_type=SERVICE_SESSION&entity_id=SVC-001",
-        response: serviceSessionAuditPayload,
-      },
-    ]);
+    const fetchMock = createServiceSessionDrawerFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
