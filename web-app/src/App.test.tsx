@@ -4354,10 +4354,7 @@ describe("App", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await flushAppEffects();
 
     fireEvent.click(screen.getByRole("button", { name: "ASM-001" }));
 
@@ -4513,10 +4510,7 @@ describe("App", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await flushAppEffects();
 
     fireEvent.click(screen.getByRole("button", { name: "Komponenty" }));
     expect(await screen.findByText("COMP-001")).toBeInTheDocument();
@@ -4622,10 +4616,7 @@ describe("App", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await flushAppEffects();
 
     fireEvent.click(screen.getByRole("button", { name: "SHIP-001" }));
     fireEvent.click(
@@ -4716,10 +4707,7 @@ describe("App", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await flushAppEffects();
 
     fireEvent.click(screen.getByRole("button", { name: "SHIP-001" }));
     fireEvent.click(
@@ -4806,10 +4794,7 @@ describe("App", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await flushAppEffects();
 
     expect(screen.getByText("SHIP-001")).toBeInTheDocument();
 
@@ -4885,10 +4870,7 @@ describe("App", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await flushAppEffects();
 
     expect(screen.getByText("SHIP-001")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -4933,10 +4915,7 @@ describe("App", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await flushAppEffects();
 
     expect(screen.getByText("SHIP-001")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -4947,10 +4926,7 @@ describe("App", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByLabelText("Tylko zablokowane"));
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await flushAppEffects();
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock).toHaveBeenLastCalledWith(
@@ -4978,10 +4954,7 @@ describe("App", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await flushAppEffects();
 
     expect(screen.getByText("SHIP-001")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -4994,10 +4967,7 @@ describe("App", () => {
     const apiControls = screen.getByRole("region", { name: /API/i });
     fireEvent.click(within(apiControls).getByRole("button", { name: "Odśwież" }));
 
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await flushAppEffects();
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock).toHaveBeenLastCalledWith(
       "/api/shipment-readiness?device_type=DEMO-OPS&sort_by=created_at&sort_desc=true&limit=100",
@@ -5026,10 +4996,7 @@ describe("App", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await flushAppEffects();
 
     expect(
       screen.getByRole("checkbox", { name: /Auto-od/i }),
@@ -5065,10 +5032,7 @@ describe("App", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await flushAppEffects();
 
     const deviceTypeInput = screen.getByLabelText("Typ urządzenia");
     expect(screen.getByText("SHIP-001")).toBeInTheDocument();
@@ -5081,10 +5045,7 @@ describe("App", () => {
     expect(screen.getByText("Oczekuje na zastosowanie")).toBeInTheDocument();
 
     fireEvent.keyDown(deviceTypeInput, { key: "Enter", code: "Enter" });
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await flushAppEffects();
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock).toHaveBeenLastCalledWith(
@@ -5108,16 +5069,10 @@ describe("App", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await flushAppEffects();
 
     fireEvent.click(screen.getByRole("button", { name: "Komponenty" }));
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await flushAppEffects();
     expect(screen.getByText("COMP-001")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(2);
 
@@ -5129,10 +5084,7 @@ describe("App", () => {
     expect(screen.getByText("Oczekuje na zastosowanie")).toBeInTheDocument();
 
     fireEvent.keyDown(blockingComponentInput, { key: "Enter", code: "Enter" });
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await flushAppEffects();
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(fetchMock).toHaveBeenLastCalledWith(
@@ -5155,10 +5107,7 @@ describe("App", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await flushAppEffects();
 
     expect(screen.getByText("SHIP-001")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -5169,10 +5118,7 @@ describe("App", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByRole("button", { name: "Komponenty" }));
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await flushAppEffects();
 
     expect(screen.getByText("COMP-001")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -5197,18 +5143,12 @@ describe("App", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await flushAppEffects();
 
     expect(screen.getByText("SHIP-001")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Komponenty" }));
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await flushAppEffects();
 
     expect(screen.getByText("COMP-001")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -5219,10 +5159,7 @@ describe("App", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
 
     fireEvent.click(screen.getByRole("button", { name: /Wysy/i }));
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await flushAppEffects();
 
     expect(screen.getByText("SHIP-001")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(3);
