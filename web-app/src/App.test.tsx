@@ -1966,6 +1966,40 @@ function createShipmentStatusTransitionFetchMock({
   });
 }
 
+function createMarkReadyRejectedFetchMock() {
+  return vi.fn((input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input);
+    const method = init?.method ?? "GET";
+
+    if (url.startsWith("/api/shipment-readiness")) {
+      return Promise.resolve(createJsonResponse(shipmentPayload));
+    }
+
+    if (url === "/api/devices/SHIP-001/shipment-readiness") {
+      return Promise.resolve(createJsonResponse(shipmentActionDetailsPayload));
+    }
+
+    if (url === "/api/devices/SHIP-001/component-quality") {
+      return Promise.resolve(createJsonResponse(shipmentActionComponentDetailsPayload));
+    }
+
+    if (url === "/api/devices/SHIP-001/shipment-gate-history?limit=10") {
+      return Promise.resolve(createJsonResponse(shipmentGateHistoryPayload));
+    }
+
+    if (url === "/api/devices/SHIP-001/status" && method === "PATCH") {
+      return Promise.resolve(
+        createJsonResponse(
+          { detail: "Open critical NCR blocks shipment" },
+          { status: 400, statusText: "Bad Request" },
+        ),
+      );
+    }
+
+    throw new Error(`Unexpected request: ${method} ${url}`);
+  });
+}
+
 function mockClipboardWrite() {
   const writeTextMock = vi.fn(async () => undefined);
 
@@ -3923,39 +3957,7 @@ describe("App", () => {
   });
 
   it("shows action error in the details drawer when mark-ready is rejected", async () => {
-    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
-      const url = String(input);
-      const method = init?.method ?? "GET";
-
-      if (url.startsWith("/api/shipment-readiness")) {
-        return Promise.resolve(createJsonResponse(shipmentPayload));
-      }
-
-      if (url === "/api/devices/SHIP-001/shipment-readiness") {
-        return Promise.resolve(createJsonResponse(shipmentActionDetailsPayload));
-      }
-
-      if (url === "/api/devices/SHIP-001/component-quality") {
-        return Promise.resolve(
-          createJsonResponse(shipmentActionComponentDetailsPayload),
-        );
-      }
-
-      if (url === "/api/devices/SHIP-001/shipment-gate-history?limit=10") {
-        return Promise.resolve(createJsonResponse(shipmentGateHistoryPayload));
-      }
-
-      if (url === "/api/devices/SHIP-001/status" && method === "PATCH") {
-        return Promise.resolve(
-          createJsonResponse(
-            { detail: "Open critical NCR blocks shipment" },
-            { status: 400, statusText: "Bad Request" },
-          ),
-        );
-      }
-
-      throw new Error(`Unexpected request: ${method} ${url}`);
-    });
+    const fetchMock = createMarkReadyRejectedFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
