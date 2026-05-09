@@ -5591,11 +5591,7 @@ describe("App", () => {
   });
 
   it("clamps component limit to minimum value before sending request", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(createJsonResponse(shipmentPayload))
-      .mockResolvedValueOnce(createJsonResponse(componentPayload))
-      .mockResolvedValueOnce(createJsonResponse(componentPayload));
+    const fetchMock = createDashboardQueuesFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
