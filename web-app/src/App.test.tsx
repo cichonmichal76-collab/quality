@@ -1598,6 +1598,25 @@ function createComponentQueueFetchMock(
   ]);
 }
 
+function createDashboardQueuesFetchMock({
+  shipment = shipmentPayload,
+  component = componentPayload,
+}: {
+  shipment?: DeviceShipmentQueue;
+  component?: DeviceComponentQualityQueue;
+} = {}) {
+  return createFetchMock([
+    {
+      matcher: (url) => url.includes("/api/shipment-readiness"),
+      response: shipment,
+    },
+    {
+      matcher: (url) => url.includes("/api/component-quality"),
+      response: component,
+    },
+  ]);
+}
+
 async function flushAppEffects() {
   await act(async () => {
     await Promise.resolve();
@@ -1640,10 +1659,7 @@ describe("App", () => {
   });
 
   it("switches to component view and renders component queue data", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(createJsonResponse(shipmentPayload))
-      .mockResolvedValueOnce(createJsonResponse(componentPayload));
+    const fetchMock = createDashboardQueuesFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
@@ -4502,10 +4518,7 @@ describe("App", () => {
   it("loads last active view from localStorage and persists tab changes", async () => {
     localStorage.setItem(VIEW_STORAGE_KEY, "components");
 
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(createJsonResponse(componentPayload))
-      .mockResolvedValueOnce(createJsonResponse(shipmentPayload));
+    const fetchMock = createDashboardQueuesFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
@@ -4805,11 +4818,7 @@ describe("App", () => {
   it("flushes pending component text filters on Enter", async () => {
     vi.useFakeTimers();
 
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(createJsonResponse(shipmentPayload))
-      .mockResolvedValueOnce(createJsonResponse(componentPayload))
-      .mockResolvedValue(createJsonResponse(componentPayload));
+    const fetchMock = createDashboardQueuesFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
@@ -4844,10 +4853,7 @@ describe("App", () => {
   it("does not refetch component view when hidden shipment debounce settles", async () => {
     vi.useFakeTimers();
 
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(createJsonResponse(shipmentPayload))
-      .mockResolvedValue(createJsonResponse(componentPayload));
+    const fetchMock = createDashboardQueuesFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
@@ -4879,11 +4885,7 @@ describe("App", () => {
   it("does not refetch shipment view when hidden component debounce settles", async () => {
     vi.useFakeTimers();
 
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(createJsonResponse(shipmentPayload))
-      .mockResolvedValueOnce(createJsonResponse(componentPayload))
-      .mockResolvedValue(createJsonResponse(shipmentPayload));
+    const fetchMock = createDashboardQueuesFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
