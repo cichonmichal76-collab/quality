@@ -164,10 +164,7 @@ test("dashboard shows commissioning sync history in device details", async ({
     const url = new URL(route.request().url());
 
     if (url.pathname === "/api/shipment-readiness") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
+      await fulfillJson(route, {
           total_devices: 1,
           shipment_ready: 0,
           blocked_devices: 1,
@@ -203,8 +200,7 @@ test("dashboard shows commissioning sync history in device details", async ({
               },
             },
           ],
-        }),
-      });
+        });
       return;
     }
 
@@ -293,11 +289,7 @@ test("dashboard shows commissioning sync history in device details", async ({
     }
 
     if (url.pathname === "/api/work-sessions" || url.pathname === "/api/operators") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([]),
-      });
+      await fulfillJson(route, []);
       return;
     }
 
@@ -347,10 +339,7 @@ test("dashboard opens commissioning session details from service queue", async (
     const url = new URL(route.request().url());
 
     if (url.pathname === "/api/shipment-readiness") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
+      await fulfillJson(route, {
           total_devices: 1,
           ready_count: 1,
           blocked_count: 0,
@@ -392,8 +381,7 @@ test("dashboard opens commissioning session details from service queue", async (
               blocking_reasons: [],
             },
           ],
-        }),
-      });
+        });
       return;
     }
 
@@ -488,10 +476,7 @@ test("dashboard opens full commissioning session page and returns to queue conte
     const url = new URL(route.request().url());
 
     if (url.pathname === "/api/shipment-readiness") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
+      await fulfillJson(route, {
           total_devices: 1,
           ready_count: 1,
           blocked_count: 0,
@@ -533,8 +518,7 @@ test("dashboard opens full commissioning session page and returns to queue conte
               blocking_reasons: [],
             },
           ],
-        }),
-      });
+        });
       return;
     }
 
@@ -644,10 +628,7 @@ test("dashboard jumps from commissioning sync audit to a filtered service queue"
     const url = new URL(route.request().url());
 
     if (url.pathname === "/api/shipment-readiness") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
+      await fulfillJson(route, {
           total_devices: 1,
           ready_count: 1,
           blocked_count: 0,
@@ -689,8 +670,7 @@ test("dashboard jumps from commissioning sync audit to a filtered service queue"
               blocking_reasons: [],
             },
           ],
-        }),
-      });
+        });
       return;
     }
 
@@ -785,10 +765,7 @@ test("dashboard jumps from commissioning sync audit to reuploaded service queue"
     const url = new URL(route.request().url());
 
     if (url.pathname === "/api/shipment-readiness") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
+      await fulfillJson(route, {
           total_devices: 1,
           ready_count: 1,
           blocked_count: 0,
@@ -830,8 +807,7 @@ test("dashboard jumps from commissioning sync audit to reuploaded service queue"
               blocking_reasons: [],
             },
           ],
-        }),
-      });
+        });
       return;
     }
 
@@ -959,10 +935,7 @@ test("dashboard jumps from shipment gate history to a filtered shipment queue", 
       url.pathname === "/api/component-quality" &&
       url.searchParams.get("device_type") === "DEMO-OPS"
     ) {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
+      await fulfillJson(route, {
           total_devices: 1,
           devices_with_issues: 1,
           returned_count: 1,
@@ -1000,16 +973,14 @@ test("dashboard jumps from shipment gate history to a filtered shipment queue", 
               recommended_action: "RUN_COMPONENT_QC_OR_REWORK",
             },
           ],
-        }),
-      });
+        });
       return;
     }
 
-    if (url.pathname === "/api/devices/COMP-001/shipment-readiness") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
+    if (
+      await fulfillDeviceDetailsRequests(url.pathname, route, {
+        deviceSerialNumber: "COMP-001",
+        shipmentReadiness: {
           device_serial_number: "COMP-001",
           device_type: "DEMO-OPS",
           device_variant_code: "DEFAULT",
@@ -1041,16 +1012,8 @@ test("dashboard jumps from shipment gate history to a filtered shipment queue", 
           recommended_action: "RESOLVE_COMPONENT_QUALITY",
           blocking_reasons: ["Installed component lacks QC_PASSED"],
           blocking_checks: [],
-        }),
-      });
-      return;
-    }
-
-    if (url.pathname === "/api/devices/COMP-001/component-quality") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
+        },
+        componentQuality: {
           device_serial_number: "COMP-001",
           device_type: "DEMO-OPS",
           device_variant_code: "DEFAULT",
@@ -1067,16 +1030,8 @@ test("dashboard jumps from shipment gate history to a filtered shipment queue", 
           primary_blocking_component_serial_number: "FAN-001",
           recommended_action: "RUN_COMPONENT_QC_OR_REWORK",
           components: [],
-        }),
-      });
-      return;
-    }
-
-    if (url.pathname === "/api/devices/COMP-001/shipment-gate-history") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([
+        },
+        shipmentGateHistory: [
           {
             id: "AUD-1",
             event_type: "SHIPMENT_GATE_BLOCKED",
@@ -1105,7 +1060,37 @@ test("dashboard jumps from shipment gate history to a filtered shipment queue", 
             payload: { requested_status: "READY_FOR_SHIPMENT" },
             created_at: "2026-05-01T10:00:00Z",
           },
-        ]),
+        ],
+        serviceSessions: [],
+        auditEvents: { body: [] },
+        workSessions: [],
+        operators: [],
+      })
+    ) {
+      return;
+    }
+
+    if (
+      url.pathname === "/api/shipment-readiness" &&
+      url.searchParams.get("latest_gate_result") === "BLOCKED"
+    ) {
+      await fulfillJson(route, {
+        total_devices: 1,
+        shipment_ready: 0,
+        blocked_devices: 1,
+        returned_count: 1,
+        offset: 0,
+        limit: 100,
+        has_more: false,
+        next_offset: null,
+        filters: { latest_gate_result: "BLOCKED" },
+        blocking_summary: [],
+        action_summary: [],
+        latest_decision_summary: [
+          { latest_gate_result: "BLOCKED", device_count: 1 },
+        ],
+        production_status_summary: [],
+        devices: [],
       });
       return;
     }
@@ -1161,10 +1146,7 @@ test("dashboard shows commissioning sessions in device details", async ({
     const url = new URL(route.request().url());
 
     if (url.pathname === "/api/shipment-readiness") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
+      await fulfillJson(route, {
           total_devices: 1,
           ready_count: 0,
           blocked_count: 1,
@@ -1206,8 +1188,7 @@ test("dashboard shows commissioning sessions in device details", async ({
               blocking_reasons: [],
             },
           ],
-        }),
-      });
+        });
       return;
     }
 
@@ -1295,3 +1276,4 @@ test("dashboard shows commissioning sessions in device details", async ({
     drawer.getByRole("link", { name: "Pobierz paczkę ZIP" }),
   ).toHaveAttribute("href", "/api/service-sessions/SVC-9001/package");
 });
+
