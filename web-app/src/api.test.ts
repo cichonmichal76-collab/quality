@@ -523,17 +523,14 @@ describe("updateWorkstation", () => {
 
 describe("listOperators", () => {
   it("pobiera operatorów do filtrowania sesji final test", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      json: async () => [
+    const fetchMock = vi.fn().mockResolvedValue(
+      createJsonResponse([
         {
           operator_id: "OP-FT-001",
           role: "FINAL_TEST_OPERATOR",
         },
-      ],
-    } satisfies Partial<Response>);
+      ]),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const payload = await listOperators("/api");
@@ -550,11 +547,8 @@ describe("listOperators", () => {
 
 describe("createOperator", () => {
   it("tworzy operatora do stanowiska QC", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      json: async () => ({
+    const fetchMock = vi.fn().mockResolvedValue(
+      createJsonResponse({
         operator_id: "QCOP-NEW",
         full_name: "Nowy operator",
         role: "QUALITY_INSPECTOR",
@@ -562,7 +556,7 @@ describe("createOperator", () => {
         rfid_uid_hash: "RFID-NEW",
         is_active: true,
       }),
-    } satisfies Partial<Response>);
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const payload = await createOperator("/api", {
@@ -596,11 +590,8 @@ describe("createOperator", () => {
 
 describe("updateOperator", () => {
   it("aktualizuje operatora, login i aktywnosc", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      json: async () => ({
+    const fetchMock = vi.fn().mockResolvedValue(
+      createJsonResponse({
         operator_id: "QCOP-DEMO",
         full_name: "Starszy operator",
         role: "QUALITY_MANAGER",
@@ -608,7 +599,7 @@ describe("updateOperator", () => {
         rfid_uid_hash: "RFID-UPD",
         is_active: false,
       }),
-    } satisfies Partial<Response>);
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const payload = await updateOperator("/api", "QCOP-DEMO", {
@@ -641,18 +632,15 @@ describe("updateOperator", () => {
 
 describe("operatorLogin", () => {
   it("wysyla login operatora i zwraca sesje stanowiskowa", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      json: async () => ({
+    const fetchMock = vi.fn().mockResolvedValue(
+      createJsonResponse({
         work_session_id: "WS-QC-001",
         operator_id: "QCOP-DEMO",
         workstation_id: "QCWS-DEMO",
         machine_id: null,
         status: "ACTIVE",
       }),
-    } satisfies Partial<Response>);
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const payload = await operatorLogin("/api", {
@@ -678,18 +666,15 @@ describe("operatorLogin", () => {
 
 describe("rfidLogin", () => {
   it("wysyla odczyt RFID i zwraca sesje stanowiskowa", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      json: async () => ({
+    const fetchMock = vi.fn().mockResolvedValue(
+      createJsonResponse({
         work_session_id: "WS-QC-002",
         operator_id: "QCOP-DEMO",
         workstation_id: "QCWS-DEMO",
         machine_id: null,
         status: "ACTIVE",
       }),
-    } satisfies Partial<Response>);
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const payload = await rfidLogin("/api", {
@@ -756,11 +741,8 @@ describe("listServiceSessionsQueue", () => {
   });
 
   it("pobiera szczegoly pojedynczej sesji commissioning", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      json: async () => ({
+    const fetchMock = vi.fn().mockResolvedValue(
+      createJsonResponse({
         id: "svc-row-001",
         session_id: "SVC-001",
         device_serial_number: "DEVICE-001",
@@ -780,7 +762,7 @@ describe("listServiceSessionsQueue", () => {
         uploaded_at: "2026-05-03T08:00:00Z",
         created_at: "2026-05-03T07:30:00Z",
       }),
-    });
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const payload = await getServiceSession("/api", "SVC-001");
@@ -795,11 +777,8 @@ describe("listServiceSessionsQueue", () => {
   });
 
   it("pobiera kolejke commissioning z filtrami, sortowaniem i paginacja", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      json: async () => ({
+    const fetchMock = vi.fn().mockResolvedValue(
+      createJsonResponse({
         total_sessions: 2,
         reuploaded_sessions: 1,
         returned_count: 1,
@@ -834,7 +813,7 @@ describe("listServiceSessionsQueue", () => {
           },
         ],
       }),
-    } satisfies Partial<Response>);
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const payload = await listServiceSessionsQueue("/api", {
