@@ -1695,6 +1695,46 @@ function createServiceSessionPageFetchMock() {
   ]);
 }
 
+function createShipmentCsvExportFetchMock(
+  firstPage: DeviceShipmentQueue,
+  secondPage: DeviceShipmentQueue,
+) {
+  return createFetchMock([
+    {
+      matcher: "/api/shipment-readiness?sort_by=created_at&sort_desc=true&limit=100",
+      response: shipmentPayload,
+    },
+    {
+      matcher: "/api/shipment-readiness?sort_by=created_at&sort_desc=true&limit=500",
+      response: firstPage,
+    },
+    {
+      matcher: "/api/shipment-readiness?sort_by=created_at&sort_desc=true&limit=500&offset=500",
+      response: secondPage,
+    },
+  ]);
+}
+
+function createComponentCsvExportFetchMock(
+  firstPage: DeviceComponentQualityQueue,
+  secondPage: DeviceComponentQualityQueue,
+) {
+  return createFetchMock([
+    {
+      matcher: "/api/component-quality?only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=100",
+      response: componentPayload,
+    },
+    {
+      matcher: "/api/component-quality?only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=500",
+      response: firstPage,
+    },
+    {
+      matcher: "/api/component-quality?only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=500&offset=500",
+      response: secondPage,
+    },
+  ]);
+}
+
 async function flushAppEffects() {
   await act(async () => {
     await Promise.resolve();
@@ -2466,20 +2506,10 @@ describe("App", () => {
         },
       ],
     };
-    const fetchMock = createFetchMock([
-      {
-        matcher: "/api/shipment-readiness?sort_by=created_at&sort_desc=true&limit=100",
-        response: shipmentPayload,
-      },
-      {
-        matcher: "/api/shipment-readiness?sort_by=created_at&sort_desc=true&limit=500",
-        response: shipmentExportPageOne,
-      },
-      {
-        matcher: "/api/shipment-readiness?sort_by=created_at&sort_desc=true&limit=500&offset=500",
-        response: shipmentExportPageTwo,
-      },
-    ]);
+    const fetchMock = createShipmentCsvExportFetchMock(
+      shipmentExportPageOne,
+      shipmentExportPageTwo,
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
@@ -2545,20 +2575,10 @@ describe("App", () => {
         },
       ],
     };
-    const fetchMock = createFetchMock([
-      {
-        matcher: "/api/component-quality?only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=100",
-        response: componentPayload,
-      },
-      {
-        matcher: "/api/component-quality?only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=500",
-        response: componentExportPageOne,
-      },
-      {
-        matcher: "/api/component-quality?only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=500&offset=500",
-        response: componentExportPageTwo,
-      },
-    ]);
+    const fetchMock = createComponentCsvExportFetchMock(
+      componentExportPageOne,
+      componentExportPageTwo,
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
