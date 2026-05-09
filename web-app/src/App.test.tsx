@@ -1454,6 +1454,18 @@ function createErrorResponse(
   } as Response;
 }
 
+function getCreatedBlob(
+  createObjectURLMock: ReturnType<typeof vi.fn<(blob: Blob) => string>>,
+): Blob {
+  const blob = createObjectURLMock.mock.calls[0]?.[0];
+
+  if (!(blob instanceof Blob)) {
+    throw new Error("Expected CSV export to create a Blob URL from a Blob.");
+  }
+
+  return blob;
+}
+
 afterEach(() => {
   localStorage.clear();
   window.history.replaceState({}, "", "/");
@@ -2479,7 +2491,7 @@ describe("App", () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
     await waitFor(() => expect(createObjectURLMock).toHaveBeenCalledTimes(1));
-    const csvBlob = createObjectURLMock.mock.calls[0]?.[0] as unknown as Blob;
+    const csvBlob = getCreatedBlob(createObjectURLMock);
     const csvText = await csvBlob.text();
     expect(csvText).toContain("device_serial_number");
     expect(csvText).toContain("SHIP-001");
@@ -2594,7 +2606,7 @@ describe("App", () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
     await waitFor(() => expect(createObjectURLMock).toHaveBeenCalledTimes(1));
-    const csvBlob = createObjectURLMock.mock.calls[0]?.[0] as unknown as Blob;
+    const csvBlob = getCreatedBlob(createObjectURLMock);
     const csvText = await csvBlob.text();
     expect(csvText).toContain("device_serial_number");
     expect(csvText).toContain("COMP-001");
