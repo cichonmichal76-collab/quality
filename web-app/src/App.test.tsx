@@ -1878,11 +1878,9 @@ describe("App", () => {
         },
       ],
     };
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(createJsonResponse(shipmentPayload))
-      .mockResolvedValueOnce(createJsonResponse(componentSummaryPayload))
-      .mockResolvedValueOnce(createJsonResponse(componentSummaryPayload));
+    const fetchMock = createDashboardQueuesFetchMock({
+      component: componentSummaryPayload,
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
@@ -1933,11 +1931,9 @@ describe("App", () => {
         },
       ],
     };
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(createJsonResponse(shipmentPayload))
-      .mockResolvedValueOnce(createJsonResponse(componentSummaryPayload))
-      .mockResolvedValueOnce(createJsonResponse(componentSummaryPayload));
+    const fetchMock = createDashboardQueuesFetchMock({
+      component: componentSummaryPayload,
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
