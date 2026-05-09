@@ -1466,6 +1466,32 @@ function getCreatedBlob(
   return blob;
 }
 
+function setupCsvDownloadMocks(objectUrl: string) {
+  const createObjectURLMock = vi.fn((_blob: Blob) => objectUrl);
+  const revokeObjectURLMock = vi.fn();
+  const clickedDownloads: Array<{ download: string; href: string }> = [];
+
+  Object.defineProperty(URL, "createObjectURL", {
+    configurable: true,
+    value: createObjectURLMock,
+  });
+  Object.defineProperty(URL, "revokeObjectURL", {
+    configurable: true,
+    value: revokeObjectURLMock,
+  });
+
+  vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(
+    function click(this: HTMLAnchorElement) {
+      clickedDownloads.push({
+        download: this.download,
+        href: this.href,
+      });
+    },
+  );
+
+  return { createObjectURLMock, revokeObjectURLMock, clickedDownloads };
+}
+
 afterEach(() => {
   localStorage.clear();
   window.history.replaceState({}, "", "/");
@@ -2397,28 +2423,8 @@ describe("App", () => {
   });
 
   it("exports the active shipment queue to CSV", async () => {
-    const createObjectURLMock = vi.fn((_blob: Blob) => {
-      return "blob:shipment-export";
-    });
-    const revokeObjectURLMock = vi.fn();
-    Object.defineProperty(URL, "createObjectURL", {
-      configurable: true,
-      value: createObjectURLMock,
-    });
-    Object.defineProperty(URL, "revokeObjectURL", {
-      configurable: true,
-      value: revokeObjectURLMock,
-    });
-
-    const clickedDownloads: Array<{ download: string; href: string }> = [];
-    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(
-      function click(this: HTMLAnchorElement) {
-        clickedDownloads.push({
-          download: this.download,
-          href: this.href,
-        });
-      },
-    );
+    const { createObjectURLMock, revokeObjectURLMock, clickedDownloads } =
+      setupCsvDownloadMocks("blob:shipment-export");
 
     const shipmentExportPageOne: DeviceShipmentQueue = {
       ...shipmentPayload,
@@ -2512,28 +2518,8 @@ describe("App", () => {
   it("exports the active component queue to CSV", async () => {
     localStorage.setItem(VIEW_STORAGE_KEY, "components");
 
-    const createObjectURLMock = vi.fn((_blob: Blob) => {
-      return "blob:component-export";
-    });
-    const revokeObjectURLMock = vi.fn();
-    Object.defineProperty(URL, "createObjectURL", {
-      configurable: true,
-      value: createObjectURLMock,
-    });
-    Object.defineProperty(URL, "revokeObjectURL", {
-      configurable: true,
-      value: revokeObjectURLMock,
-    });
-
-    const clickedDownloads: Array<{ download: string; href: string }> = [];
-    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(
-      function click(this: HTMLAnchorElement) {
-        clickedDownloads.push({
-          download: this.download,
-          href: this.href,
-        });
-      },
-    );
+    const { createObjectURLMock, revokeObjectURLMock, clickedDownloads } =
+      setupCsvDownloadMocks("blob:component-export");
 
     const componentExportPageOne: DeviceComponentQualityQueue = {
       ...componentPayload,
