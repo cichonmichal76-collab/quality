@@ -2135,24 +2135,7 @@ describe("App", () => {
       "/?view=components&comp_device_type=DEMO-OPS&comp_sort_by=blocked_components&comp_sort_desc=true&comp_only_blocking=true&comp_limit=100&comp_offset=0&device_serial=COMP-001&device_type=DEMO-OPS&device_variant=DEFAULT",
     );
 
-    const fetchMock = createFetchMock([
-      {
-        matcher: "/api/component-quality?device_type=DEMO-OPS&only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=100",
-        response: componentPayload,
-      },
-      {
-        matcher: "/api/devices/COMP-001/shipment-readiness",
-        response: componentActionShipmentDetailsPayload,
-      },
-      {
-        matcher: "/api/devices/COMP-001/component-quality",
-        response: componentActionComponentDetailsPayload,
-      },
-      {
-        matcher: "/api/devices/COMP-001/shipment-gate-history?limit=10",
-        response: [],
-      },
-    ]);
+    const fetchMock = createComponentDetailsFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
