@@ -1491,6 +1491,27 @@ function createComponentDetailsFetchMock(
   ]);
 }
 
+function createAssemblyDetailsFetchMock() {
+  return createFetchMock([
+    {
+      matcher: "/api/shipment-readiness?device_type=DEMO-OPS&sort_by=created_at&sort_desc=true&limit=100",
+      response: shipmentAssemblyQueuePayload,
+    },
+    {
+      matcher: "/api/devices/ASM-001/shipment-readiness",
+      response: shipmentAssemblyDetailsPayload,
+    },
+    {
+      matcher: "/api/devices/ASM-001/component-quality",
+      response: componentAssemblyDetailsPayload,
+    },
+    {
+      matcher: "/api/devices/ASM-001/shipment-gate-history?limit=10",
+      response: [],
+    },
+  ]);
+}
+
 async function flushAppEffects() {
   await act(async () => {
     await Promise.resolve();
@@ -3504,30 +3525,7 @@ describe("App", () => {
       "/devices/ASM-001?view=shipment&ship_device_type=DEMO-OPS&ship_sort_by=created_at&ship_sort_desc=true&ship_limit=100&ship_offset=0&device_type=DEMO-OPS&device_variant=DEFAULT#bom",
     );
 
-    const fetchMock = vi.fn((input: string | URL | Request) => {
-      const url = String(input);
-
-      if (
-        url ===
-        "/api/shipment-readiness?device_type=DEMO-OPS&sort_by=created_at&sort_desc=true&limit=100"
-      ) {
-        return Promise.resolve(createJsonResponse(shipmentAssemblyQueuePayload));
-      }
-
-      if (url === "/api/devices/ASM-001/shipment-readiness") {
-        return Promise.resolve(createJsonResponse(shipmentAssemblyDetailsPayload));
-      }
-
-      if (url === "/api/devices/ASM-001/component-quality") {
-        return Promise.resolve(createJsonResponse(componentAssemblyDetailsPayload));
-      }
-
-      if (url === "/api/devices/ASM-001/shipment-gate-history?limit=10") {
-        return Promise.resolve(createJsonResponse([]));
-      }
-
-      throw new Error(`Unexpected request: ${url}`);
-    });
+    const fetchMock = createAssemblyDetailsFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
