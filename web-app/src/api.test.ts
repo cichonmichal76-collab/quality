@@ -698,11 +698,8 @@ describe("rfidLogin", () => {
 
 describe("listServiceSessionsQueue", () => {
   it("pobiera liste sesji commissioning przefiltrowana po serialu urzadzenia", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      json: async () => [
+    const fetchMock = vi.fn().mockResolvedValue(
+      createJsonResponse([
         {
           id: "svc-row-001",
           session_id: "SVC-001",
@@ -723,8 +720,8 @@ describe("listServiceSessionsQueue", () => {
           uploaded_at: "2026-05-03T08:00:00Z",
           created_at: "2026-05-03T07:30:00Z",
         },
-      ],
-    });
+      ]),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const payload = await listServiceSessions("/api", {
@@ -1374,11 +1371,8 @@ describe("qc product configuration api", () => {
   it("tworzy, aktualizuje i usuwa krok checklisty produktu QC", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        statusText: "OK",
-        json: async () => ({
+      .mockResolvedValueOnce(
+        createJsonResponse({
           id: "STEP-001",
           checklist_id: "CHK-001",
           step_order: 1,
@@ -1399,12 +1393,9 @@ describe("qc product configuration api", () => {
           tolerance_min: 11.8,
           tolerance_max: 12.2,
         }),
-      } satisfies Partial<Response>)
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        statusText: "OK",
-        json: async () => ({
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
           id: "STEP-001",
           checklist_id: "CHK-001",
           step_order: 1,
@@ -1425,7 +1416,7 @@ describe("qc product configuration api", () => {
           tolerance_min: 11.8,
           tolerance_max: 12.2,
         }),
-      } satisfies Partial<Response>)
+      )
       .mockResolvedValueOnce({
         ok: true,
         status: 204,
