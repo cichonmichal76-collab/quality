@@ -1896,6 +1896,76 @@ function createBulkComponentQcPassFetchMock({
   });
 }
 
+function createShipmentStatusTransitionFetchMock({
+  initialQueuePayload,
+  nextQueuePayload,
+  initialDetailsPayload,
+  nextDetailsPayload,
+  initialHistoryPayload,
+  nextHistoryPayload,
+  nextProductionStatus,
+  updatedAt,
+}: {
+  initialQueuePayload: DeviceShipmentQueue;
+  nextQueuePayload: DeviceShipmentQueue;
+  initialDetailsPayload: DeviceShipmentReadiness;
+  nextDetailsPayload: DeviceShipmentReadiness;
+  initialHistoryPayload: AuditEvent[];
+  nextHistoryPayload: AuditEvent[];
+  nextProductionStatus: string;
+  updatedAt: string;
+}) {
+  let statusUpdated = false;
+
+  return vi.fn((input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input);
+    const method = init?.method ?? "GET";
+
+    if (url.startsWith("/api/shipment-readiness")) {
+      return Promise.resolve(
+        createJsonResponse(statusUpdated ? nextQueuePayload : initialQueuePayload),
+      );
+    }
+
+    if (url === "/api/devices/SHIP-001/shipment-readiness") {
+      return Promise.resolve(
+        createJsonResponse(statusUpdated ? nextDetailsPayload : initialDetailsPayload),
+      );
+    }
+
+    if (url === "/api/devices/SHIP-001/component-quality") {
+      return Promise.resolve(createJsonResponse(shipmentActionComponentDetailsPayload));
+    }
+
+    if (url === "/api/devices/SHIP-001/shipment-gate-history?limit=10") {
+      return Promise.resolve(
+        createJsonResponse(statusUpdated ? nextHistoryPayload : initialHistoryPayload),
+      );
+    }
+
+    if (url === "/api/devices/SHIP-001/status" && method === "PATCH") {
+      statusUpdated = true;
+      return Promise.resolve(
+        createJsonResponse({
+          id: "DEV-001",
+          device_serial_number: "SHIP-001",
+          device_type: "DEMO-OPS",
+          variant_code: "DEFAULT",
+          hardware_version: null,
+          firmware_version: null,
+          bootloader_version: null,
+          created_by: null,
+          production_status: nextProductionStatus,
+          created_at: "2026-05-01T08:00:00Z",
+          updated_at: updatedAt,
+        }),
+      );
+    }
+
+    throw new Error(`Unexpected request: ${method} ${url}`);
+  });
+}
+
 function mockClipboardWrite() {
   const writeTextMock = vi.fn(async () => undefined);
 
@@ -3808,59 +3878,15 @@ describe("App", () => {
   });
 
   it("marks device as ready for shipment from the details drawer", async () => {
-    let readyMarked = false;
-    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
-      const url = String(input);
-      const method = init?.method ?? "GET";
-
-      if (url.startsWith("/api/shipment-readiness")) {
-        return Promise.resolve(
-          createJsonResponse(readyMarked ? shipmentReadyQueuePayload : shipmentPayload),
-        );
-      }
-
-      if (url === "/api/devices/SHIP-001/shipment-readiness") {
-        return Promise.resolve(
-          createJsonResponse(
-            readyMarked ? shipmentDetailsReadyPayload : shipmentActionDetailsPayload,
-          ),
-        );
-      }
-
-      if (url === "/api/devices/SHIP-001/component-quality") {
-        return Promise.resolve(
-          createJsonResponse(shipmentActionComponentDetailsPayload),
-        );
-      }
-
-      if (url === "/api/devices/SHIP-001/shipment-gate-history?limit=10") {
-        return Promise.resolve(
-          createJsonResponse(
-            readyMarked ? shipmentGateHistoryReadyPayload : shipmentGateHistoryPayload,
-          ),
-        );
-      }
-
-      if (url === "/api/devices/SHIP-001/status" && method === "PATCH") {
-        readyMarked = true;
-        return Promise.resolve(
-          createJsonResponse({
-            id: "DEV-001",
-            device_serial_number: "SHIP-001",
-            device_type: "DEMO-OPS",
-            variant_code: "DEFAULT",
-            hardware_version: null,
-            firmware_version: null,
-            bootloader_version: null,
-            created_by: null,
-            production_status: "READY_FOR_SHIPMENT",
-            created_at: "2026-05-01T08:00:00Z",
-            updated_at: "2026-05-01T10:15:00Z",
-          }),
-        );
-      }
-
-      throw new Error(`Unexpected request: ${method} ${url}`);
+    const fetchMock = createShipmentStatusTransitionFetchMock({
+      initialQueuePayload: shipmentPayload,
+      nextQueuePayload: shipmentReadyQueuePayload,
+      initialDetailsPayload: shipmentActionDetailsPayload,
+      nextDetailsPayload: shipmentDetailsReadyPayload,
+      initialHistoryPayload: shipmentGateHistoryPayload,
+      nextHistoryPayload: shipmentGateHistoryReadyPayload,
+      nextProductionStatus: "READY_FOR_SHIPMENT",
+      updatedAt: "2026-05-01T10:15:00Z",
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -3949,59 +3975,15 @@ describe("App", () => {
   });
 
   it("marks ready device as shipped from the details drawer", async () => {
-    let shipped = false;
-    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
-      const url = String(input);
-      const method = init?.method ?? "GET";
-
-      if (url.startsWith("/api/shipment-readiness")) {
-        return Promise.resolve(
-          createJsonResponse(shipped ? shipmentShippedQueuePayload : shipmentReadyQueuePayload),
-        );
-      }
-
-      if (url === "/api/devices/SHIP-001/shipment-readiness") {
-        return Promise.resolve(
-          createJsonResponse(
-            shipped ? shipmentDetailsShippedPayload : shipmentDetailsReadyPayload,
-          ),
-        );
-      }
-
-      if (url === "/api/devices/SHIP-001/component-quality") {
-        return Promise.resolve(
-          createJsonResponse(shipmentActionComponentDetailsPayload),
-        );
-      }
-
-      if (url === "/api/devices/SHIP-001/shipment-gate-history?limit=10") {
-        return Promise.resolve(
-          createJsonResponse(
-            shipped ? shipmentGateHistoryShippedPayload : shipmentGateHistoryReadyPayload,
-          ),
-        );
-      }
-
-      if (url === "/api/devices/SHIP-001/status" && method === "PATCH") {
-        shipped = true;
-        return Promise.resolve(
-          createJsonResponse({
-            id: "DEV-001",
-            device_serial_number: "SHIP-001",
-            device_type: "DEMO-OPS",
-            variant_code: "DEFAULT",
-            hardware_version: null,
-            firmware_version: null,
-            bootloader_version: null,
-            created_by: null,
-            production_status: "SHIPPED",
-            created_at: "2026-05-01T08:00:00Z",
-            updated_at: "2026-05-01T11:00:00Z",
-          }),
-        );
-      }
-
-      throw new Error(`Unexpected request: ${method} ${url}`);
+    const fetchMock = createShipmentStatusTransitionFetchMock({
+      initialQueuePayload: shipmentReadyQueuePayload,
+      nextQueuePayload: shipmentShippedQueuePayload,
+      initialDetailsPayload: shipmentDetailsReadyPayload,
+      nextDetailsPayload: shipmentDetailsShippedPayload,
+      initialHistoryPayload: shipmentGateHistoryReadyPayload,
+      nextHistoryPayload: shipmentGateHistoryShippedPayload,
+      nextProductionStatus: "SHIPPED",
+      updatedAt: "2026-05-01T11:00:00Z",
     });
     vi.stubGlobal("fetch", fetchMock);
 
