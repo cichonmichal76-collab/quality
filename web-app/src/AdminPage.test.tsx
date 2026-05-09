@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { App } from "./App";
-import { jsonResponse } from "./TestHttpUtils";
+import { createFetchMock, jsonResponse } from "./TestHttpUtils";
 
 afterEach(() => {
   cleanup();
@@ -36,35 +36,36 @@ describe("AdminPage", () => {
       },
     ];
 
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      const method = init?.method ?? "GET";
-
-      if (url.endsWith("/api/operators") && method === "GET") {
-        return jsonResponse(operators);
-      }
-
-      if (url.endsWith("/api/workstations") && method === "GET") {
-        return jsonResponse(workstations);
-      }
-
-      if (url.endsWith("/api/operators") && method === "POST") {
-        const payload = JSON.parse(String(init?.body));
-        operators.unshift({
-          id: "OP-ROW-NEW",
-          operator_id: payload.operator_id,
-          full_name: payload.full_name,
-          role: payload.role,
-          login_name: payload.login_name,
-          rfid_uid_hash: payload.rfid_uid_hash,
-          is_active: payload.is_active,
-          created_at: "2026-05-03T10:00:00Z",
-        });
-        return jsonResponse(operators[0]);
-      }
-
-      throw new Error(`Unexpected request: ${method} ${url}`);
-    });
+    const fetchMock = createFetchMock([
+      {
+        matcher: "/api/operators",
+        method: "GET",
+        response: operators,
+      },
+      {
+        matcher: "/api/workstations",
+        method: "GET",
+        response: workstations,
+      },
+      {
+        matcher: "/api/operators",
+        method: "POST",
+        response: (_url: string, _method: string, init?: RequestInit) => {
+          const payload = JSON.parse(String(init?.body));
+          operators.unshift({
+            id: "OP-ROW-NEW",
+            operator_id: payload.operator_id,
+            full_name: payload.full_name,
+            role: payload.role,
+            login_name: payload.login_name,
+            rfid_uid_hash: payload.rfid_uid_hash,
+            is_active: payload.is_active,
+            created_at: "2026-05-03T10:00:00Z",
+          });
+          return operators[0];
+        },
+      },
+    ]);
 
     vi.stubGlobal("fetch", fetchMock);
     window.history.replaceState(null, "", "/admin");
@@ -123,29 +124,30 @@ describe("AdminPage", () => {
       },
     ];
 
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      const method = init?.method ?? "GET";
-
-      if (url.endsWith("/api/operators") && method === "GET") {
-        return jsonResponse(operators);
-      }
-
-      if (url.endsWith("/api/workstations") && method === "GET") {
-        return jsonResponse(workstations);
-      }
-
-      if (url.endsWith("/api/workstations/QCWS-001") && method === "PATCH") {
-        const payload = JSON.parse(String(init?.body));
-        workstations[0] = {
-          ...workstations[0],
-          ...payload,
-        };
-        return jsonResponse(workstations[0]);
-      }
-
-      throw new Error(`Unexpected request: ${method} ${url}`);
-    });
+    const fetchMock = createFetchMock([
+      {
+        matcher: "/api/operators",
+        method: "GET",
+        response: operators,
+      },
+      {
+        matcher: "/api/workstations",
+        method: "GET",
+        response: workstations,
+      },
+      {
+        matcher: "/api/workstations/QCWS-001",
+        method: "PATCH",
+        response: (_url: string, _method: string, init?: RequestInit) => {
+          const payload = JSON.parse(String(init?.body));
+          workstations[0] = {
+            ...workstations[0],
+            ...payload,
+          };
+          return workstations[0];
+        },
+      },
+    ]);
 
     vi.stubGlobal("fetch", fetchMock);
     window.history.replaceState(null, "", "/admin");
