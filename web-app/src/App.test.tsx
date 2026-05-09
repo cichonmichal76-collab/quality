@@ -1492,6 +1492,13 @@ function setupCsvDownloadMocks(objectUrl: string) {
   return { createObjectURLMock, revokeObjectURLMock, clickedDownloads };
 }
 
+async function flushAppEffects() {
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
 afterEach(() => {
   localStorage.clear();
   window.history.replaceState({}, "", "/");
@@ -1506,10 +1513,7 @@ describe("App", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await flushAppEffects();
 
     expect(screen.getByText("SHIP-001")).toBeInTheDocument();
     expect(screen.getByText("API OK")).toBeInTheDocument();
@@ -1537,10 +1541,7 @@ describe("App", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await flushAppEffects();
 
     expect(screen.getByText("SHIP-001")).toBeInTheDocument();
 
@@ -1559,10 +1560,7 @@ describe("App", () => {
       ),
     ).toBeInTheDocument();
 
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await flushAppEffects();
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock).toHaveBeenLastCalledWith(
       "/api/component-quality?only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=100",
@@ -1705,10 +1703,7 @@ describe("App", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await flushAppEffects();
 
     fireEvent.click(screen.getByRole("button", { name: "Komponenty" }));
 
@@ -1763,10 +1758,7 @@ describe("App", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await flushAppEffects();
 
     fireEvent.click(screen.getByRole("button", { name: "Komponenty" }));
 
@@ -1911,10 +1903,7 @@ describe("App", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await flushAppEffects();
 
     fireEvent.click(screen.getByRole("button", { name: "SHIP-001" }));
 
@@ -2485,11 +2474,7 @@ describe("App", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
-
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await flushAppEffects();
 
     expect(screen.getByText("SHIP-001")).toBeInTheDocument();
 
@@ -2580,11 +2565,7 @@ describe("App", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
-
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await flushAppEffects();
 
     expect(screen.getByText("COMP-001")).toBeInTheDocument();
 
@@ -3992,10 +3973,7 @@ describe("App", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await flushAppEffects();
 
     fireEvent.click(screen.getByRole("button", { name: "SHIP-001" }));
     const actionButton = await screen.findByRole("button", {
@@ -4063,10 +4041,7 @@ describe("App", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await flushAppEffects();
 
     fireEvent.click(screen.getByRole("button", { name: "SHIP-001" }));
     fireEvent.click(
@@ -4139,10 +4114,7 @@ describe("App", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await flushAppEffects();
 
     fireEvent.click(screen.getByRole("button", { name: "SHIP-001" }));
     fireEvent.click(
@@ -4256,10 +4228,7 @@ describe("App", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await flushAppEffects();
 
     fireEvent.click(screen.getByRole("button", { name: "TEST-001" }));
 
