@@ -5412,7 +5412,7 @@ describe("App", () => {
   });
 
   it("restores default shipment filters after reset", async () => {
-    const fetchMock = vi.fn(async () => createJsonResponse(shipmentPayload));
+    const fetchMock = createShipmentQueueFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
@@ -5496,8 +5496,8 @@ describe("App", () => {
   });
 
   it("clamps shipment limit in UI state before sending request", async () => {
-    const fetchMock = vi.fn(async () =>
-      createJsonResponse(paginatedShipmentPageOnePayload),
+    const fetchMock = createShipmentQueueFetchMock(
+      paginatedShipmentPageOnePayload,
     );
     vi.stubGlobal("fetch", fetchMock);
 
