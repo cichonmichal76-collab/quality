@@ -1766,6 +1766,16 @@ function createComponentRefreshErrorFetchMock() {
     );
 }
 
+function createDeferredThenFreshShipmentFetchMock() {
+  const firstResponse = createDeferredResponse();
+  const fetchMock = vi
+    .fn()
+    .mockImplementationOnce(() => firstResponse.promise)
+    .mockResolvedValueOnce(createJsonResponse(freshShipmentPayload));
+
+  return { fetchMock, firstResponse };
+}
+
 async function flushAppEffects() {
   await act(async () => {
     await Promise.resolve();
@@ -4624,9 +4634,11 @@ describe("App", () => {
   it("shows API error banner when request fails", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () =>
-        createErrorResponse(503, "Service Unavailable", "backend temporarily down"),
-      ),
+      vi
+        .fn()
+        .mockResolvedValue(
+          createErrorResponse(503, "Service Unavailable", "backend temporarily down"),
+        ),
     );
 
     render(<App />);
@@ -4658,11 +4670,7 @@ describe("App", () => {
   });
 
   it("ignores stale shipment success after a newer response wins", async () => {
-    const firstResponse = createDeferredResponse();
-    const fetchMock = vi
-      .fn()
-      .mockImplementationOnce(() => firstResponse.promise)
-      .mockResolvedValueOnce(createJsonResponse(freshShipmentPayload));
+    const { fetchMock, firstResponse } = createDeferredThenFreshShipmentFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
@@ -4684,11 +4692,7 @@ describe("App", () => {
   });
 
   it("ignores stale shipment error after a newer response wins", async () => {
-    const firstResponse = createDeferredResponse();
-    const fetchMock = vi
-      .fn()
-      .mockImplementationOnce(() => firstResponse.promise)
-      .mockResolvedValueOnce(createJsonResponse(freshShipmentPayload));
+    const { fetchMock, firstResponse } = createDeferredThenFreshShipmentFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
