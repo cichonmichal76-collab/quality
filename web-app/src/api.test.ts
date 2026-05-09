@@ -42,6 +42,7 @@ import {
   updateWorkstation,
 } from "./api";
 import {
+  emptyResponse as createEmptyResponse,
   errorResponse as createErrorResponse,
   jsonResponse as createJsonResponse,
 } from "./TestHttpUtils";
@@ -148,16 +149,13 @@ describe("updateDeviceStatus", () => {
 
 describe("updateNonconformityStatus", () => {
   it("wysyła PATCH zamykający NCR z corrective_action", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      json: async () => ({
+    const fetchMock = vi.fn().mockResolvedValue(
+      createJsonResponse({
         ncr_id: "NCR-001",
         status: "CLOSED",
         corrective_action: "Zamknięte z panelu operacyjnego.",
       }),
-    } satisfies Partial<Response>);
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const payload = await updateNonconformityStatus(
@@ -956,11 +954,8 @@ describe("listQcChecklists", () => {
 
 describe("listQcChecklistSteps", () => {
   it("pobiera kroki checklisty QC po checklist_code", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      json: async () => [
+    const fetchMock = vi.fn().mockResolvedValue(
+      createJsonResponse([
         {
           id: "STEP-001",
           checklist_id: "CHK-001",
@@ -975,8 +970,8 @@ describe("listQcChecklistSteps", () => {
           tolerance_min: 24.8,
           tolerance_max: 25.2,
         },
-      ],
-    } satisfies Partial<Response>);
+      ]),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const payload = await listQcChecklistSteps("/api", "QC-COMP-001");
@@ -1417,12 +1412,7 @@ describe("qc product configuration api", () => {
           tolerance_max: 12.2,
         }),
       )
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 204,
-        statusText: "No Content",
-        text: async () => "",
-      } satisfies Partial<Response>);
+      .mockResolvedValueOnce(createEmptyResponse());
     vi.stubGlobal("fetch", fetchMock);
 
     await createQcChecklistStep("/api", "QC-DEMO-OPS-SCREW-M4", {

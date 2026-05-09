@@ -34,6 +34,19 @@ export function errorResponse(
   } as Response;
 }
 
+export function emptyResponse(
+  status = 204,
+  statusText = "No Content",
+): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    statusText,
+    json: async () => null,
+    text: async () => "",
+  } as Response;
+}
+
 type UrlMatcher =
   | string
   | RegExp
