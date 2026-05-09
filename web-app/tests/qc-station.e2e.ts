@@ -315,10 +315,7 @@ test("qc station pozwala pobrac detal z kolejki oczekujacych na QC", async ({ pa
     }
 
     if (pathname === "/api/qc-checklists/QC-STATION-DEMO-LOCAL/steps") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([
+      await fulfillJson(route, [
           {
             id: "STEP-001",
             checklist_id: "CHK-001",
@@ -340,8 +337,7 @@ test("qc station pozwala pobrac detal z kolejki oczekujacych na QC", async ({ pa
             tolerance_min: null,
             tolerance_max: null,
           },
-        ]),
-      });
+        ]);
       return;
     }
 
@@ -350,11 +346,7 @@ test("qc station pozwala pobrac detal z kolejki oczekujacych na QC", async ({ pa
       pathname.includes("/closed-critical-ncrs") ||
       pathname.includes("/runs")
     ) {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([]),
-      });
+      await fulfillJson(route, []);
       return;
     }
 
@@ -474,10 +466,7 @@ test("qc station pozwala zamknac NCR i przywrocic detal do reworku", async ({ pa
     }
 
     if (pathname === "/api/qc-checklists/QC-REWORK/steps") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([
+      await fulfillJson(route, [
           {
             id: "STEP-REWORK-001",
             checklist_id: "CHK-REWORK",
@@ -499,16 +488,12 @@ test("qc station pozwala zamknac NCR i przywrocic detal do reworku", async ({ pa
             tolerance_min: null,
             tolerance_max: null,
           },
-        ]),
-      });
+        ]);
       return;
     }
 
     if (pathname === "/api/qc-items/QCITEM-DEMO-REWORK/open-critical-ncrs") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(
+      await fulfillJson(route, 
           releasedForRework
             ? []
             : [
@@ -527,16 +512,12 @@ test("qc station pozwala zamknac NCR i przywrocic detal do reworku", async ({ pa
                   closed_at: null,
                 },
               ],
-        ),
-      });
+        );
       return;
     }
 
     if (pathname === "/api/qc-items/QCITEM-DEMO-REWORK/closed-critical-ncrs") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(
+      await fulfillJson(route, 
           releasedForRework
             ? [
                 {
@@ -570,16 +551,12 @@ test("qc station pozwala zamknac NCR i przywrocic detal do reworku", async ({ pa
                 },
               ]
             : [],
-        ),
-      });
+        );
       return;
     }
 
     if (pathname === "/api/qc-items/QCITEM-DEMO-REWORK/runs") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([
+      await fulfillJson(route, [
           {
             id: "QC-ROW-REWORK",
             run_id: "QC-WEB-REWORK",
@@ -622,16 +599,12 @@ test("qc station pozwala zamknac NCR i przywrocic detal do reworku", async ({ pa
               started_at: "2026-05-03T08:31:00Z",
               ended_at: "2026-05-03T08:33:00Z",
             },
-          ]),
-        });
+          ]);
         return;
       }
 
     if (pathname === "/api/qc-runs/QC-WEB-REWORK/details") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
+      await fulfillJson(route, {
           id: "QC-ROW-REWORK",
           run_id: "QC-WEB-REWORK",
           device_serial_number: null,
@@ -684,16 +657,12 @@ test("qc station pozwala zamknac NCR i przywrocic detal do reworku", async ({ pa
               created_at: "2026-05-03T08:18:00Z",
             },
           ],
-        }),
-      });
+        });
       return;
     }
 
     if (pathname === "/api/qc-runs/QC-WEB-PASS-OLD/details") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
+      await fulfillJson(route, {
           id: "QC-ROW-PASS-OLD",
           run_id: "QC-WEB-PASS-OLD",
           device_serial_number: null,
@@ -713,16 +682,12 @@ test("qc station pozwala zamknac NCR i przywrocic detal do reworku", async ({ pa
           failure_disposition: null,
           step_results: [],
           evidence_files: [],
-        }),
-      });
+        });
       return;
     }
 
     if (pathname === "/api/qc-runs/QC-WEB-POST-REWORK/details") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
+      await fulfillJson(route, {
           id: "QC-ROW-POST-REWORK",
           run_id: "QC-WEB-POST-REWORK",
           device_serial_number: null,
@@ -742,17 +707,13 @@ test("qc station pozwala zamknac NCR i przywrocic detal do reworku", async ({ pa
           failure_disposition: null,
           step_results: [],
           evidence_files: [],
-        }),
-      });
+        });
       return;
     }
 
     if (pathname === "/api/qc-items/QCITEM-DEMO-REWORK/release-for-rework" && method === "POST") {
       releasedForRework = true;
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
+      await fulfillJson(route, {
           id: "ITEM-ROW-REWORK",
           item_serial_number: "QCITEM-DEMO-REWORK",
           barcode_value: "QCBC-DEMO-REWORK",
@@ -768,8 +729,7 @@ test("qc station pozwala zamknac NCR i przywrocic detal do reworku", async ({ pa
           current_status: "REWORK_REQUIRED",
           produced_at: "2026-05-03T08:16:00Z",
           created_at: "2026-05-03T08:16:00Z",
-        }),
-      });
+        });
       return;
     }
 
@@ -778,11 +738,7 @@ test("qc station pozwala zamknac NCR i przywrocic detal do reworku", async ({ pa
       pathname.includes("/closed-critical-ncrs") ||
       pathname.includes("/runs")
     ) {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([]),
-      });
+      await fulfillJson(route, []);
       return;
     }
 
@@ -860,3 +816,4 @@ test("qc station pozwala zamknac NCR i przywrocic detal do reworku", async ({ pa
     await expect(page.getByTestId("qc-run-history-list")).toContainText("QC-WEB-PASS-OLD");
     await expect(page.getByTestId("qc-run-history-list")).toContainText("QC-WEB-POST-REWORK");
   });
+
