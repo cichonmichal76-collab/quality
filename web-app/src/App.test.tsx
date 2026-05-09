@@ -20,7 +20,10 @@ import type {
   ServiceSessionRead,
   WorkSessionRead,
 } from "./api";
-import { jsonResponse as createJsonResponse } from "./TestHttpUtils";
+import {
+  errorResponse as createErrorResponse,
+  jsonResponse as createJsonResponse,
+} from "./TestHttpUtils";
 
 const API_STORAGE_KEY = "servicetrace.web.apiBaseUrl";
 const VIEW_STORAGE_KEY = "servicetrace.web.activeView";
@@ -1424,20 +1427,6 @@ function createDeferredResponse() {
     resolveResponse,
     rejectResponse,
   };
-}
-
-function createErrorResponse(
-  status: number,
-  statusText: string,
-  detail: string,
-): Response {
-  return {
-    ok: false,
-    status,
-    statusText,
-    json: async () => ({ detail }),
-    text: async () => detail,
-  } as Response;
 }
 
 function getCreatedBlob(

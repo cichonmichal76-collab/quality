@@ -20,6 +20,20 @@ export function jsonResponse(
   } as Response;
 }
 
+export function errorResponse(
+  status: number,
+  statusText: string,
+  detail: string,
+): Response {
+  return {
+    ok: false,
+    status,
+    statusText,
+    json: async () => ({ detail }),
+    text: async () => detail,
+  } as Response;
+}
+
 type UrlMatcher =
   | string
   | RegExp
