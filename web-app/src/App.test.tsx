@@ -1587,6 +1587,17 @@ function createShipmentQueueFetchMock(response: DeviceShipmentQueue = shipmentPa
   ]);
 }
 
+function createComponentQueueFetchMock(
+  response: DeviceComponentQualityQueue = componentPayload,
+) {
+  return createFetchMock([
+    {
+      matcher: (url) => url.includes("/api/component-quality"),
+      response,
+    },
+  ]);
+}
+
 async function flushAppEffects() {
   await act(async () => {
     await Promise.resolve();
@@ -1925,7 +1936,7 @@ describe("App", () => {
       }),
     );
 
-    const fetchMock = vi.fn(async () => createJsonResponse(componentPayload));
+    const fetchMock = createComponentQueueFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
@@ -2352,7 +2363,7 @@ describe("App", () => {
       },
     });
 
-    const fetchMock = vi.fn(async () => createJsonResponse(componentPayload));
+    const fetchMock = createComponentQueueFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
@@ -5343,7 +5354,7 @@ describe("App", () => {
       }),
     );
 
-    const fetchMock = vi.fn(async () => createJsonResponse(componentPayload));
+    const fetchMock = createComponentQueueFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
