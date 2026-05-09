@@ -1756,6 +1756,16 @@ function createComponentCsvExportFetchMock(
   ]);
 }
 
+function createComponentRefreshErrorFetchMock() {
+  return vi
+    .fn()
+    .mockResolvedValueOnce(createJsonResponse(shipmentPayload))
+    .mockResolvedValueOnce(createJsonResponse(componentPayload))
+    .mockResolvedValueOnce(
+      createErrorResponse(503, "Service Unavailable", "component queue offline"),
+    );
+}
+
 async function flushAppEffects() {
   await act(async () => {
     await Promise.resolve();
@@ -5454,13 +5464,7 @@ describe("App", () => {
   });
 
   it("clears stale component data when refresh ends with API error", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(createJsonResponse(shipmentPayload))
-      .mockResolvedValueOnce(createJsonResponse(componentPayload))
-      .mockResolvedValueOnce(
-        createErrorResponse(503, "Service Unavailable", "component queue offline"),
-      );
+    const fetchMock = createComponentRefreshErrorFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
