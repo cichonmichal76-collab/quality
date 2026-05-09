@@ -41,6 +41,10 @@ import {
   uploadQcRunEvidence,
   updateWorkstation,
 } from "./api";
+import {
+  errorResponse as createErrorResponse,
+  jsonResponse as createJsonResponse,
+} from "./TestHttpUtils";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -94,15 +98,12 @@ describe("optionalBoolean", () => {
 
 describe("updateDeviceStatus", () => {
   it("wysyła PATCH ze statusem urządzenia i parsuje odpowiedź JSON", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      json: async () => ({
+    const fetchMock = vi.fn().mockResolvedValue(
+      createJsonResponse({
         device_serial_number: "SHIP-001",
         production_status: "READY_FOR_SHIPMENT",
       }),
-    } satisfies Partial<Response>);
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const payload = await updateDeviceStatus(
@@ -128,13 +129,15 @@ describe("updateDeviceStatus", () => {
   it("wyciąga detail z odpowiedzi JSON, gdy backend odrzuca akcję", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({
-        ok: false,
-        status: 400,
-        statusText: "Bad Request",
-        text: async () =>
-          JSON.stringify({ detail: "Open critical NCR blocks shipment" }),
-      } satisfies Partial<Response>),
+      vi
+        .fn()
+        .mockResolvedValue(
+          createErrorResponse(
+            400,
+            "Bad Request",
+            "Open critical NCR blocks shipment",
+          ),
+        ),
     );
 
     await expect(
@@ -184,15 +187,12 @@ describe("updateNonconformityStatus", () => {
 
 describe("updateProductionItemStatus", () => {
   it("wysyla PATCH ze statusem komponentu", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      json: async () => ({
+    const fetchMock = vi.fn().mockResolvedValue(
+      createJsonResponse({
         item_serial_number: "ITEM-001",
         current_status: "REWORK_REQUIRED",
       }),
-    } satisfies Partial<Response>);
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const payload = await updateProductionItemStatus(
@@ -218,19 +218,16 @@ describe("updateProductionItemStatus", () => {
 
 describe("qc item rework helpers", () => {
   it("pobiera otwarte krytyczne NCR dla komponentu", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      json: async () => [
+    const fetchMock = vi.fn().mockResolvedValue(
+      createJsonResponse([
         {
           ncr_id: "NCR-QC-001",
           component_serial_number: "ITEM-001",
           severity: "CRITICAL",
           status: "OPEN",
         },
-      ],
-    } satisfies Partial<Response>);
+      ]),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const payload = await listQcItemOpenCriticalNcrs("/api", "ITEM-001");
@@ -245,19 +242,16 @@ describe("qc item rework helpers", () => {
   });
 
   it("pobiera zamkniete krytyczne NCR dla komponentu z limitem", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      json: async () => [
+    const fetchMock = vi.fn().mockResolvedValue(
+      createJsonResponse([
         {
           ncr_id: "NCR-QC-CLOSED-001",
           component_serial_number: "ITEM-001",
           severity: "CRITICAL",
           status: "CLOSED",
         },
-      ],
-    } satisfies Partial<Response>);
+      ]),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const payload = await listQcItemClosedCriticalNcrs("/api", "ITEM-001", 5);
