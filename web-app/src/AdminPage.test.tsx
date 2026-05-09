@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { App } from "./App";
+import { jsonResponse } from "./TestHttpUtils";
 
 afterEach(() => {
   cleanup();
@@ -464,12 +465,3 @@ describe("AdminPage", () => {
     });
   });
 });
-
-function jsonResponse(payload: unknown): Response {
-  return {
-    ok: true,
-    status: 200,
-    statusText: "OK",
-    json: async () => payload,
-  } as Response;
-}
