@@ -1776,6 +1776,19 @@ function createDeferredThenFreshShipmentFetchMock() {
   return { fetchMock, firstResponse };
 }
 
+function mockClipboardWrite() {
+  const writeTextMock = vi.fn(async () => undefined);
+
+  Object.defineProperty(window.navigator, "clipboard", {
+    configurable: true,
+    value: {
+      writeText: writeTextMock,
+    },
+  });
+
+  return writeTextMock;
+}
+
 async function flushAppEffects() {
   await act(async () => {
     await Promise.resolve();
@@ -2483,13 +2496,7 @@ describe("App", () => {
       }),
     );
 
-    const writeTextMock = vi.fn(async () => undefined);
-    Object.defineProperty(window.navigator, "clipboard", {
-      configurable: true,
-      value: {
-        writeText: writeTextMock,
-      },
-    });
+    const writeTextMock = mockClipboardWrite();
 
     const fetchMock = createComponentQueueFetchMock();
     vi.stubGlobal("fetch", fetchMock);
@@ -3560,13 +3567,7 @@ describe("App", () => {
       "/devices/COMP-001?view=components&comp_device_type=DEMO-OPS&comp_sort_by=blocked_components&comp_sort_desc=true&comp_only_blocking=true&comp_limit=100&comp_offset=0&device_type=DEMO-OPS&device_variant=DEFAULT#bom",
     );
 
-    const writeTextMock = vi.fn(async () => undefined);
-    Object.defineProperty(window.navigator, "clipboard", {
-      configurable: true,
-      value: {
-        writeText: writeTextMock,
-      },
-    });
+    const writeTextMock = mockClipboardWrite();
 
     const fetchMock = createComponentDetailsFetchMock();
     vi.stubGlobal("fetch", fetchMock);
