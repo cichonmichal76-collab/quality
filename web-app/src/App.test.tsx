@@ -1776,6 +1776,14 @@ function createDeferredThenFreshShipmentFetchMock() {
   return { fetchMock, firstResponse };
 }
 
+function createStaticErrorFetchMock(detail: string) {
+  return vi
+    .fn()
+    .mockResolvedValue(
+      createErrorResponse(503, "Service Unavailable", detail),
+    );
+}
+
 function mockClipboardWrite() {
   const writeTextMock = vi.fn(async () => undefined);
 
@@ -4633,14 +4641,7 @@ describe("App", () => {
   });
 
   it("shows API error banner when request fails", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi
-        .fn()
-        .mockResolvedValue(
-          createErrorResponse(503, "Service Unavailable", "backend temporarily down"),
-        ),
-    );
+    vi.stubGlobal("fetch", createStaticErrorFetchMock("backend temporarily down"));
 
     render(<App />);
 
