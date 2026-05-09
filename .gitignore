@@ -38,5 +38,13 @@ build/
 # Runtime data
 servicetrace_dev.db
 backend/servicetrace_dev.db
+servicetrace_dashboard_demo.db
+servicetrace_dashboard_demo.db.*.bak
+backend/servicetrace_dashboard_demo.db
+backend/servicetrace_dashboard_demo.db.*.bak
+backend-run*.log
+frontend-run*.log
 backend/app/storage/
+backend/storage/
 backend_storage/
+storage/
