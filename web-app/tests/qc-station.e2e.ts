@@ -5,6 +5,7 @@ import {
   buildQcDemoOperator,
   buildQcDemoSession,
   buildQcDemoWorkstation,
+  fulfillImage,
   fulfillJson,
 } from "./qc-station.e2e-helpers";
 
@@ -40,11 +41,7 @@ test("qc station starts from login screen and supports RFID entry", async ({ pag
     }
 
     if (pathname === "/api/files/FILE-REF-001") {
-      await route.fulfill({
-        status: 200,
-        contentType: "image/png",
-        body: "demo-image",
-      });
+      await fulfillImage(route);
       return;
     }
 
@@ -54,54 +51,50 @@ test("qc station starts from login screen and supports RFID entry", async ({ pag
     }
 
     if (pathname === "/api/qc-checklists/QC-STATION-DEMO-LOCAL/steps") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([
-          {
-            id: "STEP-001",
-            checklist_id: "CHK-001",
-            step_order: 1,
-            title: "Zmierz szerokosc",
-            instruction: "Uzyj suwmiarki cyfrowej.",
-            control_area: "Obudowa wentylatora",
-            evaluation_mode: "NUMERIC_RANGE",
-            result_input_label: "Wynik szerokosci",
-            region_x: 14,
-            region_y: 18,
-            region_width: 58,
-            region_height: 34,
-            requires_photo: false,
-            requires_measurement: true,
-            blocking_on_fail: true,
-            expected_value: "25.0",
-            unit: "mm",
-            tolerance_min: 24.8,
-            tolerance_max: 25.2,
-          },
-          {
-            id: "STEP-002",
-            checklist_id: "CHK-001",
-            step_order: 2,
-            title: "Zatwierdz etykiete",
-            instruction: "Sprawdz zgodnosc nadruku z karta kontroli.",
-            control_area: "Etykieta",
-            evaluation_mode: "TEXT_MATCH",
-            result_input_label: "Wpisz odczyt etykiety",
-            region_x: 62,
-            region_y: 60,
-            region_width: 24,
-            region_height: 18,
-            requires_photo: false,
-            requires_measurement: false,
-            blocking_on_fail: true,
-            expected_value: "A2-70",
-            unit: null,
-            tolerance_min: null,
-            tolerance_max: null,
-          },
-        ]),
-      });
+      await fulfillJson(route, [
+        {
+          id: "STEP-001",
+          checklist_id: "CHK-001",
+          step_order: 1,
+          title: "Zmierz szerokosc",
+          instruction: "Uzyj suwmiarki cyfrowej.",
+          control_area: "Obudowa wentylatora",
+          evaluation_mode: "NUMERIC_RANGE",
+          result_input_label: "Wynik szerokosci",
+          region_x: 14,
+          region_y: 18,
+          region_width: 58,
+          region_height: 34,
+          requires_photo: false,
+          requires_measurement: true,
+          blocking_on_fail: true,
+          expected_value: "25.0",
+          unit: "mm",
+          tolerance_min: 24.8,
+          tolerance_max: 25.2,
+        },
+        {
+          id: "STEP-002",
+          checklist_id: "CHK-001",
+          step_order: 2,
+          title: "Zatwierdz etykiete",
+          instruction: "Sprawdz zgodnosc nadruku z karta kontroli.",
+          control_area: "Etykieta",
+          evaluation_mode: "TEXT_MATCH",
+          result_input_label: "Wpisz odczyt etykiety",
+          region_x: 62,
+          region_y: 60,
+          region_width: 24,
+          region_height: 18,
+          requires_photo: false,
+          requires_measurement: false,
+          blocking_on_fail: true,
+          expected_value: "A2-70",
+          unit: null,
+          tolerance_min: null,
+          tolerance_max: null,
+        },
+      ]);
       return;
     }
 
@@ -129,23 +122,19 @@ test("qc station starts from login screen and supports RFID entry", async ({ pag
     }
 
     if (pathname === "/api/qc-runs" && method === "POST") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          run_id: "QC-WEB-E2E-001",
-          item_serial_number: "QCITEM-DEMO-LOCAL",
-          barcode_value: "QCBC-DEMO-LOCAL",
-          checklist_id: "CHK-001",
-          process_stage: "COMPONENT_QC",
-          work_session_id: "WS-QA-001",
-          operator_id: "QCOP-DEMO-LOCAL",
-          id: "QC-ROW-001",
-          status: "IN_PROGRESS",
-          result: null,
-          started_at: "2026-05-03T08:20:00Z",
-          ended_at: null,
-        }),
+      await fulfillJson(route, {
+        run_id: "QC-WEB-E2E-001",
+        item_serial_number: "QCITEM-DEMO-LOCAL",
+        barcode_value: "QCBC-DEMO-LOCAL",
+        checklist_id: "CHK-001",
+        process_stage: "COMPONENT_QC",
+        work_session_id: "WS-QA-001",
+        operator_id: "QCOP-DEMO-LOCAL",
+        id: "QC-ROW-001",
+        status: "IN_PROGRESS",
+        result: null,
+        started_at: "2026-05-03T08:20:00Z",
+        ended_at: null,
       });
       return;
     }
@@ -158,41 +147,33 @@ test("qc station starts from login screen and supports RFID entry", async ({ pag
       const requestBody = JSON.parse(route.request().postData() ?? "{}");
       const stepId = pathname.split("/").at(-2) ?? "STEP-UNKNOWN";
 
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          id: `STEP-RESULT-${stepId}`,
-          qc_run_id: "QC-ROW-001",
-          step_id: stepId,
-          status: requestBody.measurement_value ? "PASS" : requestBody.status,
-          measurement_value: requestBody.measurement_value ?? null,
-          comment: requestBody.comment ?? null,
-          mcu_snapshot: null,
-          created_at: "2026-05-03T08:20:15Z",
-        }),
+      await fulfillJson(route, {
+        id: `STEP-RESULT-${stepId}`,
+        qc_run_id: "QC-ROW-001",
+        step_id: stepId,
+        status: requestBody.measurement_value ? "PASS" : requestBody.status,
+        measurement_value: requestBody.measurement_value ?? null,
+        comment: requestBody.comment ?? null,
+        mcu_snapshot: null,
+        created_at: "2026-05-03T08:20:15Z",
       });
       return;
     }
 
     if (pathname.startsWith("/api/qc-runs/") && pathname.endsWith("/complete")) {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          run_id: "QC-WEB-E2E-001",
-          item_serial_number: "QCITEM-DEMO-LOCAL",
-          barcode_value: "QCBC-DEMO-LOCAL",
-          checklist_id: "CHK-001",
-          process_stage: "COMPONENT_QC",
-          work_session_id: "WS-QA-001",
-          operator_id: "QCOP-DEMO-LOCAL",
-          id: "QC-ROW-001",
-          status: "COMPLETED",
-          result: "PASS",
-          started_at: "2026-05-03T08:20:00Z",
-          ended_at: "2026-05-03T08:20:40Z",
-        }),
+      await fulfillJson(route, {
+        run_id: "QC-WEB-E2E-001",
+        item_serial_number: "QCITEM-DEMO-LOCAL",
+        barcode_value: "QCBC-DEMO-LOCAL",
+        checklist_id: "CHK-001",
+        process_stage: "COMPONENT_QC",
+        work_session_id: "WS-QA-001",
+        operator_id: "QCOP-DEMO-LOCAL",
+        id: "QC-ROW-001",
+        status: "COMPLETED",
+        result: "PASS",
+        started_at: "2026-05-03T08:20:00Z",
+        ended_at: "2026-05-03T08:20:40Z",
       });
       return;
     }
@@ -202,11 +183,7 @@ test("qc station starts from login screen and supports RFID entry", async ({ pag
       pathname.includes("/closed-critical-ncrs") ||
       pathname.includes("/runs")
     ) {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([]),
-      });
+      await fulfillJson(route, []);
       return;
     }
 
