@@ -2000,6 +2000,86 @@ function createMarkReadyRejectedFetchMock() {
   });
 }
 
+function createFinalTestPassFetchMock() {
+  let finalTestRecorded = false;
+
+  return vi.fn((input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input);
+    const method = init?.method ?? "GET";
+
+    if (url.startsWith("/api/shipment-readiness")) {
+      return Promise.resolve(
+        createJsonResponse(
+          finalTestRecorded
+            ? shipmentAfterFinalTestPassQueuePayload
+            : shipmentFinalTestQueuePayload,
+        ),
+      );
+    }
+
+    if (url === "/api/devices/TEST-001/shipment-readiness") {
+      return Promise.resolve(
+        createJsonResponse(
+          finalTestRecorded
+            ? shipmentAfterFinalTestPassDetailsPayload
+            : shipmentFinalTestDetailsPayload,
+        ),
+      );
+    }
+
+    if (url === "/api/devices/TEST-001/component-quality") {
+      return Promise.resolve(
+        createJsonResponse(shipmentFinalTestComponentDetailsPayload),
+      );
+    }
+
+    if (url === "/api/devices/TEST-001/shipment-gate-history?limit=10") {
+      return Promise.resolve(createJsonResponse([]));
+    }
+
+    if (url === "/api/work-sessions") {
+      return Promise.resolve(createJsonResponse(workSessionsPayload));
+    }
+
+    if (url === "/api/operators") {
+      return Promise.resolve(createJsonResponse(operatorsPayload));
+    }
+
+    if (url === "/api/final-tests" && method === "POST") {
+      finalTestRecorded = true;
+      const body = JSON.parse(String(init?.body)) as {
+        test_run_id: string;
+        device_serial_number: string;
+        result: string;
+        work_session_id: string;
+      };
+
+      expect(body.device_serial_number).toBe("TEST-001");
+      expect(body.result).toBe("PASS");
+      expect(body.work_session_id).toBe("WS-FT-001");
+      expect(body.test_run_id).toMatch(/^FT-WEB-TEST-001-/);
+
+      return Promise.resolve(
+        createJsonResponse({
+          id: "FT-ROW-001",
+          test_run_id: body.test_run_id,
+          device_serial_number: "TEST-001",
+          operator_id: "OP-FT-001",
+          result: "PASS",
+          firmware_version: null,
+          bootloader_version: null,
+          report_path: null,
+          mcu_log_path: null,
+          work_session_id: "WS-FT-001",
+          created_at: "2026-05-01T09:10:00Z",
+        }),
+      );
+    }
+
+    throw new Error(`Unexpected request: ${method} ${url}`);
+  });
+}
+
 function mockClipboardWrite() {
   const writeTextMock = vi.fn(async () => undefined);
 
@@ -4025,82 +4105,7 @@ describe("App", () => {
   });
 
   it("records final test PASS from the details drawer with an active work session", async () => {
-    let finalTestRecorded = false;
-    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
-      const url = String(input);
-      const method = init?.method ?? "GET";
-
-      if (url.startsWith("/api/shipment-readiness")) {
-        return Promise.resolve(
-          createJsonResponse(
-            finalTestRecorded
-              ? shipmentAfterFinalTestPassQueuePayload
-              : shipmentFinalTestQueuePayload,
-          ),
-        );
-      }
-
-      if (url === "/api/devices/TEST-001/shipment-readiness") {
-        return Promise.resolve(
-          createJsonResponse(
-            finalTestRecorded
-              ? shipmentAfterFinalTestPassDetailsPayload
-              : shipmentFinalTestDetailsPayload,
-          ),
-        );
-      }
-
-      if (url === "/api/devices/TEST-001/component-quality") {
-        return Promise.resolve(
-          createJsonResponse(shipmentFinalTestComponentDetailsPayload),
-        );
-      }
-
-      if (url === "/api/devices/TEST-001/shipment-gate-history?limit=10") {
-        return Promise.resolve(createJsonResponse([]));
-      }
-
-      if (url === "/api/work-sessions") {
-        return Promise.resolve(createJsonResponse(workSessionsPayload));
-      }
-
-      if (url === "/api/operators") {
-        return Promise.resolve(createJsonResponse(operatorsPayload));
-      }
-
-      if (url === "/api/final-tests" && method === "POST") {
-        finalTestRecorded = true;
-        const body = JSON.parse(String(init?.body)) as {
-          test_run_id: string;
-          device_serial_number: string;
-          result: string;
-          work_session_id: string;
-        };
-
-        expect(body.device_serial_number).toBe("TEST-001");
-        expect(body.result).toBe("PASS");
-        expect(body.work_session_id).toBe("WS-FT-001");
-        expect(body.test_run_id).toMatch(/^FT-WEB-TEST-001-/);
-
-        return Promise.resolve(
-          createJsonResponse({
-            id: "FT-ROW-001",
-            test_run_id: body.test_run_id,
-            device_serial_number: "TEST-001",
-            operator_id: "OP-FT-001",
-            result: "PASS",
-            firmware_version: null,
-            bootloader_version: null,
-            report_path: null,
-            mcu_log_path: null,
-            work_session_id: "WS-FT-001",
-            created_at: "2026-05-01T09:10:00Z",
-          }),
-        );
-      }
-
-      throw new Error(`Unexpected request: ${method} ${url}`);
-    });
+    const fetchMock = createFinalTestPassFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
