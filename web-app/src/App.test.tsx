@@ -2170,6 +2170,122 @@ function createAssemblyCompletionFetchMock() {
   });
 }
 
+function createComponentQcPassFetchMock() {
+  let componentQcRecorded = false;
+  let qcRunId = "";
+
+  return vi.fn((input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input);
+    const method = init?.method ?? "GET";
+
+    if (url.startsWith("/api/shipment-readiness")) {
+      return Promise.resolve(createJsonResponse(shipmentPayload));
+    }
+
+    if (url.startsWith("/api/component-quality?only_blocking=true")) {
+      return Promise.resolve(
+        createJsonResponse(
+          componentQcRecorded ? componentActionAfterPassQueuePayload : componentPayload,
+        ),
+      );
+    }
+
+    if (url === "/api/devices/COMP-001/shipment-readiness") {
+      return Promise.resolve(
+        createJsonResponse(
+          componentQcRecorded
+            ? componentActionAfterPassShipmentDetailsPayload
+            : componentActionShipmentDetailsPayload,
+        ),
+      );
+    }
+
+    if (url === "/api/devices/COMP-001/component-quality") {
+      return Promise.resolve(
+        createJsonResponse(
+          componentQcRecorded
+            ? componentActionAfterPassComponentDetailsPayload
+            : componentActionComponentDetailsPayload,
+        ),
+      );
+    }
+
+    if (url === "/api/devices/COMP-001/shipment-gate-history?limit=10") {
+      return Promise.resolve(createJsonResponse([]));
+    }
+
+    if (url === "/api/work-sessions") {
+      return Promise.resolve(createJsonResponse(workSessionsPayload));
+    }
+
+    if (url === "/api/operators") {
+      return Promise.resolve(createJsonResponse(operatorsPayload));
+    }
+
+    if (url === "/api/qc-runs" && method === "POST") {
+      const body = JSON.parse(String(init?.body)) as {
+        run_id: string;
+        device_serial_number: string;
+        item_serial_number: string;
+        barcode_value: string;
+        process_stage: string;
+        work_session_id: string;
+      };
+      qcRunId = body.run_id;
+
+      expect(body.device_serial_number).toBe("COMP-001");
+      expect(body.item_serial_number).toBe("FAN-001");
+      expect(body.barcode_value).toBe("BC-FAN-001");
+      expect(body.process_stage).toBe("COMPONENT_QC");
+      expect(body.work_session_id).toBe("WS-QA-001");
+      expect(body.run_id).toMatch(/^QC-WEB-FAN-001-/);
+
+      return Promise.resolve(
+        createJsonResponse({
+          id: "QC-ROW-001",
+          run_id: body.run_id,
+          device_serial_number: "COMP-001",
+          item_serial_number: "FAN-001",
+          barcode_value: "BC-FAN-001",
+          checklist_id: null,
+          process_stage: "COMPONENT_QC",
+          operator_id: "OP-QA-001",
+          work_session_id: "WS-QA-001",
+          status: "IN_PROGRESS",
+          result: null,
+          started_at: "2026-05-01T09:20:00Z",
+          ended_at: null,
+        }),
+      );
+    }
+
+    if (qcRunId && url === `/api/qc-runs/${qcRunId}/complete` && method === "POST") {
+      componentQcRecorded = true;
+      expect(init?.body).toBe("result=PASS");
+
+      return Promise.resolve(
+        createJsonResponse({
+          id: "QC-ROW-001",
+          run_id: qcRunId,
+          device_serial_number: "COMP-001",
+          item_serial_number: "FAN-001",
+          barcode_value: "BC-FAN-001",
+          checklist_id: null,
+          process_stage: "COMPONENT_QC",
+          operator_id: "OP-QA-001",
+          work_session_id: "WS-QA-001",
+          status: "COMPLETED",
+          result: "PASS",
+          started_at: "2026-05-01T09:20:00Z",
+          ended_at: "2026-05-01T09:21:00Z",
+        }),
+      );
+    }
+
+    throw new Error(`Unexpected request: ${method} ${url}`);
+  });
+}
+
 function mockClipboardWrite() {
   const writeTextMock = vi.fn(async () => undefined);
 
@@ -4273,126 +4389,7 @@ describe("App", () => {
   });
 
   it("records component QC PASS from the details drawer with an active quality session", async () => {
-    let componentQcRecorded = false;
-    let qcRunId = "";
-    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
-      const url = String(input);
-      const method = init?.method ?? "GET";
-
-      if (url.startsWith("/api/shipment-readiness")) {
-        return Promise.resolve(createJsonResponse(shipmentPayload));
-      }
-
-      if (
-        url.startsWith("/api/component-quality?only_blocking=true")
-      ) {
-        return Promise.resolve(
-          createJsonResponse(
-            componentQcRecorded
-              ? componentActionAfterPassQueuePayload
-              : componentPayload,
-          ),
-        );
-      }
-
-      if (url === "/api/devices/COMP-001/shipment-readiness") {
-        return Promise.resolve(
-          createJsonResponse(
-            componentQcRecorded
-              ? componentActionAfterPassShipmentDetailsPayload
-              : componentActionShipmentDetailsPayload,
-          ),
-        );
-      }
-
-      if (url === "/api/devices/COMP-001/component-quality") {
-        return Promise.resolve(
-          createJsonResponse(
-            componentQcRecorded
-              ? componentActionAfterPassComponentDetailsPayload
-              : componentActionComponentDetailsPayload,
-          ),
-        );
-      }
-
-      if (url === "/api/devices/COMP-001/shipment-gate-history?limit=10") {
-        return Promise.resolve(createJsonResponse([]));
-      }
-
-      if (url === "/api/work-sessions") {
-        return Promise.resolve(createJsonResponse(workSessionsPayload));
-      }
-
-      if (url === "/api/operators") {
-        return Promise.resolve(createJsonResponse(operatorsPayload));
-      }
-
-      if (url === "/api/qc-runs" && method === "POST") {
-        const body = JSON.parse(String(init?.body)) as {
-          run_id: string;
-          device_serial_number: string;
-          item_serial_number: string;
-          barcode_value: string;
-          process_stage: string;
-          work_session_id: string;
-        };
-        qcRunId = body.run_id;
-
-        expect(body.device_serial_number).toBe("COMP-001");
-        expect(body.item_serial_number).toBe("FAN-001");
-        expect(body.barcode_value).toBe("BC-FAN-001");
-        expect(body.process_stage).toBe("COMPONENT_QC");
-        expect(body.work_session_id).toBe("WS-QA-001");
-        expect(body.run_id).toMatch(/^QC-WEB-FAN-001-/);
-
-        return Promise.resolve(
-          createJsonResponse({
-            id: "QC-ROW-001",
-            run_id: body.run_id,
-            device_serial_number: "COMP-001",
-            item_serial_number: "FAN-001",
-            barcode_value: "BC-FAN-001",
-            checklist_id: null,
-            process_stage: "COMPONENT_QC",
-            operator_id: "OP-QA-001",
-            work_session_id: "WS-QA-001",
-            status: "IN_PROGRESS",
-            result: null,
-            started_at: "2026-05-01T09:20:00Z",
-            ended_at: null,
-          }),
-        );
-      }
-
-      if (
-        qcRunId &&
-        url === `/api/qc-runs/${qcRunId}/complete` &&
-        method === "POST"
-      ) {
-        componentQcRecorded = true;
-        expect(init?.body).toBe("result=PASS");
-
-        return Promise.resolve(
-          createJsonResponse({
-            id: "QC-ROW-001",
-            run_id: qcRunId,
-            device_serial_number: "COMP-001",
-            item_serial_number: "FAN-001",
-            barcode_value: "BC-FAN-001",
-            checklist_id: null,
-            process_stage: "COMPONENT_QC",
-            operator_id: "OP-QA-001",
-            work_session_id: "WS-QA-001",
-            status: "COMPLETED",
-            result: "PASS",
-            started_at: "2026-05-01T09:20:00Z",
-            ended_at: "2026-05-01T09:21:00Z",
-          }),
-        );
-      }
-
-      throw new Error(`Unexpected request: ${method} ${url}`);
-    });
+    const fetchMock = createComponentQcPassFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
