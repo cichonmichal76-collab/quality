@@ -1971,34 +1971,24 @@ describe("App", () => {
       "/?view=components&comp_device_type=DEMO-OPS&comp_sort_by=blocked_components&comp_sort_desc=true&comp_only_blocking=true&comp_limit=100&comp_offset=0&device_serial=COMP-001&device_type=DEMO-OPS&device_variant=DEFAULT",
     );
 
-    const fetchMock = vi.fn((input: string | URL | Request) => {
-      const url = String(input);
-
-      if (
-        url ===
-        "/api/component-quality?device_type=DEMO-OPS&only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=100"
-      ) {
-        return Promise.resolve(createJsonResponse(componentPayload));
-      }
-
-      if (url === "/api/devices/COMP-001/shipment-readiness") {
-        return Promise.resolve(
-          createJsonResponse(componentActionShipmentDetailsPayload),
-        );
-      }
-
-      if (url === "/api/devices/COMP-001/component-quality") {
-        return Promise.resolve(
-          createJsonResponse(componentActionComponentDetailsPayload),
-        );
-      }
-
-      if (url === "/api/devices/COMP-001/shipment-gate-history?limit=10") {
-        return Promise.resolve(createJsonResponse([]));
-      }
-
-      throw new Error(`Unexpected request: ${url}`);
-    });
+    const fetchMock = createFetchMock([
+      {
+        matcher: "/api/component-quality?device_type=DEMO-OPS&only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=100",
+        response: componentPayload,
+      },
+      {
+        matcher: "/api/devices/COMP-001/shipment-readiness",
+        response: componentActionShipmentDetailsPayload,
+      },
+      {
+        matcher: "/api/devices/COMP-001/component-quality",
+        response: componentActionComponentDetailsPayload,
+      },
+      {
+        matcher: "/api/devices/COMP-001/shipment-gate-history?limit=10",
+        response: [],
+      },
+    ]);
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
@@ -2021,29 +2011,20 @@ describe("App", () => {
       "/?view=service&svc_device_type=DEMO-SVC&svc_sort_by=uploaded_at&svc_sort_desc=true&svc_limit=100&svc_offset=0&svc_session_id=SVC-001",
     );
 
-    const fetchMock = vi.fn((input: string | URL | Request) => {
-      const url = String(input);
-
-      if (
-        url ===
-        "/api/service-sessions/queue?device_type=DEMO-SVC&sort_by=uploaded_at&sort_desc=true&limit=100"
-      ) {
-        return Promise.resolve(createJsonResponse(serviceQueuePayload));
-      }
-
-      if (url === "/api/service-sessions/SVC-001") {
-        return Promise.resolve(createJsonResponse(serviceSessionDetailsPayload));
-      }
-
-      if (
-        url ===
-        "/api/audit-events?entity_type=SERVICE_SESSION&entity_id=SVC-001"
-      ) {
-        return Promise.resolve(createJsonResponse(serviceSessionAuditPayload));
-      }
-
-      throw new Error(`Unexpected request: ${url}`);
-    });
+    const fetchMock = createFetchMock([
+      {
+        matcher: "/api/service-sessions/queue?device_type=DEMO-SVC&sort_by=uploaded_at&sort_desc=true&limit=100",
+        response: serviceQueuePayload,
+      },
+      {
+        matcher: "/api/service-sessions/SVC-001",
+        response: serviceSessionDetailsPayload,
+      },
+      {
+        matcher: "/api/audit-events?entity_type=SERVICE_SESSION&entity_id=SVC-001",
+        response: serviceSessionAuditPayload,
+      },
+    ]);
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
