@@ -1761,9 +1761,7 @@ function createComponentRefreshErrorFetchMock() {
     .fn()
     .mockResolvedValueOnce(createJsonResponse(shipmentPayload))
     .mockResolvedValueOnce(createJsonResponse(componentPayload))
-    .mockResolvedValueOnce(
-      createErrorResponse(503, "Service Unavailable", "component queue offline"),
-    );
+    .mockResolvedValueOnce(createServiceUnavailableResponse("component queue offline"));
 }
 
 function createDeferredThenFreshShipmentFetchMock() {
@@ -1777,11 +1775,11 @@ function createDeferredThenFreshShipmentFetchMock() {
 }
 
 function createStaticErrorFetchMock(detail: string) {
-  return vi
-    .fn()
-    .mockResolvedValue(
-      createErrorResponse(503, "Service Unavailable", detail),
-    );
+  return vi.fn().mockResolvedValue(createServiceUnavailableResponse(detail));
+}
+
+function createServiceUnavailableResponse(detail: string) {
+  return createErrorResponse(503, "Service Unavailable", detail);
 }
 
 function mockClipboardWrite() {
@@ -4707,7 +4705,7 @@ describe("App", () => {
 
     await act(async () => {
       firstResponse.resolveResponse(
-        createErrorResponse(503, "Service Unavailable", "stale shipment failure"),
+        createServiceUnavailableResponse("stale shipment failure"),
       );
       await Promise.resolve();
     });
