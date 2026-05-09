@@ -1512,6 +1512,35 @@ function createAssemblyDetailsFetchMock() {
   ]);
 }
 
+function createDashboardComponentNavigationFetchMock() {
+  return createFetchMock([
+    {
+      matcher: (url) => url.startsWith("/api/shipment-readiness"),
+      response: shipmentPayload,
+    },
+    {
+      matcher: "/api/component-quality?only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=100",
+      response: componentPayload,
+    },
+    {
+      matcher: "/api/component-quality?device_type=DEMO-OPS&only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=100",
+      response: componentPayload,
+    },
+    {
+      matcher: "/api/devices/COMP-001/shipment-readiness",
+      response: componentActionShipmentDetailsPayload,
+    },
+    {
+      matcher: "/api/devices/COMP-001/component-quality",
+      response: componentActionComponentDetailsPayload,
+    },
+    {
+      matcher: "/api/devices/COMP-001/shipment-gate-history?limit=10",
+      response: [],
+    },
+  ]);
+}
+
 async function flushAppEffects() {
   await act(async () => {
     await Promise.resolve();
@@ -2085,45 +2114,7 @@ describe("App", () => {
   });
 
   it("syncs active tab, filters and selected device into URL", async () => {
-    const fetchMock = vi.fn((input: string | URL | Request) => {
-      const url = String(input);
-
-      if (url.startsWith("/api/shipment-readiness")) {
-        return Promise.resolve(createJsonResponse(shipmentPayload));
-      }
-
-      if (
-        url ===
-        "/api/component-quality?only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=100"
-      ) {
-        return Promise.resolve(createJsonResponse(componentPayload));
-      }
-
-      if (
-        url ===
-        "/api/component-quality?device_type=DEMO-OPS&only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=100"
-      ) {
-        return Promise.resolve(createJsonResponse(componentPayload));
-      }
-
-      if (url === "/api/devices/COMP-001/shipment-readiness") {
-        return Promise.resolve(
-          createJsonResponse(componentActionShipmentDetailsPayload),
-        );
-      }
-
-      if (url === "/api/devices/COMP-001/component-quality") {
-        return Promise.resolve(
-          createJsonResponse(componentActionComponentDetailsPayload),
-        );
-      }
-
-      if (url === "/api/devices/COMP-001/shipment-gate-history?limit=10") {
-        return Promise.resolve(createJsonResponse([]));
-      }
-
-      throw new Error(`Unexpected request: ${url}`);
-    });
+    const fetchMock = createDashboardComponentNavigationFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
@@ -3643,45 +3634,7 @@ describe("App", () => {
   });
 
   it("shows full page link in the details drawer", async () => {
-    const fetchMock = vi.fn((input: string | URL | Request) => {
-      const url = String(input);
-
-      if (url.startsWith("/api/shipment-readiness")) {
-        return Promise.resolve(createJsonResponse(shipmentPayload));
-      }
-
-      if (
-        url ===
-        "/api/component-quality?only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=100"
-      ) {
-        return Promise.resolve(createJsonResponse(componentPayload));
-      }
-
-      if (
-        url ===
-        "/api/component-quality?device_type=DEMO-OPS&only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=100"
-      ) {
-        return Promise.resolve(createJsonResponse(componentPayload));
-      }
-
-      if (url === "/api/devices/COMP-001/shipment-readiness") {
-        return Promise.resolve(
-          createJsonResponse(componentActionShipmentDetailsPayload),
-        );
-      }
-
-      if (url === "/api/devices/COMP-001/component-quality") {
-        return Promise.resolve(
-          createJsonResponse(componentActionComponentDetailsPayload),
-        );
-      }
-
-      if (url === "/api/devices/COMP-001/shipment-gate-history?limit=10") {
-        return Promise.resolve(createJsonResponse([]));
-      }
-
-      throw new Error(`Unexpected request: ${url}`);
-    });
+    const fetchMock = createDashboardComponentNavigationFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
