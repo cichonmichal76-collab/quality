@@ -1578,6 +1578,15 @@ function createShipmentDetailsDrawerFetchMock() {
   ]);
 }
 
+function createShipmentQueueFetchMock(response: DeviceShipmentQueue = shipmentPayload) {
+  return createFetchMock([
+    {
+      matcher: (url) => url.includes("/api/shipment-readiness"),
+      response,
+    },
+  ]);
+}
+
 async function flushAppEffects() {
   await act(async () => {
     await Promise.resolve();
@@ -4524,7 +4533,7 @@ describe("App", () => {
   });
 
   it("clears stale shipment data when api base becomes empty", async () => {
-    const fetchMock = vi.fn(async () => createJsonResponse(shipmentPayload));
+    const fetchMock = createShipmentQueueFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
@@ -4598,9 +4607,7 @@ describe("App", () => {
   it("debounces shipment text filters before sending request", async () => {
     vi.useFakeTimers();
 
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(createJsonResponse(shipmentPayload));
+    const fetchMock = createShipmentQueueFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
@@ -4643,9 +4650,7 @@ describe("App", () => {
   it("flushes pending shipment text filters when a non-text filter changes", async () => {
     vi.useFakeTimers();
 
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(createJsonResponse(shipmentPayload));
+    const fetchMock = createShipmentQueueFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
@@ -4682,9 +4687,7 @@ describe("App", () => {
   it("flushes pending shipment text filters before manual refresh", async () => {
     vi.useFakeTimers();
 
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(createJsonResponse(shipmentPayload));
+    const fetchMock = createShipmentQueueFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
@@ -4724,9 +4727,7 @@ describe("App", () => {
     localStorage.setItem(AUTO_REFRESH_ENABLED_STORAGE_KEY, "true");
     localStorage.setItem(AUTO_REFRESH_INTERVAL_STORAGE_KEY, "5000");
 
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(createJsonResponse(shipmentPayload));
+    const fetchMock = createShipmentQueueFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
@@ -4760,9 +4761,7 @@ describe("App", () => {
   it("flushes pending shipment text filters on Enter", async () => {
     vi.useFakeTimers();
 
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(createJsonResponse(shipmentPayload));
+    const fetchMock = createShipmentQueueFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
@@ -4908,9 +4907,7 @@ describe("App", () => {
   });
 
   it("applies shipment filters and keeps blocked and ready toggles exclusive", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(createJsonResponse(shipmentPayload));
+    const fetchMock = createShipmentQueueFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
@@ -4954,9 +4951,7 @@ describe("App", () => {
   });
 
   it("clears incompatible shipment filters when only ready is enabled", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(createJsonResponse(shipmentPayload));
+    const fetchMock = createShipmentQueueFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
@@ -4991,9 +4986,7 @@ describe("App", () => {
   });
 
   it("disables incompatible shipment filter controls when only ready is enabled", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(createJsonResponse(shipmentPayload));
+    const fetchMock = createShipmentQueueFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
@@ -5022,9 +5015,7 @@ describe("App", () => {
   });
 
   it("disables ready-for-shipment action when only blocked is enabled", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(createJsonResponse(shipmentPayload));
+    const fetchMock = createShipmentQueueFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
@@ -5080,7 +5071,7 @@ describe("App", () => {
   it("loads API base from localStorage and persists manual changes", async () => {
     localStorage.setItem(API_STORAGE_KEY, "http://localhost:9100/api");
 
-    const fetchMock = vi.fn(async () => createJsonResponse(shipmentPayload));
+    const fetchMock = createShipmentQueueFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
