@@ -5830,11 +5830,9 @@ describe("App", () => {
       sessions: [serviceQueuePayload.sessions[0]],
     };
 
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(createJsonResponse(shipmentPayload))
-      .mockResolvedValueOnce(createJsonResponse(serviceQueuePayload))
-      .mockResolvedValueOnce(createJsonResponse(retryHeavyPayload));
+    const fetchMock = createShipmentServiceQueuesFetchMock({
+      service: retryHeavyPayload,
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
