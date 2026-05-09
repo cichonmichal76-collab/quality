@@ -1,9 +1,6 @@
 import type { Route } from "@playwright/test";
 
-type JsonStatus = {
-  status?: number;
-  contentType?: string;
-};
+export { fulfillImage, fulfillJson } from "./e2e-response-helpers";
 
 type OperatorFixture = {
   id: string;
@@ -138,22 +135,6 @@ const baseItem: ItemFixture = {
   qc_reserved_by_workstation_id: null,
   qc_reserved_at: null,
 };
-
-export async function fulfillJson(route: Route, body: unknown, options: JsonStatus = {}) {
-  await route.fulfill({
-    status: options.status ?? 200,
-    contentType: options.contentType ?? "application/json",
-    body: JSON.stringify(body),
-  });
-}
-
-export async function fulfillImage(route: Route, body = "demo-image") {
-  await route.fulfill({
-    status: 200,
-    contentType: "image/png",
-    body,
-  });
-}
 
 export function buildQcDemoOperator(overrides: Partial<OperatorFixture> = {}): OperatorFixture {
   return { ...baseOperator, ...overrides };

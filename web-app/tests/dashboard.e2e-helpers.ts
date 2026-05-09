@@ -1,5 +1,7 @@
 import type { Route } from "@playwright/test";
 
+export { fulfillJson } from "./e2e-response-helpers";
+
 type ServiceSessionFixture = {
   session_id: string;
   device_serial_number: string;
@@ -90,14 +92,6 @@ export function buildServiceSessionAuditEvent(
       ...(overrides.payload ?? {}),
     },
   };
-}
-
-export async function fulfillJson(route: Route, body: unknown) {
-  await route.fulfill({
-    status: 200,
-    contentType: "application/json",
-    body: JSON.stringify(body),
-  });
 }
 
 export async function fulfillServiceSessionsQueue(

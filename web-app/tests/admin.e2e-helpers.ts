@@ -1,4 +1,4 @@
-import type { Route } from "@playwright/test";
+export { fulfillImage, fulfillJson } from "./e2e-response-helpers";
 
 type OperatorFixture = {
   id: string;
@@ -69,22 +69,6 @@ const baseChecklist: ChecklistFixture = {
   is_active: true,
   created_at: "2026-05-03T11:00:00Z",
 };
-
-export async function fulfillJson(route: Route, body: unknown) {
-  await route.fulfill({
-    status: 200,
-    contentType: "application/json",
-    body: JSON.stringify(body),
-  });
-}
-
-export async function fulfillImage(route: Route, body = "demo-image") {
-  await route.fulfill({
-    status: 200,
-    contentType: "image/png",
-    body,
-  });
-}
 
 export function buildAdminOperator(
   overrides: Partial<OperatorFixture> = {},
