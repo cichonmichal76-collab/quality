@@ -1468,6 +1468,29 @@ function setupCsvDownloadMocks(objectUrl: string) {
   return { createObjectURLMock, revokeObjectURLMock, clickedDownloads };
 }
 
+function createComponentDetailsFetchMock(
+  shipmentGateHistory: AuditEvent[] = [],
+) {
+  return createFetchMock([
+    {
+      matcher: "/api/component-quality?device_type=DEMO-OPS&only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=100",
+      response: componentPayload,
+    },
+    {
+      matcher: "/api/devices/COMP-001/shipment-readiness",
+      response: componentActionShipmentDetailsPayload,
+    },
+    {
+      matcher: "/api/devices/COMP-001/component-quality",
+      response: componentActionComponentDetailsPayload,
+    },
+    {
+      matcher: "/api/devices/COMP-001/shipment-gate-history?limit=10",
+      response: shipmentGateHistory,
+    },
+  ]);
+}
+
 async function flushAppEffects() {
   await act(async () => {
     await Promise.resolve();
@@ -2114,34 +2137,7 @@ describe("App", () => {
       "/devices/COMP-001?view=components&comp_device_type=DEMO-OPS&comp_sort_by=blocked_components&comp_sort_desc=true&comp_only_blocking=true&comp_limit=100&comp_offset=0&device_type=DEMO-OPS&device_variant=DEFAULT",
     );
 
-    const fetchMock = vi.fn((input: string | URL | Request) => {
-      const url = String(input);
-
-      if (
-        url ===
-        "/api/component-quality?device_type=DEMO-OPS&only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=100"
-      ) {
-        return Promise.resolve(createJsonResponse(componentPayload));
-      }
-
-      if (url === "/api/devices/COMP-001/shipment-readiness") {
-        return Promise.resolve(
-          createJsonResponse(componentActionShipmentDetailsPayload),
-        );
-      }
-
-      if (url === "/api/devices/COMP-001/component-quality") {
-        return Promise.resolve(
-          createJsonResponse(componentActionComponentDetailsPayload),
-        );
-      }
-
-      if (url === "/api/devices/COMP-001/shipment-gate-history?limit=10") {
-        return Promise.resolve(createJsonResponse([]));
-      }
-
-      throw new Error(`Unexpected request: ${url}`);
-    });
+    const fetchMock = createComponentDetailsFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
@@ -3443,34 +3439,7 @@ describe("App", () => {
       },
     });
 
-    const fetchMock = vi.fn((input: string | URL | Request) => {
-      const url = String(input);
-
-      if (
-        url ===
-        "/api/component-quality?device_type=DEMO-OPS&only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=100"
-      ) {
-        return Promise.resolve(createJsonResponse(componentPayload));
-      }
-
-      if (url === "/api/devices/COMP-001/shipment-readiness") {
-        return Promise.resolve(
-          createJsonResponse(componentActionShipmentDetailsPayload),
-        );
-      }
-
-      if (url === "/api/devices/COMP-001/component-quality") {
-        return Promise.resolve(
-          createJsonResponse(componentActionComponentDetailsPayload),
-        );
-      }
-
-      if (url === "/api/devices/COMP-001/shipment-gate-history?limit=10") {
-        return Promise.resolve(createJsonResponse([]));
-      }
-
-      throw new Error(`Unexpected request: ${url}`);
-    });
+    const fetchMock = createComponentDetailsFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
@@ -3629,34 +3598,7 @@ describe("App", () => {
       "/devices/COMP-001?view=components&comp_device_type=DEMO-OPS&comp_sort_by=blocked_components&comp_sort_desc=true&comp_only_blocking=true&comp_limit=100&comp_offset=0&device_type=DEMO-OPS&device_variant=DEFAULT#historia-gate",
     );
 
-    const fetchMock = vi.fn((input: string | URL | Request) => {
-      const url = String(input);
-
-      if (
-        url ===
-        "/api/component-quality?device_type=DEMO-OPS&only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=100"
-      ) {
-        return Promise.resolve(createJsonResponse(componentPayload));
-      }
-
-      if (url === "/api/devices/COMP-001/shipment-readiness") {
-        return Promise.resolve(
-          createJsonResponse(componentActionShipmentDetailsPayload),
-        );
-      }
-
-      if (url === "/api/devices/COMP-001/component-quality") {
-        return Promise.resolve(
-          createJsonResponse(componentActionComponentDetailsPayload),
-        );
-      }
-
-      if (url === "/api/devices/COMP-001/shipment-gate-history?limit=10") {
-        return Promise.resolve(createJsonResponse(shipmentGateHistoryPayload));
-      }
-
-      throw new Error(`Unexpected request: ${url}`);
-    });
+    const fetchMock = createComponentDetailsFetchMock(shipmentGateHistoryPayload);
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
@@ -3699,34 +3641,7 @@ describe("App", () => {
       "/devices/COMP-001?view=components&comp_device_type=DEMO-OPS&comp_sort_by=blocked_components&comp_sort_desc=true&comp_only_blocking=true&comp_limit=100&comp_offset=0&device_type=DEMO-OPS&device_variant=DEFAULT#bom",
     );
 
-    const fetchMock = vi.fn((input: string | URL | Request) => {
-      const url = String(input);
-
-      if (
-        url ===
-        "/api/component-quality?device_type=DEMO-OPS&only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=100"
-      ) {
-        return Promise.resolve(createJsonResponse(componentPayload));
-      }
-
-      if (url === "/api/devices/COMP-001/shipment-readiness") {
-        return Promise.resolve(
-          createJsonResponse(componentActionShipmentDetailsPayload),
-        );
-      }
-
-      if (url === "/api/devices/COMP-001/component-quality") {
-        return Promise.resolve(
-          createJsonResponse(componentActionComponentDetailsPayload),
-        );
-      }
-
-      if (url === "/api/devices/COMP-001/shipment-gate-history?limit=10") {
-        return Promise.resolve(createJsonResponse([]));
-      }
-
-      throw new Error(`Unexpected request: ${url}`);
-    });
+    const fetchMock = createComponentDetailsFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
@@ -3748,34 +3663,7 @@ describe("App", () => {
       "/devices/COMP-001?view=components&comp_device_type=DEMO-OPS&comp_sort_by=blocked_components&comp_sort_desc=true&comp_only_blocking=true&comp_limit=100&comp_offset=0&device_type=DEMO-OPS&device_variant=DEFAULT#komponent-fan-001",
     );
 
-    const fetchMock = vi.fn((input: string | URL | Request) => {
-      const url = String(input);
-
-      if (
-        url ===
-        "/api/component-quality?device_type=DEMO-OPS&only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=100"
-      ) {
-        return Promise.resolve(createJsonResponse(componentPayload));
-      }
-
-      if (url === "/api/devices/COMP-001/shipment-readiness") {
-        return Promise.resolve(
-          createJsonResponse(componentActionShipmentDetailsPayload),
-        );
-      }
-
-      if (url === "/api/devices/COMP-001/component-quality") {
-        return Promise.resolve(
-          createJsonResponse(componentActionComponentDetailsPayload),
-        );
-      }
-
-      if (url === "/api/devices/COMP-001/shipment-gate-history?limit=10") {
-        return Promise.resolve(createJsonResponse([]));
-      }
-
-      throw new Error(`Unexpected request: ${url}`);
-    });
+    const fetchMock = createComponentDetailsFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
