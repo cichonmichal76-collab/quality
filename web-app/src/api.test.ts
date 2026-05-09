@@ -266,11 +266,8 @@ describe("qc item rework helpers", () => {
   });
 
   it("pobiera historie QC run dla komponentu", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      json: async () => [
+    const fetchMock = vi.fn().mockResolvedValue(
+      createJsonResponse([
         {
           run_id: "QCRUN-001",
           item_serial_number: "ITEM-001",
@@ -278,8 +275,8 @@ describe("qc item rework helpers", () => {
           status: "COMPLETED",
           result: "PASS",
         },
-      ],
-    } satisfies Partial<Response>);
+      ]),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const payload = await listQcRunsForItem("/api", "ITEM-001", 8);
@@ -294,11 +291,8 @@ describe("qc item rework helpers", () => {
   });
 
   it("pobiera szczegoly wybranego QC run", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      json: async () => ({
+    const fetchMock = vi.fn().mockResolvedValue(
+      createJsonResponse({
         id: "QC-ROW-001",
         run_id: "QC-WEB-001",
         device_serial_number: null,
@@ -352,7 +346,7 @@ describe("qc item rework helpers", () => {
           },
         ],
       }),
-    } satisfies Partial<Response>);
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const payload = await getQcRunDetails("/api", "QC-WEB-001");
@@ -369,15 +363,12 @@ describe("qc item rework helpers", () => {
   });
 
   it("wysyla release-for-rework z akcja korygujaca i work session", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      json: async () => ({
+    const fetchMock = vi.fn().mockResolvedValue(
+      createJsonResponse({
         item_serial_number: "ITEM-001",
         current_status: "REWORK_REQUIRED",
       }),
-    } satisfies Partial<Response>);
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const payload = await releaseQcItemForRework("/api", "ITEM-001", {
@@ -408,18 +399,15 @@ describe("qc item rework helpers", () => {
 
 describe("listWorkSessions", () => {
   it("pobiera aktywne sesje pracy z API", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      json: async () => [
+    const fetchMock = vi.fn().mockResolvedValue(
+      createJsonResponse([
         {
           work_session_id: "WS-FT-001",
           operator_id: "OP-FT-001",
           status: "ACTIVE",
         },
-      ],
-    } satisfies Partial<Response>);
+      ]),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const payload = await listWorkSessions("/api");
@@ -436,11 +424,8 @@ describe("listWorkSessions", () => {
 
 describe("listWorkstations", () => {
   it("pobiera stanowiska do ekranu logowania QC", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      json: async () => [
+    const fetchMock = vi.fn().mockResolvedValue(
+      createJsonResponse([
         {
           workstation_id: "QCWS-DEMO",
           name: "QC Station",
@@ -448,8 +433,8 @@ describe("listWorkstations", () => {
           station_type: "QC",
           is_active: true,
         },
-      ],
-    } satisfies Partial<Response>);
+      ]),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const payload = await listWorkstations("/api");
@@ -466,18 +451,15 @@ describe("listWorkstations", () => {
 
 describe("createWorkstation", () => {
   it("tworzy nowe stanowisko QC", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      json: async () => ({
+    const fetchMock = vi.fn().mockResolvedValue(
+      createJsonResponse({
         workstation_id: "QCWS-NEW",
         name: "Nowe stanowisko",
         area: "QA",
         station_type: "QC",
         is_active: true,
       }),
-    } satisfies Partial<Response>);
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const payload = await createWorkstation("/api", {
@@ -505,18 +487,15 @@ describe("createWorkstation", () => {
 
 describe("updateWorkstation", () => {
   it("aktualizuje stanowisko QC", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      json: async () => ({
+    const fetchMock = vi.fn().mockResolvedValue(
+      createJsonResponse({
         workstation_id: "QCWS-DEMO",
         name: "Linia QC 2",
         area: "LAB",
         station_type: "FINAL_QC",
         is_active: false,
       }),
-    } satisfies Partial<Response>);
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const payload = await updateWorkstation("/api", "QCWS-DEMO", {
