@@ -78,6 +78,14 @@ export async function fulfillJson(route: Route, body: unknown) {
   });
 }
 
+export async function fulfillImage(route: Route, body = "demo-image") {
+  await route.fulfill({
+    status: 200,
+    contentType: "image/png",
+    body,
+  });
+}
+
 export function buildAdminOperator(
   overrides: Partial<OperatorFixture> = {},
 ): OperatorFixture {

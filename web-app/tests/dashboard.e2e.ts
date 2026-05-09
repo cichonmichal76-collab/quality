@@ -216,27 +216,23 @@ test("dashboard restores selected commissioning session after reload", async ({
       requestUrl.searchParams.get("entity_type") === "SERVICE_SESSION" &&
       requestUrl.searchParams.get("entity_id") === "SVC-001"
     ) {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([
-          {
-            id: "AUD-SVC-001",
-            event_type: "SERVICE_SESSION_PACKAGE_REUPLOADED",
-            entity_type: "SERVICE_SESSION",
-            entity_id: "SVC-001",
-            work_session_id: null,
-            result: "UPLOADED",
-            created_at: "2026-05-03T08:10:00Z",
-            message: "Service session package reuploaded",
-            payload: {
-              client_trigger_source: "MANUAL",
-              upload_count: 1,
-              upload_correlation_id: "CORR-001",
-            },
+      await fulfillJson(route, [
+        {
+          id: "AUD-SVC-001",
+          event_type: "SERVICE_SESSION_PACKAGE_REUPLOADED",
+          entity_type: "SERVICE_SESSION",
+          entity_id: "SVC-001",
+          work_session_id: null,
+          result: "UPLOADED",
+          created_at: "2026-05-03T08:10:00Z",
+          message: "Service session package reuploaded",
+          payload: {
+            client_trigger_source: "MANUAL",
+            upload_count: 1,
+            upload_correlation_id: "CORR-001",
           },
-        ]),
-      });
+        },
+      ]);
       return;
     }
 
@@ -410,45 +406,41 @@ test("dashboard auto-refreshes the active queue", async ({ page }) => {
     const serialNumber =
       shipmentRequestCount <= 2 ? "SHIP-AUTO-001" : "SHIP-AUTO-002";
 
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        ...baseShipmentPayload,
-        devices: [
-          {
-            device_serial_number: serialNumber,
-            device_type: "DEMO-AUTO",
-            device_variant_code: "DEFAULT",
-            production_status: "FINAL_TEST_PASSED",
-            device_created_at: "2026-05-01T08:00:00Z",
-            device_updated_at: "2026-05-01T09:00:00Z",
-            final_test_passed: true,
-            has_critical_open_ncr: false,
-            critical_open_ncr_ids: [],
-            bom_compliance: {
-              passes_bom_gate: true,
-              installed_component_count: 1,
-              missing_required_components: [],
-              over_installed_components: [],
-              unexpected_component_types: [],
-              blocking_reason: null,
-            },
-            can_transition_to_ready_for_shipment: true,
-            latest_shipment_gate_decision: {
-              event_type: "SHIPMENT_GATE_PASSED",
-              result: "PASS",
-              message: "Ready",
-              recommended_action: "MARK_READY_FOR_SHIPMENT",
-              created_at: "2026-05-01T09:05:00Z",
-            },
-            primary_blocking_code: null,
-            primary_blocking_message: null,
-            recommended_action: "MARK_READY_FOR_SHIPMENT",
-            blocking_reasons: [],
+    await fulfillJson(route, {
+      ...baseShipmentPayload,
+      devices: [
+        {
+          device_serial_number: serialNumber,
+          device_type: "DEMO-AUTO",
+          device_variant_code: "DEFAULT",
+          production_status: "FINAL_TEST_PASSED",
+          device_created_at: "2026-05-01T08:00:00Z",
+          device_updated_at: "2026-05-01T09:00:00Z",
+          final_test_passed: true,
+          has_critical_open_ncr: false,
+          critical_open_ncr_ids: [],
+          bom_compliance: {
+            passes_bom_gate: true,
+            installed_component_count: 1,
+            missing_required_components: [],
+            over_installed_components: [],
+            unexpected_component_types: [],
+            blocking_reason: null,
           },
-        ],
-      }),
+          can_transition_to_ready_for_shipment: true,
+          latest_shipment_gate_decision: {
+            event_type: "SHIPMENT_GATE_PASSED",
+            result: "PASS",
+            message: "Ready",
+            recommended_action: "MARK_READY_FOR_SHIPMENT",
+            created_at: "2026-05-01T09:05:00Z",
+          },
+          primary_blocking_code: null,
+          primary_blocking_message: null,
+          recommended_action: "MARK_READY_FOR_SHIPMENT",
+          blocking_reasons: [],
+        },
+      ],
     });
   });
 

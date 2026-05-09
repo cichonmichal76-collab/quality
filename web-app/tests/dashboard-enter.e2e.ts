@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { fulfillJson } from "./dashboard.e2e-helpers";
+
 const mockedShipmentQueue = {
   total_devices: 0,
   ready_count: 0,
@@ -155,11 +157,7 @@ test("dashboard flushes component text filter immediately on Enter", async ({
   });
 
   await page.route("**/api/shipment-readiness**", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify(mockedShipmentQueue),
-    });
+    await fulfillJson(route, mockedShipmentQueue);
   });
 
   await page.route("**/api/component-quality**", async (route) => {
@@ -168,36 +166,28 @@ test("dashboard flushes component text filter immediately on Enter", async ({
 
     if (requestUrl.searchParams.get("blocking_component_type") === "FAN_MODULE") {
       resolveFilteredRequest();
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          ...mockedComponentQueue,
-          total_devices: 1,
-          devices_with_issues: 1,
-          returned_count: 1,
-          filters: { blocking_component_type: "FAN_MODULE" },
-          component_type_summary: [mockedComponentQueue.component_type_summary[0]],
-          blocking_component_type_summary: [
-            mockedComponentQueue.blocking_component_type_summary[0],
-          ],
-          primary_blocking_component_type_summary: [
-            mockedComponentQueue.primary_blocking_component_type_summary[0],
-          ],
-          recommended_action_summary: [
-            mockedComponentQueue.recommended_action_summary[0],
-          ],
-          devices: [mockedComponentQueue.devices[0]],
-        }),
+      await fulfillJson(route, {
+        ...mockedComponentQueue,
+        total_devices: 1,
+        devices_with_issues: 1,
+        returned_count: 1,
+        filters: { blocking_component_type: "FAN_MODULE" },
+        component_type_summary: [mockedComponentQueue.component_type_summary[0]],
+        blocking_component_type_summary: [
+          mockedComponentQueue.blocking_component_type_summary[0],
+        ],
+        primary_blocking_component_type_summary: [
+          mockedComponentQueue.primary_blocking_component_type_summary[0],
+        ],
+        recommended_action_summary: [
+          mockedComponentQueue.recommended_action_summary[0],
+        ],
+        devices: [mockedComponentQueue.devices[0]],
       });
       return;
     }
 
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify(mockedComponentQueue),
-    });
+    await fulfillJson(route, mockedComponentQueue);
   });
 
   await page.goto("/");

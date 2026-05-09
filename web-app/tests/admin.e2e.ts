@@ -3,6 +3,7 @@ import {
   buildAdminChecklist,
   buildAdminOperator,
   buildAdminWorkstation,
+  fulfillImage,
   fulfillJson,
 } from "./admin.e2e-helpers";
 
@@ -194,11 +195,7 @@ test("admin page configures product qc for bom component", async ({ page }) => {
   );
 
   await page.route("**/api/files/FILE-001", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "image/png",
-      body: "demo-image",
-    });
+    await fulfillImage(route);
   });
 
   await page.goto("/admin");
