@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { App } from "./App";
-import { createFetchMock, jsonResponse } from "./TestHttpUtils";
+import { createFetchMock } from "./TestHttpUtils";
 
 afterEach(() => {
   cleanup();
@@ -193,23 +193,21 @@ describe("AdminPage", () => {
       value: revokeObjectUrl,
     });
 
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      const method = init?.method ?? "GET";
-
-      if (url.endsWith("/api/operators") && method === "GET") {
-        return jsonResponse(operators);
-      }
-
-      if (url.endsWith("/api/workstations") && method === "GET") {
-        return jsonResponse(workstations);
-      }
-
-      if (
-        url.endsWith("/api/qc-product-configurations/DEMO-OPS?variant_code=DEFAULT") &&
-        method === "GET"
-      ) {
-        return jsonResponse({
+    const fetchMock = createFetchMock([
+      {
+        matcher: "/api/operators",
+        method: "GET",
+        response: operators,
+      },
+      {
+        matcher: "/api/workstations",
+        method: "GET",
+        response: workstations,
+      },
+      {
+        matcher: "/api/qc-product-configurations/DEMO-OPS?variant_code=DEFAULT",
+        method: "GET",
+        response: () => ({
           device_type: "DEMO-OPS",
           variant_code: "DEFAULT",
           items: [
@@ -231,14 +229,13 @@ describe("AdminPage", () => {
               configured_step_count: configurationLoaded ? 1 : 0,
             },
           ],
-        });
-      }
-
-      if (
-        url.includes("/api/qc-checklists?device_type=DEMO-OPS") &&
-        method === "GET"
-      ) {
-        return jsonResponse([
+        }),
+      },
+      {
+        matcher: (url, method) =>
+          method === "GET" &&
+          url.includes("/api/qc-checklists?device_type=DEMO-OPS"),
+        response: [
           {
             id: "CHK-001",
             checklist_code: "QC-DEMO-OPS-DEFAULT-SCREW-M4",
@@ -253,14 +250,12 @@ describe("AdminPage", () => {
             is_active: true,
             created_at: "2026-05-03T11:00:00Z",
           },
-        ]);
-      }
-
-      if (
-        url.endsWith("/api/qc-checklists/QC-DEMO-OPS-DEFAULT-SCREW-M4/steps") &&
-        method === "GET"
-      ) {
-        return jsonResponse([
+        ],
+      },
+      {
+        matcher: "/api/qc-checklists/QC-DEMO-OPS-DEFAULT-SCREW-M4/steps",
+        method: "GET",
+        response: [
           {
             id: "STEP-001",
             checklist_id: "CHK-001",
@@ -282,32 +277,33 @@ describe("AdminPage", () => {
             tolerance_min: null,
             tolerance_max: null,
           },
-        ]);
-      }
-
-      if (url.endsWith("/api/qc-checklists") && method === "POST") {
-        configurationLoaded = true;
-        return jsonResponse({
-          id: "CHK-001",
-          checklist_code: "QC-DEMO-OPS-DEFAULT-SCREW-M4",
-          name: "Kontrola sruby M4",
-          process_stage: "COMPONENT_QC",
-          version: "1.0",
-          device_type: "DEMO-OPS",
-          variant_code: "DEFAULT",
-          component_type: "SCREW_M4",
-          skip_component_qc: false,
-          reference_image_file_id: null,
-          is_active: true,
-          created_at: "2026-05-03T11:00:00Z",
-        });
-      }
-
-      if (
-        url.endsWith("/api/qc-checklists/QC-DEMO-OPS-DEFAULT-SCREW-M4/reference-image") &&
-        method === "POST"
-      ) {
-        return jsonResponse({
+        ],
+      },
+      {
+        matcher: "/api/qc-checklists",
+        method: "POST",
+        response: () => {
+          configurationLoaded = true;
+          return {
+            id: "CHK-001",
+            checklist_code: "QC-DEMO-OPS-DEFAULT-SCREW-M4",
+            name: "Kontrola sruby M4",
+            process_stage: "COMPONENT_QC",
+            version: "1.0",
+            device_type: "DEMO-OPS",
+            variant_code: "DEFAULT",
+            component_type: "SCREW_M4",
+            skip_component_qc: false,
+            reference_image_file_id: null,
+            is_active: true,
+            created_at: "2026-05-03T11:00:00Z",
+          };
+        },
+      },
+      {
+        matcher: "/api/qc-checklists/QC-DEMO-OPS-DEFAULT-SCREW-M4/reference-image",
+        method: "POST",
+        response: {
           id: "CHK-001",
           checklist_code: "QC-DEMO-OPS-DEFAULT-SCREW-M4",
           name: "Kontrola sruby M4",
@@ -320,38 +316,34 @@ describe("AdminPage", () => {
           reference_image_file_id: "FILE-001",
           is_active: true,
           created_at: "2026-05-03T11:00:00Z",
-        });
-      }
-
-      if (
-        url.endsWith("/api/qc-checklists/QC-DEMO-OPS-DEFAULT-SCREW-M4/steps") &&
-        method === "POST"
-      ) {
-        return jsonResponse({
+        },
+      },
+      {
+        matcher: "/api/qc-checklists/QC-DEMO-OPS-DEFAULT-SCREW-M4/steps",
+        method: "POST",
+        response: {
           id: "STEP-001",
           checklist_id: "CHK-001",
           step_order: 1,
           title: "Zweryfikuj oznaczenie",
           instruction: "Porownaj oznaczenie z wzorcem.",
-            control_area: "Glowka sruby",
-            evaluation_mode: "TEXT_MATCH",
-            result_input_label: "Wpisz oznaczenie",
-            region_x: 62,
-            region_y: 58,
-            region_width: 20,
-            region_height: 16,
-            requires_photo: false,
-            requires_measurement: false,
-            blocking_on_fail: true,
+          control_area: "Glowka sruby",
+          evaluation_mode: "TEXT_MATCH",
+          result_input_label: "Wpisz oznaczenie",
+          region_x: 62,
+          region_y: 58,
+          region_width: 20,
+          region_height: 16,
+          requires_photo: false,
+          requires_measurement: false,
+          blocking_on_fail: true,
           expected_value: "A2-70",
           unit: null,
           tolerance_min: null,
           tolerance_max: null,
-        });
-      }
-
-      throw new Error(`Unexpected request: ${method} ${url}`);
-    });
+        },
+      },
+    ]);
 
     vi.stubGlobal("fetch", fetchMock);
     window.history.replaceState(null, "", "/admin");
