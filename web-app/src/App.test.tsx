@@ -1636,6 +1636,27 @@ function createShipmentServiceQueuesFetchMock({
   ]);
 }
 
+function createPaginatedShipmentQueueFetchMock() {
+  return createFetchMock([
+    {
+      matcher: "/api/shipment-readiness?sort_by=created_at&sort_desc=true&limit=100",
+      response: paginatedShipmentPageOnePayload,
+    },
+    {
+      matcher: "/api/shipment-readiness?sort_by=created_at&sort_desc=true&limit=1",
+      response: paginatedShipmentPageOnePayload,
+    },
+    {
+      matcher: "/api/shipment-readiness?sort_by=created_at&sort_desc=true&limit=1&offset=1",
+      response: paginatedShipmentPageTwoPayload,
+    },
+    {
+      matcher: "/api/shipment-readiness?device_type=DEMO-OPS&sort_by=created_at&sort_desc=true&limit=1",
+      response: paginatedShipmentPageOnePayload,
+    },
+  ]);
+}
+
 async function flushAppEffects() {
   await act(async () => {
     await Promise.resolve();
@@ -5457,12 +5478,7 @@ describe("App", () => {
   });
 
   it("pages through shipment queue and resets offset after filter changes", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(createJsonResponse(paginatedShipmentPageOnePayload))
-      .mockResolvedValueOnce(createJsonResponse(paginatedShipmentPageOnePayload))
-      .mockResolvedValueOnce(createJsonResponse(paginatedShipmentPageTwoPayload))
-      .mockResolvedValue(createJsonResponse(paginatedShipmentPageOnePayload));
+    const fetchMock = createPaginatedShipmentQueueFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
