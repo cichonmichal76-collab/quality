@@ -1212,11 +1212,8 @@ describe("addQcStepResult", () => {
 
 describe("scanAssemblyComponent", () => {
   it("wysyła POST montujący komponent z kontekstem sesji produkcyjnej", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      json: async () => ({
+    const fetchMock = vi.fn().mockResolvedValue(
+      createJsonResponse({
         id: "ASM-LINK-001",
         parent_device_serial_number: "ASM-001",
         child_item_serial_number: "FAN-777",
@@ -1230,7 +1227,7 @@ describe("scanAssemblyComponent", () => {
         bom_version: "1.2",
         status: "INSTALLED",
       }),
-    } satisfies Partial<Response>);
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const payload = await scanAssemblyComponent("/api", "ASM-001", {
@@ -1264,11 +1261,8 @@ describe("scanAssemblyComponent", () => {
 
 describe("qc product configuration api", () => {
   it("pobiera konfiguracje komponentow BOM dla produktu", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      json: async () => ({
+    const fetchMock = vi.fn().mockResolvedValue(
+      createJsonResponse({
         device_type: "DEMO-OPS",
         variant_code: "DEFAULT",
         items: [
@@ -1286,7 +1280,7 @@ describe("qc product configuration api", () => {
           },
         ],
       }),
-    } satisfies Partial<Response>);
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const payload = await getQcProductConfiguration("/api", "DEMO-OPS");
@@ -1301,12 +1295,7 @@ describe("qc product configuration api", () => {
   });
 
   it("obsluguje filtrowanie checklist po produkcie, wariancie i komponencie", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      json: async () => [],
-    } satisfies Partial<Response>);
+    const fetchMock = vi.fn().mockResolvedValue(createJsonResponse([]));
     vi.stubGlobal("fetch", fetchMock);
 
     await listQcChecklists("/api", {
@@ -1326,11 +1315,8 @@ describe("qc product configuration api", () => {
   it("tworzy i aktualizuje checkliste produktu QC", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        statusText: "OK",
-        json: async () => ({
+      .mockResolvedValueOnce(
+        createJsonResponse({
           checklist_code: "QC-DEMO-OPS-SCREW-M4",
           name: "Kontrola sruby",
           process_stage: "COMPONENT_QC",
@@ -1344,12 +1330,9 @@ describe("qc product configuration api", () => {
           id: "CHK-001",
           created_at: "2026-05-03T10:00:00Z",
         }),
-      } satisfies Partial<Response>)
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        statusText: "OK",
-        json: async () => ({
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
           checklist_code: "QC-DEMO-OPS-SCREW-M4",
           name: "Kontrola sruby M4",
           process_stage: "COMPONENT_QC",
@@ -1363,7 +1346,7 @@ describe("qc product configuration api", () => {
           id: "CHK-001",
           created_at: "2026-05-03T10:00:00Z",
         }),
-      } satisfies Partial<Response>);
+      );
     vi.stubGlobal("fetch", fetchMock);
 
     await createQcChecklist("/api", {
@@ -1487,11 +1470,8 @@ describe("qc product configuration api", () => {
   });
 
   it("wysyla zdjecie referencyjne checklisty jako multipart/form-data", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      json: async () => ({
+    const fetchMock = vi.fn().mockResolvedValue(
+      createJsonResponse({
         checklist_code: "QC-DEMO-OPS-SCREW-M4",
         name: "Kontrola sruby",
         process_stage: "COMPONENT_QC",
@@ -1505,7 +1485,7 @@ describe("qc product configuration api", () => {
         id: "CHK-001",
         created_at: "2026-05-03T10:00:00Z",
       }),
-    } satisfies Partial<Response>);
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const file = new File(["demo-image"], "screw.png", { type: "image/png" });
