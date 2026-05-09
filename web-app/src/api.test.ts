@@ -841,17 +841,14 @@ describe("listServiceSessionsQueue", () => {
 
 describe("createFinalTest", () => {
   it("wysyła POST zapisujący wynik final testu z work_session_id", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      json: async () => ({
+    const fetchMock = vi.fn().mockResolvedValue(
+      createJsonResponse({
         test_run_id: "FT-WEB-001",
         device_serial_number: "TEST-001",
         result: "PASS",
         work_session_id: "WS-FT-001",
       }),
-    } satisfies Partial<Response>);
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const payload = await createFinalTest("/api", {
@@ -883,11 +880,8 @@ describe("createFinalTest", () => {
 
 describe("createQcRun", () => {
   it("wysyła POST zapisujący komponentowy QC run z work_session_id", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      json: async () => ({
+    const fetchMock = vi.fn().mockResolvedValue(
+      createJsonResponse({
         run_id: "QC-WEB-001",
         device_serial_number: "SHIP-001",
         item_serial_number: "FAN-900",
@@ -900,7 +894,7 @@ describe("createQcRun", () => {
         started_at: "2026-05-01T09:20:00Z",
         ended_at: null,
       }),
-    } satisfies Partial<Response>);
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const payload = await createQcRun("/api", {
@@ -936,11 +930,8 @@ describe("createQcRun", () => {
 
 describe("listQcChecklists", () => {
   it("pobiera aktywne checklisty QC", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      json: async () => [
+    const fetchMock = vi.fn().mockResolvedValue(
+      createJsonResponse([
         {
           id: "CHK-001",
           checklist_code: "QC-COMP-001",
@@ -950,8 +941,8 @@ describe("listQcChecklists", () => {
           is_active: true,
           created_at: "2026-05-03T08:00:00Z",
         },
-      ],
-    } satisfies Partial<Response>);
+      ]),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const payload = await listQcChecklists("/api");
@@ -1005,11 +996,8 @@ describe("listQcChecklistSteps", () => {
 
 describe("getProductionItemByBarcode", () => {
   it("pobiera detal po barcode do stanowiska QC", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      json: async () => ({
+    const fetchMock = vi.fn().mockResolvedValue(
+      createJsonResponse({
         id: "ITEM-ROW-001",
         item_serial_number: "FAN-001",
         barcode_value: "BC-FAN-001",
@@ -1026,7 +1014,7 @@ describe("getProductionItemByBarcode", () => {
         produced_at: "2026-05-03T08:00:00Z",
         created_at: "2026-05-03T08:00:00Z",
       }),
-    } satisfies Partial<Response>);
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const payload = await getProductionItemByBarcode("/api", "BC-FAN-001");
@@ -1043,11 +1031,8 @@ describe("getProductionItemByBarcode", () => {
 
 describe("completeQcRun", () => {
   it("wysyła POST form-data zamykający komponentowy QC run wynikiem FAIL", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      json: async () => ({
+    const fetchMock = vi.fn().mockResolvedValue(
+      createJsonResponse({
         run_id: "QC-WEB-001",
         device_serial_number: "SHIP-001",
         item_serial_number: "FAN-900",
@@ -1060,7 +1045,7 @@ describe("completeQcRun", () => {
         started_at: "2026-05-01T09:20:00Z",
         ended_at: "2026-05-01T09:21:00Z",
       }),
-    } satisfies Partial<Response>);
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const payload = await completeQcRun("/api", "QC-WEB-001", "FAIL");
@@ -1079,11 +1064,8 @@ describe("completeQcRun", () => {
     );
   });
   it("wysyła pusty formularz, gdy backend sam wylicza wynik runu", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      json: async () => ({
+    const fetchMock = vi.fn().mockResolvedValue(
+      createJsonResponse({
         run_id: "QC-WEB-002",
         item_serial_number: "FAN-901",
         barcode_value: "BC-FAN-901",
@@ -1096,7 +1078,7 @@ describe("completeQcRun", () => {
         started_at: "2026-05-03T09:20:00Z",
         ended_at: "2026-05-03T09:21:00Z",
       }),
-    } satisfies Partial<Response>);
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const payload = await completeQcRun("/api", "QC-WEB-002");
@@ -1115,11 +1097,8 @@ describe("completeQcRun", () => {
     );
   });
   it("wysyla reason i comment dla FAIL z formularza obiektowego", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      json: async () => ({
+    const fetchMock = vi.fn().mockResolvedValue(
+      createJsonResponse({
         run_id: "QC-WEB-003",
         item_serial_number: "FAN-902",
         barcode_value: "BC-FAN-902",
@@ -1132,7 +1111,7 @@ describe("completeQcRun", () => {
         started_at: "2026-05-03T09:22:00Z",
         ended_at: "2026-05-03T09:23:00Z",
       }),
-    } satisfies Partial<Response>);
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     await completeQcRun("/api", "QC-WEB-003", {
@@ -1155,11 +1134,8 @@ describe("completeQcRun", () => {
 
 describe("uploadQcRunEvidence", () => {
   it("wysyla multipart z plikiem dowodowym dla QC run", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      json: async () => ({
+    const fetchMock = vi.fn().mockResolvedValue(
+      createJsonResponse({
         id: "FILE-001",
         related_entity_type: "QC_RUN",
         related_entity_id: "QC-WEB-010",
@@ -1170,7 +1146,7 @@ describe("uploadQcRunEvidence", () => {
         uploaded_by: "QCOP-001",
         created_at: "2026-05-03T09:40:00Z",
       }),
-    } satisfies Partial<Response>);
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const file = new File(["demo"], "defect.jpg", { type: "image/jpeg" });
@@ -1195,11 +1171,8 @@ describe("uploadQcRunEvidence", () => {
 
 describe("addQcStepResult", () => {
   it("wysyła JSON z wynikiem kroku i pomiarem", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      json: async () => ({
+    const fetchMock = vi.fn().mockResolvedValue(
+      createJsonResponse({
         id: "STEP-RESULT-001",
         qc_run_id: "QC-ROW-001",
         step_id: "STEP-001",
@@ -1209,7 +1182,7 @@ describe("addQcStepResult", () => {
         mcu_snapshot: null,
         created_at: "2026-05-03T09:20:15Z",
       }),
-    } satisfies Partial<Response>);
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const payload = await addQcStepResult("/api", "QC-WEB-001", "STEP-001", {
