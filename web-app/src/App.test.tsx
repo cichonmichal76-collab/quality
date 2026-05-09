@@ -20,6 +20,7 @@ import type {
   ServiceSessionRead,
   WorkSessionRead,
 } from "./api";
+import { jsonResponse as createJsonResponse } from "./TestHttpUtils";
 
 const API_STORAGE_KEY = "servicetrace.web.apiBaseUrl";
 const VIEW_STORAGE_KEY = "servicetrace.web.activeView";
@@ -1408,21 +1409,6 @@ const freshShipmentPayload: DeviceShipmentQueue = {
     },
   ],
 };
-
-function createJsonResponse(
-  payload: unknown,
-  init: { status?: number; statusText?: string } = {},
-): Response {
-  const status = init.status ?? 200;
-
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    statusText: init.statusText ?? (status >= 200 && status < 300 ? "OK" : "Error"),
-    json: async () => payload,
-    text: async () => JSON.stringify(payload),
-  } as Response;
-}
 
 function createDeferredResponse() {
   let resolveResponse!: (response: Response) => void;

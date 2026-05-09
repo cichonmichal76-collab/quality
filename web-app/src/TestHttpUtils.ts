@@ -1,11 +1,22 @@
 import { vi } from "vitest";
 
-export function jsonResponse(payload: unknown): Response {
+type JsonResponseInit = {
+  status?: number;
+  statusText?: string;
+};
+
+export function jsonResponse(
+  payload: unknown,
+  init: JsonResponseInit = {},
+): Response {
+  const status = init.status ?? 200;
+
   return {
-    ok: true,
-    status: 200,
-    statusText: "OK",
+    ok: status >= 200 && status < 300,
+    status,
+    statusText: init.statusText ?? (status >= 200 && status < 300 ? "OK" : "Error"),
     json: async () => payload,
+    text: async () => JSON.stringify(payload),
   } as Response;
 }
 
