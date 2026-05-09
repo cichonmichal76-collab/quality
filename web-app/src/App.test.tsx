@@ -21,6 +21,7 @@ import type {
   WorkSessionRead,
 } from "./api";
 import {
+  createFetchMock,
   errorResponse as createErrorResponse,
   jsonResponse as createJsonResponse,
 } from "./TestHttpUtils";
@@ -5871,30 +5872,24 @@ describe("App", () => {
   });
 
   it("opens commissioning session details drawer from service queue", async () => {
-    const fetchMock = vi.fn((input: RequestInfo | URL) => {
-      const url = String(input);
-
-      if (url === "/api/shipment-readiness?sort_by=created_at&sort_desc=true&limit=100") {
-        return Promise.resolve(createJsonResponse(shipmentPayload));
-      }
-
-      if (url === "/api/service-sessions/queue?sort_by=uploaded_at&sort_desc=true&limit=100") {
-        return Promise.resolve(createJsonResponse(serviceQueuePayload));
-      }
-
-      if (url === "/api/service-sessions/SVC-001") {
-        return Promise.resolve(createJsonResponse(serviceSessionDetailsPayload));
-      }
-
-      if (
-        url ===
-        "/api/audit-events?entity_type=SERVICE_SESSION&entity_id=SVC-001"
-      ) {
-        return Promise.resolve(createJsonResponse(serviceSessionAuditPayload));
-      }
-
-      throw new Error(`Unexpected fetch: ${url}`);
-    });
+    const fetchMock = createFetchMock([
+      {
+        matcher: "/api/shipment-readiness?sort_by=created_at&sort_desc=true&limit=100",
+        response: shipmentPayload,
+      },
+      {
+        matcher: "/api/service-sessions/queue?sort_by=uploaded_at&sort_desc=true&limit=100",
+        response: serviceQueuePayload,
+      },
+      {
+        matcher: "/api/service-sessions/SVC-001",
+        response: serviceSessionDetailsPayload,
+      },
+      {
+        matcher: "/api/audit-events?entity_type=SERVICE_SESSION&entity_id=SVC-001",
+        response: serviceSessionAuditPayload,
+      },
+    ]);
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
