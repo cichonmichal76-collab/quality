@@ -1541,6 +1541,43 @@ function createDashboardComponentNavigationFetchMock() {
   ]);
 }
 
+function createShipmentDetailsDrawerFetchMock() {
+  return createFetchMock([
+    {
+      matcher: (url) => url.startsWith("/api/shipment-readiness"),
+      response: shipmentPayload,
+    },
+    {
+      matcher: "/api/devices/SHIP-001/shipment-readiness",
+      response: shipmentDetailsPayload,
+    },
+    {
+      matcher: "/api/devices/SHIP-001/component-quality",
+      response: shipmentComponentDetailsPayload,
+    },
+    {
+      matcher: "/api/service-sessions?device_serial_number=SHIP-001",
+      response: serviceSessionPayload,
+    },
+    {
+      matcher: "/api/audit-events?entity_type=SERVICE_SESSION&service_session_device_serial_number=SHIP-001",
+      response: serviceSessionAuditPayload,
+    },
+    {
+      matcher: "/api/devices/SHIP-001/shipment-gate-history?limit=10",
+      response: shipmentGateHistoryPayload,
+    },
+    {
+      matcher: "/api/work-sessions",
+      response: workSessionsPayload,
+    },
+    {
+      matcher: "/api/operators",
+      response: operatorsPayload,
+    },
+  ]);
+}
+
 async function flushAppEffects() {
   await act(async () => {
     await Promise.resolve();
@@ -1909,46 +1946,7 @@ describe("App", () => {
   });
 
   it("opens device details drawer from shipment queue and renders fetched details", async () => {
-    const fetchMock = vi.fn((input: string | URL | Request) => {
-      const url = String(input);
-
-      if (url.startsWith("/api/shipment-readiness")) {
-        return Promise.resolve(createJsonResponse(shipmentPayload));
-      }
-
-      if (url === "/api/devices/SHIP-001/shipment-readiness") {
-        return Promise.resolve(createJsonResponse(shipmentDetailsPayload));
-      }
-
-      if (url === "/api/devices/SHIP-001/component-quality") {
-        return Promise.resolve(createJsonResponse(shipmentComponentDetailsPayload));
-      }
-
-      if (url === "/api/service-sessions?device_serial_number=SHIP-001") {
-        return Promise.resolve(createJsonResponse(serviceSessionPayload));
-      }
-
-      if (
-        url ===
-        "/api/audit-events?entity_type=SERVICE_SESSION&service_session_device_serial_number=SHIP-001"
-      ) {
-        return Promise.resolve(createJsonResponse(serviceSessionAuditPayload));
-      }
-
-      if (url === "/api/devices/SHIP-001/shipment-gate-history?limit=10") {
-        return Promise.resolve(createJsonResponse(shipmentGateHistoryPayload));
-      }
-
-      if (url === "/api/work-sessions") {
-        return Promise.resolve(createJsonResponse(workSessionsPayload));
-      }
-
-      if (url === "/api/operators") {
-        return Promise.resolve(createJsonResponse(operatorsPayload));
-      }
-
-      throw new Error(`Unexpected request: ${url}`);
-    });
+    const fetchMock = createShipmentDetailsDrawerFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
