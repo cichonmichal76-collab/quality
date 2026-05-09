@@ -5074,10 +5074,9 @@ describe("App", () => {
   });
 
   it("renders empty state for component queue when API returns no devices", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(createJsonResponse(shipmentPayload))
-      .mockResolvedValueOnce(createJsonResponse(emptyComponentPayload));
+    const fetchMock = createDashboardQueuesFetchMock({
+      component: emptyComponentPayload,
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
@@ -5151,10 +5150,7 @@ describe("App", () => {
       }),
     );
 
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(createJsonResponse(componentPayload))
-      .mockResolvedValueOnce(createJsonResponse(shipmentPayload));
+    const fetchMock = createDashboardQueuesFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
