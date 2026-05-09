@@ -1617,6 +1617,25 @@ function createDashboardQueuesFetchMock({
   ]);
 }
 
+function createShipmentServiceQueuesFetchMock({
+  shipment = shipmentPayload,
+  service = serviceQueuePayload,
+}: {
+  shipment?: DeviceShipmentQueue;
+  service?: ServiceSessionQueue;
+} = {}) {
+  return createFetchMock([
+    {
+      matcher: (url) => url.includes("/api/shipment-readiness"),
+      response: shipment,
+    },
+    {
+      matcher: (url) => url.includes("/api/service-sessions/queue"),
+      response: service,
+    },
+  ]);
+}
+
 async function flushAppEffects() {
   await act(async () => {
     await Promise.resolve();
@@ -5606,10 +5625,7 @@ describe("App", () => {
   });
 
   it("loads commissioning queue after switching to service view", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(createJsonResponse(shipmentPayload))
-      .mockResolvedValueOnce(createJsonResponse(serviceQueuePayload));
+    const fetchMock = createShipmentServiceQueuesFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
@@ -5715,11 +5731,7 @@ describe("App", () => {
   });
 
   it("applies trigger filter from commissioning summary cards", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(createJsonResponse(shipmentPayload))
-      .mockResolvedValueOnce(createJsonResponse(serviceQueuePayload))
-      .mockResolvedValueOnce(createJsonResponse(serviceQueuePayload));
+    const fetchMock = createShipmentServiceQueuesFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
@@ -5774,11 +5786,9 @@ describe("App", () => {
       sessions: [serviceQueuePayload.sessions[0]],
     };
 
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(createJsonResponse(shipmentPayload))
-      .mockResolvedValueOnce(createJsonResponse(serviceQueuePayload))
-      .mockResolvedValueOnce(createJsonResponse(reuploadedOnlyPayload));
+    const fetchMock = createShipmentServiceQueuesFetchMock({
+      service: reuploadedOnlyPayload,
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
