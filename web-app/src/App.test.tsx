@@ -2402,32 +2402,20 @@ describe("App", () => {
         },
       ],
     };
-    const fetchMock = vi.fn((input: string | URL | Request) => {
-      const url = String(input);
-
-      if (
-        url ===
-        "/api/shipment-readiness?sort_by=created_at&sort_desc=true&limit=100"
-      ) {
-        return Promise.resolve(createJsonResponse(shipmentPayload));
-      }
-
-      if (
-        url ===
-        "/api/shipment-readiness?sort_by=created_at&sort_desc=true&limit=500"
-      ) {
-        return Promise.resolve(createJsonResponse(shipmentExportPageOne));
-      }
-
-      if (
-        url ===
-        "/api/shipment-readiness?sort_by=created_at&sort_desc=true&limit=500&offset=500"
-      ) {
-        return Promise.resolve(createJsonResponse(shipmentExportPageTwo));
-      }
-
-      throw new Error(`Unexpected request: ${url}`);
-    });
+    const fetchMock = createFetchMock([
+      {
+        matcher: "/api/shipment-readiness?sort_by=created_at&sort_desc=true&limit=100",
+        response: shipmentPayload,
+      },
+      {
+        matcher: "/api/shipment-readiness?sort_by=created_at&sort_desc=true&limit=500",
+        response: shipmentExportPageOne,
+      },
+      {
+        matcher: "/api/shipment-readiness?sort_by=created_at&sort_desc=true&limit=500&offset=500",
+        response: shipmentExportPageTwo,
+      },
+    ]);
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
@@ -2493,32 +2481,20 @@ describe("App", () => {
         },
       ],
     };
-    const fetchMock = vi.fn((input: string | URL | Request) => {
-      const url = String(input);
-
-      if (
-        url ===
-        "/api/component-quality?only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=100"
-      ) {
-        return Promise.resolve(createJsonResponse(componentPayload));
-      }
-
-      if (
-        url ===
-        "/api/component-quality?only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=500"
-      ) {
-        return Promise.resolve(createJsonResponse(componentExportPageOne));
-      }
-
-      if (
-        url ===
-        "/api/component-quality?only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=500&offset=500"
-      ) {
-        return Promise.resolve(createJsonResponse(componentExportPageTwo));
-      }
-
-      throw new Error(`Unexpected request: ${url}`);
-    });
+    const fetchMock = createFetchMock([
+      {
+        matcher: "/api/component-quality?only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=100",
+        response: componentPayload,
+      },
+      {
+        matcher: "/api/component-quality?only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=500",
+        response: componentExportPageOne,
+      },
+      {
+        matcher: "/api/component-quality?only_blocking=true&sort_by=blocked_components&sort_desc=true&limit=500&offset=500",
+        response: componentExportPageTwo,
+      },
+    ]);
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
