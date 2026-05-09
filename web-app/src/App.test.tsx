@@ -5327,7 +5327,7 @@ describe("App", () => {
       }),
     );
 
-    const fetchMock = vi.fn(async () => createJsonResponse(shipmentPayload));
+    const fetchMock = createShipmentQueueFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
@@ -5355,7 +5355,7 @@ describe("App", () => {
         }),
     );
 
-    const fetchMock = vi.fn(async () => createJsonResponse(shipmentPayload));
+    const fetchMock = createShipmentQueueFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
