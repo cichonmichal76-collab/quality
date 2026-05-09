@@ -2080,6 +2080,96 @@ function createFinalTestPassFetchMock() {
   });
 }
 
+function createAssemblyCompletionFetchMock() {
+  let assemblyCompleted = false;
+
+  return vi.fn((input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input);
+    const method = init?.method ?? "GET";
+
+    if (url.startsWith("/api/shipment-readiness")) {
+      return Promise.resolve(
+        createJsonResponse(
+          assemblyCompleted
+            ? shipmentAssemblyAfterQueuePayload
+            : shipmentAssemblyQueuePayload,
+        ),
+      );
+    }
+
+    if (url === "/api/devices/ASM-001/shipment-readiness") {
+      return Promise.resolve(
+        createJsonResponse(
+          assemblyCompleted
+            ? shipmentAssemblyAfterDetailsPayload
+            : shipmentAssemblyDetailsPayload,
+        ),
+      );
+    }
+
+    if (url === "/api/devices/ASM-001/component-quality") {
+      return Promise.resolve(
+        createJsonResponse(
+          assemblyCompleted
+            ? componentAssemblyAfterDetailsPayload
+            : componentAssemblyDetailsPayload,
+        ),
+      );
+    }
+
+    if (url === "/api/devices/ASM-001/shipment-gate-history?limit=10") {
+      return Promise.resolve(createJsonResponse([]));
+    }
+
+    if (url === "/api/work-sessions") {
+      return Promise.resolve(createJsonResponse(workSessionsPayload));
+    }
+
+    if (url === "/api/operators") {
+      return Promise.resolve(createJsonResponse(operatorsPayload));
+    }
+
+    if (
+      url === "/api/devices/ASM-001/assembly/scan-component" &&
+      method === "POST"
+    ) {
+      assemblyCompleted = true;
+      const body = JSON.parse(String(init?.body)) as {
+        child_barcode_value: string;
+        component_type: string;
+        installed_by: string;
+        workstation_id: string;
+        work_session_id: string;
+      };
+
+      expect(body.child_barcode_value).toBe("BC-FAN-777");
+      expect(body.component_type).toBe("FAN_MODULE_V2");
+      expect(body.installed_by).toBe("OP-PROD-001");
+      expect(body.workstation_id).toBe("PR-ST-01");
+      expect(body.work_session_id).toBe("WS-PROD-001");
+
+      return Promise.resolve(
+        createJsonResponse({
+          id: "ASM-LINK-001",
+          parent_device_serial_number: "ASM-001",
+          child_item_serial_number: "FAN-777",
+          child_barcode_value: "BC-FAN-777",
+          component_type: "FAN_MODULE_V2",
+          installed_by: "OP-PROD-001",
+          installed_at: "2026-05-02T08:20:00Z",
+          workstation_id: "PR-ST-01",
+          scan_event_id: "SCAN-001",
+          bom_template_id: "BOM-01",
+          bom_version: "1.2",
+          status: "INSTALLED",
+        }),
+      );
+    }
+
+    throw new Error(`Unexpected request: ${method} ${url}`);
+  });
+}
+
 function mockClipboardWrite() {
   const writeTextMock = vi.fn(async () => undefined);
 
@@ -4146,92 +4236,7 @@ describe("App", () => {
   });
 
   it("completes assembly from the details drawer with an active production session", async () => {
-    let assemblyCompleted = false;
-    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
-      const url = String(input);
-      const method = init?.method ?? "GET";
-
-      if (url.startsWith("/api/shipment-readiness")) {
-        return Promise.resolve(
-          createJsonResponse(
-            assemblyCompleted
-              ? shipmentAssemblyAfterQueuePayload
-              : shipmentAssemblyQueuePayload,
-          ),
-        );
-      }
-
-      if (url === "/api/devices/ASM-001/shipment-readiness") {
-        return Promise.resolve(
-          createJsonResponse(
-            assemblyCompleted
-              ? shipmentAssemblyAfterDetailsPayload
-              : shipmentAssemblyDetailsPayload,
-          ),
-        );
-      }
-
-      if (url === "/api/devices/ASM-001/component-quality") {
-        return Promise.resolve(
-          createJsonResponse(
-            assemblyCompleted
-              ? componentAssemblyAfterDetailsPayload
-              : componentAssemblyDetailsPayload,
-          ),
-        );
-      }
-
-      if (url === "/api/devices/ASM-001/shipment-gate-history?limit=10") {
-        return Promise.resolve(createJsonResponse([]));
-      }
-
-      if (url === "/api/work-sessions") {
-        return Promise.resolve(createJsonResponse(workSessionsPayload));
-      }
-
-      if (url === "/api/operators") {
-        return Promise.resolve(createJsonResponse(operatorsPayload));
-      }
-
-      if (
-        url === "/api/devices/ASM-001/assembly/scan-component" &&
-        method === "POST"
-      ) {
-        assemblyCompleted = true;
-        const body = JSON.parse(String(init?.body)) as {
-          child_barcode_value: string;
-          component_type: string;
-          installed_by: string;
-          workstation_id: string;
-          work_session_id: string;
-        };
-
-        expect(body.child_barcode_value).toBe("BC-FAN-777");
-        expect(body.component_type).toBe("FAN_MODULE_V2");
-        expect(body.installed_by).toBe("OP-PROD-001");
-        expect(body.workstation_id).toBe("PR-ST-01");
-        expect(body.work_session_id).toBe("WS-PROD-001");
-
-        return Promise.resolve(
-          createJsonResponse({
-            id: "ASM-LINK-001",
-            parent_device_serial_number: "ASM-001",
-            child_item_serial_number: "FAN-777",
-            child_barcode_value: "BC-FAN-777",
-            component_type: "FAN_MODULE_V2",
-            installed_by: "OP-PROD-001",
-            installed_at: "2026-05-02T08:20:00Z",
-            workstation_id: "PR-ST-01",
-            scan_event_id: "SCAN-001",
-            bom_template_id: "BOM-01",
-            bom_version: "1.2",
-            status: "INSTALLED",
-          }),
-        );
-      }
-
-      throw new Error(`Unexpected request: ${method} ${url}`);
-    });
+    const fetchMock = createAssemblyCompletionFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
